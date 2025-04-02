@@ -24,6 +24,21 @@ body {
   height: 100%;
 }
 
+#header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 35px;
+  padding: 0px 15px;
+  background-color: #eeeeee;
+}
+
+#header-logo-group {
+  display: flex;
+  gap: 10px;
+}
+
 #layout {
   display: flex;
   flex: 1;

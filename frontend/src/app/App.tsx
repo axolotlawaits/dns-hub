@@ -5,7 +5,7 @@ import Login from './Login'
 import Search from '../components/Search'
 import Navigation from '../components/Navigation'
 import Menu from '../components/Menu'
-import { AppShell, Burger, Group, Skeleton } from '@mantine/core'
+import Header from '../components/Header'
 import { useDisclosure } from '@mantine/hooks'
 
 const user = 'mockuser'
@@ -20,10 +20,12 @@ function App() {
           <Navigate to='/login' />
         :
           <div id="page">
+            <Header>
+            </Header>
             <div id='layout'>
               <Menu></Menu>
               <div id='content'>
-                <Search></Search>
+                
                 <Routes>
                   <Route path='/' element={<Home />} />
                 </Routes>
