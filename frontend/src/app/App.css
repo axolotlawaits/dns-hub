@@ -46,7 +46,6 @@ a:active {
 body {
   display: flex;
   place-items: center;
-  width: 100vw;
   height: 100vh;
 }
 
@@ -61,6 +60,7 @@ body {
   width: 100%;
   height: 100%;
   background-color: var(--bg);
+  padding: 0px 10px;
 }
 
 #header {
@@ -68,7 +68,7 @@ body {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  height: 40px;
+  height: 60px;
   padding: 0px 15px;
   background-color: var(--bg);
   color: var(--font)
@@ -77,6 +77,10 @@ body {
 #header-logo-group {
   display: flex;
   gap: 10px;
+}
+
+#header-logo {
+  height: 40px;
 }
 
 #layout {
@@ -133,7 +137,7 @@ body {
   width: 100%;
   height: 60px;
   background-color: var(--bg);
-  padding: 5px 10px;
+  padding: 5px 0px;
 }
 
 #footer {
