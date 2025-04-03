@@ -1,6 +1,12 @@
+import { TextInput } from '@mantine/core'
+import { IconSearch } from '@tabler/icons-react'
+
 function Search() {
+
   return (
-    <div id="search">searchbar</div>
+    <TextInput
+      placeholder="Input placeholder"
+    />
   )
 }
 
