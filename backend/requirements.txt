@@ -1,0 +1,2 @@
+pycryptodome
+ldap3

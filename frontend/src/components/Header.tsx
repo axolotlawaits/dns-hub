@@ -1,6 +1,4 @@
-import { Burger, Button } from "@mantine/core"
 import Search from "./Search"
-import { useDisclosure } from "@mantine/hooks";
 import { Link } from "react-router";
 import logoImg from '../assets/images/logo.png'
 
