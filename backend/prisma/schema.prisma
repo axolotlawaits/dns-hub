@@ -6,3 +6,16 @@ datasource db {
 generator client {
   provider = "prisma-client-js"
 }
+
+/* handbook models */
+
+model Branches {
+  uuid              String          @id @default(uuid())
+  division          String          
+  code              String
+  name              String
+  status            Int
+  city              String
+  address           String
+  last_update       DateTime
+}
