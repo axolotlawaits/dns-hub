@@ -5,6 +5,7 @@ function Search() {
 
   return (
     <TextInput
+      size='sm'
       placeholder="Input placeholder"
       leftSection={<IconSearch size={16} />}
     />

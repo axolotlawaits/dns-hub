@@ -5,7 +5,6 @@ import Finance from '../features/Finance/Finance'
 import Login from './Login'
 import Navigation from '../components/Navigation'
 import Header from '../components/Header'
-import { useDisclosure } from '@mantine/hooks'
 import '@mantine/core/styles.css'
 import Footer from '../components/Footer'
 import Accounting from '../features/Accounting/Accounting'
@@ -18,11 +17,10 @@ import Settlements from '../features/Settlements/Settlements'
 import Supply from '../features/Supply/Supply'
 import Transformation from '../features/Transformation/Transformation'
 import Automation from '../features/Automation/Automation'
-
-const user = 'mockuser'
+import { useUserContext } from '../hooks/useUserContext'
 
 function App() {
-  const [opened, { toggle }] = useDisclosure()
+  const { user } = useUserContext()
 
   return (
     <BrowserRouter>

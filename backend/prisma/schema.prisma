@@ -9,7 +9,22 @@ generator client {
 
 /* handbook models */
 
-model Branches {
+model UserData {
+  uuid              String          @id @default(uuid())
+  user              User?
+  birthday          DateTime
+  code              String
+  branch            Branch          @relation(fields: [branch_uuid], references: [uuid])
+  branch_uuid       String          @unique
+  position          String
+  email             String
+  status            String
+  start_date        DateTime
+  end_date          DateTime
+  updatedAt         DateTime       @updatedAt
+}
+
+model Branch {
   uuid              String          @id @default(uuid())
   division          String          
   code              String
@@ -18,4 +33,21 @@ model Branches {
   city              String
   address           String
   last_update       DateTime
+  userData          UserData?
 }
+
+/* app models */
+
+model User {
+  id            String         @id @default(uuid())
+  name          String
+  email         String         @unique
+  position      String
+  branch        String
+  image         String?         
+  login         String         @unique
+  updatedAt     DateTime       @updatedAt
+  userData      UserData       @relation(fields: [userDataId], references: [uuid])
+  userDataId    String         @unique
+}
+

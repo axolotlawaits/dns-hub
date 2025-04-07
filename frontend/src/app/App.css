@@ -74,6 +74,11 @@ body {
   color: var(--font)
 }
 
+#header-right {
+  display: flex;
+  gap: 10px;
+}
+
 #header-logo-group {
   display: flex;
   gap: 10px;
