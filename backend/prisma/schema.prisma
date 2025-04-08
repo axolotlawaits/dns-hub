@@ -11,17 +11,16 @@ generator client {
 
 model UserData {
   uuid              String          @id @default(uuid())
-  user              User?
   birthday          DateTime
   code              String
   branch            Branch          @relation(fields: [branch_uuid], references: [uuid])
   branch_uuid       String          @unique
-  position          String
-  email             String
+  email             String          @unique
   status            String
   start_date        DateTime
   end_date          DateTime
-  updatedAt         DateTime       @updatedAt
+  last_update       DateTime       @updatedAt
+  user              User?
 }
 
 model Branch {
@@ -39,15 +38,15 @@ model Branch {
 /* app models */
 
 model User {
-  id            String         @id @default(uuid())
-  name          String
-  email         String         @unique
-  position      String
-  branch        String
-  image         String?         
-  login         String         @unique
-  updatedAt     DateTime       @updatedAt
-  userData      UserData       @relation(fields: [userDataId], references: [uuid])
-  userDataId    String         @unique
+  id               String         @id @default(uuid())
+  name             String
+  email            String         @unique
+  position         String
+  branch           String
+  image            String?         
+  login            String         @unique
+  updatedAt        DateTime       @updatedAt
+  userData         UserData       @relation(fields: [userDataEmail], references: [email])
+  userDataEmail    String         @unique
 }
 

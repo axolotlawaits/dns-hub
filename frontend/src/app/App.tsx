@@ -18,6 +18,7 @@ import Supply from '../features/Supply/Supply'
 import Transformation from '../features/Transformation/Transformation'
 import Automation from '../features/Automation/Automation'
 import { useUserContext } from '../hooks/useUserContext'
+import SearchResults from './SearchResults'
 
 function App() {
   const { user } = useUserContext()
@@ -46,6 +47,7 @@ function App() {
                   <Route path='/settlements' element={<Settlements />} />
                   <Route path='/supply' element={<Supply />} />
                   <Route path='/transformation' element={<Transformation />} />
+                  <Route path='/search' element={<SearchResults />} />
                 </Routes>
               </div>
             </div>

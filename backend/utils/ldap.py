@@ -13,11 +13,13 @@ def authenticate_ldap(username: str, password: str) -> dict[str, str, str]:
         )
         conn.search(
             'dc=partner,dc=ru', f'(sAMAccountName={username})',
-            attributes=['department', 'displayName', 'description']
+            attributes=['department', 'displayName', 'description', 'mail', 'thumbnailPhoto']
         )
         name = conn.entries[0].displayName
         filial = conn.entries[0].department
         pos = conn.entries[0].description
+        mail = conn.entries[0].mail
+        image = conn.entries[0].thumbnailPhoto
 
     except Exception as e:
         print(e)
@@ -26,7 +28,9 @@ def authenticate_ldap(username: str, password: str) -> dict[str, str, str]:
     data_user = json.dumps({
         'name': str(name),
         'branch': str(filial),
-        'position': str(pos)
+        'position': str(pos),
+        'mail': str(mail),
+        'image': str(image)
     }, ensure_ascii = False)
 
     return data_user
