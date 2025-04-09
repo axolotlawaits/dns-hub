@@ -1,0 +1,174 @@
+.wrapper {
+  height: 100%;
+  width: 100%;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  display: flex;
+  transition: background-image 1s ease-in-out, filter 0.5s ease;
+  position: relative;
+  overflow: hidden;
+  
+}
+
+.wrapper::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.2) 0%,
+    rgba(0, 0, 0, 0.4) 100%
+  );
+  pointer-events: none;
+}
+
+.form {
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+  width: 30%;
+  min-width: 400px;
+  max-width: 600px;
+  margin-left: 5%;
+  height: 100vh;
+  display: flex !important;
+  justify-content: center;
+  align-items: center;
+  padding: 30px;
+  background-color: rgba(255, 255, 255, 0.7) !important;
+  backdrop-filter: blur(12px);
+  z-index: 1;
+}
+
+.form-content {
+  width: 100%;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.title {
+  font-family: Greycliff CF;
+  color: #333;
+}
+
+.weather-info {
+  text-align: center;
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+  color: #555;
+  text-transform: capitalize;
+}
+
+.weather-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  color: #555;
+}
+
+/* Анимации погоды */
+.weather-effect {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.rain {
+  background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><line x1="1" y1="1" x2="1" y2="3" stroke="rgba(255,255,255,0.5)" stroke-width="0.5"/></svg>');
+  animation: rain 1s linear infinite;
+}
+
+.snow {
+  background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="1.5" cy="1.5" r="1" fill="rgba(255,255,255,0.8)"/></svg>');
+  animation: snow 10s linear infinite;
+}
+
+@keyframes rain {
+  0% { background-position: 0 0; }
+  100% { background-position: -10% 100%; }
+}
+
+@keyframes snow {
+  0% { background-position: 0 -100%; }
+  100% { background-position: 0 100%; }
+}
+
+@media (max-width: 768px) {
+  .form {
+    width: 100%;
+    max-width: 100%;
+    min-width: unset;
+    background-color: rgba(255, 255, 255, 0.95);
+    margin-left: 0;
+  }
+  
+  .wrapper {
+    background-position: 60% center;
+  }
+}
+.image-credit {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  padding: 12px 20px;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  line-height: 1.5;
+  max-width: 320px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+}
+
+.image-credit:hover {
+  background: rgba(255, 255, 255, 0.8);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+
+.image-title {
+  font-weight: 600;
+  color: #1a1a1a;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.image-author {
+  color: #444;
+  font-size: 0.85rem;
+  opacity: 0.9;
+}
+
+.bg-loader {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 100;
+}
+
+/* Анимация смены фона */
+.wrapper {
+  transition: background-image 0.5s ease-in-out;
+}
+.location-text
+{
+  margin: 20px !important;
+}
