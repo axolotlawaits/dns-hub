@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
-import './App.css'
+import './styles/App.css'
+import './styles/Components.css'
 import Home from './Home'
 import Finance from '../features/Finance/Finance'
 import Login from './Login'

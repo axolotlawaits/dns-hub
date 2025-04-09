@@ -8,8 +8,12 @@
 html{
   --font: #EEEEEE;
   --font-light: #6b7280;
+  --font-info: #f5c469;
+  --font-info-contrast:#5c4925;
+  --font-contrast: #31363F;
   --bg: #222831;
   --layer: #31363F;
+  --select: #BDDDE4;
   --hover-transition: background-color 0.2s ease-out;
   overflow-y: scroll;
 }
@@ -182,7 +186,7 @@ body {
 
 .footer-nav-description {
   font-size: 12px;
-  color: var()
+  color: var(--font-info);
 }
 
 .tab {
