@@ -2,13 +2,15 @@ import Search from "./Search"
 import { Link } from "react-router";
 import logoImg from '../assets/images/logo.png'
 import { ActionIcon, Avatar } from "@mantine/core";
-import { IconLogin } from "@tabler/icons-react";
+import { IconBrightnessDown, IconLogin, IconMoon } from "@tabler/icons-react";
 import { useNavigate } from "react-router";
 import { useUserContext } from "../hooks/useUserContext";
+import { useThemeContext } from "../hooks/useThemeContext";
 
 function Header() {
   const navigate = useNavigate()
   const { user, logout } = useUserContext()
+  const { isDark, toggleTheme } = useThemeContext()
 
   const onLogout = () => {
     localStorage.removeItem('user')
@@ -23,6 +25,15 @@ function Header() {
       </Link>
       <div id="header-right">
         <Search />
+        {isDark ? 
+          <ActionIcon onClick={toggleTheme} size={36} variant="default" aria-label="ActionIcon with size as a number">
+            <IconMoon size={22} />
+          </ActionIcon>
+        :
+          <ActionIcon onClick={toggleTheme} size={36} variant="default" aria-label="ActionIcon with size as a number">
+            <IconBrightnessDown size={22} />
+          </ActionIcon>
+        }
         {user ? 
           <Avatar name={user.name} onClick={onLogout} color="initials" />
         :

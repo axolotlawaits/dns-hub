@@ -5,7 +5,7 @@
   font-family: 'Roboto', sans-serif;
 }
 
-html{
+body.dark{
   --font: #EEEEEE;
   --font-light: #6b7280;
   --font-info: #f5c469;
@@ -18,11 +18,15 @@ html{
   overflow-y: scroll;
 }
 
-html.light{
+body{
   --font: #374151;
   --font-light: #6b7280;
-  --main: #c7d2fe;
-  --main-secondary: #818cf8;
+  --font-info: #dda439;
+  --font-info-contrast:#f8d79b;
+  --font-contrast: #EEEEEE;
+  --bg: #e9d6c4;
+  --layer: #FFFCF8;
+  --select: #BDDDE4;
   --hover-transition: background-color 0.2s ease-out;
   overflow-y: scroll;
 }
