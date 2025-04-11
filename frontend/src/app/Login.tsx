@@ -129,6 +129,11 @@ function Login() {
       }
   }, [userData, login, navigate]);
 
+  const handleSubmit = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    handleLogin();
+  }, [handleLogin]);
+
   const backgroundStyle = useMemo(() => ({
     backgroundImage: currentPhoto?.url ? `url(${currentPhoto.url})` : undefined,
     filter: weatherCondition === 'rain' ? 'brightness(0.8)' : 'none'
@@ -158,12 +163,12 @@ function Login() {
       )}
 
       <Paper className="form" radius={0} p={30}>
-        <div className="form-content">
+        <form onSubmit={handleSubmit} className="form-content">
           <Title order={2} className="title" ta="center" mb={50}>
             Добро пожаловать
           </Title>
 
-          
+          <Weather />
 
           <TextInput 
             label="Логин" 
@@ -190,16 +195,13 @@ function Login() {
             fullWidth 
             mt="xl" 
             size="md" 
-            onClick={handleLogin} 
             loading={isLoading}
             type="submit"
             color="#818cf8"
           >
             Войти
           </Button>
-          <Weather />
-        </div>
-        
+        </form>
       </Paper>
     </div>
   );

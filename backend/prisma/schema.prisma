@@ -14,7 +14,7 @@ model UserData {
   birthday          DateTime
   code              String
   branch            Branch          @relation(fields: [branch_uuid], references: [uuid])
-  branch_uuid       String          @unique
+  branch_uuid       String
   email             String          @unique
   status            String
   start_date        DateTime
@@ -32,14 +32,16 @@ model Branch {
   city              String
   address           String
   last_update       DateTime
-  userData          UserData?
+  userData          UserData[]
 }
 
 model News {
   id                String          @id @default(uuid())
   name              String
   description       String
-  author_uuid       String
+  user              User            @relation(fields: [userId], references: [id])
+  userId            String          
+  createdAt         DateTime        @default(now())
 }
 
 /* app models */
@@ -53,6 +55,7 @@ model User {
   image            String?         
   login            String         @unique
   updatedAt        DateTime       @updatedAt
+  news              News[]
 }
 
 

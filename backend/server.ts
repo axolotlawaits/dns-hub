@@ -3,6 +3,7 @@ import cors from "cors"
 import { PrismaClient } from "@prisma/client"
 import path from 'path'
 import userRouter from './routes/app/user.js'
+import newsRouter from './routes/app/news.js'
 
 const app = express()
 export const prisma = new PrismaClient()
@@ -13,6 +14,7 @@ app.use(express.json())
 app.use("/hub-api", express.static(__dirname))
 
 app.use('/hub-api/user', userRouter)
+app.use('/hub-api/news', newsRouter)
 
 app.listen(2000, function() { 
   console.log('server running on port 2000')
