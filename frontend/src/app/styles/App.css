@@ -5,28 +5,30 @@
   font-family: 'Roboto', sans-serif;
 }
 
-body.dark{
-  --font: #EEEEEE;
-  --font-light: #6b7280;
-  --font-info: #f5c469;
-  --font-info-contrast:#5c4925;
-  --font-contrast: #31363F;
-  --bg: #222831;
-  --layer: #31363F;
-  --select: #BDDDE4;
+/* Темная тема */
+body.dark {
+  --font: #EEEEEE;      /* Основной текст */ 
+  --font-light: #9CA3AF; /* Вспомогательный текст */ 
+  --font-info: #FAC863;  /* Цвет акцента (оранжевый) */ 
+  --font-info-contrast: #F9CB9C; /* Акцент контрастный */ 
+  --font-contrast: #2A2D35; /* Текст на светлом фоне */ 
+  --bg: #1E293B;        /* Основной фон */ 
+  --layer: #2A2D35;     /* Фон слоёв */ 
+  --select: #BDDDE4;    /* Выделение */ 
   --hover-transition: background-color 0.2s ease-out;
   overflow-y: scroll;
 }
 
-body{
-  --font: #374151;
-  --font-light: #6b7280;
-  --font-info: #dda439;
-  --font-info-contrast:#f8d79b;
-  --font-contrast: #EEEEEE;
-  --bg: #e9d6c4;
-  --layer: #FFFCF8;
-  --select: #BDDDE4;
+/* Светлая тема */
+body {
+  --font: #2D3748;      /* Основной текст */ 
+  --font-light: #6B7280; /* Вспомогательный текст */
+  --font-info: #0087ff;  /* Цвет акцента (жёлтый) */
+  --font-info-contrast: #FFB44C; /* Акцент контрастный */ 
+  --font-contrast: #F5F5F5; /* Текст на темном фоне */ 
+  --bg: #F5F6FA;        /* Основной фон */ 
+  --layer: #FFFFFF;     /* Фон слоёв */ 
+  --select: #4379EE;    /* Выделение */ 
   --hover-transition: background-color 0.2s ease-out;
   overflow-y: scroll;
 }
@@ -120,7 +122,7 @@ a:active {
 }
 
 .nav-option:hover {
-  background-color: #76ABAE;
+  background-color: var(--select);
   cursor: pointer;
 }
 
@@ -128,7 +130,7 @@ a:active {
   display: flex;
   flex-direction: column;
   flex: 1;
-  background-color: var(--layer);
+  background-color: var(--bg);
   border-radius: 10px;
   padding: 25px;
   color: var(--font);
