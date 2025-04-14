@@ -37,9 +37,10 @@
   justify-content: center;
   align-items: center;
   padding: 30px;
-  background-color: rgba(255, 255, 255, 0.7) !important;
+  background-color: var(--bg-alpha) !important;
   backdrop-filter: blur(12px);
   z-index: 1;
+  position: relative;
 }
 
 .form-content {
@@ -51,7 +52,7 @@
 
 .title {
   font-family: Greycliff CF;
-  color: #333;
+  color: var(--font);
 }
 
 .weather-info {
@@ -118,7 +119,7 @@
   right: 24px;
   bottom: 24px;
   padding: 12px 20px;
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--bg-alpha);
   backdrop-filter: blur(12px);
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -138,7 +139,7 @@
 
 .image-title {
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--font);
   font-size: 0.95rem;
   white-space: nowrap;
   overflow: hidden;
@@ -146,7 +147,7 @@
 }
 
 .image-author {
-  color: #444;
+  color: var(--font);
   font-size: 0.85rem;
   opacity: 0.9;
 }

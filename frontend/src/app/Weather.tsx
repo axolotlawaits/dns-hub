@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Loader, Text, Group } from '@mantine/core';
-import './Login.css';
 
 export type WeatherCondition = 'clear' | 'cloudy' | 'rain' | 'snow';
 

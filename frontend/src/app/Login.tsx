@@ -4,14 +4,17 @@ import {
   PasswordInput,
   TextInput,
   Title,
-  Loader
+  Loader,
+  ActionIcon
 } from '@mantine/core';
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useUserContext } from '../hooks/useUserContext';
 import { useNavigate } from 'react-router';
 import { API } from '../config/constants';
-import './Login.css';
+import './styles/Login.css';
 import { useWeather, Weather } from './Weather';
+import { useThemeContext } from '../hooks/useThemeContext';
+import { IconBrightnessDown, IconMoon } from '@tabler/icons-react';
 
 type LoginType = { login: string; pass: string };
 type ValidationType = Partial<Record<keyof LoginType, string>>;
@@ -60,7 +63,7 @@ async function fetchBackgroundImage(season: Season, timeOfDay: TimeOfDay): Promi
 function Login() {
   const { login } = useUserContext();
   const navigate = useNavigate();
-  
+  const { isDark, toggleTheme } = useThemeContext()
   const [userData, setUserData] = useState<LoginType>({ login: '', pass: '' });
   const [isLoading, setIsLoading] = useState(false);
   const [validationErrors, setValidationErrors] = useState<ValidationType>();
@@ -146,10 +149,8 @@ function Login() {
           <Loader variant="dots" color="#fff" />
         </div>
       )}
-
       {weatherCondition === 'rain' && <div className="weather-effect rain" />}
       {weatherCondition === 'snow' && <div className="weather-effect snow" />}
-
       {currentPhoto && (
         <a 
           className="image-credit" 
@@ -161,15 +162,33 @@ function Login() {
           <div className="image-author">Автор: {currentPhoto.author}</div>
         </a>
       )}
-
       <Paper className="form" radius={0} p={30}>
+        {isDark ? 
+          <ActionIcon 
+            onClick={toggleTheme} 
+            size={36} 
+            variant="default" 
+            aria-label="ActionIcon with size as a number" 
+            style={{ position: 'absolute', top: '10px', right: '10px' }}
+          >
+            <IconMoon size={22} />
+          </ActionIcon>
+        :
+          <ActionIcon 
+            onClick={toggleTheme} 
+            size={36} 
+            variant="default" 
+            aria-label="ActionIcon with size as a number" 
+            style={{ position: 'absolute', top: '10px', right: '10px' }}
+          >
+            <IconBrightnessDown size={22} />
+          </ActionIcon>
+        }
         <form onSubmit={handleSubmit} className="form-content">
           <Title order={2} className="title" ta="center" mb={50}>
             Добро пожаловать
           </Title>
-
           <Weather />
-
           <TextInput 
             label="Логин" 
             placeholder="Введите ваш логин"
@@ -179,7 +198,6 @@ function Login() {
             error={validationErrors?.login || ldapError}
             required 
           />
-          
           <PasswordInput 
             label="Пароль" 
             placeholder="Введите ваш пароль"
@@ -190,7 +208,6 @@ function Login() {
             error={validationErrors?.pass}
             required
           />
-
           <Button 
             fullWidth 
             mt="xl" 
