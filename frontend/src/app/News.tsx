@@ -19,6 +19,7 @@ import dayjs from 'dayjs';
 import TiptapEditor from '../utils/editor';
 import { IconPencil, IconTrash } from '@tabler/icons-react';
 import './styles/News.css'
+import { useThemeContext } from '../hooks/useThemeContext';
 
 type News = {
   id: string;
@@ -31,6 +32,7 @@ type News = {
 
 export default function NewsList() {
   const { user } = useUserContext();
+  const { isDark } = useThemeContext()
   const [news, setNews] = useState<News[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedNews, setSelectedNews] = useState<News | null>(null);
@@ -135,6 +137,7 @@ export default function NewsList() {
   return (
     <Box p="md">
       <Button 
+        color={isDark ? 'indigo' : 'light-violet'}
         fullWidth 
         mt="xl" 
         size="md" 
@@ -145,9 +148,9 @@ export default function NewsList() {
       >
         Добавить новость
       </Button>
-      <Title order={2} mt="md" mb="lg">Latest News</Title>
+      <Title order={2} mt="md" mb="lg">Последние новости</Title>
       {news.length === 0 ? (
-        <Text color="dimmed">No news available</Text>
+        <Text color="dimmed">Пока нет новостей</Text>
       ) : (
         <Box style={{ display: 'grid', gap: 15 }}>
           {news.map(newsItem => (
@@ -156,7 +159,7 @@ export default function NewsList() {
               p="md"
               style={{
                 borderRadius: '10px',
-                backgroundColor: '#1f2131',
+                backgroundColor: isDark ? '#2A2D35' : '#ffffff',
                 cursor: 'pointer',
                 '&:hover': {
                   backgroundColor: '#3b2121',

@@ -1,6 +1,7 @@
 import { createContext, useState } from "react";
 
 export type User = {
+  id: string
   name: string
   branch: string
   position: string
