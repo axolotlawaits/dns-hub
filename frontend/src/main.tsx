@@ -6,6 +6,7 @@ import { UserContextProvider } from './contexts/UserContext.jsx'
 import { DatesProvider } from '@mantine/dates'
 import dayjs from 'dayjs';
 import { ThemeContextProvider } from './contexts/ThemeContext.tsx'
+import 'dayjs/locale/ru'
 
 dayjs.locale('ru')
 
