@@ -214,7 +214,6 @@ function Login() {
             size="md" 
             loading={isLoading}
             type="submit"
-            color="#818cf8"
           >
             Войти
           </Button>

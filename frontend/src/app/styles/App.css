@@ -30,7 +30,7 @@ body {
   --bg: #f6f9ff;        /* Основной фон */ 
   --bg-alpha: rgba(255, 255, 255, 0.7);
   --layer: #FFFFFF;     /* Фон слоёв */ 
-  --select: #b197fc;    /* Выделение */ 
+  --select: #9a93ff;    /* Выделение */ 
   --hover-transition: background-color 0.2s ease-out;
   overflow-y: scroll;
 }
@@ -173,6 +173,11 @@ a:active {
   background-color: var(--bg);
   border-radius: 10px;
   padding: 3px 5px;
+  transition: box-shadow 0.2s ease-out;
+}
+
+.footer-nav-option:hover {
+  box-shadow: rgba(50, 50, 93, 0.25) 0px 2px 5px -1px, rgba(0, 0, 0, 0.3) 0px 1px 3px -1px;;
 }
 
 .footer-nav-text {

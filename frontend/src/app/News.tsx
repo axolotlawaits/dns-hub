@@ -137,7 +137,6 @@ export default function NewsList() {
   return (
     <Box p="md">
       <Button 
-        color={isDark ? 'indigo' : 'light-violet'}
         fullWidth 
         mt="xl" 
         size="md" 

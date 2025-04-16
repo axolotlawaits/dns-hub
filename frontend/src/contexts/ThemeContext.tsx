@@ -1,4 +1,3 @@
-import { useMantineColorScheme } from "@mantine/core";
 import { useState, useEffect, createContext } from "react";
 
 type ThemeContextTypes = {
@@ -30,7 +29,6 @@ const defaultTheme = () => {
 
 export const ThemeContextProvider = ({ children }: Props) => {
   const [isDark, setIsDark] = useState(defaultTheme())
-  const { setColorScheme } = useMantineColorScheme()
 
   const toggleTheme = () => {
     setIsDark(!isDark)
@@ -40,10 +38,8 @@ export const ThemeContextProvider = ({ children }: Props) => {
   useEffect(() => {
     if (isDark) {
       document.body.classList.add('dark');
-      setColorScheme('dark')
     } else {
       document.body.classList.remove('dark');
-      setColorScheme('light')
     }
   }, [isDark]); 
 
