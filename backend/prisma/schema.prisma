@@ -12,9 +12,11 @@ generator client {
 model UserData {
   uuid              String          @id @default(uuid())
   birthday          DateTime
+  fio               String
   code              String
   branch            Branch          @relation(fields: [branch_uuid], references: [uuid])
   branch_uuid       String
+  position          String
   email             String          @unique
   status            String
   start_date        DateTime
@@ -32,16 +34,14 @@ model Branch {
   city              String
   address           String
   last_update       DateTime
+  imagesURL         String
+  latitude          Float
+  longitude         Float
+  totalArea         Int
+  tradingArea       Int
+  warehouseArea     Int
+  type              String
   userData          UserData[]
-}
-
-model News {
-  id                String          @id @default(uuid())
-  name              String
-  description       String
-  user              User            @relation(fields: [userId], references: [id])
-  userId            String          
-  createdAt         DateTime        @default(now())
 }
 
 /* app models */
@@ -55,8 +55,26 @@ model User {
   image            String?         
   login            String         @unique
   updatedAt        DateTime       @updatedAt
-  news              News[]
+  news             News[]
+  meterReadings    MeterReading[] 
 }
 
+model News {
+  id                String          @id @default(uuid())
+  name              String
+  description       String
+  user              User            @relation(fields: [userId], references: [id])
+  userId            String          
+  createdAt         DateTime        @default(now())
+}
 
-
+/* Instruments models */
+/* AXO */
+model MeterReading {
+  id               String         @id @default(uuid())
+  createdAt        DateTime      @default(now())
+  date             DateTime
+  user             User          @relation(fields: [userId], references: [id])
+  userId           String
+  counter          Float
+}

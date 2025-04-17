@@ -20,6 +20,7 @@ import Transformation from '../features/Transformation/Transformation'
 import Automation from '../features/Automation/Automation'
 import { useUserContext } from '../hooks/useUserContext'
 import SearchResults from './SearchResults'
+import MeterReading from '../features/AHO/MeterReading/MeterReading'
 
 function App() {
   const { user } = useUserContext()
@@ -41,6 +42,7 @@ function App() {
                   <Route path='/accounting' element={<Accounting />} />
                   <Route path='/add' element={<Adds />} />
                   <Route path='/aho' element={<Aho />} />
+                    <Route path="/aho/meter-reading" element={<MeterReading />} />
                   <Route path='/automation' element={<Automation />} />
                   <Route path='/jurists' element={<Jurists />} />
                   <Route path='/problem-books' element={<ProblemBooks />} />
