@@ -9,7 +9,7 @@
 body.dark {
   --font: #f1f1f1;      /* Основной текст */ 
   --font-aux: #9CA3AF; /* Вспомогательный текст */ 
-  --font-info: #FAC863;  /* Цвет акцента (оранжевый) */ 
+  --font-info: #748ffc;  /* Цвет акцента (оранжевый) */ 
   --font-info-contrast: #F9CB9C; /* Акцент контрастный */ 
   --font-contrast: #2A2D35; /* Текст на светлом фоне */ 
   --bg: #1E293B;        /* Основной фон */ 
@@ -17,6 +17,7 @@ body.dark {
   --layer: #2A2D35;     /* Фон слоёв */ 
   --select: #4c6ef5;    /* Выделение */ 
   --hover-transition: background-color 0.2s ease-out;
+  --soft-shadow: rgba(255, 255, 255, 0.25) 0px 1px 1px, rgba(255, 255, 255, 0.13) 0px 0px 1px 1px;
   overflow-y: scroll;
 }
 
@@ -24,7 +25,7 @@ body.dark {
 body {
   --font: #2D3748;      /* Основной текст */ 
   --font-aux: #5f6369; /* Вспомогательный текст */
-  --font-info: #0087ff;  /* Цвет акцента (жёлтый) */
+  --font-info: #9775fa;  /* Цвет акцента (жёлтый) */
   --font-info-contrast: #FFB44C; /* Акцент контрастный */ 
   --font-contrast: #F5F5F5; /* Текст на темном фоне */ 
   --bg: #f6f9ff;        /* Основной фон */ 
@@ -32,6 +33,7 @@ body {
   --layer: #FFFFFF;     /* Фон слоёв */ 
   --select: #9a93ff;    /* Выделение */ 
   --hover-transition: background-color 0.2s ease-out;
+  --soft-shadow: rgba(9, 30, 66, 0.25) 0px 1px 1px, rgba(9, 30, 66, 0.13) 0px 0px 1px 1px;
   overflow-y: scroll;
 }
 
@@ -114,7 +116,7 @@ a:active {
 }
 
 .nav-option {
-  border-radius: 10px;
+  border-radius: 5px;
   transition: var(--hover-transition);
   display: flex;
   align-items: center;
@@ -171,13 +173,13 @@ a:active {
   width: 175px;
   height: 100%;
   background-color: var(--bg);
-  border-radius: 10px;
+  border-radius: 5px;
   padding: 3px 5px;
   transition: box-shadow 0.2s ease-out;
 }
 
 .footer-nav-option:hover {
-  box-shadow: rgba(50, 50, 93, 0.25) 0px 2px 5px -1px, rgba(0, 0, 0, 0.3) 0px 1px 3px -1px;;
+  box-shadow: var(--soft-shadow);
 }
 
 .footer-nav-text {
@@ -200,4 +202,54 @@ a:active {
   flex-direction: column;
   flex: 1;
   border-radius: 10px;
+}
+
+/* search */
+
+#search-results {
+  display: flex;
+  flex-direction: column;
+  padding-top: 20px;
+}
+
+.search-result {
+  color: var(--font);
+  font-size: 14px;
+  padding: 2px 5px;
+  border-radius: 5px;
+}
+
+.search-result:hover {
+  background-color: var(--select);
+  cursor: pointer;
+}
+
+.branch-card-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.branch-card {
+  background-color: var(--layer);
+  display: flex;
+  flex-direction: column;
+  height: 150px;
+  border-radius: 10px;
+  padding: 10px 20px;
+}
+
+.branch-card-main {
+  display: flex;
+  justify-content: space-between;
+}
+
+.branch-card-left,
+.branch-card-right {
+  display: flex;
+  flex-direction: column;
+}
+
+.branch-card-text {
+  color: var(--font-aux);
 }

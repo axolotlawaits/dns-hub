@@ -20,6 +20,7 @@ import Transformation from '../features/Transformation/Transformation'
 import Automation from '../features/Automation/Automation'
 import { useUserContext } from '../hooks/useUserContext'
 import SearchResults from './SearchResults'
+import Branch from './Branch'
 
 function App() {
   const { user } = useUserContext()
@@ -49,6 +50,8 @@ function App() {
                   <Route path='/supply' element={<Supply />} />
                   <Route path='/transformation' element={<Transformation />} />
                   <Route path='/search' element={<SearchResults />} />
+                  <Route path='/branch/:id' element={<Branch />} />
+                  <Route path='/branch/*' element={<Branch />} />
                 </Routes>
               </div>
             </div>
