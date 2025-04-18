@@ -1,0 +1,74 @@
+/* Стили редактора Tiptap */
+.tiptap-editor {
+    border: 1px solid var(--bg-alpha);
+    border-radius: 4px;
+    background: var(--bg);
+    margin-bottom: 15px;
+  }
+  
+  .tiptap-editor .menu-bar {
+    padding: 8px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--bg-alpha);
+    background: var(--layer);
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+  }
+  
+  .tiptap-editor .menu-bar button {
+    background: var(--bg-alpha);
+    border: none;
+    border-radius: 4px;
+    padding: 4px 8px;
+    color: var(--font);
+    cursor: pointer;
+    font-size: 14px;
+  }
+  
+  .tiptap-editor .menu-bar button:hover {
+    background: var(--select);
+  }
+  
+  .tiptap-editor .menu-bar button.is-active {
+    background: var(--select);
+  }
+  
+  .tiptap-editor .editor-content {
+    padding: 15px;
+    min-height: 200px;
+  }
+  
+  /* Стили контента редактора */
+  .tiptap-editor .editor-content p {
+    margin: 0 0 1em 0;
+    color: var(--font);
+    height: 100%;
+  }
+  
+  .tiptap-editor .editor-content h1,
+  .tiptap-editor .editor-content h2,
+  .tiptap-editor .editor-content h3 {
+    margin: 1em 0 0.5em 0;
+    line-height: 1.2;
+    color: var(--font-aux);
+  }
+  
+  .tiptap-editor .editor-content ul,
+  .tiptap-editor .editor-content ol {
+    padding: 0 0 0 2em;
+    margin: 0 0 1em 0;
+    color: var(--font-aux);
+  }
+  
+  .tiptap-editor .editor-content img {
+    max-width: 100%;
+    height: auto;
+  }
+  
+  .tiptap-editor .editor-content a {
+    color: var(--select);
+    text-decoration: underline;
+  }
+  
