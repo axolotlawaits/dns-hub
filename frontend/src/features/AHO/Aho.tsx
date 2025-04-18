@@ -1,8 +1,8 @@
-import { IconTruckDelivery } from "@tabler/icons-react"
+import { IconMeterCube} from "@tabler/icons-react"
 import Tools from "../../components/Tools"
 
 const tools = [
-  {name: 'Показания счётчиков', description: 'Учёт показаний', link: '/aho/meter-reading', svg: <IconTruckDelivery color={'#ADB2D4'} size={100} />}
+  {name: 'Показания счётчиков', description: 'Учёт показаний', link: '/aho/meter-reading', svg: <IconMeterCube color={'#ADB2D4'} size={100} />}
 ]
 
 function Aho() {
