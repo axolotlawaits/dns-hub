@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@mantine/carousel": "^7.17.4",
     "@mantine/core": "^7.17.4",
     "@mantine/dates": "^7.17.4",
     "@mantine/hooks": "^7.17.4",
@@ -25,6 +26,8 @@
     "@tiptap/starter-kit": "^2.11.7",
     "@types/node": "^22.14.0",
     "dayjs": "^1.11.13",
+    "embla-carousel-react": "^8.6.0",
+    "pigeon-maps": "^0.22.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-resizable": "^3.0.5",
@@ -32,7 +35,7 @@
     "recharts": "^2.15.2",
     "tailwindcss": "^4.0.17",
     "tanstack": "^1.0.0",
-    "tiptap": "^1.32.2"
+    "tiptap": "^0.15.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",

@@ -1,6 +1,10 @@
 import { useParams, useSearchParams } from "react-router"
 import { API } from "../config/constants"
 import { useEffect, useState } from "react"
+import { Map, Marker } from "pigeon-maps"
+import { Button, Modal, Image } from "@mantine/core"
+import { useDisclosure } from "@mantine/hooks"
+import { Carousel } from '@mantine/carousel'
 
 export type BranchType = {
   uuid: string
@@ -8,6 +12,8 @@ export type BranchType = {
   rrs: string
   city: string
   address: string
+  latitude: number
+  longitude: number
 }
 
 function Branch() {
@@ -42,22 +48,50 @@ function Branch() {
     <div className="branch-card-wrapper">
       {branch.length > 0 && branch.map(branch => {
         return (
-          <div key={branch.uuid} className="branch-card">
-            <h1>{branch.name}</h1>
-            <div className="branch-card-main">
-              <div className="branch-card-left">
-                <span className="branch-card-text">Город: {branch.city}</span>
-                <span className="branch-card-text">РРС: {branch.rrs}</span>
-              </div>
-              <div className="branch-card-right">
-                <span className="branch-card-text">Адрес: {branch.address}</span>
-              </div>
-            </div>
-          </div>
+          <BranchCard key={branch.uuid} branch={branch} />
         )
       })}
     </div>
+  )
+}
 
+function BranchCard({branch}) {
+  const [opened, { open, close }] = useDisclosure(false)
+  
+  return (
+    <>
+      <Modal opened={opened} onClose={close} title="Галерея" size="xl" centered >
+        <Carousel slideSize="70%" height={500} slideGap="md">
+          {branch.images.map((img: any) => {
+            return (
+              <Carousel.Slide>
+                <Image src={img.link} radius={'sm'} h={500} width='auto' fit="contain"/>
+              </Carousel.Slide>
+            )
+          })}
+        </Carousel>
+      </Modal>
+      <div className="branch-card">
+        <div>
+          <h1 className="branch-title">{branch.name}</h1>
+        </div>
+        <div className="branch-card-main">
+          <div className="branch-card-left">
+            <span className="branch-card-text">Тип: {branch.type}</span>
+            {branch.tradingArea !== 0 &&
+            <span className="branch-card-text">Площадь магазина: {branch.tradingArea}</span>
+            }
+            <span className="branch-card-text">Город: {branch.city}</span>
+            <span className="branch-card-text">РРС: {branch.rrs}</span>
+            <span className="branch-card-text">Адрес: {branch.address}</span>
+          </div>
+        </div>
+        <Button onClick={open} variant="light">галерея</Button>
+        <Map height={300} defaultCenter={[branch.latitude, branch.longitude]} defaultZoom={13}>
+          <Marker width={50} anchor={[branch.latitude, branch.longitude]} />
+        </Map>
+      </div>
+    </>
   )
 }
 

@@ -227,17 +227,24 @@ a:active {
 
 .branch-card-wrapper {
   display: flex;
-  flex-direction: column;
-  gap: 15px;
+  flex-wrap: wrap;
+  gap: 20px;
 }
 
 .branch-card {
   background-color: var(--layer);
   display: flex;
   flex-direction: column;
-  height: 150px;
+  justify-content: space-between;
+  gap: 10px;
+  width: 500px;
   border-radius: 10px;
-  padding: 10px 20px;
+  padding: 15px 20px;
+  box-shadow: var(--soft-shadow);
+}
+
+.branch-title {
+  font-size: 20px;
 }
 
 .branch-card-main {
@@ -245,8 +252,7 @@ a:active {
   justify-content: space-between;
 }
 
-.branch-card-left,
-.branch-card-right {
+.branch-card-left {
   display: flex;
   flex-direction: column;
 }

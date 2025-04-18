@@ -42,6 +42,14 @@ model Branch {
   warehouseArea     Int
   type              String
   userData          UserData[]
+  images            BranchImage[]
+}
+
+model BranchImage {
+  id              String          @id @default(uuid())
+  link            String
+  branch          Branch          @relation(fields: [branch_uuid], references: [uuid])
+  branch_uuid     String
 }
 
 /* app models */

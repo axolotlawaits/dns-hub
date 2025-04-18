@@ -2,7 +2,10 @@ import News from './News';
 
 function Home() {
   return (
+    <>
     <News />
+    </>
+
   )
 }
 

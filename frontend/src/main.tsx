@@ -8,6 +8,7 @@ import dayjs from 'dayjs';
 import { ThemeContextProvider } from './contexts/ThemeContext.tsx'
 import 'dayjs/locale/ru'
 import { useThemeContext } from './hooks/useThemeContext.tsx'
+import '@mantine/carousel/styles.css'
 
 dayjs.locale('ru')
 
