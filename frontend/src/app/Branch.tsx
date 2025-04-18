@@ -14,6 +14,14 @@ export type BranchType = {
   address: string
   latitude: number
   longitude: number
+  type: string
+  tradingArea: number
+  images: BranchImage[]
+}
+
+type BranchImage = {
+  id: string
+  link: string
 }
 
 function Branch() {
@@ -55,7 +63,7 @@ function Branch() {
   )
 }
 
-function BranchCard({branch}) {
+function BranchCard({branch}: {branch: BranchType}) {
   const [opened, { open, close }] = useDisclosure(false)
   
   return (

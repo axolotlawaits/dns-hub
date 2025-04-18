@@ -37,6 +37,7 @@ function Search() {
     <>
       <Modal opened={opened} onClose={() => {close(), setBranchResult([])}} title="Что будем искать?">
         <TextInput
+          data-autofocus
           size='md'
           placeholder="поиск"
           leftSection={<IconSearch size={20} />}
