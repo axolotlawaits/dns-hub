@@ -17,7 +17,7 @@ export const getBranch = async (req: Request, res: Response) => {
   const branchId = req.params.id as string
   const branch = await prisma.branch.findMany({
     where: {uuid: branchId},
-    include: {userData: true}
+    include: {userData: true, images: true}
   })
   if (branch) {
     return res.status(200).json(branch)
@@ -29,7 +29,8 @@ export const searchBranches = async (req: Request, res: Response) => {
   const text = req.query.text as string
   const result = await prisma.branch.findMany({
     where: {name: {contains: text, mode: 'insensitive'}, status: {in: [0, 1]}},
-    take: 10
+    take: 10,
+    include: {userData: true, images: true}
   })
   if (result) {
     return res.status(200).json(result)
