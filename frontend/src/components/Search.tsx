@@ -17,18 +17,19 @@ function Search() {
     const json = await response.json()
     if (response.ok) {
       setBranchResult(json)
-      console.log('ee')
     }
   }
 
   const onBranchClick = (id: string) => {
     close()
+    setBranchResult([])
     navigate(`/branch/${id}`)
   }
 
   const onSearchEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (text && e.key === 'Enter') {
       close()
+      setBranchResult([])
       navigate(`/branch?text=${text}`)
     }
   }
@@ -47,8 +48,8 @@ function Search() {
         <div id='search-results'>
           {branchResult.length > 0 && branchResult.map(branch => {
             return (
-              <div key={branch.uuid} className='search-result'>
-                <span onClick={() => onBranchClick(branch.uuid)}>{branch.name}</span>
+              <div key={branch.uuid} className='search-result' onClick={() => onBranchClick(branch.uuid)}>
+                <span>{branch.name}</span>
               </div>
             )
           })}

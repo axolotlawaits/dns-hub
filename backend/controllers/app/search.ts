@@ -15,7 +15,7 @@ export const quickSearch = async (req: Request, res: Response) => {
 
 export const getBranch = async (req: Request, res: Response) => {
   const branchId = req.params.id as string
-  const branch = await prisma.branch.findMany({
+  const branch = await prisma.branch.findUnique({
     where: {uuid: branchId},
     include: {userData: true, images: true}
   })

@@ -34,7 +34,6 @@ model Branch {
   city              String
   address           String
   last_update       DateTime
-  imagesURL         String
   latitude          Float
   longitude         Float
   totalArea         Int
