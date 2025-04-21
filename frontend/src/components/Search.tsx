@@ -5,10 +5,12 @@ import { API } from '../config/constants'
 import { useDisclosure } from '@mantine/hooks'
 import { useNavigate } from 'react-router'
 import { BranchType } from '../app/Branch'
+import { UserDataType } from '../app/Branch'
 
 function Search() {
   const [opened, { open, close }] = useDisclosure(false)
   const [branchResult, setBranchResult] = useState<BranchType[]>([])
+  const [userResult, setUserResult] = useState<UserDataType[]>([])
   const navigate = useNavigate()
   const [text, setText] = useState('')
 
@@ -16,7 +18,8 @@ function Search() {
     const response = await fetch(`${API}/search?text=${text}`)
     const json = await response.json()
     if (response.ok) {
-      setBranchResult(json)
+      setBranchResult(json.branches)
+      setUserResult(json.users)
     }
   }
 
@@ -46,15 +49,27 @@ function Search() {
           onKeyDown={onSearchEnter}
         />
         <div id='search-results'>
-          {branchResult.length > 0 && branchResult.map(branch => {
-            return (
-              <div key={branch.uuid} className='search-result' onClick={() => onBranchClick(branch.uuid)}>
-                <span>{branch.name}</span>
-              </div>
-            )
-          })}
+          {branchResult.length > 0 && 
+          <>
+            <h1 className='search-group-title'>Филиалы</h1>
+            {branchResult.map(branch => {
+              return (
+                <div key={branch.uuid} className='search-result' onClick={() => onBranchClick(branch.uuid)}>
+                  <span>{branch.name}</span>
+                </div>
+              )
+            })}
+            <h1 className='search-group-title'>Сотрудники</h1>
+            {userResult.map(user => {
+              return (
+                <div key={user.uuid} className='search-result' onClick={() => onBranchClick(user.uuid)}>
+                  <span>{user.fio}</span>
+                </div>
+              )
+            })}
+          </>
+          }
         </div>
-
       </Modal>
       <Button
         style={{ width: 200, display: 'flex', color: 'GrayText', fontWeight: '200'}}

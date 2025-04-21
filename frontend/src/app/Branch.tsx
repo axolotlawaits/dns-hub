@@ -19,7 +19,7 @@ export type BranchType = {
   userData: UserDataType[]
 }
 
-type UserDataType = {
+export type UserDataType = {
   uuid: string
   fio: string
   position: string

@@ -3,12 +3,16 @@ import { prisma } from '../../server';
 
 export const quickSearch = async (req: Request, res: Response) => {
   const text = req.query.text as string
-  const result = await prisma.branch.findMany({
+  const branches = await prisma.branch.findMany({
     where: {name: {contains: text, mode: 'insensitive'}, status: {in: [0, 1]}},
     take: 5
   })
-  if (result) {
-    return res.status(200).json(result)
+  const users = await prisma.userData.findMany({
+    where: {fio: {contains: text, mode: 'insensitive'}},
+    take: 5
+  })
+  if (branches && users) {
+    return res.status(200).json({branches, users})
   }
   res.status(400).json({error: 'ошибка при поиске филиалов'})
 }
