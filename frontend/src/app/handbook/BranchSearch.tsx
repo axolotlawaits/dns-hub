@@ -1,5 +1,5 @@
 import { Link, useSearchParams } from "react-router"
-import { API } from "../config/constants"
+import { API } from "../../config/constants"
 import { useEffect, useState } from "react"
 import { Map, Marker } from "pigeon-maps"
 import { Button, Modal, Image } from "@mantine/core"

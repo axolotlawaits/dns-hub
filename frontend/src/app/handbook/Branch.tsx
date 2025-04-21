@@ -1,6 +1,6 @@
 import { useParams } from "react-router"
-import { API } from "../config/constants"
-import { useEffect, useState } from "react"
+import { API } from "../../config/constants"
+import { Fragment, useEffect, useState } from "react"
 import { Map, Marker } from "pigeon-maps"
 import { Carousel } from "@mantine/carousel"
 import { Image } from "@mantine/core"
@@ -68,10 +68,10 @@ function Branch() {
               <div className="branch-card-block">
                 {branch.userData.map(user => {
                   return user.position.includes('Управляющий') &&
-                    <>
+                    <Fragment key={user.uuid}>
                       <span className="branch-card-text">{user.position}</span>
                       <span className="branch-card-text">{user.fio}</span>
-                    </>
+                    </Fragment>
                   
                 })}
               </div>
@@ -86,7 +86,7 @@ function Branch() {
         <Carousel slideSize="50%" height={500} slideGap="md">
           {branch.images.map((img: any) => {
             return (
-              <Carousel.Slide>
+              <Carousel.Slide key={img.id}>
                 <Image src={img.link} radius={'sm'} h={500} width='auto' fit="contain"/>
               </Carousel.Slide>
             )

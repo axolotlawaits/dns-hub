@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 import './styles/App.css'
 import './styles/Components.css'
+import './styles/Handbook.css'
 import Home from './Home'
 import Finance from '../features/Finance/Finance'
 import Login from './Login'
@@ -20,8 +21,8 @@ import Transformation from '../features/Transformation/Transformation'
 import Automation from '../features/Automation/Automation'
 import { useUserContext } from '../hooks/useUserContext'
 import MeterReading from '../features/AHO/MeterReading/MeterReading'
-import BranchSearch from './BranchSearch'
-import Branch from './Branch'
+import BranchSearch from './handbook/BranchSearch'
+import Branch from './handbook/Branch'
 
 function App() {
   const { user } = useUserContext()

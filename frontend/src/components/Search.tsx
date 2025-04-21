@@ -4,8 +4,8 @@ import { useState } from 'react'
 import { API } from '../config/constants'
 import { useDisclosure } from '@mantine/hooks'
 import { useNavigate } from 'react-router'
-import { BranchType } from '../app/Branch'
-import { UserDataType } from '../app/Branch'
+import { BranchType } from '../app/handbook/Branch'
+import { UserDataType } from '../app/handbook/Branch'
 
 function Search() {
   const [opened, { open, close }] = useDisclosure(false)
