@@ -23,6 +23,8 @@ import { useUserContext } from '../hooks/useUserContext'
 import MeterReading from '../features/AHO/MeterReading/MeterReading'
 import BranchSearch from './handbook/BranchSearch'
 import Branch from './handbook/Branch'
+import Employee from './handbook/Employee'
+import EmployeeSearch from './handbook/EmployeeSearch'
 
 function App() {
   const { user } = useUserContext()
@@ -54,6 +56,8 @@ function App() {
                   <Route path='/transformation' element={<Transformation />} />
                   <Route path='/branch/:id' element={<Branch />} />
                   <Route path='/branch/*' element={<BranchSearch />} />
+                  <Route path='/employee/:id' element={<Employee />} />
+                  <Route path='/employee/*' element={<EmployeeSearch />} />
                 </Routes>
               </div>
             </div>

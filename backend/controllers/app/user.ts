@@ -21,16 +21,3 @@ export const login = async (req: Request, res: Response) => {
     }
   }
 
-// export const searchUser = async (req: Request, res: Response): Promise<any> => {
-//   const name = req.query.search as string
-//   const projects = await prisma.userData.findMany({
-//     where: {name: {contains: name, mode: 'insensitive'}},
-//     take: 5,
-//     include: {images: true}
-//   })
-//   if (projects) {
-//     res.status(200).json(projects)
-//   } else {
-//     res.status(400).json({error: 'ошибка при поиске проектов'})
-//   }
-// }

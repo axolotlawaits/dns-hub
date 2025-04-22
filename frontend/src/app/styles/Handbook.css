@@ -75,3 +75,18 @@
 }
 
 /* employee */
+
+.employee-card {
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  padding: 25px 40px;
+  box-shadow: var(--soft-shadow);
+  background-color: var(--layer);
+}
+
+.employee-info {
+  display: flex;
+  flex-direction: column;
+  color: var(--font-aux);
+}

@@ -4,6 +4,7 @@ import { Fragment, useEffect, useState } from "react"
 import { Map, Marker } from "pigeon-maps"
 import { Carousel } from "@mantine/carousel"
 import { Image } from "@mantine/core"
+import { EmployeeType } from "./Employee"
 
 export type BranchType = {
   uuid: string
@@ -16,13 +17,7 @@ export type BranchType = {
   type: string
   tradingArea: number
   images: BranchImage[]
-  userData: UserDataType[]
-}
-
-export type UserDataType = {
-  uuid: string
-  fio: string
-  position: string
+  userData: EmployeeType[]
 }
 
 type BranchImage = {

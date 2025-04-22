@@ -5,12 +5,12 @@ import { API } from '../config/constants'
 import { useDisclosure } from '@mantine/hooks'
 import { useNavigate } from 'react-router'
 import { BranchType } from '../app/handbook/Branch'
-import { UserDataType } from '../app/handbook/Branch'
+import { EmployeeType } from '../app/handbook/Employee'
 
 function Search() {
   const [opened, { open, close }] = useDisclosure(false)
   const [branchResult, setBranchResult] = useState<BranchType[]>([])
-  const [userResult, setUserResult] = useState<UserDataType[]>([])
+  const [employeeResult, setEmployeeResult] = useState<EmployeeType[]>([])
   const navigate = useNavigate()
   const [text, setText] = useState('')
 
@@ -19,14 +19,22 @@ function Search() {
     const json = await response.json()
     if (response.ok) {
       setBranchResult(json.branches)
-      setUserResult(json.users)
+      setEmployeeResult(json.users)
     }
   }
 
   const onBranchClick = (id: string) => {
     close()
     setBranchResult([])
+    setEmployeeResult([])
     navigate(`/branch/${id}`)
+  }
+
+  const onEmployeeClick = (id: string) => {
+    close()
+    setEmployeeResult([])
+    setBranchResult([])
+    navigate(`/employee/${id}`)
   }
 
   const onSearchEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -60,10 +68,10 @@ function Search() {
               )
             })}
             <h1 className='search-group-title'>Сотрудники</h1>
-            {userResult.map(user => {
+            {employeeResult.map(employee => {
               return (
-                <div key={user.uuid} className='search-result' onClick={() => onBranchClick(user.uuid)}>
-                  <span>{user.fio}</span>
+                <div key={employee.uuid} className='search-result' onClick={() => onEmployeeClick(employee.uuid)}>
+                  <span>{employee.fio}</span>
                 </div>
               )
             })}
