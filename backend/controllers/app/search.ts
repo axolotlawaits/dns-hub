@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { prisma } from '../../server';
 
-export const quickSearch = async (req: Request, res: Response) => {
+export const quickSearch = async (req: Request, res: Response): Promise<any>  => {
   const text = req.query.text as string
   const branches = await prisma.branch.findMany({
     where: {name: {contains: text, mode: 'insensitive'}, status: {in: [0, 1]}},
@@ -17,7 +17,7 @@ export const quickSearch = async (req: Request, res: Response) => {
   res.status(400).json({error: 'ошибка при поиске филиалов'})
 }
 
-export const getBranch = async (req: Request, res: Response) => {
+export const getBranch = async (req: Request, res: Response): Promise<any>  => {
   const branchId = req.params.id as string
   const branch = await prisma.branch.findUnique({
     where: {uuid: branchId},
@@ -29,7 +29,7 @@ export const getBranch = async (req: Request, res: Response) => {
   res.status(400).json({error: 'ошибка при поиске филиала'})
 }
 
-export const searchBranches = async (req: Request, res: Response) => {
+export const searchBranches = async (req: Request, res: Response): Promise<any>  => {
   const text = req.query.text as string
   const result = await prisma.branch.findMany({
     where: {name: {contains: text, mode: 'insensitive'}, status: {in: [0, 1]}},
@@ -44,7 +44,7 @@ export const searchBranches = async (req: Request, res: Response) => {
 
 /* employee */
 
-export const getEmployee = async (req: Request, res: Response) => {
+export const getEmployee = async (req: Request, res: Response): Promise<any> => {
   const employeeId = req.params.id as string
   const employee = await prisma.userData.findUnique({
     where: {uuid: employeeId},
