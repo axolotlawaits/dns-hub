@@ -25,7 +25,7 @@ function BranchSearch() {
   }, [searchParams])
 
   return (
-    <div className="branch-card-wrapper">
+    <div className="branch-cards-wrapper">
       {branches.length > 0 && branches.map(branch => {
         return (
           <BranchCard key={branch.uuid} branch={branch} />
