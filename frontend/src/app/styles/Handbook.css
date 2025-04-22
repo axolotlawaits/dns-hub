@@ -4,6 +4,23 @@
   gap: 20px;
 }
 
+#search-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.search-info-text {
+  font-size: 14px;
+  font-weight: 200;
+  color: var(--font-aux);
+}
+
+.search-branches {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 /* branches */
 
 .branch-cards-wrapper {
@@ -81,6 +98,12 @@
 }
 
 /* employee */
+
+.employee-cards-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 
 .employee-card {
   display: flex;
