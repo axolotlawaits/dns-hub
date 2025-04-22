@@ -40,7 +40,9 @@ function Header() {
           </ActionIcon>
         }
         {user ? 
-          <Avatar name={user.name} onClick={onLogout} color="initials" />
+          <ActionIcon size="input-sm" variant="default" aria-label="ActionIcon with size as a number" radius={"xl"}>
+            <Avatar name={user.name} onClick={onLogout} color="initials" />
+          </ActionIcon>
         :
           <ActionIcon size="input-sm" variant="default" aria-label="ActionIcon with size as a number">
             <IconLogin size={24} onClick={() => navigate('/login')} />
