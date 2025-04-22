@@ -17,6 +17,24 @@ export const quickSearch = async (req: Request, res: Response): Promise<any>  =>
   res.status(400).json({error: 'ошибка при поиске филиалов'})
 }
 
+export const searchAll = async (req: Request, res: Response): Promise<any>  => {
+  const text = req.query.text as string
+  const branches = await prisma.branch.findMany({
+    where: {name: {contains: text, mode: 'insensitive'}, status: {in: [0, 1]}},
+    include: {userData: true, images: true},
+    take: 10
+  })
+  const users = await prisma.userData.findMany({
+    where: {fio: {contains: text, mode: 'insensitive'}},
+    include: {branch: true},
+    take: 10
+  })
+  if (branches && users) {
+    return res.status(200).json({branches, users})
+  }
+  res.status(400).json({error: 'ошибка при поиске филиалов'})
+}
+
 export const getBranch = async (req: Request, res: Response): Promise<any>  => {
   const branchId = req.params.id as string
   const branch = await prisma.branch.findUnique({
@@ -53,7 +71,7 @@ export const getEmployee = async (req: Request, res: Response): Promise<any> => 
   if (employee) {
     return res.status(200).json(employee)
   }
-  res.status(400).json({error: 'ошибка при поиске филиала'})
+  res.status(400).json({error: 'ошибка при поиске сотрудника'})
 }
 
 export const searchEmployees = async (req: Request, res: Response): Promise<any> => {
@@ -66,6 +84,6 @@ export const searchEmployees = async (req: Request, res: Response): Promise<any>
   if (employee) {
     res.status(200).json(employee)
   } else {
-    res.status(400).json({error: 'ошибка при поиске проектов'})
+    res.status(400).json({error: 'ошибка при поиске сотрудников'})
   }
 }

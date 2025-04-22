@@ -14,7 +14,7 @@ function Search() {
   const navigate = useNavigate()
   const [text, setText] = useState('')
 
-  const branchSearch = async (text: string) => {
+  const onSearch = async (text: string) => {
     const response = await fetch(`${API}/search?text=${text}`)
     const json = await response.json()
     if (response.ok) {
@@ -41,7 +41,8 @@ function Search() {
     if (text && e.key === 'Enter') {
       close()
       setBranchResult([])
-      navigate(`/branch?text=${text}`)
+      setEmployeeResult([])
+      navigate(`/search?text=${text}`)
     }
   }
 
@@ -53,7 +54,7 @@ function Search() {
           size='md'
           placeholder="поиск"
           leftSection={<IconSearch size={20} />}
-          onChange={(e) => e.target.value ? (branchSearch(e.target.value), setText(e.target.value)) : setBranchResult([])}
+          onChange={(e) => e.target.value ? (onSearch(e.target.value), setText(e.target.value)) : setBranchResult([])}
           onKeyDown={onSearchEnter}
         />
         <div id='search-results'>

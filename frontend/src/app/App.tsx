@@ -21,10 +21,9 @@ import Transformation from '../features/Transformation/Transformation'
 import Automation from '../features/Automation/Automation'
 import { useUserContext } from '../hooks/useUserContext'
 import MeterReading from '../features/AHO/MeterReading/MeterReading'
-import BranchSearch from './handbook/BranchSearch'
 import Branch from './handbook/Branch'
 import Employee from './handbook/Employee'
-import EmployeeSearch from './handbook/EmployeeSearch'
+import Handbook from './handbook/Handbook'
 
 function App() {
   const { user } = useUserContext()
@@ -54,10 +53,9 @@ function App() {
                   <Route path='/settlements' element={<Settlements />} />
                   <Route path='/supply' element={<Supply />} />
                   <Route path='/transformation' element={<Transformation />} />
+                  <Route path='/search/*' element={<Handbook />} />
                   <Route path='/branch/:id' element={<Branch />} />
-                  <Route path='/branch/*' element={<BranchSearch />} />
                   <Route path='/employee/:id' element={<Employee />} />
-                  <Route path='/employee/*' element={<EmployeeSearch />} />
                 </Routes>
               </div>
             </div>

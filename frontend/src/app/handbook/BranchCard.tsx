@@ -1,39 +1,9 @@
-import { Link, useSearchParams } from "react-router"
-import { API } from "../../config/constants"
-import { useEffect, useState } from "react"
+import { Link } from "react-router"
 import { Map, Marker } from "pigeon-maps"
 import { Button, Modal, Image } from "@mantine/core"
 import { useDisclosure } from "@mantine/hooks"
 import { Carousel } from '@mantine/carousel'
 import { BranchType } from "./Branch"
-
-function BranchSearch() {
-  const [searchParams] = useSearchParams()
-  const [branches, setBranches] = useState<BranchType[]>([])
-  const query = searchParams.get('text')
-
-  const getBranches = async () => {
-    const response = await fetch(`${API}/search/branch?text=${query}`)
-    const json = await response.json()
-    if (response.ok) {
-      setBranches(json)
-    }
-  }
-
-  useEffect(() => {
-    getBranches()
-  }, [searchParams])
-
-  return (
-    <div className="branch-cards-wrapper">
-      {branches.length > 0 && branches.map(branch => {
-        return (
-          <BranchCard key={branch.uuid} branch={branch} />
-        )
-      })}
-    </div>
-  )
-}
 
 function BranchCard({branch}: {branch: BranchType}) {
   const [opened, { open, close }] = useDisclosure(false)
@@ -52,7 +22,7 @@ function BranchCard({branch}: {branch: BranchType}) {
         </Carousel>
       </Modal>
       <div className="branch-card">
-        <Link to={`${branch.uuid}`}>
+        <Link to={`/branch/${branch.uuid}`}>
           <h1 className="branch-title">{branch.name}</h1>
         </Link>
         <div className="branch-card-main">
@@ -75,4 +45,4 @@ function BranchCard({branch}: {branch: BranchType}) {
   )
 }
 
-export default BranchSearch
+export default BranchCard
