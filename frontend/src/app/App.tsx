@@ -24,9 +24,13 @@ import MeterReading from '../features/AHO/MeterReading/MeterReading'
 import Branch from './handbook/Branch'
 import Employee from './handbook/Employee'
 import Handbook from './handbook/Handbook'
+import { useDisclosure } from '@mantine/hooks'
+import { AppShell } from '@mantine/core'
 
 function App() {
   const { user } = useUserContext()
+  const [desktopOpened, { toggle: toggleDesktop }] = useDisclosure(true)
+  const [mobileOpened, { toggle: toggleMobile }] = useDisclosure()
 
   return (
     <BrowserRouter>
@@ -34,33 +38,45 @@ function App() {
         <Route path='/*' element={!user ?
           <Navigate to='/login' />
         :
-          <div id="page">
-            <Header />
-            <div id='layout'>
-              <Navigation />
-              <div id='content'>
-                <Routes>
-                  <Route path='/' element={<Home />} />
-                  <Route path='/finance' element={<Finance />} />
-                  <Route path='/accounting' element={<Accounting />} />
-                  <Route path='/add' element={<Adds />} />
-                  <Route path='/aho' element={<Aho />} />
-                    <Route path="/aho/meter-reading" element={<MeterReading />} />
-                  <Route path='/automation' element={<Automation />} />
-                  <Route path='/jurists' element={<Jurists />} />
-                  <Route path='/problem-books' element={<ProblemBooks />} />
-                  <Route path='/service' element={<Service />} />
-                  <Route path='/settlements' element={<Settlements />} />
-                  <Route path='/supply' element={<Supply />} />
-                  <Route path='/transformation' element={<Transformation />} />
-                  <Route path='/search/*' element={<Handbook />} />
-                  <Route path='/branch/:id' element={<Branch />} />
-                  <Route path='/employee/:id' element={<Employee />} />
-                </Routes>
-              </div>
-            </div>
+          <AppShell
+            header={{ height: 60 }}
+            navbar={{
+              width: 250,
+              breakpoint: 'sm',
+              collapsed: { mobile: !mobileOpened, desktop: !desktopOpened },
+            }}
+            padding="md"
+            id='page'
+          >
+            <Header 
+              desktopOpened={desktopOpened} 
+              toggleDesktop={toggleDesktop} 
+              mobileOpened={mobileOpened}
+              toggleMobile={toggleMobile}
+            />
+            <Navigation />
+            <AppShell.Main id='content'>
+              <Routes>
+                <Route path='/' element={<Home />} />
+                <Route path='/finance' element={<Finance />} />
+                <Route path='/accounting' element={<Accounting />} />
+                <Route path='/add' element={<Adds />} />
+                <Route path='/aho' element={<Aho />} />
+                  <Route path="/aho/meter-reading" element={<MeterReading />} />
+                <Route path='/automation' element={<Automation />} />
+                <Route path='/jurists' element={<Jurists />} />
+                <Route path='/problem-books' element={<ProblemBooks />} />
+                <Route path='/service' element={<Service />} />
+                <Route path='/settlements' element={<Settlements />} />
+                <Route path='/supply' element={<Supply />} />
+                <Route path='/transformation' element={<Transformation />} />
+                <Route path='/search/*' element={<Handbook />} />
+                <Route path='/branch/:id' element={<Branch />} />
+                <Route path='/employee/:id' element={<Employee />} />
+              </Routes>
+            </AppShell.Main>
             <Footer />
-          </div>
+          </AppShell>
         } />
         <Route path="/login" element={<Login />} />
       </Routes>

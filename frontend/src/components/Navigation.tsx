@@ -1,7 +1,9 @@
+import { AppShell } from "@mantine/core"
 import { 
   IconAbacus, IconAddressBook, IconAutomation, IconBadgeAd, IconBasketPlus, IconFileExcel, 
   IconGavel, IconHammer, IconReportMoney, IconShieldCheck, IconTransform 
 } from "@tabler/icons-react"
+import { useState } from "react"
 import { Link } from "react-router"
 
 const options = [
@@ -20,7 +22,7 @@ const options = [
 
 function Navigation() {
   return (
-    <div id="navigation">
+    <AppShell.Navbar id="navigation">
       <div id="nav-options">
         {options.map((option, index) => {
           return (
@@ -31,7 +33,7 @@ function Navigation() {
           )
         })}
       </div>
-    </div>
+    </AppShell.Navbar>
   )
 }
 
