@@ -31,7 +31,7 @@ function Employee() {
   return (
     employee &&
     <div className="employee-card">
-      <h1>{employee.fio}</h1>
+      <h1 className="employee-card-title">{employee.fio}</h1>
       <div className="employee-info">
         <span>Должность: {employee.position}</span>
         <span>Почта: {employee.email}</span>

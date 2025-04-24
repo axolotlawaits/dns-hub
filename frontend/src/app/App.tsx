@@ -45,7 +45,7 @@ function App() {
               breakpoint: 'sm',
               collapsed: { mobile: !mobileOpened, desktop: !desktopOpened },
             }}
-            padding="md"
+            padding="xl"
             id='page'
           >
             <Header 

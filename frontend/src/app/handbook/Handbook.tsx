@@ -79,8 +79,8 @@ function Handbook() {
           <h2>Сотрудники</h2>
           {employees.map(employee => {
             return (
-              <div className="employee-card">
-                <h1>{employee.fio}</h1>
+              <div key={employee.uuid} className="employee-card">
+                <h1 className="employee-card-title">{employee.fio}</h1>
                 <div className="employee-info">
                   <span>Должность: {employee.position}</span>
                   <span>Почта: {employee.email}</span>

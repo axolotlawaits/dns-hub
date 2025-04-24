@@ -14,7 +14,7 @@ function BranchCard({branch}: {branch: BranchType}) {
         <Carousel slideSize="70%" height={500} slideGap="md">
           {branch.images.map((img: any) => {
             return (
-              <Carousel.Slide>
+              <Carousel.Slide key={img.id}>
                 <Image src={img.link} radius={'sm'} h={500} width='auto' fit="contain"/>
               </Carousel.Slide>
             )
@@ -37,7 +37,7 @@ function BranchCard({branch}: {branch: BranchType}) {
           </div>
         </div>
         <Button onClick={open} variant="light">галерея</Button>
-        <Map height={300} center={[branch.latitude, branch.longitude]} zoom={13}>
+        <Map height={300} center={[branch.latitude, branch.longitude]} zoom={14} mouseEvents={false} >
           <Marker width={50} anchor={[branch.latitude, branch.longitude]} />
         </Map>
       </div>
