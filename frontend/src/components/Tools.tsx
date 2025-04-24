@@ -1,6 +1,14 @@
+import { ReactNode } from "react"
 import { Link } from "react-router"
 
-function Tools({tools}) {
+type ToolType = {
+  name: string
+  description: string
+  link: string
+  svg: ReactNode
+}
+
+function Tools({tools}: {tools: ToolType[]}) {
   return (
     <div>
       {tools.map(tool => {
