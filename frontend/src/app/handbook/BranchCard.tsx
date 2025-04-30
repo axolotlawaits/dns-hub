@@ -10,7 +10,7 @@ function BranchCard({branch}: {branch: BranchType}) {
   
   return (
     <>
-      <Modal opened={opened} onClose={close} title="Галерея" size="xl" centered >
+      <Modal opened={opened} onClose={close} title={branch.name} size="xl" centered >
         <Carousel slideSize="70%" height={500} slideGap="md">
           {branch.images.map((img: any) => {
             return (

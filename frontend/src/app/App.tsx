@@ -40,6 +40,7 @@ function App() {
         :
           <AppShell
             header={{ height: 60 }}
+            footer={{ height: 65 }}
             navbar={{
               width: 250,
               breakpoint: 'sm',

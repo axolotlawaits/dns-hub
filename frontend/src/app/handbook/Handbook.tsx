@@ -4,7 +4,8 @@ import { BranchType } from "./Branch"
 import { EmployeeType } from "./Employee"
 import BranchCard from './BranchCard'
 import { API } from "../../config/constants"
-import { Select } from "@mantine/core"
+import { ActionIcon, Select } from "@mantine/core"
+import { IconFilterOff } from "@tabler/icons-react"
 
 function Handbook() {
   const [searchParams] = useSearchParams()
@@ -12,6 +13,8 @@ function Handbook() {
   const [employees, setEmployees] = useState<EmployeeType[]>([])
   const [searchFilter, setSearchFilter] = useState<string | null>('')
   const query = searchParams.get('text')
+  const [cities, setCities] = useState<string[]>([])
+  const [cityFilter, setCityFilter] = useState<string | null>('')
 
   const getSearchResults = async () => {
     const response = await fetch(`${API}/search/all?text=${query}`)
@@ -23,7 +26,7 @@ function Handbook() {
   }
 
   const getBranches = async () => {
-    const response = await fetch(`${API}/search/branch?text=${query}`)
+    const response = await fetch(`${API}/search/branch?text=${query}&city=${cityFilter}`)
     const json = await response.json()
     if (response.ok) {
       setBranches(json)
@@ -38,8 +41,17 @@ function Handbook() {
     }
   }
 
+  const getCities = async () => {
+    const response = await fetch(`${API}/search/city?text=${query}`)
+    const json = await response.json()
+    if (response.ok) {
+      setCities(json)
+    }
+  }
+
   useEffect(() => {
     getSearchResults()
+    getCities()
   }, [searchParams])
 
   useEffect(() => {
@@ -47,17 +59,39 @@ function Handbook() {
     setEmployees([])
     searchFilter === 'branch' && getBranches()
     searchFilter === 'employee' && getEmployees()
-  }, [searchFilter])
+  }, [searchFilter, cityFilter])
+
+  const clearFilters = () => {
+    setSearchFilter('')
+    setCityFilter('')
+    getSearchResults()
+  }
 
   return (
     <div id="search-page">
-      <Select 
-        data={[{value: 'branch', label: 'филиал'}, {value: 'employee', label: 'сотрудник'}]} 
-        value={searchFilter} 
-        onChange={setSearchFilter} 
-        placeholder="Поиск по..." 
-        style={{ width: 300 }}
-      />
+      <div id="search-filters">
+        <Select 
+          data={[{value: 'branch', label: 'филиал'}, {value: 'employee', label: 'сотрудник'}]} 
+          value={searchFilter} 
+          onChange={setSearchFilter} 
+          placeholder="Поиск по..." 
+          style={{ width: 300 }}
+        />
+        {searchFilter === 'branch' &&
+          <Select 
+            data={cities} 
+            value={cityFilter} 
+            onChange={setCityFilter} 
+            placeholder="Выбрать город" 
+            style={{ width: 300 }}
+          />
+        }
+        {(searchFilter || cityFilter) &&
+          <ActionIcon onClick={clearFilters} variant="filled" color="red" size={36} aria-label="clear-filters">
+            <IconFilterOff />
+          </ActionIcon>
+        }
+      </div>
       <div id="search-info">
         <span className="search-info-text">Ключевая фраза: {query}</span>
         <span className="search-info-text">Найдено: филиалы: {branches.length}, сотрудники: {employees.length}</span>

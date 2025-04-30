@@ -1,8 +1,9 @@
+import { AppShell } from "@mantine/core"
 import { IconBasket, IconBriefcase, IconCube, IconNews } from "@tabler/icons-react"
 
 function Footer() {
   return (
-    <div id="footer-wrapper">
+    <AppShell.Footer id="footer-wrapper">
       <div id="footer">
         <div id="footer-nav">
           <a href={`https://dns-shop.ru`} className="footer-nav-option" target="_blank">
@@ -35,7 +36,7 @@ function Footer() {
           </a>
         </div>
       </div>
-    </div>
+    </AppShell.Footer>
   )
 }
 

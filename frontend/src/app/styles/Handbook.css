@@ -4,6 +4,11 @@
   gap: 20px;
 }
 
+#search-filters {
+  display: flex;
+  gap: 10px;
+}
+
 #search-info {
   display: flex;
   flex-direction: column;

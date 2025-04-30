@@ -49,8 +49,10 @@ export const getBranch = async (req: Request, res: Response): Promise<any>  => {
 
 export const searchBranches = async (req: Request, res: Response): Promise<any>  => {
   const text = req.query.text as string
+  const city = (req.query.city as string) || undefined
+
   const result = await prisma.branch.findMany({
-    where: {name: {contains: text, mode: 'insensitive'}, status: {in: [0, 1]}},
+    where: {name: {contains: text, mode: 'insensitive'}, city: city, status: {in: [0, 1]}},
     take: 10,
     include: {userData: true, images: true}
   })
@@ -75,14 +77,28 @@ export const getEmployee = async (req: Request, res: Response): Promise<any> => 
 }
 
 export const searchEmployees = async (req: Request, res: Response): Promise<any> => {
-  const text = req.query.search as string
-  const employee = await prisma.userData.findMany({
+  const text = req.query.text as string
+  const employees = await prisma.userData.findMany({
     where: {fio: {contains: text, mode: 'insensitive'}},
     take: 10,
     include: {branch: true}
   })
-  if (employee) {
-    res.status(200).json(employee)
+  if (employees) {
+    res.status(200).json(employees)
+  } else {
+    res.status(400).json({error: 'ошибка при поиске сотрудников'})
+  }
+}
+
+export const searchCities = async (req: Request, res: Response): Promise<any> => {
+  const text = req.query.text as string
+  const cities = await prisma.branch.findMany({
+    where: {city: {contains: text, mode: 'insensitive'}},
+    select: {city: true},
+    distinct: ['city']
+  })
+  if (cities) {
+    res.status(200).json(cities.map(city => city.city))
   } else {
     res.status(400).json({error: 'ошибка при поиске сотрудников'})
   }
