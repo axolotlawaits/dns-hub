@@ -12,6 +12,7 @@ body.dark {
   --font-info: #748ffc;  /* Цвет акцента (оранжевый) */ 
   --font-info-contrast: #F9CB9C; /* Акцент контрастный */ 
   --font-contrast: #2A2D35; /* Текст на светлом фоне */ 
+  --font-danger: #f03e3e;
   --bg: #1E293B;        /* Основной фон */ 
   --bg-alpha: rgba(75, 75, 75, 0.7);
   --layer: #2A2D35;     /* Фон слоёв */ 
@@ -29,6 +30,7 @@ body {
   --font-info: #9775fa;  /* Цвет акцента (жёлтый) */
   --font-info-contrast: #FFB44C; /* Акцент контрастный */ 
   --font-contrast: #F5F5F5; /* Текст на темном фоне */ 
+  --font-danger: #ff6b6b;
   --bg: #f6f9ff;        /* Основной фон */ 
   --bg-alpha: rgba(255, 255, 255, 0.7);
   --layer: #FFFFFF;     /* Фон слоёв */ 

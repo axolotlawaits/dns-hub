@@ -2,8 +2,8 @@ import Search from "./Search"
 import { Link } from "react-router";
 import logoLight from '../assets/images/logo-light.png'
 import logoDark from '../assets/images/logo-dark.png'
-import { ActionIcon, AppShell, Avatar, Burger, Group } from "@mantine/core";
-import { IconBrightnessDown, IconLogin, IconMoon } from "@tabler/icons-react";
+import { ActionIcon, AppShell, Avatar, Burger, Group, Menu } from "@mantine/core";
+import { IconBrightnessDown, IconLogin, IconLogout, IconMoon } from "@tabler/icons-react";
 import { useNavigate } from "react-router";
 import { useUserContext } from "../hooks/useUserContext";
 import { useThemeContext } from "../hooks/useThemeContext";
@@ -53,9 +53,16 @@ function Header({desktopOpened, toggleDesktop, mobileOpened, toggleMobile}: Head
           </ActionIcon>
         }
         {user ? 
-          <ActionIcon size="input-sm" variant="default" aria-label="ActionIcon with size as a number" radius={"xl"}>
-            <Avatar name={user.name} onClick={onLogout} color="initials" />
-          </ActionIcon>
+          <Menu shadow="md" width={200}>
+            <Menu.Target>
+              <ActionIcon size="input-sm" variant="default" aria-label="ActionIcon with size as a number" radius={"xl"}>
+                <Avatar name={user.name} color="indigo" />
+              </ActionIcon>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Item onClick={onLogout} color="red" leftSection={<IconLogout size={14} />}>выйти</Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
         :
           <ActionIcon size="input-sm" variant="default" aria-label="ActionIcon with size as a number">
             <IconLogin size={24} onClick={() => navigate('/login')} />
