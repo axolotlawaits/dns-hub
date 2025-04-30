@@ -1,6 +1,6 @@
-import { AppShell } from "@mantine/core"
+import { ActionIcon, AppShell, Tooltip } from "@mantine/core"
 import { 
-  IconAbacus, IconAddressBook, IconAutomation, IconBadgeAd, IconBasketPlus, IconFileExcel, 
+  IconAbacus, IconAddressBook, IconAutomation, IconBadgeAd, IconBasketPlus, IconChevronLeftPipe, IconChevronRightPipe, IconFileExcel, 
   IconGavel, IconHammer, IconReportMoney, IconShieldCheck, IconTransform 
 } from "@tabler/icons-react"
 import { Link } from "react-router"
@@ -19,19 +19,46 @@ const options = [
   {name: 'Сервис', link: 'service', icon: <IconHammer size={24}/>}
 ]
 
-function Navigation() {
+type NavProps = {
+  navOpened: boolean
+  toggleNav: () => void
+}
+
+function Navigation({navOpened, toggleNav}: NavProps) {
   return (
-    <AppShell.Navbar id="navigation">
-      <div id="nav-options">
-        {options.map((option, index) => {
-          return (
-            <Link to={`/${option.link}`} key={index} className="nav-option">
-              {option.icon}
-              <span>{option.name}</span>
-            </Link>
-          )
-        })}
-      </div>
+    <AppShell.Navbar id="navigation" className={!navOpened ? 'collapsed' : ''}>
+      <ActionIcon
+        variant="filled"
+        size="md"
+        onClick={toggleNav}
+        aria-label={navOpened ? 'Close menu' : 'Open menu'}
+      >
+        {navOpened ? <IconChevronLeftPipe size={24} /> : <IconChevronRightPipe size={24} />}
+      </ActionIcon>
+      {navOpened ?
+        <div id="nav-options">
+          {options.map((option, index) => {
+            return (
+              <Link to={`/${option.link}`} key={index} className="nav-option">
+                {option.icon}
+                <span>{option.name}</span>
+              </Link>
+            )
+          })}
+        </div>
+      :
+        <div id="nav-options" className="collapsed">
+          {options.map((option, index) => {
+            return (
+              <Link to={`/${option.link}`} key={index} className="nav-option collapsed">
+                <Tooltip label={option.name} position="right" offset={12}>
+                  {option.icon}
+                </Tooltip>
+              </Link>
+            )
+          })}
+        </div>
+      }
     </AppShell.Navbar>
   )
 }

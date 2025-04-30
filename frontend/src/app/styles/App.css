@@ -113,15 +113,34 @@ a:active {
 }
 
 #navigation {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  width: fit-content;
   background-color: var(--bg);
   color: var(--font);
-  padding: 20px 10px 20px 40px;
+  padding: 20px 10px;
   z-index: 1;
   flex: 1;
+  align-items: flex-end;
+  width: 225px;
+  transition: width 0.15s ease-out;
+}
+
+#navigation.collapsed {
+  align-items: center;
+  width: 55px;
+}
+
+#nav-tag {
+  position: absolute;
+  top: 0px;
+  right: 0px;
 }
 
 #nav-options {
   display: flex;
+  width: fit-content;
   flex-direction: column;
   gap: 15px;
 }
@@ -139,6 +158,10 @@ a:active {
 .nav-option:hover {
   background-color: var(--select);
   cursor: pointer;
+}
+
+.nav-option.collapsed {
+  padding: 0px 5px;
 }
 
 #content {

@@ -2,20 +2,13 @@ import Search from "./Search"
 import { Link } from "react-router";
 import logoLight from '../assets/images/logo-light.png'
 import logoDark from '../assets/images/logo-dark.png'
-import { ActionIcon, AppShell, Avatar, Burger, Group, Menu } from "@mantine/core";
+import { ActionIcon, AppShell, Avatar, Menu } from "@mantine/core";
 import { IconBrightnessDown, IconLogin, IconLogout, IconMoon } from "@tabler/icons-react";
 import { useNavigate } from "react-router";
 import { useUserContext } from "../hooks/useUserContext";
 import { useThemeContext } from "../hooks/useThemeContext";
 
-type HeaderProps = {
-  desktopOpened: boolean
-  mobileOpened: boolean
-  toggleDesktop: () => void
-  toggleMobile: () => void
-}
-
-function Header({desktopOpened, toggleDesktop, mobileOpened, toggleMobile}: HeaderProps) {
+function Header() {
   const navigate = useNavigate()
   const { user, logout } = useUserContext()
   const { isDark, toggleTheme } = useThemeContext()
@@ -29,10 +22,6 @@ function Header({desktopOpened, toggleDesktop, mobileOpened, toggleMobile}: Head
   return (
     <AppShell.Header id='header'>
       <div id="header-left">
-        <Group h="100%" px="md">
-          <Burger opened={mobileOpened} onClick={toggleMobile} hiddenFrom="sm" size="md" />
-          <Burger opened={desktopOpened} onClick={toggleDesktop} visibleFrom="sm" size="md" />
-        </Group>
         <Link to={'/'} id="header-logo-group">
           {isDark ? (
             <img src={logoDark} id="header-logo" alt="Dark Logo" />

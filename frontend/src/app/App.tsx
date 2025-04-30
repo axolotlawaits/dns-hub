@@ -29,8 +29,7 @@ import { AppShell } from '@mantine/core'
 
 function App() {
   const { user } = useUserContext()
-  const [desktopOpened, { toggle: toggleDesktop }] = useDisclosure(true)
-  const [mobileOpened, { toggle: toggleMobile }] = useDisclosure()
+  const [navOpened, { toggle: toggleNav }] = useDisclosure(true)
 
   return (
     <BrowserRouter>
@@ -42,20 +41,18 @@ function App() {
             header={{ height: 60 }}
             footer={{ height: 65 }}
             navbar={{
-              width: 250,
+              width: navOpened ? 225 : 55,
               breakpoint: 'sm',
-              collapsed: { mobile: !mobileOpened, desktop: !desktopOpened },
+              
             }}
             padding="xl"
             id='page'
           >
-            <Header 
-              desktopOpened={desktopOpened} 
-              toggleDesktop={toggleDesktop} 
-              mobileOpened={mobileOpened}
-              toggleMobile={toggleMobile}
+            <Header />
+            <Navigation 
+              navOpened={navOpened} 
+              toggleNav={toggleNav} 
             />
-            <Navigation />
             <AppShell.Main id='content'>
               <Routes>
                 <Route path='/' element={<Home />} />
