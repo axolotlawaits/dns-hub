@@ -1,0 +1,39 @@
+#route-wrapper{
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+#route-days-wrapper{
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.day-table{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: var(--outline-shadow);
+  padding: 10px;
+  background-color: var(--layer);
+  border-radius: 5px;
+}
+
+/* card */
+
+.route-card{
+  width: 300px;
+}
+
+.route-card-footer{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.route-created{
+  font-size: 12px;
+  color: #737373;
+}
+
