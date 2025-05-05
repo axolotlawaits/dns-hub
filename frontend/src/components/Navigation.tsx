@@ -3,6 +3,7 @@ import {
   IconAbacus, IconAddressBook, IconAutomation, IconBadgeAd, IconBasketPlus, IconChevronLeftPipe, IconChevronRightPipe, IconFileExcel, 
   IconGavel, IconHammer, IconReportMoney, IconShieldCheck, IconTransform 
 } from "@tabler/icons-react"
+import { useState } from "react"
 import { Link } from "react-router"
 
 const options = [
@@ -25,6 +26,8 @@ type NavProps = {
 }
 
 function Navigation({navOpened, toggleNav}: NavProps) {
+  const [activeTab, setActiveTab] = useState('')
+
   return (
     <AppShell.Navbar id="navigation" className={!navOpened ? 'collapsed' : ''}>
       <ActionIcon
@@ -39,7 +42,12 @@ function Navigation({navOpened, toggleNav}: NavProps) {
         <div id="nav-options">
           {options.map((option, index) => {
             return (
-              <Link to={`/${option.link}`} key={index} className="nav-option">
+              <Link 
+                to={`/${option.link}`} 
+                key={index} 
+                className={`nav-option ${activeTab === option.name ? 'active' : ''}`} 
+                onClick={() => setActiveTab(option.name)}
+              >
                 {option.icon}
                 <span>{option.name}</span>
               </Link>
@@ -50,7 +58,12 @@ function Navigation({navOpened, toggleNav}: NavProps) {
         <div id="nav-options" className="collapsed">
           {options.map((option, index) => {
             return (
-              <Link to={`/${option.link}`} key={index} className="nav-option collapsed">
+              <Link 
+                to={`/${option.link}`} 
+                key={index} 
+                className={`nav-option collapsed ${activeTab === option.name ? 'active' : ''}`} 
+                onClick={() => setActiveTab(option.name)}
+              >
                 <Tooltip label={option.name} position="right" offset={12}>
                   {option.icon}
                 </Tooltip>

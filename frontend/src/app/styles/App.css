@@ -72,7 +72,6 @@ a:active {
   width: 100%;
   min-height: 100vh;
   background-color: var(--bg);
-  padding: 0px 10px;
 }
 
 #header {
@@ -153,6 +152,10 @@ a:active {
   align-items: center;
   padding: 0px 15px;
   height: 35px;
+}
+
+.nav-option.active {
+  background-color: var(--select);
 }
 
 .nav-option:hover {
