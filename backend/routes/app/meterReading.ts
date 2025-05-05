@@ -5,7 +5,7 @@ import {
   createMeterReading,
   updateMeterReading,
   deleteMeterReading,
-} from '../../controllers/app/MeterReading';
+} from '../../controllers/app/meterReading';
 
 const router = Router();
 

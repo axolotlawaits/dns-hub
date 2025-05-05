@@ -34,7 +34,6 @@ model Branch {
   city              String
   address           String
   last_update       DateTime
-  imagesURL         String
   latitude          Float
   longitude         Float
   totalArea         Int
@@ -43,6 +42,25 @@ model Branch {
   type              String
   userData          UserData[]
   images            BranchImage[]
+}
+
+model Type {
+  id                String        @id @default(uuid())
+  model_uuid        String
+  chapter           String
+  name              String
+  Tool              Tool          @relation(fields: [model_uuid], references: [id])
+}
+
+model Tool {
+  id                String        @id @default(uuid())
+  parent_id         String?
+  name              String
+  icon              String
+  link              String
+  description       String?
+  order             Int
+  types             Type[]
 }
 
 model BranchImage {
@@ -55,16 +73,18 @@ model BranchImage {
 /* app models */
 
 model User {
-  id               String         @id @default(uuid())
-  name             String
-  email            String         @unique
-  position         String
-  branch           String
-  image            String?         
-  login            String         @unique
-  updatedAt        DateTime       @updatedAt
-  news             News[]
-  meterReadings    MeterReading[] 
+    id               String         @id @default(uuid())
+    name             String
+    email            String         @unique
+    position         String
+    branch           String
+    image            String?
+    login            String         @unique
+    updatedAt        DateTime       @updatedAt
+    correspondences  Correspondence[]
+    attachments      CorrespondenceAttachment[]
+    news             News[]
+    meterReadings    MeterReading[]
 }
 
 model News {
@@ -85,4 +105,28 @@ model MeterReading {
   user             User          @relation(fields: [userId], references: [id])
   userId           String
   counter          Float
+}
+
+model Correspondence {
+    id               String                     @id @default(uuid())
+    createdAt        DateTime                   @default(now())
+    ReceiptDate      DateTime
+    userAdd          String
+    from             String
+    to               String
+    content          String
+    typeMail         String
+    numberMail       String
+    attachments      CorrespondenceAttachment[]
+    user             User                       @relation(fields: [userAdd], references: [id])
+}
+
+model CorrespondenceAttachment {
+    id               String                     @id @default(uuid())
+    createdAt        DateTime                   @default(now())
+    record_id        String                     
+    userAdd          String
+    source           String
+    correspondence   Correspondence             @relation(fields: [record_id], references: [id])
+    user             User                       @relation(fields: [userAdd], references: [id])
 }

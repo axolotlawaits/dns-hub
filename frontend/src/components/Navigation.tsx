@@ -1,38 +1,80 @@
-import { 
-  IconAbacus, IconAddressBook, IconAutomation, IconBadgeAd, IconBasketPlus, IconFileExcel, 
-  IconGavel, IconHammer, IconReportMoney, IconShieldCheck, IconTransform 
-} from "@tabler/icons-react"
-import { Link } from "react-router"
+import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import * as TablerIcons from "@tabler/icons-react";
+import { API } from "../config/constants";
 
-const options = [
-  {name: 'Финансы', link: 'finance', icon: <IconReportMoney size={24}/>},
-  {name: 'АХО', link: 'aho', icon: <IconShieldCheck size={24}/>},
-  {name: 'Юристы', link: 'jurists', icon: <IconGavel size={24}/>},
-  {name: 'Бухгалтерия', link: 'accounting', icon: <IconAbacus size={24}/>},
-  {name: 'Взаиморасчеты', link: 'settlements', icon: <IconFileExcel size={24}/>},
-  {name: 'Задачники', link: 'problem-books', icon: <IconAddressBook size={24}/>},
-  {name: 'Реклама', link: 'add', icon: <IconBadgeAd size={24}/>},
-  {name: 'Снабжение', link: 'supply', icon: <IconBasketPlus size={24}/>},
-  {name: 'Трансформация', link: 'transformation', icon: <IconTransform size={24}/>},
-  {name: 'Автоматизация', link: 'automation', icon: <IconAutomation size={24}/>},
-  {name: 'Сервис', link: 'service', icon: <IconHammer size={24}/>}
-]
+interface Tool {
+  id: string;
+  parent_id: string | null;
+  name: string;
+  icon: string;
+  link: string;
+  order: number;
+  types: any[];
+}
 
 function Navigation() {
+  const [tools, setTools] = useState<Tool[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await fetch(`${API}/navigation`);
+        if (!response.ok) {
+          throw new Error('Ошибка при загрузке навигации');
+        }
+        const data = await response.json();
+        setTools(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Неизвестная ошибка');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  if (isLoading) return <div className="loading">Загрузка...</div>;
+  if (error) return <div className="error">{error}</div>;
+
+  const getIconComponent = (iconName: string) => {
+    // Явное приведение типа для иконки
+    const IconComponent = TablerIcons[iconName as keyof typeof TablerIcons] as React.ComponentType<{
+      size?: number;
+      className?: string;
+      stroke?: number;
+    }>;
+    
+    return IconComponent ? <IconComponent size={24} /> : null;
+  };
+
+  const handleClick = (link: string, id: string) => {
+    navigate(link, { state: { id } });
+  };
+
   return (
     <div id="navigation">
       <div id="nav-options">
-        {options.map((option, index) => {
-          return (
-            <Link to={`/${option.link}`} key={index} className="nav-option">
-              {option.icon}
-              <span>{option.name}</span>
-            </Link>
-          )
-        })}
+        {tools
+          .sort((a, b) => a.order - b.order)
+          .map((tool) => (
+            <div
+              key={tool.id}
+              className="nav-option"
+              onClick={() => handleClick(`/${tool.link}`, tool.id)}
+              style={{ cursor: 'pointer' }}
+            >
+              {getIconComponent(tool.icon)}
+              <span>{tool.name}</span>
+            </div>
+          ))}
       </div>
     </div>
-  )
+  );
 }
 
-export default Navigation
+export default Navigation;

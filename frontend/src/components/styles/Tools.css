@@ -1,0 +1,6 @@
+.tools-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px; /* Расстояние между карточками */
+    padding: 16px; /* Отступы внутри контейнера */
+  }

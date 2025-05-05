@@ -1,6 +1,7 @@
 export const PaginationOption = [
-    { value: '5', label: '5 строк' },
-    { value: '10', label: '10 строк' },
-    { value: '20', label: '20 строк' },
-    { value: '50', label: '50 строк' },
-  ];
+    { value: '10', label: '10' },
+    { value: '20', label: '20' },
+    { value: '30', label: '30' },
+    { value: '40', label: '40' },
+    { value: '50', label: '50' },
+  ]

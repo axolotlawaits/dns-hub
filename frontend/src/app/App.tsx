@@ -21,6 +21,7 @@ import Automation from '../features/Automation/Automation'
 import { useUserContext } from '../hooks/useUserContext'
 import SearchResults from './SearchResults'
 import MeterReading from '../features/AHO/MeterReading/MeterReading'
+import Correspondence from '../features/AHO/Correspondence/Correspondence'
 import Branch from './Branch'
 
 function App() {
@@ -44,6 +45,7 @@ function App() {
                   <Route path='/add' element={<Adds />} />
                   <Route path='/aho' element={<Aho />} />
                     <Route path="/aho/meter-reading" element={<MeterReading />} />
+                    <Route path="/aho/correspondence" element={<Correspondence />} />
                   <Route path='/automation' element={<Automation />} />
                   <Route path='/jurists' element={<Jurists />} />
                   <Route path='/problem-books' element={<ProblemBooks />} />

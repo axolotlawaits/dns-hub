@@ -1,7 +1,14 @@
-export const formatName = (name: string) => {
-    const nameArray = name.split(' ')
-    return nameArray[0] + ` ${nameArray[1][0]}.` + `${nameArray[2][0]}.`
+export const formatName = (name: string): string => {
+  const nameArray = name.split(' ');
+  if (nameArray.length === 1) {
+    return nameArray[0];
   }
+  if (nameArray.length === 2) {
+    return `${nameArray[0]} ${nameArray[1][0]}.`;
+  }
+  return `${nameArray[0]} ${nameArray[1][0]}.${nameArray[2][0]}.`;
+};
+
   
   export const truncateText = (text: string, maxLength: number): string => {
     const plainText = text.replace(/<[^>]*>/g, '');
