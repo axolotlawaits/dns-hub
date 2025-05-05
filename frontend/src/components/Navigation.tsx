@@ -1,3 +1,5 @@
+import { ActionIcon, AppShell, Tooltip } from "@mantine/core"
+import { IconChevronLeftPipe, IconChevronRightPipe} from "@tabler/icons-react"
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import * as TablerIcons from "@tabler/icons-react";
@@ -13,7 +15,13 @@ interface Tool {
   types: any[];
 }
 
-function Navigation() {
+type NavProps = {
+  navOpened: boolean
+  toggleNav: () => void
+}
+
+function Navigation({navOpened, toggleNav}: NavProps) {
+  const [activeTab, setActiveTab] = useState('')
   const [tools, setTools] = useState<Tool[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -52,29 +60,57 @@ function Navigation() {
     return IconComponent ? <IconComponent size={24} /> : null;
   };
 
-  const handleClick = (link: string, id: string) => {
+  const handleClick = (link: string, id: string, tool: Tool) => {
+    setActiveTab(tool.name)
     navigate(link, { state: { id } });
   };
 
   return (
-    <div id="navigation">
-      <div id="nav-options">
-        {tools
+    <AppShell.Navbar id="navigation" className={!navOpened ? 'collapsed' : ''}>
+      <ActionIcon
+        variant="filled"
+        size="md"
+        onClick={toggleNav}
+        aria-label={navOpened ? 'Close menu' : 'Open menu'}
+      >
+        {navOpened ? <IconChevronLeftPipe size={24} /> : <IconChevronRightPipe size={24} />}
+      </ActionIcon>
+      {navOpened ?
+        <div id="nav-options">
+          {tools
           .sort((a, b) => a.order - b.order)
           .map((tool) => (
             <div
               key={tool.id}
-              className="nav-option"
-              onClick={() => handleClick(`/${tool.link}`, tool.id)}
+              className={`nav-option ${activeTab === tool.name ? 'active' : ''}`} 
+              onClick={() => handleClick(`/${tool.link}`, tool.id, tool)}
               style={{ cursor: 'pointer' }}
             >
               {getIconComponent(tool.icon)}
               <span>{tool.name}</span>
             </div>
           ))}
-      </div>
-    </div>
-  );
+        </div>
+      :
+        <div id="nav-options" className="collapsed">
+          {tools
+          .sort((a, b) => a.order - b.order)
+          .map((tool) => (
+            <div
+              key={tool.id}
+              className={`nav-option collapsed ${activeTab === tool.name ? 'active' : ''}`} 
+              onClick={() => handleClick(`/${tool.link}`, tool.id, tool)}
+              style={{ cursor: 'pointer' }}
+            >
+              <Tooltip label={tool.name} position="right" offset={12}>
+                {getIconComponent(tool.icon)}
+              </Tooltip>
+            </div>
+          ))}
+        </div>
+      }
+    </AppShell.Navbar>
+  )
 }
 
 export default Navigation;

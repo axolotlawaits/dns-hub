@@ -16,12 +16,13 @@ export async function ldapAuth(req: Request, res: Response, next: NextFunction) 
       attributes: ['department', 'displayName', 'description', 'mail', 'thumbnailPhoto'] 
     }
 
-    const user = await authenticate(options);
-    res.locals.user = user
+    const user = await authenticate(options)
+
     if (user.thumbnailPhoto) {
-      const thumbnailBase64 = user.thumbnailPhoto.toString('base64');
+      user.thumbnailPhoto = user.thumbnailPhoto.toString('base64');
     }
 
+    res.locals.user = user
     next()
   } catch (error) {
     res.status(400).send({ message: 'ldap internal issue' })
