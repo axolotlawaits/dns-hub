@@ -27,6 +27,8 @@ import Employee from './handbook/Employee'
 import Handbook from './handbook/Handbook'
 import { useDisclosure } from '@mantine/hooks'
 import { AppShell } from '@mantine/core'
+import RouteComponent from '../features/Supply/Loaders/RouteComponent'
+import LoadersHome from '../features/Supply/Loaders/LoadersHome'
 
 function App() {
   const { user } = useUserContext()
@@ -69,6 +71,8 @@ function App() {
                 <Route path='/service' element={<Service />} />
                 <Route path='/settlements' element={<Settlements />} />
                 <Route path='/supply' element={<Supply />} />
+                  <Route path='/supply/loaders' element={<LoadersHome />} />
+                  <Route path='/supply/loaders/route/:id' element={<RouteComponent />} />
                 <Route path='/transformation' element={<Transformation />} />
                 <Route path='/search/*' element={<Handbook />} />
                 <Route path='/branch/:id' element={<Branch />} />

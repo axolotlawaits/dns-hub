@@ -130,3 +130,47 @@ model CorrespondenceAttachment {
     correspondence   Correspondence             @relation(fields: [record_id], references: [id])
     user             User                       @relation(fields: [userAdd], references: [id])
 }
+
+/* supply */
+
+model Route {
+  id              String          @id @default(uuid())
+  name            String          @unique
+  rrs             String
+  contractor      String
+  filials         Filial[]
+  days            RouteDay[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model RouteDay {
+  id              String          @id @default(uuid())
+  day             DateTime        @unique
+  route           Route           @relation(fields: [routeId], references: [id])
+  routeId         String        
+  createdAt       DateTime        @default(now())
+  filials         Filial[]
+}
+
+model Filial {
+  id              String          @id @default(uuid())
+  name            String
+  place           Int?             
+  accepted        Boolean         @default(false)
+  feedback        String?
+  loaders         Loader[]
+  route           Route           @relation(fields: [routeId], references: [id])
+  routeId         String  
+  routeDay        RouteDay?       @relation(fields: [routeDayId], references: [id])
+  routeDayId      String?
+  updatedAt       DateTime        @updatedAt        
+}
+
+model Loader {
+  id              String          @id @default(uuid())
+  startTime       DateTime
+  endTime         DateTime
+  filial          Filial          @relation(fields: [filialId], references: [id])
+  filialId        String
+}

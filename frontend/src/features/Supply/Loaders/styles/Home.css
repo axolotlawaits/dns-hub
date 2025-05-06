@@ -1,0 +1,19 @@
+#routes-page-wrapper{
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+#routes-wrapper{
+  display: flex;
+  gap: 30px;
+}
+
+.card-text-link{
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.card-text-link:hover{
+  text-decoration: underline;
+}

@@ -9,6 +9,9 @@ import searchRouter from './routes/app/search.js'
 import correspondenceRouter from './routes/app/correspondence.js'
 import navigationRouter from './routes/app/navigation.js'
 import typeRouter from './routes/app/type.js'
+import routeDayRouter from './routes/supply/routeDay.js'
+import routeRouter from './routes/supply/route.js'
+import filialRouter from './routes/supply/filial.js'
 
 const app = express()
 export const prisma = new PrismaClient()
@@ -25,6 +28,11 @@ app.use('/hub-api/aho/correspondence', correspondenceRouter)
 app.use('/hub-api/search', searchRouter)
 app.use('/hub-api/navigation', navigationRouter);
 app.use('/hub-api/type', typeRouter);
+/* loader (mb fix later) */
+app.use('/hub-api/loaders/route', routeRouter)
+app.use('/hub-api/loaders/routeDay', routeDayRouter)
+app.use('/hub-api/loaders/filial', filialRouter)
+/* */
 
 app.use(express.static(path.join(__dirname, 'public')))
 
