@@ -1,12 +1,11 @@
 import { Modal, TextInput, Select, Button, Alert, Stack, Textarea, Text, Group } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { FileDropZone, ListItemWithActions } from './dnd';
 import { useState, useEffect, useCallback } from 'react';
-import React from 'react';
 import dayjs from 'dayjs';
 import { API } from '../config/constants';
+import { FileDropZone, ListItemWithActions, DraggableItem } from './dnd'; // Import DraggableItem and other necessary components
 
-export type FieldType = 'text' | 'number' | 'select' | 'date' | 'datetime' | 'textarea';
+export type FieldType = 'text' | 'number' | 'select' | 'date' | 'datetime' | 'textarea' | 'file';
 
 export interface FormField {
   name: string;
@@ -14,6 +13,10 @@ export interface FormField {
   type: FieldType;
   required?: boolean;
   options?: Array<{ value: string; label: string }>;
+  step?: string;
+  min?: number;
+  max?: number;
+  withDnd?: boolean; // Флаг для включения DND функциональности
 }
 
 export interface ViewFieldConfig {
@@ -39,6 +42,81 @@ interface DynamicFormModalProps {
   error?: string | null;
 }
 
+interface FileAttachment {
+  id?: string;
+  userAdd: string;
+  source: File | string;
+}
+
+interface FileUploadProps {
+  onFilesDrop: (files: File[]) => void;
+  attachments: FileAttachment[];
+  onRemoveAttachment: (id: string | undefined) => void;
+  withDnd?: boolean;
+}
+
+const FileUploadComponent = ({
+  onFilesDrop,
+  attachments,
+  onRemoveAttachment,
+  withDnd = false
+}: FileUploadProps) => {
+  const DndFileUpload = useCallback(() => {
+    return (
+      <>
+        <FileDropZone onFilesDrop={onFilesDrop} />
+        <Stack mt="md">
+          {attachments.map((attachment) => (
+            <ListItemWithActions
+              key={attachment.id || `temp-${Math.random().toString(36).substr(2, 9)}`}
+              item={{
+                id: attachment.id || `temp-${Math.random().toString(36).substr(2, 9)}`,
+                name: typeof attachment.source === 'string'
+                  ? attachment.source
+                  : attachment.source.name
+              }}
+              onDelete={() => onRemoveAttachment(attachment.id)}
+              renderContent={(item: DraggableItem) => <Text>{item.name}</Text>}
+            />
+          ))}
+        </Stack>
+      </>
+    );
+  }, [onFilesDrop, attachments, onRemoveAttachment]);
+
+  if (withDnd) {
+    try {
+      return <DndFileUpload />;
+    } catch (e) {
+      console.warn("DnD components are not available, falling back to basic UI.");
+    }
+  }
+
+  return (
+    <>
+      <input
+        type="file"
+        multiple
+        onChange={(e) => {
+          if (e.target.files) {
+            onFilesDrop(Array.from(e.target.files));
+          }
+        }}
+      />
+      <Stack mt="md">
+        {attachments.map((attachment) => (
+          <Group key={attachment.id || `temp-${Math.random().toString(36).substr(2, 9)}`} mb="md">
+            <Text>{typeof attachment.source === 'string' ? attachment.source : attachment.source.name}</Text>
+            <Button variant="light" color="red" onClick={() => onRemoveAttachment(attachment.id)}>
+              Remove
+            </Button>
+          </Group>
+        ))}
+      </Stack>
+    </>
+  );
+};
+
 export const DynamicFormModal = ({
   opened,
   onClose,
@@ -55,11 +133,7 @@ export const DynamicFormModal = ({
     initialValues: initialValues,
   });
 
-  const [attachments, setAttachments] = useState<Array<{
-    id?: string;
-    userAdd: string;
-    source: File | string;
-  }>>(initialValues.attachments || []);
+  const [attachments, setAttachments] = useState<FileAttachment[]>(initialValues.attachments || []);
 
   useEffect(() => {
     if (opened) {
@@ -75,7 +149,7 @@ export const DynamicFormModal = ({
     }));
     setAttachments((prev) => [...prev, ...newAttachments]);
     form.setFieldValue('attachments', [...attachments, ...newAttachments]);
-  }, [initialValues.userAdd, form]);
+  }, [initialValues.userAdd, form, attachments]);
 
   const handleRemoveAttachment = useCallback((id: string | undefined) => {
     setAttachments((prev) => {
@@ -86,20 +160,6 @@ export const DynamicFormModal = ({
       return newAttachments;
     });
   }, [form]);
-
-  const renderAttachment = (attachment: { id?: string; userAdd: string; source: File | string }) => (
-    <ListItemWithActions
-      key={attachment.id || `temp-${Math.random().toString(36).substr(2, 9)}`}
-      item={{
-        id: attachment.id || `temp-${Math.random().toString(36).substr(2, 9)}`,
-        name: typeof attachment.source === 'string'
-          ? attachment.source
-          : attachment.source.name
-      }}
-      onDelete={() => handleRemoveAttachment(attachment.id)}
-      renderContent={(item) => <Text>{item.name}</Text>}
-    />
-  );
 
   const renderField = (field: FormField) => {
     switch (field.type) {
@@ -156,6 +216,30 @@ export const DynamicFormModal = ({
             mb="md"
           />
         );
+      case 'number':
+        return (
+          <TextInput
+            key={field.name}
+            type="number"
+            label={field.label}
+            required={field.required}
+            {...form.getInputProps(field.name)}
+            mb="md"
+            step={field.step || "any"}
+            min={field.min}
+            max={field.max}
+          />
+        );
+      case 'file':
+        return (
+          <FileUploadComponent
+            key={field.name}
+            onFilesDrop={handleFileDrop}
+            attachments={attachments}
+            onRemoveAttachment={handleRemoveAttachment}
+            withDnd={field.withDnd}
+          />
+        );
       default:
         return null;
     }
@@ -185,7 +269,7 @@ export const DynamicFormModal = ({
       ) : mode === 'delete' ? (
         <>
           <Text mb="xl">
-            Вы уверены, что хотите удалить корреспонденцию от {dayjs(initialValues.ReceiptDate).format('DD.MM.YYYY')}?
+            Вы уверены, что хотите удалить запись? {dayjs(initialValues.ReceiptDate).format('DD.MM.YYYY')}?
           </Text>
           <Group justify="flex-end">
             <Button variant="default" onClick={onClose}>
@@ -199,14 +283,6 @@ export const DynamicFormModal = ({
       ) : (
         <form onSubmit={form.onSubmit((values) => onSubmit && onSubmit({ ...values, attachments }))}>
           {fields.map(renderField)}
-          <FileDropZone onFilesDrop={handleFileDrop} />
-          <Stack mt="md">
-            {attachments.map((attachment) => (
-              <React.Fragment key={attachment.id || `temp-${Math.random().toString(36).substr(2, 9)}`}>
-                {renderAttachment(attachment)}
-              </React.Fragment>
-            ))}
-          </Stack>
           {error && (
             <Alert color="red" mt="md">
               {error}

@@ -1,74 +1,82 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { API } from '../../../config/constants';
-import { PaginationOption } from '../../../config/table';
-import { User } from '../../../contexts/UserContext';
-import { formatName } from '../../../utils/format';
-import { dateRange } from '../../../utils/filter';
-import {
-  Button,
-  Modal,
-  TextInput,
-  Title,
-  Text,
-  Group,
-  ActionIcon,
-  Box,
-  LoadingOverlay,
-  NumberInput,
-  Grid,
-  Card,
-  Pagination,
-  Select,
-  Flex,
-  MultiSelect
-} from '@mantine/core';
-import { useDisclosure } from '@mantine/hooks';
 import { useUserContext } from '../../../hooks/useUserContext';
+import { formatName } from '../../../utils/format';
+import { dateRange, FilterGroup } from '../../../utils/filter';
+import { Button, Title, Box, LoadingOverlay, Grid, Card, Group, ActionIcon } from '@mantine/core';
+import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
-import { IconPencil, IconTrash, IconArrowUp, IconArrowDown } from '@tabler/icons-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { useReactTable, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, flexRender, type ColumnDef, type ColumnFiltersState, type SortingState } from '@tanstack/react-table';
+import { IconPencil, IconTrash } from '@tabler/icons-react';
+import { ColumnDef, ColumnFiltersState, SortingState, OnChangeFn } from '@tanstack/react-table';
+import { DynamicFormModal } from '../../../utils/formModal';
+import { TableComponent } from '../../../utils/table';
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
+import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
+import 'dayjs/locale/ru';
+import isBetween from 'dayjs/plugin/isBetween';
 
-// Типы данных
-type MeterReading = {
+dayjs.locale('ru');
+dayjs.extend(isSameOrAfter);
+dayjs.extend(isSameOrBefore);
+dayjs.extend(isBetween);
+
+interface User {
+  id: string;
+  name: string;
+}
+
+interface MeterReading {
   id: string;
   date: Date;
   counter: number;
   userId: string;
   createdAt: Date;
   user: User;
-};
+}
 
-type MeterReadingWithConsumption = MeterReading & {
+interface MeterReadingWithFormattedData extends MeterReading {
   consumption: number;
   formattedDate: string;
+  displayDate: string;
   formattedCounter: string;
   formattedConsumption: string;
   userName: string;
-};
+}
 
-type DateFilter = {
+interface DateFilterValue {
   start?: string;
   end?: string;
-};
+}
 
-const DEFAULT_READING_FORM = {
+interface ReadingFormValues {
+  date: string;
+  counter: number;
+}
+
+const DEFAULT_READING_FORM: ReadingFormValues = {
   date: dayjs().format('YYYY-MM-DDTHH:mm'),
   counter: 0,
 };
 
-// Компонент для отображения графика
-const ReadingsChart = ({ data }: { data: MeterReadingWithConsumption[] }) => (
+const ReadingsChart = ({ data }: { data: MeterReadingWithFormattedData[] }) => (
   <ResponsiveContainer width="100%" height={400}>
     <LineChart data={data}>
       <CartesianGrid strokeDasharray="3 3" />
-      <XAxis dataKey="formattedDate" />
-      <YAxis unit=" м³" />
+      <XAxis 
+        dataKey="formattedDate" 
+        label={{ value: 'Дата', position: 'insideBottomRight', offset: -5 }} 
+      />
+      <YAxis 
+        label={{ value: 'м³', angle: -90, position: 'insideLeft' }} 
+        unit=" м³" 
+      />
       <Tooltip
         formatter={(value: number, name: string) => [
           `${value.toFixed(2)} м³`, 
           name === 'consumption' ? 'Расход' : 'Показание'
         ]}
+        labelFormatter={(label) => `Дата: ${label}`}
       />
       <Legend />
       <Line
@@ -77,222 +85,162 @@ const ReadingsChart = ({ data }: { data: MeterReadingWithConsumption[] }) => (
         name="Расход"
         stroke="#82ca9d"
         activeDot={{ r: 6 }}
+        strokeWidth={2}
+      />
+      <Line
+        type="monotone"
+        dataKey="counter"
+        name="Показание"
+        stroke="#8884d8"
+        activeDot={{ r: 6 }}
+        strokeWidth={2}
       />
     </LineChart>
   </ResponsiveContainer>
 );
 
-// Компонент формы для создания/редактирования
-const ReadingFormModal = ({
-  opened,
-  onClose,
-  onSubmit,
-  title,
-  form,
-  setForm
-}: {
-  opened: boolean;
-  onClose: () => void;
-  onSubmit: (e: React.FormEvent) => void;
-  title: string;
-  form: typeof DEFAULT_READING_FORM;
-  setForm: React.Dispatch<React.SetStateAction<typeof DEFAULT_READING_FORM>>;
-}) => (
-  <Modal opened={opened} onClose={onClose} title={title} size="sm" radius="md">
-    <form onSubmit={onSubmit}>
-      <TextInput
-        type="datetime-local"
-        label="Дата"
-        value={form.date}
-        onChange={(e) => setForm(prev => ({ ...prev, date: e.target.value }))}
-        required
-        mb="md"
-      />
-      <NumberInput
-        label="Показание (м³)"
-        value={form.counter}
-        onChange={(value) => setForm(prev => ({ ...prev, counter: Number(value) }))}
-        required
-        min={0}
-        step={0.01}
-        mb="md"
-      />
-      <Button type="submit" fullWidth mt="xl">
-        {title.includes('Добавить') ? 'Создать показание' : 'Сохранить изменения'}
-      </Button>
-    </form>
-  </Modal>
-);
-
-export default function MeterReadingsList() {
+const useMeterReadings = () => {
   const { user } = useUserContext();
   const [readings, setReadings] = useState<MeterReading[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedReading, setSelectedReading] = useState<MeterReading | null>(null);
-  const [readingForm, setReadingForm] = useState(DEFAULT_READING_FORM);
-
-  // Table states
+  const [readingForm, setReadingForm] = useState<ReadingFormValues>(DEFAULT_READING_FORM);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'date', desc: true }]);
-  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'displayDate', desc: true }]);
 
-  // Modal controls
-  const [viewModalOpened, viewModalHandlers] = useDisclosure(false);
-  const [editModalOpened, editModalHandlers] = useDisclosure(false);
-  const [createModalOpened, createModalHandlers] = useDisclosure(false);
-  const [deleteModalOpened, deleteModalHandlers] = useDisclosure(false);
+  const modals = {
+    view: useDisclosure(false),
+    edit: useDisclosure(false),
+    create: useDisclosure(false),
+    delete: useDisclosure(false),
+  };
 
-  // Fetch readings with useCallback to memoize the function
-  const fetchReadings = useCallback(async () => {
+  const fetchData = useCallback(async (url: string, options?: RequestInit) => {
     try {
-      const response = await fetch(`${API}/aho/meter-reading`);
-      const data = await response.json();
-      setReadings(data);
-    } catch (err) {
-      console.error('Failed to load meter readings:', err);
-    } finally {
-      setLoading(false);
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        ...options,
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Failed to fetch data from ${url}: ${errorData.message || 'Unknown error'}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error(`Error fetching data from ${url}:`, error);
+      throw error;
     }
   }, []);
 
-  useEffect(() => {
-    fetchReadings();
-  }, [fetchReadings]);
-
-  // Prepare table data with consumption calculation
-  const tableData = useMemo<MeterReadingWithConsumption[]>(() => {
-    const sortedByDate = [...readings].sort((a, b) => dayjs(a.date).diff(dayjs(b.date)));
-    
+  const formatTableData = useCallback((data: MeterReading[]): MeterReadingWithFormattedData[] => {
+    const sortedByDate = [...data].sort((a, b) => dayjs(a.date).diff(dayjs(b.date)));
     return sortedByDate.map((reading, index, array) => {
       const prevReading = array[index - 1];
       const consumption = prevReading ? Math.max(0, reading.counter - prevReading.counter) : 0;
-      
       return {
         ...reading,
         consumption,
         formattedDate: dayjs(reading.date).format('MMMM YYYY'),
+        displayDate: dayjs(reading.date).format('DD.MM.YYYY HH:mm'),
         formattedCounter: reading.counter.toFixed(2),
         formattedConsumption: consumption.toFixed(2),
-        userName: formatName(reading.user.name),
+        userName: reading.user?.name ? formatName(reading.user.name) : 'Unknown',
       };
     });
+  }, []);
+
+  const tableData = useMemo(() => formatTableData(readings), [readings, formatTableData]);
+
+  const filteredData = useMemo(() => {
+    let result = [...tableData];
+    
+    columnFilters.forEach(filter => {
+      if (filter.id === 'displayDate' && filter.value) {
+        const { start, end } = filter.value as DateFilterValue;
+        result = result.filter(row => {
+          const rowDate = new Date(row.date);
+          if (start && end) {
+            return rowDate >= new Date(start) && rowDate <= new Date(end);
+          }
+          if (start) return rowDate >= new Date(start);
+          if (end) return rowDate <= new Date(end);
+          return true;
+        });
+      }
+      if (filter.id === 'userName' && filter.value) {
+        const users = filter.value as string[];
+        if (users.length > 0) {
+          result = result.filter(row => users.includes(row.userName));
+        }
+      }
+    });
+    
+    return result;
+  }, [tableData, columnFilters]);
+
+  const userFilterOptions = useMemo(() => {
+    const uniqueNames = Array.from(
+      new Set(readings.map(r => r.user?.name ? formatName(r.user.name) : 'Unknown'))
+    );
+    return uniqueNames.map(name => ({ value: name, label: name }));
   }, [readings]);
 
-  // Table columns configuration
-  const columns = useMemo<ColumnDef<MeterReadingWithConsumption>[]>(() => [
-    {
-      accessorKey: 'date',
-      header: 'Дата',
-      cell: (info) => dayjs(info.getValue<Date>()).format('MMMM YYYY'),
-      filterFn: dateRange,
-      sortingFn: 'datetime',
-    },
-    {
-      accessorKey: 'formattedCounter',
-      header: 'Показание (м³)',
-      size: 120,
-    },
-    {
-      accessorKey: 'formattedConsumption',
-      header: 'Израсходовано (м³)',
-      size: 140,
-    },
-    {
-      accessorKey: 'userName',
-      header: 'Пользователь',
-      size: 150,
-      filterFn: 'includesString',
-    },
-    {
-      id: 'actions',
-      header: 'Действия',
-      cell: ({ row }) => (
-        <Group gap="xs">
-          <ActionIcon
-            color="blue"
-            variant="subtle"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleEditClick(row.original);
-            }}
-          >
-            <IconPencil size={18} />
-          </ActionIcon>
-          <ActionIcon
-            color="red"
-            variant="subtle"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDeleteClick(row.original);
-            }}
-          >
-            <IconTrash size={18} />
-          </ActionIcon>
-        </Group>
-      ),
-      size: 100,
-      enableSorting: false,
-    },
-  ], []);
-
-  // Initialize table
-  const table = useReactTable({
-    data: tableData,
-    columns,
-    state: {
-      columnFilters,
-      sorting,
-    },
-    filterFns: {
-      dateRange: dateRange,
-    },
-    columnResizeMode: 'onChange',
-    onColumnFiltersChange: setColumnFilters,
-    onSortingChange: setSorting,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-  });
-
-  // Handlers
-  const handleEditClick = useCallback((reading: MeterReading) => {
-    setSelectedReading(reading);
-    setReadingForm({
-      date: dayjs(reading.date).format('YYYY-MM-DDTHH:mm'),
-      counter: reading.counter,
-    });
-    editModalHandlers.open();
-  }, []);
-
-  const handleDeleteClick = useCallback((reading: MeterReading) => {
-    setSelectedReading(reading);
-    deleteModalHandlers.open();
-  }, []);
+  const handleTableAction = useCallback((action: 'view' | 'edit' | 'delete', data: MeterReading) => {
+    setSelectedReading(data);
+    if (action === 'edit') {
+      setReadingForm({
+        date: dayjs(data.date).format('YYYY-MM-DDTHH:mm'),
+        counter: data.counter,
+      });
+    }
+    modals[action][1].open();
+  }, [modals]);
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!selectedReading) return;
+    
     try {
-      await fetch(`${API}/aho/meter-reading/${selectedReading.id}`, { method: 'DELETE' });
+      const response = await fetch(`${API}/aho/meter-reading/${selectedReading.id}`, {
+        method: 'DELETE',
+        headers: { 
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+  
+      // Проверяем статус ответа перед попыткой парсить JSON
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+  
+      // Проверяем, есть ли тело ответа
+      const text = await response.text();
+      if (text) {
+        try {
+          const data = JSON.parse(text);
+          console.log('Delete response:', data);
+        } catch (e) {
+          console.log('Non-JSON response:', text);
+        }
+      }
+  
       setReadings(prev => prev.filter(item => item.id !== selectedReading.id));
-      deleteModalHandlers.close();
-    } catch (err) {
-      console.error('Failed to delete reading:', err);
+      modals.delete[1].close();
+    } catch (error) {
+      console.error('Failed to delete reading:', error);
+      // Можно добавить уведомление об ошибке пользователю
     }
-  }, [selectedReading]);
+  }, [selectedReading, modals.delete]);
 
-  // Unified handler for create and edit
-  const handleReadingSubmit = useCallback(async (e: React.FormEvent, isEdit: boolean) => {
-    e.preventDefault();
+  const handleFormSubmit = useCallback(async (values: ReadingFormValues, mode: 'create' | 'edit') => {
     if (!user) return;
     
     try {
-      const url = isEdit 
-        ? `${API}/aho/meter-reading/${selectedReading?.id}`
-        : `${API}/aho/meter-reading/`;
-      
-      const method = isEdit ? 'PATCH' : 'POST';
-      
+      const url = mode === 'create'
+        ? `${API}/aho/meter-reading`
+        : `${API}/aho/meter-reading/${selectedReading!.id}`;
+      const method = mode === 'create' ? 'POST' : 'PATCH';
+  
       const response = await fetch(url, {
         method,
         headers: {
@@ -300,56 +248,227 @@ export default function MeterReadingsList() {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify({
-          date: new Date(readingForm.date).toISOString(),
-          counter: readingForm.counter,
-          ...(!isEdit && { userId: user.id })
+          date: new Date(values.date).toISOString(),
+          counter: parseFloat(values.counter.toString()),
+          userId: user.id,
         }),
       });
+  
+      // Проверяем Content-Type ответа
+      const contentType = response.headers.get('content-type');
       
-      if (!response.ok) throw new Error(`Failed to ${isEdit ? 'update' : 'create'} reading`);
-      
+      if (!response.ok) {
+        // Если ответ не JSON, читаем как текст
+        const errorText = await response.text();
+        throw new Error(errorText || `HTTP error! status: ${response.status}`);
+      }
+  
+      // Проверяем, что ответ действительно JSON
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        throw new Error(`Expected JSON but received: ${text.substring(0, 100)}...`);
+      }
+  
       const result = await response.json();
       
-      setReadings(prev => isEdit
-        ? prev.map(item => item.id === selectedReading?.id ? result : item)
-        : [result, ...prev]
+      setReadings(prev => mode === 'create'
+        ? [result, ...prev]
+        : prev.map(item => item.id === selectedReading!.id ? result : item)
       );
-      
       setReadingForm(DEFAULT_READING_FORM);
-      isEdit ? editModalHandlers.close() : createModalHandlers.close();
-    } catch (err) {
-      console.error(`Failed to ${isEdit ? 'edit' : 'create'} reading:`, err);
+      modals[mode][1].close();
+    } catch (error) {
+      console.error(`Failed to ${mode} reading:`, error);
+      // Добавьте здесь отображение ошибки пользователю
+      if (error instanceof Error) {
+        alert(`Ошибка: ${error.message}`);
+      }
     }
-  }, [user, readingForm, selectedReading]);
+  }, [user, selectedReading, modals]);
 
-  const handleDateFilterChange = useCallback((startDate: string | null, endDate: string | null) => {
+  const handleColumnFiltersChange: OnChangeFn<ColumnFiltersState> = useCallback(
+    (updaterOrValue) => setColumnFilters(prev => 
+      typeof updaterOrValue === 'function' ? updaterOrValue(prev) : updaterOrValue
+    ),
+    []
+  );
+
+  const handleSortingChange: OnChangeFn<SortingState> = useCallback(
+    (updaterOrValue) => setSorting(prev => 
+      typeof updaterOrValue === 'function' ? updaterOrValue(prev) : updaterOrValue
+    ),
+    []
+  );
+
+  const handleFilterChange = useCallback((columnId: string, value: any) => {
     setColumnFilters(prev => [
-      ...prev.filter(filter => filter.id !== 'date'),
-      ...(startDate || endDate ? [{ 
-        id: 'date', 
-        value: { start: startDate, end: endDate } 
-      }] : []),
+      ...prev.filter(f => f.id !== columnId),
+      ...(value !== undefined ? [{ id: columnId, value }] : [])
     ]);
   }, []);
 
-  const handleUserFilterChange = useCallback((values: string[]) => {
-    setColumnFilters(prev => [
-      ...prev.filter(filter => filter.id !== 'userName'),
-      ...(values.length > 0 ? [{ id: 'userName', value: values }] : []),
-    ]);
-  }, []);
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        const readingsData = await fetchData(`${API}/aho/meter-reading`);
+        const formattedReadings = readingsData.map((r: { date: string | number | Date; createdAt: string | number | Date; }) => ({
+          ...r,
+          date: new Date(r.date),
+          createdAt: new Date(r.createdAt),
+        }));
+        setReadings(formattedReadings);
+      } catch (error) {
+        console.error('Failed to load data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchInitialData();
+  }, [fetchData]);
 
-  const userFilterOptions = useMemo(() => {
-    const uniqueNames = Array.from(new Set(readings.map(r => formatName(r.user.name))));
-    return uniqueNames.map(name => ({ value: name, label: name }));
-  }, [readings]);
+  return {
+    loading,
+    filteredData,
+    userFilterOptions,
+    columnFilters,
+    sorting,
+    readingForm,
+    selectedReading,
+    modals,
+    handleTableAction,
+    handleDeleteConfirm,
+    handleFormSubmit,
+    handleColumnFiltersChange,
+    handleSortingChange,
+    handleFilterChange,
+    setReadingForm, // Добавляем эту строку
+    setColumnFilters, // И эту строку
+  };
+};
 
-  if (loading) {
-    return <LoadingOverlay visible />;
-  }
+const MeterReadingsList = () => {
+  const {
+    loading,
+    filteredData,
+    userFilterOptions,
+    columnFilters,
+    sorting,
+    readingForm,
+    selectedReading,
+    modals,
+    handleTableAction,
+    handleDeleteConfirm,
+    handleFormSubmit,
+    handleColumnFiltersChange,
+    handleSortingChange,
+    handleFilterChange,
+    setReadingForm,
+    setColumnFilters,
+  } = useMeterReadings();
 
-  const currentDateFilter = columnFilters.find(f => f.id === 'date')?.value as DateFilter | undefined;
-  const currentUserFilter = columnFilters.find(f => f.id === 'userName')?.value as string[] | undefined;
+  const viewFieldsConfig = useMemo(() => [
+    { label: 'Дата', value: (item: MeterReading) => item?.date ? dayjs(item.date).format('DD.MM.YYYY HH:mm') : 'N/A' },
+    { label: 'Показание', value: (item: MeterReading) => item?.counter ? `${item.counter.toFixed(2)} м³` : 'N/A' },
+    { label: 'Пользователь', value: (item: MeterReading) => item?.user?.name || 'Unknown' },
+    { label: 'Дата создания', value: (item: MeterReading) => item?.createdAt ? dayjs(item.createdAt).format('DD.MM.YYYY HH:mm') : 'N/A' },
+  ], []);
+
+  const formConfig = useMemo(() => ({
+    fields: [
+      {
+        name: 'date',
+        label: 'Дата',
+        type: 'datetime' as const,
+        required: true,
+      },
+      {
+        name: 'counter',
+        label: 'Показание (м³)',
+        type: 'number' as const,
+        required: true,
+        min: 0,
+        step: "0.01",
+      },
+    ],
+    initialValues: DEFAULT_READING_FORM,
+  }), []);
+
+  const filters = useMemo(() => [
+    {
+      type: 'date' as const,
+      columnId: 'displayDate',
+      label: 'Фильтр по дате',
+      width: 200,
+    },
+    {
+      type: 'user' as const,
+      columnId: 'userName',
+      label: 'Фильтр по пользователю',
+      options: userFilterOptions,
+      width: 200,
+    },
+  ], [userFilterOptions]);
+
+  const columns = useMemo<ColumnDef<MeterReadingWithFormattedData>[]>(
+    () => [
+      {
+        accessorKey: 'displayDate',
+        header: 'Дата',
+        cell: (info) => info.row.original.formattedDate,
+        filterFn: dateRange,
+        sortingFn: 'datetime',
+      },
+      {
+        accessorKey: 'formattedCounter',
+        header: 'Показание (м³)',
+        size: 120,
+      },
+      {
+        accessorKey: 'formattedConsumption',
+        header: 'Израсходовано (м³)',
+        size: 140,
+      },
+      {
+        accessorKey: 'userName',
+        header: 'Пользователь',
+        size: 150,
+        filterFn: 'includesString',
+      },
+      {
+        id: 'actions',
+        header: 'Действия',
+        cell: ({ row }) => (
+          <Group wrap="nowrap" align="center">
+            <ActionIcon
+              color="blue"
+              variant="subtle"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleTableAction('edit', row.original);
+              }}
+            >
+              <IconPencil size={18} />
+            </ActionIcon>
+            <ActionIcon
+              color="red"
+              variant="subtle"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleTableAction('delete', row.original);
+              }}
+            >
+              <IconTrash size={18} />
+            </ActionIcon>
+          </Group>
+        ),
+        size: 100,
+        enableSorting: false,
+      },
+    ],
+    [handleTableAction]
+  );
+
+  if (loading) return <LoadingOverlay visible />;
 
   return (
     <Box p="md">
@@ -359,203 +478,88 @@ export default function MeterReadingsList() {
         size="md"
         onClick={() => {
           setReadingForm(DEFAULT_READING_FORM);
-          createModalHandlers.open();
+          modals.create[1].open();
         }}
       >
         Добавить показание
-      </Button>      
+      </Button>
       <Title order={2} mt="md" mb="lg">
         Показания счетчиков
-      </Title>      
+      </Title>
+      <Box mb="md">
+        <FilterGroup
+          filters={filters}
+          columnFilters={columnFilters}
+          onColumnFiltersChange={handleFilterChange}
+        />
+        <Button 
+          variant="outline"
+          onClick={() => setColumnFilters([])}
+          mt="sm"
+        >
+          Сбросить все фильтры
+        </Button>
+      </Box>
       <Grid>
-        <Grid.Col span={12}>
-          <Group gap="md" mb="md">
-            <TextInput
-              type="date"
-              label="Фильтр по дате (начало)"
-              placeholder="Выберите начальную дату"
-              value={currentDateFilter?.start ?? ''}
-              onChange={(e) => handleDateFilterChange(e.target.value, currentDateFilter?.end ?? null)}
-              style={{ width: '200px' }}
-            />
-            <TextInput
-              type="date"
-              label="Фильтр по дате (конец)"
-              placeholder="Выберите конечную дату"
-              value={currentDateFilter?.end ?? ''}
-              onChange={(e) => handleDateFilterChange(currentDateFilter?.start ?? null, e.target.value)}
-              style={{ width: '200px' }}
-            />
-            <MultiSelect
-              label="Фильтр по пользователю"
-              placeholder="Выберите пользователей"
-              data={userFilterOptions}
-              value={currentUserFilter || []}
-              onChange={handleUserFilterChange}
-              searchable
-              clearable
-              style={{ width: '200px' }}
-            />
-          </Group>
-        </Grid.Col>        
         <Grid.Col span={{ base: 12, md: 7 }}>
-          <Card withBorder shadow="sm" radius="md">
-            <div ref={tableContainerRef} style={{ overflowX: 'auto', position: 'relative' }}>
-              <table>
-                <thead>
-                  {table.getHeaderGroups().map(headerGroup => (
-                    <tr key={headerGroup.id}>
-                      {headerGroup.headers.map(header => (
-                        <th
-                          key={header.id}
-                          style={{
-                            width: header.getSize(),
-                            cursor: header.column.getCanSort() ? 'pointer' : 'default',
-                          }}
-                          onClick={header.column.getToggleSortingHandler()}
-                        >
-                          <Group gap="xs">
-                            {flexRender(header.column.columnDef.header, header.getContext())}
-                            {{
-                              asc: <IconArrowUp size={14} />,
-                              desc: <IconArrowDown size={14} />,
-                            }[header.column.getIsSorted() as string] ?? null}
-                          </Group>
-                          <div
-                            {...{
-                              onMouseDown: header.getResizeHandler(),
-                              onTouchStart: header.getResizeHandler(),
-                              style: {
-                                position: 'absolute',
-                                right: 0,
-                                top: 0,
-                                height: '100%',
-                                width: '4px',
-                                backgroundColor: header.column.getIsResizing() ? '#228be6' : '#ddd',
-                                cursor: 'col-resize',
-                                userSelect: 'none',
-                                touchAction: 'none',
-                              },
-                            }}
-                          />
-                        </th>
-                      ))}
-                    </tr>
-                  ))}
-                </thead>
-                <tbody>
-                  {table.getRowModel().rows.map(row => (
-                    <tr
-                      key={row.id}
-                      onClick={() => {
-                        setSelectedReading(row.original);
-                        viewModalHandlers.open();
-                      }}
-                    >
-                      {row.getVisibleCells().map(cell => (
-                        <td
-                          key={cell.id}
-                          style={{
-                            width: cell.column.getSize(),
-                          }}
-                        >
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>           
-            <Flex justify="space-between" align="center" mt="md">
-              <Select
-                value={table.getState().pagination.pageSize.toString()}
-                onChange={v => table.setPageSize(Number(v))}
-                data={PaginationOption}
-                style={{ width: '120px' }}
-              />
-              <Pagination
-                value={table.getState().pagination.pageIndex + 1}
-                onChange={p => table.setPageIndex(p - 1)}
-                total={table.getPageCount()}
-              />
-            </Flex>
+          <Card withBorder shadow="sm" radius="md" h="100%">
+            <TableComponent<MeterReadingWithFormattedData>
+              data={filteredData}
+              columns={columns}
+              columnFilters={columnFilters}
+              sorting={sorting}
+              onColumnFiltersChange={handleColumnFiltersChange}
+              onSortingChange={handleSortingChange}
+              filterFns={{ dateRange }}
+              onRowClick={(rowData) => handleTableAction('view', rowData)}
+            />
           </Card>
-        </Grid.Col>  
-        
+        </Grid.Col>
         <Grid.Col span={{ base: 12, md: 5 }}>
-          <Card withBorder shadow="sm" radius="md" style={{ height: '100%' }}>
+          <Card withBorder shadow="sm" radius="md" h="100%">
             <Title order={4} mb="md">
               График показаний
             </Title>
-            <ReadingsChart data={tableData} />
+            <ReadingsChart data={filteredData} />
           </Card>
         </Grid.Col>
-      </Grid>  
-      {/* Модальные окна */}
-      <Modal
-        opened={viewModalOpened}
-        onClose={viewModalHandlers.close}
+      </Grid>
+      <DynamicFormModal
+        opened={modals.view[0]}
+        onClose={modals.view[1].close}
         title="Просмотр показания"
-        size="md"
-        radius="md"
-      >
-        {selectedReading && (
-          <>
-            <Group mb="md">
-              <Text fw={500}>Дата показания:</Text>
-              <Text>{dayjs(selectedReading.date).format('DD.MM.YYYY HH:mm')}</Text>
-            </Group>
-            <Group mb="md">
-              <Text fw={500}>Показание:</Text>
-              <Text>{selectedReading.counter.toFixed(2)} м³</Text>
-            </Group>
-            <Group mb="md">
-              <Text fw={500}>Пользователь:</Text>
-              <Text>{formatName(selectedReading.user.name)}</Text>
-            </Group>
-            <Group>
-              <Text fw={500}>Дата создания:</Text>
-              <Text>{dayjs(selectedReading.createdAt).format('DD.MM.YYYY HH:mm')}</Text>
-            </Group>
-          </>
-        )}
-      </Modal>     
-      <ReadingFormModal
-        opened={editModalOpened}
-        onClose={editModalHandlers.close}
-        onSubmit={(e) => handleReadingSubmit(e, true)}
+        mode="view"
+        initialValues={selectedReading || {}}
+        viewFieldsConfig={viewFieldsConfig}
+      />
+      <DynamicFormModal
+        opened={modals.edit[0]}
+        onClose={modals.edit[1].close}
         title="Редактировать показание"
-        form={readingForm}
-        setForm={setReadingForm}
-      />     
-      <ReadingFormModal
-        opened={createModalOpened}
-        onClose={createModalHandlers.close}
-        onSubmit={(e) => handleReadingSubmit(e, false)}
+        mode="edit"
+        fields={formConfig.fields}
+        initialValues={readingForm}
+        onSubmit={(values) => handleFormSubmit(values, 'edit')}
+      />
+      <DynamicFormModal
+        opened={modals.create[0]}
+        onClose={modals.create[1].close}
         title="Добавить показание"
-        form={readingForm}
-        setForm={setReadingForm}
-      />      
-      <Modal
-        opened={deleteModalOpened}
-        onClose={deleteModalHandlers.close}
+        mode="create"
+        fields={formConfig.fields}
+        initialValues={DEFAULT_READING_FORM}
+        onSubmit={(values) => handleFormSubmit(values, 'create')}
+      />
+      <DynamicFormModal
+        opened={modals.delete[0]}
+        onClose={modals.delete[1].close}
         title="Подтверждение удаления"
-        size="sm"
-        radius="md"
-      >
-        <Text mb="xl">
-          Вы уверены, что хотите удалить показание от {selectedReading && dayjs(selectedReading.date).format('DD.MM.YYYY')}?
-        </Text>
-        <Group justify="flex-end">
-          <Button variant="default" onClick={deleteModalHandlers.close}>
-            Отмена
-          </Button>
-          <Button color="red" onClick={handleDeleteConfirm}>
-            Удалить
-          </Button>
-        </Group>
-      </Modal>
+        mode="delete"
+        initialValues={selectedReading || {}}
+        onConfirm={handleDeleteConfirm}
+      />
     </Box>
   );
-}
+};
+
+export default MeterReadingsList;

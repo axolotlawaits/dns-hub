@@ -12,7 +12,10 @@ interface DateFilter {
   end?: string;
 }
 
-export const dateRange: FilterFn<any> = (row, columnId, filterValue) => {
+export const dateRange: FilterFn<any> = (
+  row,
+  columnId,
+  filterValue) => {
   const dateStr = row.getValue<string>(columnId);
   
   if (!dateStr || typeof dateStr !== 'string') return false;

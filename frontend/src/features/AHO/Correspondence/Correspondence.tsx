@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { API } from '../../../config/constants';
 import { useUserContext } from '../../../hooks/useUserContext';
 import { formatName } from '../../../utils/format';
-import { dateRange } from '../../../utils/filter';
+import { dateRange, FilterGroup } from '../../../utils/filter';
 import { Button, Title, Box, LoadingOverlay, Grid, Card, Group, ActionIcon } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
@@ -11,9 +11,7 @@ import { ColumnDef, ColumnFiltersState, SortingState, OnChangeFn } from '@tansta
 import { DndProviderWrapper } from '../../../utils/dnd';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { TableComponent } from '../../../utils/table';
-import { FilterGroup } from '../../../utils/filter';
 
-// Типы вынесены в отдельный интерфейс для лучшей читаемости
 interface TypeMailOption {
   value: string;
   label: string;
@@ -64,7 +62,6 @@ interface CorrespondenceForm {
   attachments: Array<{ id?: string; userAdd: string; source: File | string }>;
 }
 
-// Константы вынесены в начало для лучшей видимости
 const DEFAULT_CORRESPONDENCE_FORM: CorrespondenceForm = {
   ReceiptDate: dayjs().format('YYYY-MM-DDTHH:mm'),
   userAdd: '',
@@ -79,7 +76,6 @@ const DEFAULT_CORRESPONDENCE_FORM: CorrespondenceForm = {
 const MODEL_UUID = '7be62529-3fb5-430d-9017-48b752841e54';
 const CHAPTER = 'Тип письма';
 
-// Вынесена функция для форматирования данных таблицы
 const formatTableData = (data: Correspondence[]): CorrespondenceWithFormattedData[] => {
   return data.map((item) => ({
     ...item,
@@ -89,7 +85,6 @@ const formatTableData = (data: Correspondence[]): CorrespondenceWithFormattedDat
   }));
 };
 
-// Вынесена функция для получения опций фильтра пользователей
 const getUserFilterOptions = (data: Correspondence[]) => {
   const uniqueNames = Array.from(
     new Set(data.map((c) => c.user?.name ? formatName(c.user.name) : 'Unknown')
@@ -117,7 +112,6 @@ export default function CorrespondenceList() {
     delete: useDisclosure(false),
   };
 
-  // Унифицированная функция для обновления состояния
   const updateState = (newState: Partial<typeof state>) => {
     setState(prev => ({ ...prev, ...newState }));
   };
@@ -125,10 +119,22 @@ export default function CorrespondenceList() {
   const fetchData = useCallback(async (url: string, options?: RequestInit) => {
     try {
       const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        headers: { 
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
         ...options,
       });
-      if (!response.ok) throw new Error(`Failed to fetch data from ${url}`);
+  
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `HTTP error! status: ${response.status}`);
+      }
+  
+      if (response.status === 204 || !response.headers.get('content-type')) {
+        return null;
+      }
+  
       return await response.json();
     } catch (error) {
       console.error(`Error fetching data from ${url}:`, error);
@@ -203,6 +209,17 @@ export default function CorrespondenceList() {
         type: 'textarea' as const,
         required: true,
       },
+      {
+        name: 'attachments',
+        label: 'Файлы',
+        type: 'file' as const,
+        withDnd: true,
+        onRemove: (index: number, values: any, setFieldValue: any) => {
+          const newAttachments = [...values.attachments];
+          newAttachments.splice(index, 1);
+          setFieldValue('attachments', newAttachments);
+        }
+      },
     ],
     initialValues: DEFAULT_CORRESPONDENCE_FORM,
   }), [state.typeMailOptions]);
@@ -246,18 +263,23 @@ export default function CorrespondenceList() {
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!state.selectedCorrespondence) return;
+    
     try {
       await fetchData(`${API}/aho/correspondence/${state.selectedCorrespondence.id}`, {
         method: 'DELETE',
       });
+  
       updateState({ 
         correspondence: state.correspondence.filter(item => item.id !== state.selectedCorrespondence?.id)
       });
       modals.delete[1].close();
     } catch (error) {
       console.error('Failed to delete correspondence:', error);
+      updateState({ 
+        uploadError: error instanceof Error ? error.message : 'Failed to delete correspondence'
+      });
     }
-  }, [state.selectedCorrespondence, state.correspondence, modals.delete, fetchData]);
+  }, [state.selectedCorrespondence, state.correspondence, modals.delete]);
 
   const handleFormSubmit = useCallback(async (values: Record<string, any>, mode: 'create' | 'edit') => {
     if (!user && mode === 'create') return;
@@ -271,16 +293,19 @@ export default function CorrespondenceList() {
       formData.append('typeMail', values.typeMail);
       formData.append('numberMail', values.numberMail);
   
+      // Handle attachments
       if (values.attachments?.length > 0) {
         values.attachments.forEach((attachment: { id?: string; source: File | string }) => {
           if (attachment.source instanceof File) {
             formData.append('attachments', attachment.source);
           } else if (attachment.id && mode === 'edit') {
-            formData.append('existingAttachments', attachment.id);
+            // For existing attachments, you might want to send them differently
+            // or the server might not need them in the form data
           }
         });
       }
   
+      // Handle removed attachments - send as JSON string
       if (mode === 'edit' && state.selectedCorrespondence) {
         const removedAttachments = state.selectedCorrespondence.attachments
           .filter(originalAttachment => 
@@ -288,7 +313,9 @@ export default function CorrespondenceList() {
           )
           .map(a => a.id);
         
-        removedAttachments.forEach(id => formData.append('removedAttachments', id));
+        if (removedAttachments.length > 0) {
+          formData.append('removedAttachments', JSON.stringify(removedAttachments));
+        }
       }
   
       const url = mode === 'create' 
@@ -296,10 +323,26 @@ export default function CorrespondenceList() {
         : `${API}/aho/correspondence/${state.selectedCorrespondence!.id}`;
       const method = mode === 'create' ? 'POST' : 'PUT';
   
-      const responseData = await fetchData(url, {
+      // Debug: log FormData contents before sending
+      console.log('FormData entries:');
+      for (const [key, value] of formData.entries()) {
+        console.log(key, value);
+      }
+  
+      const response = await fetch(url, {
         method,
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
         body: formData,
       });
+  
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `HTTP error! status: ${response.status}`);
+      }
+  
+      const responseData = await response.json();
   
       updateState({
         correspondence: mode === 'create'
@@ -307,15 +350,18 @@ export default function CorrespondenceList() {
           : state.correspondence.map(item =>
               item.id === state.selectedCorrespondence!.id ? responseData : item
             ),
-        correspondenceForm: mode === 'create' ? DEFAULT_CORRESPONDENCE_FORM : state.correspondenceForm
+        correspondenceForm: DEFAULT_CORRESPONDENCE_FORM,
+        uploadError: null
       });
   
       modals[mode][1].close();
     } catch (error) {
       console.error(`Failed to ${mode} correspondence:`, error);
-      updateState({ uploadError: error instanceof Error ? error.message : 'Unknown error' });
+      updateState({ 
+        uploadError: error instanceof Error ? error.message : 'Unknown error' 
+      });
     }
-  }, [user, state.selectedCorrespondence, state.correspondence, modals, fetchData]);
+  }, [user, state.selectedCorrespondence, state.correspondence, modals]);
 
   const handleColumnFiltersChange: OnChangeFn<ColumnFiltersState> = useCallback(
     (updaterOrValue) => {
