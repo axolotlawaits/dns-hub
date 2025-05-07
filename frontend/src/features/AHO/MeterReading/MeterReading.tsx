@@ -208,12 +208,10 @@ const useMeterReadings = () => {
         }
       });
   
-      // Проверяем статус ответа перед попыткой парсить JSON
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
   
-      // Проверяем, есть ли тело ответа
       const text = await response.text();
       if (text) {
         try {
@@ -228,7 +226,6 @@ const useMeterReadings = () => {
       modals.delete[1].close();
     } catch (error) {
       console.error('Failed to delete reading:', error);
-      // Можно добавить уведомление об ошибке пользователю
     }
   }, [selectedReading, modals.delete]);
 
@@ -279,7 +276,6 @@ const useMeterReadings = () => {
       modals[mode][1].close();
     } catch (error) {
       console.error(`Failed to ${mode} reading:`, error);
-      // Добавьте здесь отображение ошибки пользователю
       if (error instanceof Error) {
         alert(`Ошибка: ${error.message}`);
       }
@@ -341,8 +337,8 @@ const useMeterReadings = () => {
     handleColumnFiltersChange,
     handleSortingChange,
     handleFilterChange,
-    setReadingForm, // Добавляем эту строку
-    setColumnFilters, // И эту строку
+    setReadingForm,
+    setColumnFilters,
   };
 };
 
@@ -401,7 +397,7 @@ const MeterReadingsList = () => {
       width: 200,
     },
     {
-      type: 'user' as const,
+      type: 'select' as const,
       columnId: 'userName',
       label: 'Фильтр по пользователю',
       options: userFilterOptions,

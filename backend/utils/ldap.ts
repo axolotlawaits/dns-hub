@@ -18,10 +18,6 @@ export async function ldapAuth(req: Request, res: Response, next: NextFunction) 
 
     const user = await authenticate(options)
 
-    if (user.thumbnailPhoto) {
-      user.thumbnailPhoto = user.thumbnailPhoto.toString('base64');
-    }
-
     res.locals.user = user
     next()
   } catch (error) {

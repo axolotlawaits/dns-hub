@@ -39,7 +39,7 @@ export const dateRange: FilterFn<any> = (
 };
 
 interface FilterProps {
-  filterType: 'date' | 'user' | 'text';
+  filterType: 'date' | 'text' | 'select';
   currentFilter?: DateFilter | string[];
   filterOptions?: Array<{ value: string; label: string }>;
   onFilterChange: (value: any) => void;
@@ -73,7 +73,7 @@ export const Filter = ({
   switch (filterType) {
     case 'date':
       return (
-        <Group gap="xs">
+        <Group gap="md">
           <TextInput
             type="date"
             label={`${label} (начало)`}
@@ -92,7 +92,7 @@ export const Filter = ({
           />
         </Group>
       );
-    case 'user':
+    case 'select':
       return (
         <MultiSelect
           label={label}
@@ -104,7 +104,7 @@ export const Filter = ({
           clearable
           style={{ width }}
         />
-      );
+      );     
     default:
       return null;
   }
@@ -112,7 +112,7 @@ export const Filter = ({
 
 interface FilterGroupProps {
   filters: Array<{
-    type: 'date' | 'user' | 'text';
+    type: 'date' | 'text' | 'select';
     columnId: string;
     label: string;
     placeholder?: string;
