@@ -5,7 +5,7 @@ import {
   createMeterReading,
   updateMeterReading,
   deleteMeterReading,
-} from '../../controllers/app/meterReading';
+} from '../../controllers/aho/meterReading';
 
 const router = Router();
 

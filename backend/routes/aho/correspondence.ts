@@ -5,8 +5,8 @@ import {
   getCorrespondenceById,
   updateCorrespondence,
   deleteCorrespondence,
-} from '../../controllers/app/correspondence';
-import uploadCorrespondence from '../../config/multerConfig'; // Use default import
+} from '../../controllers/aho/correspondence';
+import uploadCorrespondence from '../../middleware/uploader'; // Use default import
 
 const router = Router();
 

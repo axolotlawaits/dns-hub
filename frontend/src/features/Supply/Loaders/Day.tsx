@@ -39,7 +39,7 @@ function Day({day}: {day: DayType}) {
   return (
     <div key={day.id} className="day-table">
       <p>{dayjs(day.day).format('MMMM D, YYYY')}</p>
-      <Table highlightOnHover>
+      <Table highlightOnHover >
         <Table.Thead>
           <Table.Tr>
             <Table.Th>Филиал</Table.Th>
