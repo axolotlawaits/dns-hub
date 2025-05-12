@@ -31,7 +31,7 @@ function Header() {
         </Link>
       </div>
       <div id="header-right">
-        <Search />
+        <Search /> 
         {isDark ? 
           <ActionIcon onClick={toggleTheme} size={36} variant="default" aria-label="ActionIcon with size as a number">
             <IconMoon size={22} />
