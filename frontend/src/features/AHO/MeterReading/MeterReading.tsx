@@ -400,6 +400,7 @@ const MeterReadingsList = () => {
       type: 'select' as const,
       columnId: 'userName',
       label: 'Фильтр по пользователю',
+      placeholder: 'Выберите пользователя',
       options: userFilterOptions,
       width: 200,
     },

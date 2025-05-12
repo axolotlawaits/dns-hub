@@ -23,13 +23,14 @@
     "dayjs": "^1.11.13",
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
-    "ldap-authentication": "^3.3.4",
+    "ldapjs": "^3.0.7",
     "multer": "^1.4.5-lts.2",
     "node-schedule": "^2.1.1",
     "tsx": "^4.19.3",
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@types/ldapjs": "^3.0.6",
     "@types/multer": "^1.4.12",
     "prisma": "^6.6.0",
     "typescript": "^5.8.2"

@@ -307,10 +307,12 @@ export default function CorrespondenceList() {
   
       // Handle removed attachments for edit mode
       if (mode === 'edit' && selectedCorrespondence) {
+        const valuesAttachments = values.attachments || []; // Ensure it's always an array
         const removedAttachments = selectedCorrespondence.attachments
           .filter(originalAttachment => 
-            !values.attachments.some((a: { id?: string }) => a.id === originalAttachment.id)
-          .map((a: { id: any; }) => a.id))
+            !valuesAttachments.some((a: { id?: string }) => a.id === originalAttachment.id)
+          )
+          .map(a => a.id);
         
         if (removedAttachments.length > 0) {
           formData.append('removedAttachments', JSON.stringify(removedAttachments));
@@ -360,6 +362,7 @@ export default function CorrespondenceList() {
       type: 'select' as const,
       columnId: 'userName',
       label: 'Фильтр по пользователю',
+      placeholder: 'Выберите пользователя',
       options: userFilterOptions,
       width: 200,
     },
@@ -368,6 +371,7 @@ export default function CorrespondenceList() {
       columnId: 'typeMail',
       options: typeFilterOptions,
       label: 'Фильтр по типу',
+      placeholder: 'Выберите тип',
       width: 200,
       },
   ], [userFilterOptions]);

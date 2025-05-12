@@ -31,7 +31,7 @@ function Header() {
         </Link>
       </div>
       <div id="header-right">
-        <Search />
+        <Search /> 
         {isDark ? 
           <ActionIcon onClick={toggleTheme} size={36} variant="default" aria-label="ActionIcon with size as a number">
             <IconMoon size={22} />
@@ -45,7 +45,7 @@ function Header() {
           <Menu shadow="md" width={200}>
             <Menu.Target>
               <ActionIcon size="input-sm" variant="default" aria-label="ActionIcon with size as a number" radius={"xl"}>
-                <Avatar name={user.name} color="indigo" />
+                <Avatar src={`data:image/jpeg;base64,${user.image}`} color="indigo" />
               </ActionIcon>
             </Menu.Target>
             <Menu.Dropdown>
