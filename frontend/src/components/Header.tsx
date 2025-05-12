@@ -45,7 +45,9 @@ function Header() {
           <Menu shadow="md" width={200}>
             <Menu.Target>
               {user.image ?
-                <Avatar src={`data:image/jpeg;base64,${user.image}`} />
+                <ActionIcon size="input-sm" variant="default" aria-label="ActionIcon with size as a number" radius={"xl"}>
+                  <Avatar src={`data:image/jpeg;base64,${user.image}`} />
+                </ActionIcon>
               :
                 <ActionIcon size="input-sm" variant="default" aria-label="ActionIcon with size as a number" radius={"xl"}>
                   <Avatar name={user.name} color="indigo" />
