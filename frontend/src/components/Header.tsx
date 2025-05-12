@@ -18,7 +18,7 @@ function Header() {
     logout()
     navigate('/login')
   }
-  
+
   return (
     <AppShell.Header id='header'>
       <div id="header-left">
@@ -44,9 +44,13 @@ function Header() {
         {user ? 
           <Menu shadow="md" width={200}>
             <Menu.Target>
-              <ActionIcon size="input-sm" variant="default" aria-label="ActionIcon with size as a number" radius={"xl"}>
-                <Avatar name={user.name} color="indigo" />
-              </ActionIcon>
+              {user.image ?
+                <Avatar src={`data:image/jpeg;base64,${user.image}`} />
+              :
+                <ActionIcon size="input-sm" variant="default" aria-label="ActionIcon with size as a number" radius={"xl"}>
+                  <Avatar name={user.name} color="indigo" />
+                </ActionIcon>
+              }
             </Menu.Target>
             <Menu.Dropdown>
               <Menu.Item onClick={onLogout} color="red" leftSection={<IconLogout size={14} />}>выйти</Menu.Item>

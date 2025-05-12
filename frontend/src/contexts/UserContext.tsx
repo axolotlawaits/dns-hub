@@ -5,6 +5,7 @@ export type User = {
   name: string
   branch: string
   position: string
+  image: string
 }
 
 type Props = {

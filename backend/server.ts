@@ -35,7 +35,7 @@ app.use('/hub-api/loaders/route', routeRouter)
 app.use('/hub-api/loaders/routeDay', routeDayRouter)
 app.use('/hub-api/loaders/filial', filialRouter)
 /* */
-console.log('hey')
+
 app.use(express.static(path.join(__dirname, 'public')))
 
 app.listen(2000, function() { 
