@@ -6,12 +6,13 @@ import { useDisclosure } from '@mantine/hooks'
 import { useNavigate } from 'react-router'
 import { BranchType } from '../app/handbook/Branch'
 import { EmployeeType } from '../app/handbook/Employee'
+import { Tool } from './Tools'
 
 function Search() {
   const [opened, { open, close }] = useDisclosure(false)
   const [branchResult, setBranchResult] = useState<BranchType[]>([])
   const [employeeResult, setEmployeeResult] = useState<EmployeeType[]>([])
-  const [toolResult, setToolResult] = useState([])
+  const [toolResult, setToolResult] = useState<Tool[]>([])
   const navigate = useNavigate()
   const [text, setText] = useState('')
 
@@ -24,19 +25,13 @@ function Search() {
       setToolResult(json.tools)
     }
   }
-  console.log(toolResult)
-  const onBranchClick = (id: string) => {
-    close()
-    setBranchResult([])
-    setEmployeeResult([])
-    navigate(`/branch/${id}`)
-  }
 
-  const onEmployeeClick = (id: string) => {
+  const onResultClick = (link: string) => {
     close()
-    setEmployeeResult([])
     setBranchResult([])
-    navigate(`/employee/${id}`)
+    setEmployeeResult([])
+    setToolResult([])
+    navigate(link)
   }
 
   const onSearchEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -65,7 +60,7 @@ function Search() {
             <h1 className='search-group-title'>Филиалы</h1>
             {branchResult.map(branch => {
               return (
-                <div key={branch.uuid} className='search-result' onClick={() => onBranchClick(branch.uuid)}>
+                <div key={branch.uuid} className='search-result' onClick={() => onResultClick(`/branch/${branch.uuid}`)}>
                   <span>{branch.name}</span>
                 </div>
               )
@@ -73,7 +68,7 @@ function Search() {
             <h1 className='search-group-title'>Сотрудники</h1>
             {employeeResult.map(employee => {
               return (
-                <div key={employee.uuid} className='search-result' onClick={() => onEmployeeClick(employee.uuid)}>
+                <div key={employee.uuid} className='search-result' onClick={() => onResultClick(`/employee/${employee.uuid}`)}>
                   <span>{employee.fio}</span>
                 </div>
               )
@@ -81,7 +76,7 @@ function Search() {
             <h1 className='search-group-title'>Инструменты</h1>
             {toolResult.map(tool => {
               return (
-                <div key={tool.id} className='search-result' onClick={() => navigate(tool.link)}>
+                <div key={tool.id} className='search-result' onClick={() => onResultClick(`/${tool.link}`)}>
                   <span>{tool.name}</span>
                 </div>
               )
