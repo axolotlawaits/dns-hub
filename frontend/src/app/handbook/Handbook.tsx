@@ -6,11 +6,13 @@ import BranchCard from './BranchCard'
 import { API } from "../../config/constants"
 import { ActionIcon, Select } from "@mantine/core"
 import { IconFilterOff } from "@tabler/icons-react"
+import Tools, { Tool } from "../../components/Tools"
 
 function Handbook() {
   const [searchParams] = useSearchParams()
   const [branches, setBranches] = useState<BranchType[]>([])
   const [employees, setEmployees] = useState<EmployeeType[]>([])
+  const [tools, setTools] = useState<Tool[]>([])
   const [searchFilter, setSearchFilter] = useState<string | null>('')
   const query = searchParams.get('text')
   const [cities, setCities] = useState<string[]>([])
@@ -22,6 +24,7 @@ function Handbook() {
     if (response.ok) {
       setBranches(json.branches)
       setEmployees(json.users)
+      setTools(json.tools)
     }
   }
 
@@ -41,6 +44,14 @@ function Handbook() {
     }
   }
 
+  const getTools = async () => {
+    const response = await fetch(`${API}/search/tool?text=${query}`)
+    const json = await response.json()
+    if (response.ok) {
+      setTools(json)
+    }
+  }
+
   const getCities = async () => {
     const response = await fetch(`${API}/search/city?text=${query}`)
     const json = await response.json()
@@ -55,8 +66,11 @@ function Handbook() {
   }, [searchParams])
 
   useEffect(() => {
+    setTools([])
     setBranches([])
     setEmployees([])
+    setTools([])
+    searchFilter === 'tool' && getTools()
     searchFilter === 'branch' && getBranches()
     searchFilter === 'employee' && getEmployees()
   }, [searchFilter, cityFilter])
@@ -71,7 +85,11 @@ function Handbook() {
     <div id="search-page">
       <div id="search-filters">
         <Select 
-          data={[{value: 'branch', label: 'филиал'}, {value: 'employee', label: 'сотрудник'}]} 
+          data={[
+            {value: 'branch', label: 'филиал'}, 
+            {value: 'employee', label: 'сотрудник'},
+            {value: 'tool', label: 'инструмент'}
+          ]} 
           value={searchFilter} 
           onChange={setSearchFilter} 
           placeholder="Поиск по..." 
@@ -94,8 +112,9 @@ function Handbook() {
       </div>
       <div id="search-info">
         <span className="search-info-text">Ключевая фраза: {query}</span>
-        <span className="search-info-text">Найдено: филиалы: {branches.length}, сотрудники: {employees.length}</span>
+        <span className="search-info-text">Найдено: инструменты: {tools.length}, филиалы: {branches.length}, сотрудники: {employees.length}</span>
       </div>
+      {tools.length > 0 && <Tools tools={tools} />}
       {branches.length > 0 && 
         <div className="search-branches">
           <h2>Филиалы</h2>

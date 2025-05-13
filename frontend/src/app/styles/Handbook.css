@@ -1,3 +1,31 @@
+/* search component */
+
+.search-group-title {
+  font-size: 12px;
+  color: var(--font-aux)
+}
+
+#search-results {
+  display: flex;
+  flex-direction: column;
+  padding-top: 20px;
+  gap: 10px;
+}
+
+.search-result {
+  color: var(--font);
+  font-size: 14px;
+  padding: 2px 5px;
+  border-radius: 5px;
+}
+
+.search-result:hover {
+  background-color: var(--select);
+  cursor: pointer;
+}
+
+/* search page */
+
 #search-page {
   display: flex;
   flex-direction: column;

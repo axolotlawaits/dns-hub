@@ -1,4 +1,4 @@
-import { Button, Modal, TextInput } from '@mantine/core'
+import { Button, Divider, Modal, TextInput } from '@mantine/core'
 import { IconSearch } from '@tabler/icons-react'
 import { useState } from 'react'
 import { API } from '../config/constants'
@@ -28,19 +28,22 @@ function Search() {
 
   const onResultClick = (link: string) => {
     close()
-    setBranchResult([])
-    setEmployeeResult([])
-    setToolResult([])
+    clearData()
     navigate(link)
   }
 
   const onSearchEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (text && e.key === 'Enter') {
       close()
-      setBranchResult([])
-      setEmployeeResult([])
+      clearData()
       navigate(`/search?text=${text}`)
     }
+  }
+
+  const clearData = () => {
+    setBranchResult([])
+    setEmployeeResult([])
+    setToolResult([])
   }
 
   return (
@@ -51,37 +54,45 @@ function Search() {
           size='md'
           placeholder="поиск"
           leftSection={<IconSearch size={20} />}
-          onChange={(e) => e.target.value ? (onSearch(e.target.value), setText(e.target.value)) : setBranchResult([])}
+          onChange={(e) => e.target.value ? (onSearch(e.target.value), setText(e.target.value)) : clearData()}
           onKeyDown={onSearchEnter}
         />
         <div id='search-results'>
           {branchResult.length > 0 && 
-          <>
-            <h1 className='search-group-title'>Филиалы</h1>
-            {branchResult.map(branch => {
-              return (
-                <div key={branch.uuid} className='search-result' onClick={() => onResultClick(`/branch/${branch.uuid}`)}>
-                  <span>{branch.name}</span>
-                </div>
-              )
-            })}
-            <h1 className='search-group-title'>Сотрудники</h1>
-            {employeeResult.map(employee => {
-              return (
-                <div key={employee.uuid} className='search-result' onClick={() => onResultClick(`/employee/${employee.uuid}`)}>
-                  <span>{employee.fio}</span>
-                </div>
-              )
-            })}
-            <h1 className='search-group-title'>Инструменты</h1>
-            {toolResult.map(tool => {
-              return (
-                <div key={tool.id} className='search-result' onClick={() => onResultClick(`/${tool.link}`)}>
-                  <span>{tool.name}</span>
-                </div>
-              )
-            })}
-          </>
+            <div className='search-group'>
+              <h1 className='search-group-title'>Филиалы</h1>
+              {branchResult.map(branch => {
+                return (
+                  <div key={branch.uuid} className='search-result' onClick={() => onResultClick(`/branch/${branch.uuid}`)}>
+                    <span>{branch.name}</span>
+                  </div>
+                )
+              })}
+            </div>
+          }
+          {employeeResult.length > 0 &&
+            <div className='search-group'>
+              <h1 className='search-group-title'>Сотрудники</h1>
+              {employeeResult.map(employee => {
+                return (
+                  <div key={employee.uuid} className='search-result' onClick={() => onResultClick(`/employee/${employee.uuid}`)}>
+                    <span>{employee.fio}</span>
+                  </div>
+                )
+              })}
+            </div>
+          }
+          {toolResult.length > 0 &&
+            <div className='search-group'>
+              <h1 className='search-group-title'>Инструменты</h1>
+              {toolResult.map(tool => {
+                return (
+                  <div key={tool.id} className='search-result' onClick={() => onResultClick(`/${tool.link}`)}>
+                    <span>{tool.name}</span>
+                  </div>
+                )
+              })}
+            </div>
           }
         </div>
       </Modal>

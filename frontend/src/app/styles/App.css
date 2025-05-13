@@ -248,31 +248,6 @@ a:active {
   border-radius: 10px;
 }
 
-/* search */
-
-.search-group-title {
-  font-size: 12px;
-  color: var(--font-aux)
-}
-
-#search-results {
-  display: flex;
-  flex-direction: column;
-  padding-top: 20px;
-}
-
-.search-result {
-  color: var(--font);
-  font-size: 14px;
-  padding: 2px 5px;
-  border-radius: 5px;
-}
-
-.search-result:hover {
-  background-color: var(--select);
-  cursor: pointer;
-}
-
 /* table */
 table
 {
