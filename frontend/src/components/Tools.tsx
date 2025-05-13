@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import * as TablerIcons from "@tabler/icons-react";
 import '../components/styles/Tools.css';
 
-// Общий интерфейс, который можно импортировать в другие компоненты
 export interface Tool {
   id: string;
   parent_id: string | null;

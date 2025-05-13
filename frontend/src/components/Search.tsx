@@ -11,6 +11,7 @@ function Search() {
   const [opened, { open, close }] = useDisclosure(false)
   const [branchResult, setBranchResult] = useState<BranchType[]>([])
   const [employeeResult, setEmployeeResult] = useState<EmployeeType[]>([])
+  const [toolResult, setToolResult] = useState([])
   const navigate = useNavigate()
   const [text, setText] = useState('')
 
@@ -20,9 +21,10 @@ function Search() {
     if (response.ok) {
       setBranchResult(json.branches)
       setEmployeeResult(json.users)
+      setToolResult(json.tools)
     }
   }
-
+  console.log(toolResult)
   const onBranchClick = (id: string) => {
     close()
     setBranchResult([])
@@ -73,6 +75,14 @@ function Search() {
               return (
                 <div key={employee.uuid} className='search-result' onClick={() => onEmployeeClick(employee.uuid)}>
                   <span>{employee.fio}</span>
+                </div>
+              )
+            })}
+            <h1 className='search-group-title'>Инструменты</h1>
+            {toolResult.map(tool => {
+              return (
+                <div key={tool.id} className='search-result' onClick={() => navigate(tool.link)}>
+                  <span>{tool.name}</span>
                 </div>
               )
             })}

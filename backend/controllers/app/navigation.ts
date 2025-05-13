@@ -2,8 +2,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../../server';
 
-const ROOT_PARENT_ID = '00000000-0000-0000-0000-000000000000';
-
 // Получение списка корневых элементов меню
 export const getRootMenuItems = async (
   req: Request,
@@ -13,7 +11,7 @@ export const getRootMenuItems = async (
   try {
     const menuList = await prisma.tool.findMany({
       where: {
-        parent_id: ROOT_PARENT_ID
+        parent_id: null
       },
       select: {
         id: true,
