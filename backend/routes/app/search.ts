@@ -1,5 +1,5 @@
 import express from 'express'
-import { getBranch, getEmployee, quickSearch, searchAll, searchBranches, searchCities, searchEmployees, searchTools } from '../../controllers/app/search'
+import { getBranch, getEmployee, quickSearch, searchAll, searchBranches, searchCities, searchEmployees, searchPositions, searchTools } from '../../controllers/app/search'
 
 const router = express.Router()
 
@@ -18,5 +18,7 @@ router.get('/employee/:id', getEmployee)
 router.get('/employee', searchEmployees)
 
 router.get('/city', searchCities)
+
+router.get('/position', searchPositions)
 
 export default router

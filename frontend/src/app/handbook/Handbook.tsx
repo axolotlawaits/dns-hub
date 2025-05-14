@@ -17,6 +17,8 @@ function Handbook() {
   const query = searchParams.get('text')
   const [cities, setCities] = useState<string[]>([])
   const [cityFilter, setCityFilter] = useState<string | null>('')
+  const [positions, setPositions] = useState<string[]>([])
+  const [positionFilter, setPositionFilter] = useState<string | null>('')
 
   const getSearchResults = async () => {
     const response = await fetch(`${API}/search/all?text=${query}`)
@@ -29,15 +31,16 @@ function Handbook() {
   }
 
   const getBranches = async () => {
-    const response = await fetch(`${API}/search/branch?text=${query}&city=${cityFilter}`)
+    const response = await fetch(`${API}/search/branch?text=${query}&city=${cityFilter || ''}`)
     const json = await response.json()
     if (response.ok) {
+      console.log(json)
       setBranches(json)
     }
   }
 
   const getEmployees = async () => {
-    const response = await fetch(`${API}/search/employee?text=${query}`)
+    const response = await fetch(`${API}/search/employee?text=${query}&position=${positionFilter || ''}`)
     const json = await response.json()
     if (response.ok) {
       setEmployees(json)
@@ -53,34 +56,41 @@ function Handbook() {
   }
 
   const getCities = async () => {
-    const response = await fetch(`${API}/search/city?text=${query}`)
+    const response = await fetch(`${API}/search/city`)
     const json = await response.json()
     if (response.ok) {
       setCities(json)
     }
   }
 
+  const getPositions = async () => {
+    const response = await fetch(`${API}/search/position`)
+    const json = await response.json()
+    if (response.ok) {
+      setPositions(json)
+    }
+  }
+
   useEffect(() => {
     getSearchResults()
-    getCities()
   }, [searchParams])
 
   useEffect(() => {
     setTools([])
     setBranches([])
     setEmployees([])
-    setTools([])
     searchFilter === 'tool' && getTools()
-    searchFilter === 'branch' && getBranches()
-    searchFilter === 'employee' && getEmployees()
-  }, [searchFilter, cityFilter])
+    searchFilter === 'branch' && getBranches(), getCities()
+    searchFilter === 'employee' && getEmployees(), getPositions()
+  }, [searchFilter, cityFilter, positionFilter])
 
   const clearFilters = () => {
     setSearchFilter('')
     setCityFilter('')
+    setPositionFilter('')
     getSearchResults()
   }
-
+  console.log(cityFilter)
   return (
     <div id="search-page">
       <div id="search-filters">
@@ -102,9 +112,22 @@ function Handbook() {
             onChange={setCityFilter} 
             placeholder="Выбрать город" 
             style={{ width: 300 }}
+            searchable
+            clearable
           />
         }
-        {(searchFilter || cityFilter) &&
+        {searchFilter === 'employee' &&
+          <Select 
+            data={positions} 
+            value={positionFilter} 
+            onChange={setPositionFilter} 
+            placeholder="Выбрать должность" 
+            style={{ width: 300 }}
+            searchable
+            clearable
+          />
+        }
+        {(searchFilter || cityFilter || positionFilter) &&
           <ActionIcon onClick={clearFilters} variant="filled" color="red" size={36} aria-label="clear-filters">
             <IconFilterOff />
           </ActionIcon>
