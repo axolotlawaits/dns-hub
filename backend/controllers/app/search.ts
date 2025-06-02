@@ -26,21 +26,45 @@ export const quickSearch = async (req: Request, res: Response): Promise<any>  =>
 
 export const searchAll = async (req: Request, res: Response): Promise<any>  => {
   const text = req.query.text as string
-  const branches = await prisma.branch.findMany({
-    where: {name: {contains: text, mode: 'insensitive'}, status: {in: [0, 1]}},
-    include: {userData: true, images: true},
-    take: 10
-  })
-  const users = await prisma.userData.findMany({
-    where: {fio: {contains: text, mode: 'insensitive'}},
-    include: {branch: true},
-    take: 10
-  })
-  if (branches && users) {
-    return res.status(200).json({branches, users})
+  const [branches, users, tools] = await Promise.all([
+    prisma.branch.findMany({
+      where: {name: {contains: text, mode: 'insensitive'}, status: {in: [0, 1]}},
+      include: {userData: true, images: true},
+      take: 10
+    }),
+    prisma.userData.findMany({
+      where: {fio: {contains: text, mode: 'insensitive'}},
+      include: {branch: true},
+      take: 10
+    }),
+    prisma.tool.findMany({
+      where: {name: {contains: text, mode: 'insensitive'}, parent_id: {not: null}},
+      take: 3
+    })
+  ])
+
+  if (branches) {
+    return res.status(200).json({branches, users, tools})
   }
   res.status(400).json({error: 'ошибка при поиске филиалов'})
 }
+
+/* tools */
+
+export const searchTools = async (req: Request, res: Response): Promise<any>  => {
+  const text = req.query.text as string
+
+  const result = await prisma.tool.findMany({
+    where: {name: {contains: text, mode: 'insensitive'}, parent_id: {not: null}},
+    take: 5,
+  })
+  if (result) {
+    return res.status(200).json(result)
+  }
+  res.status(400).json({error: 'ошибка при поиске инструментов'})
+}
+
+/* branches */
 
 export const getBranch = async (req: Request, res: Response): Promise<any>  => {
   const branchId = req.params.id as string
@@ -85,8 +109,10 @@ export const getEmployee = async (req: Request, res: Response): Promise<any> => 
 
 export const searchEmployees = async (req: Request, res: Response): Promise<any> => {
   const text = req.query.text as string
+  const position = (req.query.position as string) || undefined
+
   const employees = await prisma.userData.findMany({
-    where: {fio: {contains: text, mode: 'insensitive'}},
+    where: {fio: {contains: text, mode: 'insensitive'}, position},
     take: 10,
     include: {branch: true}
   })
@@ -97,16 +123,30 @@ export const searchEmployees = async (req: Request, res: Response): Promise<any>
   }
 }
 
+/* filters data */
+
 export const searchCities = async (req: Request, res: Response): Promise<any> => {
-  const text = req.query.text as string
   const cities = await prisma.branch.findMany({
-    where: {city: {contains: text, mode: 'insensitive'}},
     select: {city: true},
-    distinct: ['city']
+    distinct: ['city'],
+    orderBy: {city: 'asc'}
   })
   if (cities) {
     res.status(200).json(cities.map(city => city.city))
   } else {
-    res.status(400).json({error: 'ошибка при поиске сотрудников'})
+    res.status(400).json({error: 'ошибка при поиске'})
+  }
+}
+
+export const searchPositions = async (req: Request, res: Response): Promise<any> => {
+  const positions = await prisma.userData.findMany({
+    select: {position: true},
+    distinct: ['position'],
+    orderBy: {position: 'asc'}
+  })
+  if (positions) {
+    res.status(200).json(positions.map(pos => pos.position))
+  } else {
+    res.status(400).json({error: 'ошибка при поиске'})
   }
 }
