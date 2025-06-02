@@ -7,99 +7,113 @@ generator client {
   provider = "prisma-client-js"
 }
 
-/* handbook models */
+/* Handbook models */
 
 model UserData {
-  uuid              String          @id @default(uuid())
+  uuid              String        @id @default(uuid())
   birthday          DateTime
   fio               String
   code              String
-  branch            Branch          @relation(fields: [branch_uuid], references: [uuid])
+  branch            Branch        @relation(fields: [branch_uuid], references: [uuid])
   branch_uuid       String
   position          String
-  email             String          @unique
+  email             String        @unique
   status            String
   start_date        DateTime
   end_date          DateTime
-  last_update       DateTime       @updatedAt
+  last_update       DateTime      @updatedAt
 }
 
 model Branch {
-  uuid              String          @id @default(uuid())
-  division          String          
-  code              String
-  rrs               String
-  name              String
-  status            Int
-  city              String
-  address           String
-  last_update       DateTime
-  latitude          Float
-  longitude         Float
-  totalArea         Int
-  tradingArea       Int
-  warehouseArea     Int
-  type              String
-  userData          UserData[]
-  images            BranchImage[]
+  uuid                                String                 @id @default(uuid())
+  division                            String          
+  code                                String
+  rrs                                 String
+  name                                String
+  status                              Int
+  city                                String
+  address                             String
+  last_update                         DateTime
+  latitude                            Float
+  longitude                           Float
+  totalArea                           Int
+  tradingArea                         Int
+  warehouseArea                       Int
+  type                                String
+  userData                            UserData[]
+  images                              BranchImage[]
+  supplyDocs SupplyDocs[]                                   @relation("SupplyDocs_Branch")
+  printService  PrintService[]                              @relation("BranchPrint")
 }
 
 model Type {
-  id                String        @id @default(uuid())
-  model_uuid        String
-  chapter           String
-  name              String
-  Tool              Tool          @relation(fields: [model_uuid], references: [id])
+  id                              String            @id @default(uuid())
+  model_uuid                      String      
+  chapter                         String      
+  name                            String      
+  colorHex                        String?     
+  Tool                            Tool              @relation(fields: [model_uuid], references: [id])
+  SupplyDocsRequirements          SupplyDocs[]      @relation("SupplyDocs_Requirements")
+  SupplyDocsPTiU                  SupplyDocs[]      @relation("SupplyDocs_PTiU")
+  Media                           Media[]           @relation("TypeMedia")
 }
 
 model Tool {
-  id                String        @id @default(uuid())
+  id                String       @id @default(uuid())
   parent_id         String?
   name              String
   icon              String
   link              String
   description       String?
   order             Int
+  included          Boolean?    @default(true)
   types             Type[]
 }
 
 model BranchImage {
-  id              String          @id @default(uuid())
+  id              String        @id @default(uuid())
   link            String
-  branch          Branch          @relation(fields: [branch_uuid], references: [uuid])
+  branch          Branch        @relation(fields: [branch_uuid], references: [uuid])
   branch_uuid     String
 }
 
-/* app models */
+/* App models */
 
 model User {
-    id               String         @id @default(uuid())
-    name             String
-    email            String         @unique
-    position         String
-    branch           String
-    image            String?
-    login            String         @unique
-    updatedAt        DateTime       @updatedAt
-    correspondences  Correspondence[]
-    attachments      CorrespondenceAttachment[]
-    news             News[]
-    meterReadings    MeterReading[]
+  id                      String                     @id @default(uuid())
+  name                    String
+  email                   String                     @unique
+  position                String
+  branch                  String
+  image                   String?
+  login                   String                     @unique
+  updatedAt               DateTime                   @updatedAt
+  correspondences         Correspondence[]
+  attachments             CorrespondenceAttachment[]
+  news                    News[]
+  meterReadings           MeterReading[]
+  SupplyDocsAttachments   SupplyDocsAttachment[]
+  SupplyDocs              SupplyDocs[]               @relation("SupplyDocs_SettlementSpecialist")
+  AddedSupplyDocs         SupplyDocs[]               @relation("SupplyDocs_AddedBy")
+  MediaAttachment         MediaAttachment[]
+  MediaAdd                Media[]                    @relation("Media_UserAdd")
+  MediaUpdated            Media[]                    @relation("Media_UserUpdated")
 }
 
 model News {
-  id                String          @id @default(uuid())
+  id                String        @id @default(uuid())
   name              String
   description       String
-  user              User            @relation(fields: [userId], references: [id])
+  user              User          @relation(fields: [userId], references: [id])
   userId            String          
-  createdAt         DateTime        @default(now())
+  createdAt         DateTime      @default(now())
 }
 
 /* Instruments models */
+
 /* AXO */
 model MeterReading {
-  id               String         @id @default(uuid())
+  id               String        @id @default(uuid())
   createdAt        DateTime      @default(now())
   date             DateTime
   user             User          @relation(fields: [userId], references: [id])
@@ -108,40 +122,40 @@ model MeterReading {
 }
 
 model Correspondence {
-    id               String                     @id @default(uuid())
-    createdAt        DateTime                   @default(now())
-    ReceiptDate      DateTime
-    userAdd          String
-    from             String
-    to               String
-    content          String
-    typeMail         String
-    numberMail       String
-    attachments      CorrespondenceAttachment[]
-    user             User                       @relation(fields: [userAdd], references: [id])
+  id               String                     @id @default(uuid())
+  createdAt        DateTime                   @default(now())
+  ReceiptDate      DateTime
+  userAdd          String
+  from             String
+  to               String
+  content          String
+  typeMail         String
+  numberMail       String
+  attachments      CorrespondenceAttachment[]
+  user             User                       @relation(fields: [userAdd], references: [id])
 }
 
 model CorrespondenceAttachment {
-    id               String                     @id @default(uuid())
-    createdAt        DateTime                   @default(now())
-    record_id        String                     
-    userAdd          String
-    source           String
-    correspondence   Correspondence             @relation(fields: [record_id], references: [id])
-    user             User                       @relation(fields: [userAdd], references: [id])
+  id               String                     @id @default(uuid())
+  createdAt        DateTime                   @default(now())
+  record_id        String                     
+  userAdd          String
+  source           String
+  correspondence   Correspondence             @relation(fields: [record_id], references: [id])
+  user             User                       @relation(fields: [userAdd], references: [id])
 }
 
-/* supply */
+/* Supply models */
 
 model Route {
-  id              String          @id @default(uuid())
-  name            String          @unique
+  id              String        @id @default(uuid())
+  name            String        @unique
   rrs             String
   contractor      String
   filials         Filial[]
   days            RouteDay[]
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 }
 
 model RouteDay {
@@ -154,23 +168,101 @@ model RouteDay {
 }
 
 model Filial {
-  id              String          @id @default(uuid())
+  id              String        @id @default(uuid())
   name            String
   place           Int?             
-  accepted        Boolean         @default(false)
+  accepted        Boolean       @default(false)
   feedback        String?
   loaders         Loader[]
-  route           Route           @relation(fields: [routeId], references: [id])
+  route           Route         @relation(fields: [routeId], references: [id])
   routeId         String  
-  routeDay        RouteDay?       @relation(fields: [routeDayId], references: [id])
+  routeDay        RouteDay?     @relation(fields: [routeDayId], references: [id])
   routeDayId      String?
-  updatedAt       DateTime        @updatedAt        
+  updatedAt       DateTime      @updatedAt        
 }
 
 model Loader {
-  id              String          @id @default(uuid())
+  id              String        @id @default(uuid())
   startTime       DateTime
   endTime         DateTime
-  filial          Filial          @relation(fields: [filialId], references: [id])
+  filial          Filial        @relation(fields: [filialId], references: [id])
   filialId        String
+}
+
+model SupplyDocs {
+  id                      String               @id @default(uuid())
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime
+  addedById               String
+  addedBy                 User                 @relation("SupplyDocs_AddedBy", fields: [addedById], references: [id])
+  inn                     Int
+  counterParty            String
+  demandsForPayment       String
+  statusRequirements      String               
+  statusRequirementsId    Type?                 @relation("SupplyDocs_Requirements", fields: [statusRequirements], references: [id])
+  fileInvoicePayment      String
+  costBranchId            String
+  supplyDocs              SupplyDocsAttachment[]
+  costBranch              Branch               @relation("SupplyDocs_Branch", fields: [costBranchId], references: [uuid])
+  settlementSpecialistId  String?              
+  settlementSpecialist    User?                @relation("SupplyDocs_SettlementSpecialist", fields: [settlementSpecialistId], references: [id])
+  statusOfPTiU            String
+  statusOfPTiUId          Type?                @relation("SupplyDocs_PTiU", fields: [statusOfPTiU], references: [id])
+  filePTiU                String
+  note                    String
+  fileNote                String
+  requirementNumber       String  
+}
+
+model SupplyDocsAttachment {
+  id               String                     @id @default(uuid())
+  createdAt        DateTime                   @default(now())                    
+  userAdd          String
+  source           String
+  type             String
+  supplyDocs       SupplyDocs                 @relation(fields: [recordId], references: [id])
+  recordId         String 
+  user             User                       @relation(fields: [userAdd], references: [id])
+}
+
+model Media {       
+  id              String                @id @default(uuid())
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime?             @updatedAt
+  userAdd         User                  @relation("Media_UserAdd", fields: [userAddId], references: [id])
+  userAddId       String        
+  userUpdated     User?                 @relation("Media_UserUpdated", fields: [userUpdatedId], references: [id])
+  userUpdatedId   String?       
+  name            String?       
+  sketch          String?       
+  MediaAttachment MediaAttachment[]
+  information     String?       
+  urlMedia2       String?       
+  typeContent     Type?                 @relation("TypeMedia", fields: [typeContentId], references: [id])
+  typeContentId   String?
+}
+
+model MediaAttachment {
+  id               String         @id @default(uuid())
+  createdAt        DateTime       @default(now())                    
+  userAdd          User           @relation(fields: [userAddId], references: [id])
+  userAddId        String     
+  source           String     
+  type             String     
+  media            Media          @relation(fields: [recordId], references: [id])
+  recordId         String       
+}
+
+model PrintService{
+  id                    String          @id @default(uuid())
+  branch                Branch          @relation("BranchPrint", fields: [branchId] ,references: [uuid])
+  branchId              String
+  tovarName             String
+  tovarCode             Int
+  price                 Float
+  createdAt             DateTime
+  updatedAt             DateTime
+  brand                 String
+  tovarId               String
+  format                Int
 }

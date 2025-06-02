@@ -1,11 +1,26 @@
-import { Modal, TextInput, Select, Button, Alert, Stack, Textarea, Text, Group } from '@mantine/core';
+import { Modal, TextInput, Select, Button, Alert, Stack, Textarea, Text, Group, Image } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useState, useEffect, useCallback } from 'react';
 import dayjs from 'dayjs';
 import { API } from '../config/constants';
-import { FileDropZone, ListItemWithActions, DraggableItem } from './dnd'; // Import DraggableItem and other necessary components
+import { FileDropZone, ListItemWithActions, DraggableItem } from './dnd';
+import {
+  IconFile,
+  IconFileTypePdf,
+  IconFileTypeDoc,
+  IconFileTypeXls,
+  IconFileTypePpt,
+  IconFileTypeZip,
+  IconPhoto,
+  IconFileTypeJs,
+  IconFileTypeHtml,
+  IconFileTypeCss,
+  IconFileTypeTxt,
+  IconFileTypeCsv,
+} from '@tabler/icons-react';
 
-export type FieldType = 'text' | 'number' | 'select' | 'date' | 'datetime' | 'textarea' | 'file';
+// Определите интерфейсы
+export type FieldType = 'text' | 'number' | 'select' | 'selectSearch' | 'date' | 'datetime' | 'textarea' | 'file';
 
 export interface FormField {
   name: string;
@@ -16,30 +31,17 @@ export interface FormField {
   step?: string;
   min?: number;
   max?: number;
-  withDnd?: boolean; // Флаг для включения DND функциональности
+  withDnd?: boolean;
 }
 
 export interface ViewFieldConfig {
   label: string;
-  value: (item: any) => string;
+  value: (item: any) => string | number | null;
 }
 
 export interface FormConfig {
   fields: FormField[];
   initialValues: Record<string, any>;
-}
-
-interface DynamicFormModalProps {
-  opened: boolean;
-  onClose: () => void;
-  title: string;
-  mode: 'edit' | 'create' | 'view' | 'delete';
-  fields?: FormField[];
-  viewFieldsConfig?: ViewFieldConfig[];
-  initialValues: Record<string, any>;
-  onSubmit?: (values: Record<string, any>) => void;
-  onConfirm?: () => void;
-  error?: string | null;
 }
 
 interface FileAttachment {
@@ -55,6 +57,61 @@ interface FileUploadProps {
   withDnd?: boolean;
 }
 
+interface DynamicFormModalProps {
+  opened: boolean;
+  onClose: () => void;
+  title: string;
+  mode: 'edit' | 'create' | 'view' | 'delete';
+  fields?: FormField[];
+  viewFieldsConfig?: ViewFieldConfig[];
+  initialValues: Record<string, any>;
+  onSubmit?: (values: Record<string, any>) => void;
+  onConfirm?: () => void;
+  error?: string | null;
+}
+
+// Определите функцию для получения иконки файла на основе его типа
+const getFileIcon = (fileName: string) => {
+  const extension = fileName.split('.').pop()?.toLowerCase();
+
+  switch (extension) {
+    case 'jpg':
+    case 'jpeg':
+    case 'png':
+    case 'gif':
+      return <IconPhoto size={20} />;
+    case 'pdf':
+      return <IconFileTypePdf size={20} />;
+    case 'doc':
+    case 'docx':
+      return <IconFileTypeDoc size={20} />;
+    case 'xls':
+    case 'xlsx':
+      return <IconFileTypeXls size={20} />;
+    case 'zip':
+    case 'rar':
+    case 'tar':
+    case 'gz':
+      return <IconFileTypeZip size={20} />;
+    case 'ppt':
+    case 'pptx':
+      return <IconFileTypePpt size={20} />;
+    case 'js':
+      return <IconFileTypeJs size={20} />;
+    case 'html':
+      return <IconFileTypeHtml size={20} />;
+    case 'css':
+      return <IconFileTypeCss size={20} />;
+    case 'txt':
+      return <IconFileTypeTxt size={20} />;
+    case 'csv':
+      return <IconFileTypeCsv size={20} />;
+    default:
+      return <IconFile size={20} />;
+  }
+};
+
+// Обновите компонент FileUploadComponent для отображения иконок и превью
 const FileUploadComponent = ({
   onFilesDrop,
   attachments,
@@ -66,19 +123,30 @@ const FileUploadComponent = ({
       <>
         <FileDropZone onFilesDrop={onFilesDrop} />
         <Stack mt="md">
-          {attachments.map((attachment) => (
-            <ListItemWithActions
-              key={attachment.id || `temp-${Math.random().toString(36).substr(2, 9)}`}
-              item={{
-                id: attachment.id || `temp-${Math.random().toString(36).substr(2, 9)}`,
-                name: typeof attachment.source === 'string'
-                  ? attachment.source
-                  : attachment.source.name
-              }}
-              onDelete={() => onRemoveAttachment(attachment.id)}
-              renderContent={(item: DraggableItem) => <Text>{item.name}</Text>}
-            />
-          ))}
+          {attachments.map((attachment) => {
+            const fileName = typeof attachment.source === 'string' ? attachment.source : attachment.source.name;
+            const isImage = fileName.match(/\.(jpg|jpeg|png|gif)$/i);
+
+            return (
+              <ListItemWithActions
+                key={attachment.id || `temp-${Math.random().toString(36).substr(2, 9)}`}
+                item={{
+                  id: attachment.id || `temp-${Math.random().toString(36).substr(2, 9)}`,
+                  name: fileName
+                }}
+                onDelete={() => onRemoveAttachment(attachment.id)}
+                renderContent={(item: DraggableItem) => (
+                  <Group>
+                    {getFileIcon(fileName)}
+                    <Text>{item.name}</Text>
+                    {isImage && typeof attachment.source === 'string' && (
+                      <Image src={`${API}/${attachment.source}`} width={50} alt="Preview" />
+                    )}
+                  </Group>
+                )}
+              />
+            );
+          })}
         </Stack>
       </>
     );
@@ -104,19 +172,29 @@ const FileUploadComponent = ({
         }}
       />
       <Stack mt="md">
-        {attachments.map((attachment) => (
-          <Group key={attachment.id || `temp-${Math.random().toString(36).substr(2, 9)}`} mb="md">
-            <Text>{typeof attachment.source === 'string' ? attachment.source : attachment.source.name}</Text>
-            <Button variant="light" color="red" onClick={() => onRemoveAttachment(attachment.id)}>
-              Remove
-            </Button>
-          </Group>
-        ))}
+        {attachments.map((attachment) => {
+          const fileName = typeof attachment.source === 'string' ? attachment.source : attachment.source.name;
+          const isImage = fileName.match(/\.(jpg|jpeg|png|gif)$/i);
+
+          return (
+            <Group key={attachment.id || `temp-${Math.random().toString(36).substr(2, 9)}`} mb="md">
+              {getFileIcon(fileName)}
+              <Text>{fileName}</Text>
+              {isImage && typeof attachment.source === 'string' && (
+                <Image src={`${API}/${attachment.source}`} width={50} alt="Preview" />
+              )}
+              <Button variant="light" color="red" onClick={() => onRemoveAttachment(attachment.id)}>
+                Remove
+              </Button>
+            </Group>
+          );
+        })}
       </Stack>
     </>
   );
 };
 
+// Обновите компонент DynamicFormModal для отображения кнопки скачивания и превью в режиме просмотра
 export const DynamicFormModal = ({
   opened,
   onClose,
@@ -194,6 +272,20 @@ export const DynamicFormModal = ({
             mb="md"
           />
         );
+      case 'selectSearch':
+        return (
+          <Select
+            key={field.name}
+            label={field.label}
+            data={field.options || []}
+            required={field.required}
+            searchable
+            nothingFoundMessage="Ничего не найдено"
+            clearable
+            {...form.getInputProps(field.name)}
+            mb="md"
+          />
+        );
       case 'date':
         return (
           <TextInput
@@ -260,9 +352,23 @@ export const DynamicFormModal = ({
           {initialValues.attachments?.length > 0 && (
             <>
               <Text mt="md" mb="sm" fw={500}>Приложения</Text>
-              {initialValues.attachments.map((attachment: any) => (
-                <img key={attachment.id} src={`${API}/${attachment.source}`} width={50} alt="Attachment" />
-              ))}
+              {initialValues.attachments.map((attachment: FileAttachment) => {
+                const fileName = typeof attachment.source === 'string' ? attachment.source : attachment.source.name;
+                const isImage = fileName.match(/\.(jpg|jpeg|png|gif)$/i);
+
+                return (
+                  <Group key={attachment.id} mb="md">
+                    {getFileIcon(fileName)}
+                    <Text>{fileName}</Text>
+                    {isImage && typeof attachment.source === 'string' && (
+                      <Image src={`${API}/${attachment.source}`} width={50} alt="Preview" />
+                    )}
+                    <Button variant="light" onClick={() => window.open(`${API}/${attachment.source}`, '_blank')}>
+                      Скачать
+                    </Button>
+                  </Group>
+                );
+              })}
             </>
           )}
         </>

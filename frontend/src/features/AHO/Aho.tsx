@@ -18,7 +18,6 @@ function Aho() {
         setIsLoading(false);
         return;
       }
-
       try {
         const response = await fetch(`${API}/navigation/sub?parent_id=${id}`);
         if (!response.ok) {

@@ -1,9 +1,11 @@
-import Tools, { Tool } from "../../components/Tools"
+// features/AHO/Aho.tsx
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
+import Tools from "../../components/Tools";
 import { API } from "../../config/constants";
-import { useLocation } from "react-router";
+import { Tool } from "../../components/Tools"; // Импортируем интерфейс из Tools
 
-function Accounting() {
+function Retail() {
   const [tools, setTools] = useState<Tool[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -38,10 +40,10 @@ function Accounting() {
 
   return (
     <div>
-      <h1>Бухгалтерия</h1>
+      <h1>АХО</h1>
       <Tools tools={tools} />
     </div>
   );
 }
 
-export default Accounting
+export default Retail;

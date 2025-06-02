@@ -7,7 +7,7 @@ export interface Tool {
   id: string;
   parent_id: string | null;
   name: string;
-  icon: string; // Изменено с keyof typeof TablerIcons на string
+  icon: string;
   link: string;
   description: string;
   order: number;
@@ -28,7 +28,7 @@ function Tools({ tools }: ToolsProps) {
   return (
     <div className="tools-container">
       {tools.map((tool) => (
-        <Link to={tool.link} key={tool.id} className="tool-card">
+        <Link to={`/${tool.link}`} key={tool.id} className="tool-card">
           {getIconComponent(tool.icon)}
           <div className="tool-text">
             <span className="tool-name">{tool.name}</span>

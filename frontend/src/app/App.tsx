@@ -29,6 +29,10 @@ import { useDisclosure } from '@mantine/hooks'
 import { AppShell } from '@mantine/core'
 import RouteComponent from '../features/Supply/Loaders/RouteComponent'
 import LoadersHome from '../features/Supply/Loaders/LoadersHome'
+import SupplyDocs from '../features/Accounting/SupplyDocs/SupplyDocs'
+import Media from '../features/Adds/Media/Media'
+import Retail from '../features/Retail/Retail'
+import PrintService from '../features/Retail/PrintService/PrintService'
 
 function App() {
   const { user } = useUserContext()
@@ -61,7 +65,9 @@ function App() {
                 <Route path='/' element={<Home />} />
                 <Route path='/finance' element={<Finance />} />
                 <Route path='/accounting' element={<Accounting />} />
+                  <Route path="/accounting/supply-docs" element={<SupplyDocs />} />
                 <Route path='/add' element={<Adds />} />
+                    <Route path="/add/media" element={<Media />} />
                 <Route path='/aho' element={<Aho />} />
                   <Route path="/aho/meter-reading" element={<MeterReading />} />
                     <Route path="/aho/correspondence" element={<Correspondence />} />
@@ -70,6 +76,8 @@ function App() {
                 <Route path='/problem-books' element={<ProblemBooks />} />
                 <Route path='/service' element={<Service />} />
                 <Route path='/settlements' element={<Settlements />} />
+                <Route path='/retail' element={<Retail />} />
+                    <Route path='/retail/print-service' element={<PrintService />} />
                 <Route path='/supply' element={<Supply />} />
                   <Route path='/supply/loaders' element={<LoadersHome />} />
                   <Route path='/supply/loaders/route/:id' element={<RouteComponent />} />

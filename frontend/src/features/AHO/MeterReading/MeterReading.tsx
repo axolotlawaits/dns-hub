@@ -536,7 +536,7 @@ const MeterReadingsList = () => {
         mode="edit"
         fields={formConfig.fields}
         initialValues={readingForm}
-        onSubmit={(values) => handleFormSubmit(values, 'edit')}
+        onSubmit={(values) => handleFormSubmit(values as any, 'edit')}
       />
       <DynamicFormModal
         opened={modals.create[0]}
@@ -545,7 +545,7 @@ const MeterReadingsList = () => {
         mode="create"
         fields={formConfig.fields}
         initialValues={DEFAULT_READING_FORM}
-        onSubmit={(values) => handleFormSubmit(values, 'create')}
+        onSubmit={(values) => handleFormSubmit(values as any, 'create')}
       />
       <DynamicFormModal
         opened={modals.delete[0]}

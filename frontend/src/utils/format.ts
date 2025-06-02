@@ -35,3 +35,18 @@ export const formatName = (name: string): string => {
     
     return `${truncated}${ellipsis}`;
   };
+
+  // format.ts
+export const formatPrice = (price: number | string): string => {
+  // Преобразуем в число, если передана строка
+  const numericPrice = typeof price === 'string' ? parseFloat(price) : price;
+  
+  // Форматируем число с разделителями тысяч и двумя знаками после запятой
+  const formatted = numericPrice.toLocaleString('ru-RU', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+  
+  // Добавляем символ рубля
+  return `${formatted} ₽`;
+};

@@ -11,7 +11,8 @@ export const getRootMenuItems = async (
   try {
     const menuList = await prisma.tool.findMany({
       where: {
-        parent_id: null
+        parent_id: null,
+        included: true
       },
       select: {
         id: true,
@@ -47,7 +48,8 @@ export const getNonRootMenuItems = async (
   
       const menuList = await prisma.tool.findMany({
         where: {
-          parent_id: parent_id as string // Используем id для фильтрации
+          parent_id: parent_id as string, // Используем id для фильтрации
+          included: true
         },
         select: {
           id: true,

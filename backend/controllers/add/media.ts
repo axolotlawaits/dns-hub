@@ -1,0 +1,289 @@
+import { Request, Response, NextFunction } from 'express';
+import { prisma } from '../../server';
+import { z } from 'zod';
+import fs from 'fs/promises';
+import path from 'path';
+
+// Types
+type MulterFiles = Express.Multer.File[] | undefined;
+
+// Validation schemas
+const MediaAttachmentSchema = z.object({
+  userAdd: z.string(),
+  source: z.string(),
+  type: z.string(),
+});
+
+const MediaSchema = z.object({
+  userAdd: z.string(),
+  userUpdated: z.string().optional(),
+  name: z.string().optional(),
+  sketch: z.string().optional(),
+  information: z.string().optional(),
+  urlMedia2: z.string().optional(),
+  typeContent: z.string().optional(),
+  attachments: z.array(MediaAttachmentSchema).optional(),
+});
+
+// Helper functions remain similar but adjusted for media
+const logRequest = (req: Request) => {
+  console.log('Request Body:', req.body);
+  console.log('Request Files:', req.files);
+};
+
+const validateUserExists = async (userId: string) => {
+  return prisma.user.findUnique({ where: { id: userId } });
+};
+
+const deleteFileSafely = async (filePath: string) => {
+  try {
+    await fs.unlink(filePath);
+    console.log(`File deleted successfully: ${filePath}`);
+  } catch (error) {
+    console.error(`Error deleting file at ${filePath}:`, error);
+  }
+};
+
+const processMediaAttachments = async (
+  files: MulterFiles,
+  mediaId: string,
+  userAddId: string
+) => {
+  if (!files || files.length === 0) return;
+
+  const attachmentsData = files.map(file => ({
+    userAddId,
+    source: file.path,
+    type: file.mimetype,
+    recordId: mediaId,
+  }));
+
+  await prisma.mediaAttachment.createMany({ data: attachmentsData });
+};
+
+const deleteMediaAttachments = async (attachmentIds: string[], mediaId: string) => {
+  if (!attachmentIds.length) return;
+
+  const attachments = await prisma.mediaAttachment.findMany({
+    where: { 
+      id: { in: attachmentIds },
+      recordId: mediaId 
+    }
+  });
+
+  await Promise.all(
+    attachments.map(async (attachment) => {
+      await deleteFileSafely(path.join(attachment.source));
+      await prisma.mediaAttachment.delete({
+        where: { id: attachment.id }
+      });
+    })
+  );
+};
+
+// Controller methods
+export const getAllMedia = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const media = await prisma.media.findMany({
+      include: {
+        MediaAttachment: true,
+        typeContent: true,
+        userAdd: true,
+        userUpdated: true
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.status(200).json(media);
+    
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getMediaById = async (
+    req: Request<{ id: string }>,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const media = await prisma.media.findUnique({
+        where: { id: req.params.id },
+        include: {
+          MediaAttachment: true,
+          typeContent: true,
+          userAdd: true,
+          userUpdated: true  
+        },
+      });
+      
+      if (!media) {
+        return res.status(404).json({ error: 'Media not found' });
+      }
+      
+      res.status(200).json(media);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+export const createMedia = async (
+  req: Request<{}, any, z.infer<typeof MediaSchema>>,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    logRequest(req);
+    const validatedData = MediaSchema.parse(req.body);
+    const files = req.files as MulterFiles;
+
+    // Validate required user
+    const userExists = await validateUserExists(validatedData.userAdd);
+    if (!userExists) {
+      return res.status(400).json({ error: 'User does not exist' });
+    }
+
+    // Validate type if provided
+    if (validatedData.typeContent) {
+      const typeExists = await prisma.type.findUnique({
+        where: { id: validatedData.typeContent }
+      });
+      if (!typeExists) {
+        return res.status(400).json({ error: 'Type does not exist' });
+      }
+    }
+
+    const newMedia = await prisma.media.create({
+      data: {
+        name: validatedData.name,
+        sketch: validatedData.sketch,
+        information: validatedData.information,
+        urlMedia2: validatedData.urlMedia2,
+        typeContentId: validatedData.typeContent,
+        userAddId: validatedData.userAdd,
+      },
+    });
+
+    await processMediaAttachments(files, newMedia.id, validatedData.userAdd);
+
+    const result = await prisma.media.findUnique({
+      where: { id: newMedia.id },
+      include: {
+        MediaAttachment: true,
+        typeContent: true
+      },
+    });
+
+    res.status(201).json(result);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ errors: error.errors });
+    }
+    next(error);
+  }
+};
+
+export const updateMedia = async (
+  req: Request<{ id: string }, any, any>,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { body, params, files } = req;
+    const mediaId = params.id;
+
+    // Parse attachments to delete
+    let attachmentsToDelete: string[] = [];
+    try {
+      attachmentsToDelete = body.removedAttachments
+        ? JSON.parse(body.removedAttachments)
+        : [];
+    } catch (e) {
+      console.error('Error parsing removedAttachments:', e);
+    }
+
+    // Delete specified attachments
+    await deleteMediaAttachments(attachmentsToDelete, mediaId);
+
+    // Process new attachments
+    await processMediaAttachments(
+      files as MulterFiles,
+      mediaId,
+      body.userAdd || 'unknown'
+    );
+
+    // Update media main data
+    const updateData: any = {
+      name: body.name,
+      sketch: body.sketch,
+      information: body.information,
+      urlMedia2: body.urlMedia2,
+      typeContent: body.typeContent,
+      updatedAt: new Date(),
+    };
+
+    if (body.userUpdated) {
+      const userExists = await validateUserExists(body.userUpdated);
+      if (!userExists) {
+        return res.status(400).json({ error: 'Updating user does not exist' });
+      }
+      updateData.userUpdated = body.userUpdated;
+    }
+
+    const updatedMedia = await prisma.media.update({
+      where: { id: mediaId },
+      data: updateData,
+      include: {
+        MediaAttachment: true,
+        typeContent: true
+      },
+    });
+
+    res.status(200).json(updatedMedia);
+  } catch (error) {
+    if (error.code === 'P2025') {
+      return res.status(404).json({ error: 'Media not found' });
+    }
+    next(error);
+  }
+};
+
+export const deleteMedia = async (
+  req: Request<{ id: string }>,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const mediaId = req.params.id;
+
+    // Get all related attachments
+    const attachments = await prisma.mediaAttachment.findMany({
+      where: { recordId: mediaId },
+    });
+
+    // Delete all files
+    await Promise.all(
+      attachments.map(attachment => deleteFileSafely(attachment.source))
+    );
+
+    // Delete records in transaction
+    await prisma.$transaction([
+      prisma.mediaAttachment.deleteMany({
+        where: { recordId: mediaId },
+      }),
+      prisma.media.delete({
+        where: { id: mediaId },
+      }),
+    ]);
+
+    res.status(204).end();
+  } catch (error) {
+    if (error.code === 'P2025') {
+      return res.status(404).json({ error: 'Media not found' });
+    }
+    next(error);
+  }
+};

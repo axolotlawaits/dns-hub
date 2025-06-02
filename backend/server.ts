@@ -7,11 +7,14 @@ import newsRouter from './routes/app/news.js'
 import meterReadingRouter from './routes/aho/meterReading.js'
 import searchRouter from './routes/app/search.js'
 import correspondenceRouter from './routes/aho/correspondence.js'
+import supplydocsRouter from './routes/accounting/supplydocs.js'
 import navigationRouter from './routes/app/navigation.js'
 import typeRouter from './routes/app/type.js'
 import routeDayRouter from './routes/supply/routeDay.js'
 import routeRouter from './routes/supply/route.js'
 import filialRouter from './routes/supply/filial.js'
+import mediaRouter from './routes/add/media.js'
+import printServiceRouter from './routes/retail/printService.js'
 import schedule from 'node-schedule'
 import { scheduleRouteDay } from './controllers/supply/routeDay.js';
 
@@ -27,9 +30,12 @@ app.use('/hub-api/user', userRouter)
 app.use('/hub-api/news', newsRouter)
 app.use('/hub-api/aho/meter-reading', meterReadingRouter)
 app.use('/hub-api/aho/correspondence', correspondenceRouter)
+app.use('/hub-api/accounting/supply-docs', supplydocsRouter)
+app.use('/hub-api/add/media', mediaRouter)
 app.use('/hub-api/search', searchRouter)
 app.use('/hub-api/navigation', navigationRouter);
 app.use('/hub-api/type', typeRouter);
+app.use('/hub-api/retail/print-service', printServiceRouter);
 /* loader (mb fix later) */
 app.use('/hub-api/loaders/route', routeRouter)
 app.use('/hub-api/loaders/routeDay', routeDayRouter)
