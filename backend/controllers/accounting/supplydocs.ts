@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { prisma } from '../../server';
+import { prisma } from '../../server.js';
 import { z } from 'zod';
 import fs from 'fs/promises';
 import path from 'path';

@@ -5,8 +5,8 @@ import {
   getCorrespondenceById,
   updateCorrespondence,
   deleteCorrespondence,
-} from '../../controllers/aho/correspondence';
-import uploadCorrespondence from '../../middleware/uploader'; // Use default import
+} from '../../controllers/aho/correspondence.js';
+import uploadCorrespondence from '../../middleware/uploader.js'; // Use default import
 
 const router = Router();
 

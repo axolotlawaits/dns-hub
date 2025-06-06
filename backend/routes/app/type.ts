@@ -1,6 +1,6 @@
 // routes/navigation.ts
 import express from 'express';
-import {  getTypes, getTypesByModelUuid } from '../../controllers/app/type';
+import {  getTypes, getTypesByModelUuid } from '../../controllers/app/type.js';
 
 const router = express.Router();
 

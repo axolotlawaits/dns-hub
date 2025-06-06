@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authPrintService, previewPrintService, printFromDate } from '../../controllers/retail/printService';
+import { authPrintService, previewPrintService, printFromDate } from '../../controllers/retail/printService.js';
 
 const router = Router();
 

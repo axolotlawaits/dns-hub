@@ -1,6 +1,6 @@
 // controllers/app/menu.ts
 import { Request, Response, NextFunction } from 'express';
-import { prisma } from '../../server';
+import { prisma } from '../../server.js';
 
 // Получение списка корневых элементов меню
 export const getRootMenuItems = async (
@@ -10,19 +10,7 @@ export const getRootMenuItems = async (
 ): Promise<void> => {
   try {
     const menuList = await prisma.tool.findMany({
-      where: {
-        parent_id: null,
-        included: true
-      },
-      select: {
-        id: true,
-        parent_id: true,
-        name: true,
-        icon: true,
-        link: true,
-        types: true,
-        order: true
-      },
+      where: { parent_id: null },
       orderBy: { order: 'asc' },
     });
 
@@ -41,26 +29,12 @@ export const getNonRootMenuItems = async (
     try {
       const { parent_id } = req.query; // Получаем id из параметров запроса
       if (!parent_id) {
-        console.log(parent_id)
         res.status(400).json({ error: 'id is required' });
         return;
       }
   
       const menuList = await prisma.tool.findMany({
-        where: {
-          parent_id: parent_id as string, // Используем id для фильтрации
-          included: true
-        },
-        select: {
-          id: true,
-          parent_id: true,
-          name: true,
-          icon: true,
-          link: true,
-          description:true,
-          types: true,
-          order: true
-        },
+        where: { parent_id: parent_id as string },
         orderBy: { order: 'asc' },
       });
   

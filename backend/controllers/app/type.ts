@@ -1,6 +1,6 @@
 // controllers/app/type.ts
 import { Request, Response, NextFunction } from 'express';
-import { prisma } from '../../server';
+import { prisma } from '../../server.js';
 
 // Получение списка всех типов
 export const getTypes = async (

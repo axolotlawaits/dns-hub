@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { prisma } from '../../server';
+import { prisma } from '../../server.js';
 import { z } from 'zod';
 import fs from 'fs/promises';
 import path from 'path';
@@ -69,10 +69,10 @@ export const getCorrespondences = async (
 };
 
 export const getCorrespondenceById = async (
-  req: Request<{ id: string }>,
+  req: Request,
   res: Response,
   next: NextFunction
-) => {
+): Promise<any> => {
   try {
     const correspondence = await prisma.correspondence.findUnique({
       where: { id: req.params.id },
@@ -93,7 +93,7 @@ const processAttachments = async (
   files: MulterFiles,
   correspondenceId: string,
   userAdd: string
-) => {
+): Promise<any> => {
   if (!files || files.length === 0) return;
 
   const attachmentsData = files.map(file => ({
@@ -106,10 +106,10 @@ const processAttachments = async (
 };
 
 export const createCorrespondence = async (
-  req: Request<{}, any, z.infer<typeof CorrespondenceSchema>>,
+  req: Request,
   res: Response,
   next: NextFunction
-) => {
+): Promise<any> => {
   try {
     logRequest(req);
     const validatedData = CorrespondenceSchema.parse(req.body);
@@ -176,10 +176,10 @@ const deleteAttachments = async (attachmentIds: string[], correspondenceId: stri
 };
 
 export const updateCorrespondence = async (
-  req: Request<{ id: string }, any, any>,
+  req: Request,
   res: Response,
   next: NextFunction
-) => {
+): Promise<any> => {
   try {
     const { body, params, files } = req;
     const correspondenceId = params.id;
@@ -225,10 +225,10 @@ export const updateCorrespondence = async (
 };
 
 export const deleteCorrespondence = async (
-  req: Request<{ id: string }>,
+  req: Request,
   res: Response,
   next: NextFunction
-) => {
+): Promise<any> => {
   try {
     const correspondenceId = req.params.id;
 

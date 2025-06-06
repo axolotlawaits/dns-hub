@@ -1,7 +1,8 @@
 // controllers/app/meterReading.ts
 import { Request, Response, NextFunction } from 'express';
-import { prisma } from '../../server';
+import { prisma } from '../../server.js';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 
 const createMeterReadingSchema = z.object({
   date: z.string().datetime(),
@@ -33,7 +34,7 @@ export const getMeterReadings = async (
 
 // Получение одного показания счетчика
 export const getMeterReadingById = async (
-  req: Request<{ id: string }>,
+  req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
@@ -56,7 +57,7 @@ export const getMeterReadingById = async (
 
 // Создание показания счетчика
 export const createMeterReading = async (
-  req: Request<{}, any, z.infer<typeof createMeterReadingSchema>>,
+  req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
@@ -83,7 +84,7 @@ export const createMeterReading = async (
 
 // Обновление показания счетчика
 export const updateMeterReading = async (
-  req: Request<{ id: string }, any, z.infer<typeof updateMeterReadingSchema>>,
+  req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
@@ -108,7 +109,7 @@ export const updateMeterReading = async (
       return;
     }
 
-    if (error.code === 'P2025') {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
       res.status(404).json({ error: 'Meter reading not found' });
       return;
     }
@@ -119,7 +120,7 @@ export const updateMeterReading = async (
 
 // Удаление показания счетчика
 export const deleteMeterReading = async (
-  req: Request<{ id: string }>,
+  req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
@@ -130,7 +131,7 @@ export const deleteMeterReading = async (
 
     res.status(204).end();
   } catch (error) {
-    if (error.code === 'P2025') {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
       res.status(404).json({ error: 'Meter reading not found' });
       return;
     }

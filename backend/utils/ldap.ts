@@ -1,4 +1,4 @@
-import { createClient, SearchEntry, SearchOptions } from 'ldapjs';
+import ldap, { SearchEntry, SearchOptions } from 'ldapjs';
 import { NextFunction, Request, Response } from "express";
 
 export async function ldapAuth(req: Request, res: Response, next: NextFunction): Promise<any>  {
@@ -8,7 +8,7 @@ export async function ldapAuth(req: Request, res: Response, next: NextFunction):
     return res.status(400).send({ message: 'Login and password are required' });
   }
 
-  const client = createClient({
+  const client = ldap.createClient({
     url: 'ldap://ural-dc01.partner.ru',
     reconnect: true
   });

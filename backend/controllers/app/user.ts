@@ -1,4 +1,4 @@
-import { prisma } from "../../server";
+import { prisma } from "../../server.js";
 import { Request, Response } from "express";
 
 export const login = async (req: Request, res: Response): Promise<any>=> {

@@ -1,8 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
-import { prisma } from '../../server';
+import { prisma } from '../../server.js';
 import { z } from 'zod';
 import fs from 'fs/promises';
 import path from 'path';
+import { Prisma } from '@prisma/client';
 
 // Types
 type MulterFiles = Express.Multer.File[] | undefined;
@@ -105,10 +106,10 @@ export const getAllMedia = async (
 };
 
 export const getMediaById = async (
-    req: Request<{ id: string }>,
+    req: Request,
     res: Response,
     next: NextFunction
-  ) => {
+  ): Promise<any> => {
     try {
       const media = await prisma.media.findUnique({
         where: { id: req.params.id },
@@ -131,7 +132,7 @@ export const getMediaById = async (
   };
 
 export const createMedia = async (
-  req: Request<{}, any, z.infer<typeof MediaSchema>>,
+  req: Request,
   res: Response,
   next: NextFunction
 ) => {
@@ -187,7 +188,7 @@ export const createMedia = async (
 };
 
 export const updateMedia = async (
-  req: Request<{ id: string }, any, any>,
+  req: Request,
   res: Response,
   next: NextFunction
 ) => {
@@ -244,7 +245,7 @@ export const updateMedia = async (
 
     res.status(200).json(updatedMedia);
   } catch (error) {
-    if (error.code === 'P2025') {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
       return res.status(404).json({ error: 'Media not found' });
     }
     next(error);
@@ -252,10 +253,10 @@ export const updateMedia = async (
 };
 
 export const deleteMedia = async (
-  req: Request<{ id: string }>,
+  req: Request,
   res: Response,
   next: NextFunction
-) => {
+): Promise<any> => {
   try {
     const mediaId = req.params.id;
 
@@ -281,7 +282,7 @@ export const deleteMedia = async (
 
     res.status(204).end();
   } catch (error) {
-    if (error.code === 'P2025') {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
       return res.status(404).json({ error: 'Media not found' });
     }
     next(error);

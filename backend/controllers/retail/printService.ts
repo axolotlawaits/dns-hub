@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import axios from 'axios';
 import * as dotenv from 'dotenv';
 import { z } from 'zod';
-import { prisma } from '../../server';
+import { prisma } from '../../server.js';
 
 dotenv.config();
 
@@ -31,7 +31,7 @@ const previewRequestSchema = z.object({
 });
 
 // Авторизация
-export const authPrintService = async (req: Request, res: Response) => {
+export const authPrintService = async (req: Request, res: Response): Promise<any> => {
   try {
     const { login, password } = authSchema.parse(req.body);
     const tokens = await getTokens(login, password);
@@ -42,7 +42,7 @@ export const authPrintService = async (req: Request, res: Response) => {
 };
 
 // Предпросмотр ценников
-export const previewPrintService = async (req: Request, res: Response) => {
+export const previewPrintService = async (req: Request, res: Response): Promise<any> => {
   try {
     const { dateFrom, templateName, branchId } = previewRequestSchema.parse(req.body);
 
@@ -92,7 +92,7 @@ export const previewPrintService = async (req: Request, res: Response) => {
 };
 
 // Печать ценников
-export const printFromDate = async (req: Request, res: Response) => {
+export const printFromDate = async (req: Request, res: Response): Promise<any> => {
   try {
     const { tokenAuth, auth } = await getAuthTokens(req);
     const { templateName, dateFrom, branchId, nomenclatures, ...printParams } = printRequestSchema.parse(req.body);

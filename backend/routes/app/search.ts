@@ -1,5 +1,5 @@
 import express from 'express'
-import { getBranch, getEmployee, quickSearch, searchAll, searchBranches, searchCities, searchEmployees, searchPositions, searchTools } from '../../controllers/app/search'
+import { getBranch, getEmployee, quickSearch, searchAll, searchBranches, searchCities, searchEmployees, searchPositions, searchTools } from '../../controllers/app/search.js'
 
 const router = express.Router()
 

@@ -5,8 +5,8 @@ import {
   getMediaById,
   updateMedia,
   deleteMedia,
-} from '../../controllers/add/media'; // Обновленный путь к контроллерам
-import uploadMedia from '../../middleware/uploader'; // Переименованный middleware
+} from '../../controllers/add/media.js'; // Обновленный путь к контроллерам
+import uploadMedia from '../../middleware/uploader.js'; // Переименованный middleware
 
 const router = Router();
 

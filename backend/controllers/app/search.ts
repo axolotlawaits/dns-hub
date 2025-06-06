@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
-import { prisma } from '../../server';
+import { prisma } from '../../server.js';
 
 export const quickSearch = async (req: Request, res: Response): Promise<any>  => {
   const text = req.query.text as string

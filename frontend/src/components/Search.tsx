@@ -1,4 +1,4 @@
-import { Button, Divider, Modal, TextInput } from '@mantine/core'
+import { Button, Modal, TextInput } from '@mantine/core'
 import { IconSearch } from '@tabler/icons-react'
 import { useState } from 'react'
 import { API } from '../config/constants'

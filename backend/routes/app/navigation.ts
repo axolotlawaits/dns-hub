@@ -1,6 +1,6 @@
 // routes/navigation.ts
 import express from 'express';
-import { getRootMenuItems, getNonRootMenuItems } from '../../controllers/app/navigation';
+import { getRootMenuItems, getNonRootMenuItems } from '../../controllers/app/navigation.js';
 
 const router = express.Router();
 

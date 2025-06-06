@@ -1,4 +1,4 @@
-import { prisma } from "../../server"
+import { prisma } from "../../server.js"
 import { Request, Response } from "express"
 
 /* logic used in scheduler, left for further purposes */

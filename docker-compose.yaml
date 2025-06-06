@@ -1,0 +1,8 @@
+version: '3.8'
+services:
+  backend:
+    build: ./backend
+    image: axolotlawaits/hub:backend
+  frontend:
+    build: ./frontend
+    image: axolotlawaits/hub:frontend

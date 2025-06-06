@@ -5,7 +5,7 @@ import {
   createNews,
   updateNews,
   deleteNews,
-} from '../../controllers/app/news';
+} from '../../controllers/app/news.js';
 
 const router = Router();
 

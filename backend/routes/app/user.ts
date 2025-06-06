@@ -1,7 +1,7 @@
 import express from 'express'
-import { validateData } from '../../middleware/validation'
+import { validateData } from '../../middleware/validation.js'
 import { z } from 'zod'
-import { login } from '../../controllers/app/user'
+import { login } from '../../controllers/app/user.js'
 import { ldapAuth } from '../../utils/ldap.js'
 
 const ldapLoginSchema = z.object({
