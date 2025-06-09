@@ -4,19 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import dayjs from 'dayjs';
 import { API } from '../config/constants';
 import { FileDropZone, ListItemWithActions, DraggableItem } from './dnd';
-import {
-  IconFile,
-  IconFileTypePdf,
-  IconFileTypeDoc,
-  IconFileTypeXls,
-  IconFileTypePpt,
-  IconFileTypeZip,
-  IconPhoto,
-  IconFileTypeJs,
-  IconFileTypeHtml,
-  IconFileTypeCss,
-  IconFileTypeTxt,
-  IconFileTypeCsv,
+import { IconFile, IconFileTypePdf, IconFileTypeDoc, IconFileTypeXls, IconFileTypePpt, IconFileTypeZip, IconPhoto, IconFileTypeJs, IconFileTypeHtml, IconFileTypeCss, IconFileTypeTxt, IconFileTypeCsv,
 } from '@tabler/icons-react';
 
 // Определите интерфейсы
