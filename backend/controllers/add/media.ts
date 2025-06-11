@@ -19,7 +19,6 @@ const MediaSchema = z.object({
   userAdd: z.string(),
   userUpdated: z.string().optional(),
   name: z.string().optional(),
-  sketch: z.string().optional(),
   information: z.string().optional(),
   urlMedia2: z.string().optional(),
   typeContent: z.string().optional(),
@@ -52,14 +51,37 @@ const processMediaAttachments = async (
 ) => {
   if (!files || files.length === 0) return;
 
-  const attachmentsData = files.map(file => ({
-    userAddId,
-    source: file.path,
-    type: file.mimetype,
-    recordId: mediaId,
-  }));
+  // Сначала проверяем, существует ли медиа запись
+  const mediaExists = await prisma.media.findUnique({
+    where: { id: mediaId }
+  });
 
-  await prisma.mediaAttachment.createMany({ data: attachmentsData });
+  if (!mediaExists) {
+    throw new Error(`Media record with id ${mediaId} not found`);
+  }
+
+  // Проверяем существование пользователя
+  const userExists = await prisma.user.findUnique({
+    where: { id: userAddId }
+  });
+
+  if (!userExists) {
+    throw new Error(`User with id ${userAddId} not found`);
+  }
+
+  // Создаем вложения в транзакции
+  await prisma.$transaction(async (tx) => {
+    for (const file of files) {
+      await tx.mediaAttachment.create({
+        data: {
+          userAddId,
+          source: file.path,
+          type: file.mimetype,
+          recordId: mediaId,
+        }
+      });
+    }
+  });
 };
 
 const deleteMediaAttachments = async (attachmentIds: string[], mediaId: string) => {
@@ -160,7 +182,6 @@ export const createMedia = async (
     const newMedia = await prisma.media.create({
       data: {
         name: validatedData.name,
-        sketch: validatedData.sketch,
         information: validatedData.information,
         urlMedia2: validatedData.urlMedia2,
         typeContentId: validatedData.typeContent,
@@ -196,6 +217,15 @@ export const updateMedia = async (
     const { body, params, files } = req;
     const mediaId = params.id;
 
+    // Сначала проверяем существование медиа записи
+    const mediaExists = await prisma.media.findUnique({
+      where: { id: mediaId }
+    });
+
+    if (!mediaExists) {
+      return res.status(404).json({ error: 'Media not found' });
+    }
+
     // Parse attachments to delete
     let attachmentsToDelete: string[] = [];
     try {
@@ -210,28 +240,40 @@ export const updateMedia = async (
     await deleteMediaAttachments(attachmentsToDelete, mediaId);
 
     // Process new attachments
-    await processMediaAttachments(
-      files as MulterFiles,
-      mediaId,
-      body.userAdd || 'unknown'
-    );
+    if (files && Array.isArray(files)) {
+      await processMediaAttachments(
+        files,
+        mediaId,
+        body.userUpdated || body.userAdd || mediaExists.userAddId
+      );
+    }
 
     // Update media main data
-    const updateData: any = {
+    const updateData: Prisma.MediaUpdateInput = {
       name: body.name,
-      sketch: body.sketch,
       information: body.information,
       urlMedia2: body.urlMedia2,
-      typeContent: body.typeContent,
       updatedAt: new Date(),
     };
 
+    if (body.typeContent) {
+      const typeExists = await prisma.type.findUnique({
+        where: { id: body.typeContent }
+      });
+      if (!typeExists) {
+        return res.status(400).json({ error: 'Type does not exist' });
+      }
+      updateData.typeContent = { connect: { id: body.typeContent } };
+    }
+
     if (body.userUpdated) {
-      const userExists = await validateUserExists(body.userUpdated);
+      const userExists = await prisma.user.findUnique({
+        where: { id: body.userUpdated }
+      });
       if (!userExists) {
         return res.status(400).json({ error: 'Updating user does not exist' });
       }
-      updateData.userUpdated = body.userUpdated;
+      updateData.userUpdated = { connect: { id: body.userUpdated } };
     }
 
     const updatedMedia = await prisma.media.update({
@@ -239,14 +281,22 @@ export const updateMedia = async (
       data: updateData,
       include: {
         MediaAttachment: true,
-        typeContent: true
+        typeContent: true,
+        userAdd: true,
+        userUpdated: true
       },
     });
 
     res.status(200).json(updatedMedia);
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-      return res.status(404).json({ error: 'Media not found' });
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2025') {
+        return res.status(404).json({ error: 'Record not found' });
+      }
+      return res.status(400).json({ 
+        error: 'Database error',
+        details: error.meta 
+      });
     }
     next(error);
   }

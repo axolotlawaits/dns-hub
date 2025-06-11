@@ -1,11 +1,12 @@
-import { Modal, TextInput, Select, Button, Alert, Stack, Textarea, Text, Group, Image } from '@mantine/core';
+import { Modal, TextInput, Select, Button, Alert, Stack, Textarea, Text, Group, Image, Card } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useState, useEffect, useCallback } from 'react';
 import dayjs from 'dayjs';
 import { API } from '../config/constants';
-import { FileDropZone, ListItemWithActions, DraggableItem } from './dnd';
+import { FileDropZone } from './dnd';
 import { IconFile, IconFileTypePdf, IconFileTypeDoc, IconFileTypeXls, IconFileTypePpt, IconFileTypeZip, IconPhoto, IconFileTypeJs, IconFileTypeHtml, IconFileTypeCss, IconFileTypeTxt, IconFileTypeCsv,
 } from '@tabler/icons-react';
+import { FilePreviewModal } from './FilePreviewModal';
 
 // Определите интерфейсы
 export type FieldType = 'text' | 'number' | 'select' | 'selectSearch' | 'date' | 'datetime' | 'textarea' | 'file';
@@ -58,7 +59,6 @@ interface DynamicFormModalProps {
   error?: string | null;
 }
 
-// Определите функцию для получения иконки файла на основе его типа
 const getFileIcon = (fileName: string) => {
   const extension = fileName.split('.').pop()?.toLowerCase();
 
@@ -99,7 +99,6 @@ const getFileIcon = (fileName: string) => {
   }
 };
 
-// Обновите компонент FileUploadComponent для отображения иконок и превью
 const FileUploadComponent = ({
   onFilesDrop,
   attachments,
@@ -116,23 +115,25 @@ const FileUploadComponent = ({
             const isImage = fileName.match(/\.(jpg|jpeg|png|gif)$/i);
 
             return (
-              <ListItemWithActions
-                key={attachment.id || `temp-${Math.random().toString(36).substr(2, 9)}`}
-                item={{
-                  id: attachment.id || `temp-${Math.random().toString(36).substr(2, 9)}`,
-                  name: fileName
-                }}
-                onDelete={() => onRemoveAttachment(attachment.id)}
-                renderContent={(item: DraggableItem) => (
-                  <Group>
+              <Card key={attachment.id || `temp-${Math.random().toString(36).substr(2, 9)}`} p="sm" withBorder>
+                <Group justify="space-between">
+                  <Group gap="xs">
                     {getFileIcon(fileName)}
-                    <Text>{item.name}</Text>
-                    {isImage && typeof attachment.source === 'string' && (
-                      <Image src={`${API}/${attachment.source}`} width={50} alt="Preview" />
-                    )}
+                    <Text size="sm">{fileName}</Text>
                   </Group>
+                  <Button 
+                    variant="subtle" 
+                    color="red" 
+                    size="sm"
+                    onClick={() => onRemoveAttachment(attachment.id)}
+                  >
+                    Удалить
+                  </Button>
+                </Group>
+                {isImage && typeof attachment.source === 'string' && (
+                  <Image src={`${API}/${attachment.source}`} width={100} mt="sm" alt="Preview" />
                 )}
-              />
+              </Card>
             );
           })}
         </Stack>
@@ -165,16 +166,25 @@ const FileUploadComponent = ({
           const isImage = fileName.match(/\.(jpg|jpeg|png|gif)$/i);
 
           return (
-            <Group key={attachment.id || `temp-${Math.random().toString(36).substr(2, 9)}`} mb="md">
-              {getFileIcon(fileName)}
-              <Text>{fileName}</Text>
+            <Card key={attachment.id || `temp-${Math.random().toString(36).substr(2, 9)}`} p="sm" withBorder>
+              <Group justify="space-between">
+                <Group gap="xs">
+                  {getFileIcon(fileName)}
+                  <Text size="sm">{fileName}</Text>
+                </Group>
+                <Button 
+                  variant="subtle" 
+                  color="red" 
+                  size="sm"
+                  onClick={() => onRemoveAttachment(attachment.id)}
+                >
+                  Удалить
+                </Button>
+              </Group>
               {isImage && typeof attachment.source === 'string' && (
-                <Image src={`${API}/${attachment.source}`} width={50} alt="Preview" />
+                <Image src={`${API}/${attachment.source}`} width={100} mt="sm" alt="Preview" />
               )}
-              <Button variant="light" color="red" onClick={() => onRemoveAttachment(attachment.id)}>
-                Remove
-              </Button>
-            </Group>
+            </Card>
           );
         })}
       </Stack>
@@ -182,7 +192,6 @@ const FileUploadComponent = ({
   );
 };
 
-// Обновите компонент DynamicFormModal для отображения кнопки скачивания и превью в режиме просмотра
 export const DynamicFormModal = ({
   opened,
   onClose,
@@ -195,6 +204,7 @@ export const DynamicFormModal = ({
   onConfirm,
   error,
 }: DynamicFormModalProps) => {
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const form = useForm({
     initialValues: initialValues,
   });
@@ -312,13 +322,15 @@ export const DynamicFormModal = ({
         );
       case 'file':
         return (
-          <FileUploadComponent
-            key={field.name}
-            onFilesDrop={handleFileDrop}
-            attachments={attachments}
-            onRemoveAttachment={handleRemoveAttachment}
-            withDnd={field.withDnd}
-          />
+          <div key={field.name}>
+            <Text fw={500} mb="sm">{field.label}</Text>
+            <FileUploadComponent
+              onFilesDrop={handleFileDrop}
+              attachments={attachments}
+              onRemoveAttachment={handleRemoveAttachment}
+              withDnd={field.withDnd}
+            />
+          </div>
         );
       default:
         return null;
@@ -326,10 +338,10 @@ export const DynamicFormModal = ({
   };
 
   const renderViewField = (config: ViewFieldConfig, item: any) => (
-    <Group key={config.label} mb="md">
-      <Text fw={500}>{config.label}:</Text>
-      <Text>{config.value(item)}</Text>
-    </Group>
+    <div key={config.label} style={{ marginBottom: '16px' }}>
+      <Text fw={500} mb="xs">{config.label}</Text>
+      <Text>{config.value(item) || '-'}</Text>
+    </div>
   );
 
   return (
@@ -337,27 +349,48 @@ export const DynamicFormModal = ({
       {mode === 'view' ? (
         <>
           {viewFieldsConfig.map((config) => renderViewField(config, initialValues))}
-          {initialValues.attachments?.length > 0 && (
-            <>
-              <Text mt="md" mb="sm" fw={500}>Приложения</Text>
-              {initialValues.attachments.map((attachment: FileAttachment) => {
-                const fileName = typeof attachment.source === 'string' ? attachment.source : attachment.source.name;
-                const isImage = fileName.match(/\.(jpg|jpeg|png|gif)$/i);
 
-                return (
-                  <Group key={attachment.id} mb="md">
-                    {getFileIcon(fileName)}
-                    <Text>{fileName}</Text>
-                    {isImage && typeof attachment.source === 'string' && (
-                      <Image src={`${API}/${attachment.source}`} width={50} alt="Preview" />
-                    )}
-                    <Button variant="light" onClick={() => window.open(`${API}/${attachment.source}`, '_blank')}>
-                      Скачать
-                    </Button>
-                  </Group>
-                );
-              })}
-            </>
+          {initialValues.attachments?.length > 0 && (
+            <div style={{ marginTop: '16px' }}>
+              <Text fw={500} mb="sm">Приложения</Text>
+              <Stack gap="xs">
+                {initialValues.attachments.map((attachment: FileAttachment) => {
+                  const fileName = typeof attachment.source === 'string'
+                    ? attachment.source.split('/').pop() || 'Файл'
+                    : attachment.source.name;
+                  const fileUrl = `${API}/${attachment.source}`;
+                  const fileId = attachment.id || `temp-${fileName}-${Math.random().toString(36).substr(2, 9)}`;
+
+                  return (
+                    <Card key={fileId} p="sm" withBorder>
+                      <Group justify="space-between">
+                        <Group gap="xs" onClick={() => setPreviewId(fileId)} style={{ cursor: 'pointer' }}>
+                          {getFileIcon(fileName)}
+                          <Text size="sm">{fileName}</Text>
+                        </Group>
+                        <Text 
+                          size="sm" 
+                          c="blue" 
+                          style={{ cursor: 'pointer' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(fileUrl, '_blank');
+                          }}
+                        >
+                          Скачать
+                        </Text>
+                      </Group>
+
+                      <FilePreviewModal
+                        opened={previewId === fileId}
+                        onClose={() => setPreviewId(null)}
+                        attachments={initialValues.attachments || []}
+                      />
+                    </Card>
+                  );
+                })}
+              </Stack>
+            </div>
           )}
         </>
       ) : mode === 'delete' ? (
@@ -376,15 +409,22 @@ export const DynamicFormModal = ({
         </>
       ) : (
         <form onSubmit={form.onSubmit((values) => onSubmit && onSubmit({ ...values, attachments }))}>
-          {fields.map(renderField)}
-          {error && (
-            <Alert color="red" mt="md">
-              {error}
-            </Alert>
-          )}
-          <Button type="submit" fullWidth mt="xl">
-            Submit
-          </Button>
+          <Stack>
+            {fields.map(renderField)}
+            {error && (
+              <Alert color="red">
+                {error}
+              </Alert>
+            )}
+            <Group justify="flex-end" mt="md">
+              <Button variant="default" onClick={onClose}>
+                Отмена
+              </Button>
+              <Button type="submit">
+                {mode === 'create' ? 'Создать' : 'Сохранить'}
+              </Button>
+            </Group>
+          </Stack>
         </form>
       )}
     </Modal>

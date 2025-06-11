@@ -27,9 +27,13 @@ interface MediaAttachment {
   id: string;
   createdAt: Date;
   recordId: string;
-  userAdd: string;
+  userAdd: string; // Changed from string to User
   source: string;
   user: User;
+}
+interface Type {
+  id: string;
+  name: string;
 }
 
 interface Media {
@@ -37,10 +41,9 @@ interface Media {
   createdAt: Date;
   updatedAt?: Date;
   name?: string;
-  sketch?: string;
   information?: string;
   urlMedia2?: string;
-  typeContent?: string;
+  typeContent?: Type | null; // ✅ Теперь это объект или null
   MediaAttachment: MediaAttachment[];
   userAdd: User;
   userUpdated?: User;
@@ -56,7 +59,6 @@ interface MediaWithFormattedData extends Media {
 
 interface MediaForm {
   name?: string;
-  sketch?: string;
   information?: string;
   urlMedia2?: string;
   typeContent?: string;
@@ -66,7 +68,6 @@ interface MediaForm {
 // Constants
 const DEFAULT_MEDIA_FORM: MediaForm = {
   name: '',
-  sketch: '',
   information: '',
   urlMedia2: '',
   typeContent: '',
@@ -77,18 +78,15 @@ const MODEL_UUID = 'dd6ec264-4e8c-477a-b2d6-c62a956422c0';
 const CHAPTER = 'Тип медиа';
 
 // Utility functions
-const formatTableData = (data: Media[], typeContentOptions: TypeContentOption[]): MediaWithFormattedData[] => {
-  return data.map((item) => {
-    const typeContent = typeContentOptions.find(t => t.value === item.typeContent);
-    return {
-      ...item,
-      formattedCreatedAt: dayjs(item.createdAt).format('DD.MM.YYYY HH:mm'),
-      formattedUpdatedAt: item.updatedAt ? dayjs(item.updatedAt).format('DD.MM.YYYY HH:mm') : '-',
-      userName: item.userAdd?.name ? formatName(item.userAdd.name) : 'Unknown',
-      updatedUserName: item.userUpdated?.name ? formatName(item.userUpdated.name) : '-',
-      typeContentName: typeContent?.label || 'Без типа'
-    };
-  });
+const formatTableData = (data: Media[]): MediaWithFormattedData[] => {
+  return data.map((item) => ({
+    ...item,
+    formattedCreatedAt: dayjs(item.createdAt).format('DD.MM.YYYY HH:mm'),
+    formattedUpdatedAt: item.updatedAt ? dayjs(item.updatedAt).format('DD.MM.YYYY HH:mm') : '-',
+    userName: item.userAdd?.name ? formatName(item.userAdd.name) : 'Unknown',
+    updatedUserName: item.userUpdated?.name ? formatName(item.userUpdated.name) : '-',
+    typeContentName: item.typeContent?.name || 'Без типа', // ✅ Теперь используем .name
+  }));
 };
 
 const getFilterOptions = <T,>(data: T[], mapper: (item: T) => string) => {
@@ -168,11 +166,6 @@ export default function MediaList() {
         required: true
       },
       {
-        name: 'sketch',
-        label: 'Скетч',
-        type: 'text' as const,
-      },
-      {
         name: 'information',
         label: 'Информация',
         type: 'textarea' as const,
@@ -204,66 +197,39 @@ export default function MediaList() {
     initialValues: DEFAULT_MEDIA_FORM,
   }), [typeContentOptions]);
 
-  const viewFieldsConfig = useMemo(() => [
-    { label: 'Название', value: (item: Media) => item.name || 'Без названия' },
-    {
-      label: 'Тип контента',
-      value: (item: Media) => {
-        const type = typeContentOptions.find(t => t.value === item.typeContent);
-        return type ? type.label : 'Без типа';
-      }
-    },
-    { label: 'Создал', value: (item: Media) => item.userAdd?.name || 'Unknown' },
-    { label: 'Обновил', value: (item: Media) => item.userUpdated?.name || '-' },
-    { label: 'Дата создания', value: (item: Media) => dayjs(item.createdAt).format('DD.MM.YYYY HH:mm') },
-    { label: 'Последнее обновление', value: (item: Media) => item.updatedAt ? dayjs(item.updatedAt).format('DD.MM.YYYY HH:mm') : '-' },
-    {
-      label: 'Вложения',
-      value: (item: Media) => {
-        if (!item.MediaAttachment || !Array.isArray(item.MediaAttachment)) {
-          return <div>Нет вложений</div>;
-        }
-        return (
-          <div>
-            {item.MediaAttachment.map((attachment, index) => (
-              <div key={index}>
-                <a href={attachment.source} target="_blank" rel="noopener noreferrer">
-                  Вложение {index + 1}
-                </a>
-              </div>
-            ))}
-          </div>
-        );
-      }
-    },
-  ], [typeContentOptions]);
-  
+const viewFieldsConfig = useMemo(() => [
+  { label: 'Название', value: (item: Media) => item.name || null, },
+  { label: 'Тип контента', value: (item: Media) => item.typeContent?.name || null,},
+  { label: 'Создал', value: (item: Media) => item.userAdd?.name || null, },
+  { label: 'Обновил', value: (item: Media) => item.userUpdated?.name || null, },
+  { label: 'Дата создания', value: (item: Media) => dayjs(item.createdAt).format('DD.MM.YYYY HH:mm'), },
+  { label: 'Последнее обновление', value: (item: Media) => item.updatedAt ? dayjs(item.updatedAt).format('DD.MM.YYYY HH:mm') : null, },
+], []);
 
-  const tableData = useMemo(() => formatTableData(media, typeContentOptions), [media, typeContentOptions]);
+  const tableData = useMemo(() => formatTableData(media), [media]);
   
   const filterOptions = useMemo(() => ({
     user: getFilterOptions(media, m => m.userAdd?.name ? formatName(m.userAdd.name) : 'Unknown'),
     type: getFilterOptions(media, m => m.typeContent?.name || 'Без типа')
   }), [media]);
 
-const handleTableAction = useCallback((action: 'view' | 'edit' | 'delete', data: Media) => {
-  setSelectedMedia(data);
-  if (action === 'edit') {
-    setMediaForm({
-      name: data.name,
-      sketch: data.sketch,
-      information: data.information,
-      urlMedia2: data.urlMedia2,
-      typeContent: data.typeContent,
-      attachments: data.MediaAttachment.map(a => ({
-        id: a.id,
-        userAdd: a.userAdd.id,
-        source: a.source,
-      })),
-    });
-  }
-  modals[action][1].open();
-}, [modals]);
+  const handleTableAction = useCallback((action: 'view' | 'edit' | 'delete', data: Media) => {
+    setSelectedMedia(data);
+    if (action === 'edit') {
+      setMediaForm({
+        name: data.name,
+        information: data.information,
+        urlMedia2: data.urlMedia2,
+        typeContent: data.typeContent?.id || '', // ✅ Добавлено
+        attachments: data.MediaAttachment.map(a => ({
+          id: a.id,
+          userAdd: a.userAdd,
+          source: a.source,
+        })),
+      });
+    }
+    modals[action][1].open();
+  }, [modals]);
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!selectedMedia) return;
@@ -340,22 +306,24 @@ const handleTableAction = useCallback((action: 'view' | 'edit' | 'delete', data:
 
   const filters = useMemo(() => [
     {
-      type: 'date',
+      type: 'date' as const,
       columnId: 'formattedCreatedAt',
       label: 'Дата создания',
       width: 200,
     },
     {
-      type: 'select',
+      type: 'select' as const,
       columnId: 'userName',
       label: 'Автор',
+      placeholder: 'Выберите пользователя',
       options: filterOptions.user,
       width: 200,
     },
     {
-      type: 'select',
+      type: 'select' as const,
       columnId: 'typeContentName',
       label: 'Тип контента',
+      placeholder: 'Выберите тип',
       options: filterOptions.type,
       width: 200,
     },
@@ -396,7 +364,7 @@ const handleTableAction = useCallback((action: 'view' | 'edit' | 'delete', data:
         <Group wrap="nowrap">
           <ActionIcon
             color="blue"
-            onClick={() => handleTableAction('edit', row.original)}
+            onClick={(e) => { e.stopPropagation(); handleTableAction('edit', row.original); }}
           >
             <IconPencil size={18} />
           </ActionIcon>
@@ -464,7 +432,10 @@ const handleTableAction = useCallback((action: 'view' | 'edit' | 'delete', data:
           onClose={modals.view[1].close}
           title="Просмотр медиа"
           mode="view"
-          initialValues={selectedMedia || {}}
+          initialValues={{
+            ...selectedMedia,
+            attachments: selectedMedia?.MediaAttachment || [],
+          }}
           viewFieldsConfig={viewFieldsConfig}
         />
 

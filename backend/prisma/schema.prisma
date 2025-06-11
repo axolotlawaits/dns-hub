@@ -282,7 +282,6 @@ model Media {
   userUpdated     User?                 @relation("Media_UserUpdated", fields: [userUpdatedId], references: [id])
   userUpdatedId   String?       
   name            String?       
-  sketch          String?       
   MediaAttachment MediaAttachment[]
   information     String?       
   urlMedia2       String?       
