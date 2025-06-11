@@ -27,10 +27,10 @@ model UserData {
 
 model Position{
   uuid                                String                 @id @default(uuid())
-  groupUuid                           String           
   name                                String         
   userData                            UserData[]
-  groupToolAccesses                   PositionToolAccess[]   
+  groupToolAccesses                   PositionToolAccess[] 
+  groupUuid                           String             
   group                               Group?                 @relation(fields: [groupUuid], references: [uuid])
 }
 
