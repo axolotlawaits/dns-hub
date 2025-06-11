@@ -22,16 +22,23 @@ model UserData {
   start_date                          DateTime         
   end_date                            DateTime         
   last_update                         DateTime               @updatedAt
-  groupPosition                       GroupPosition?         @relation(fields: [position], references: [uuidPosition])
+  positonUuid                         Position?              @relation(fields: [position], references: [uuidPosition])
 }
 
-model GroupPosition{
+model Position{
   uuidPosition                        String          @id @default(uuid())
-  uuidGroup                           String           
-  group                               String
+  groupUuid                           String           
   position                            String         
   userData                            UserData[]
   groupToolAccesses                   PositionToolAccess[]   
+  group                               Group?          @relation(fields: [groupUuid], references: [uuidGroup])
+}
+
+model Group{
+  uuidGroup                           String           @id @default(uuid())
+  uuidPosition                        String          
+  positions                           Position[]
+  group                               String 
 }
 
 model Branch {
@@ -122,7 +129,7 @@ enum Role {
 
 model PositionToolAccess {
   id          String                 @id @default(uuid())
-  position    GroupPosition          @relation(fields: [positionId], references: [uuidPosition])
+  position    Position          @relation(fields: [positionId], references: [uuidPosition])
   positionId  String
   tool        Tool                   @relation(fields: [toolId], references: [id])
   toolId      String
