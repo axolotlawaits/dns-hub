@@ -1,12 +1,4 @@
-import {
-  Button,
-  Paper,
-  PasswordInput,
-  TextInput,
-  Title,
-  Loader,
-  ActionIcon
-} from '@mantine/core';
+import { Button, Paper, PasswordInput, TextInput, Title, Loader, ActionIcon } from '@mantine/core';
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useUserContext } from '../hooks/useUserContext';
 import { useNavigate } from 'react-router';
