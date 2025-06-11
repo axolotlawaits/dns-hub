@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useUserContext } from '../hooks/useUserContext';
-import { API } from '../config/constants';
+import { useUserContext } from '../../hooks/useUserContext';
+import { API } from '../../config/constants';
 import { Avatar, Card, Text, Group, Badge, Skeleton, Stack, Box } from '@mantine/core';
 
 
@@ -20,7 +20,7 @@ interface UserData {
   };
 }
 
-const Profile = () => {
+const ProfileInfo = () => {
   const { user } = useUserContext();
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -134,4 +134,4 @@ const Profile = () => {
   );
 };
 
-export default Profile;
+export default ProfileInfo;

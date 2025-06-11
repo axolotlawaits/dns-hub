@@ -5,9 +5,12 @@ export type User = {
   name: string
   branch: string
   position: string
-  email: string;
+  email: string
   image: string
+  role: UserRole
 }
+
+type UserRole = 'DEVELOPER' | 'ADMIN' | 'SUPERVISOR' | 'EMPLOYEE'
 
 type Props = {
   children?: React.ReactNode

@@ -30,7 +30,8 @@ model GroupPosition{
   uuidGroup                           String           
   group                               String
   position                            String         
-  userData                            UserData[]     
+  userData                            UserData[]
+  groupToolAccesses                   PositionToolAccess[]   
 }
 
 model Branch {
@@ -68,15 +69,17 @@ model Type {
 }
 
 model Tool {
-  id                String       @id @default(uuid())
-  parent_id         String?
-  name              String
-  icon              String
-  link              String
-  description       String?
-  order             Int
-  included          Boolean?    @default(true)
-  types             Type[]
+  id                  String       @id @default(uuid())
+  parent_id           String?
+  name                String
+  icon                String
+  link                String
+  description         String?
+  order               Int
+  included            Boolean?    @default(true)
+  types               Type[]
+  groupToolAccesses   PositionToolAccess[]
+  userToolAccesses    UserToolAccess[]
 }
 
 model BranchImage {
@@ -96,6 +99,7 @@ model User {
   image                   String?
   login                   String                     @unique
   updatedAt               DateTime                   @updatedAt
+  role                    Role                       @default(EMPLOYEE)
   correspondences         Correspondence[]
   attachments             CorrespondenceAttachment[]
   news                    News[]
@@ -106,6 +110,42 @@ model User {
   MediaAttachment         MediaAttachment[]
   MediaAdd                Media[]                    @relation("Media_UserAdd")
   MediaUpdated            Media[]                    @relation("Media_UserUpdated")
+  userToolAccesses        UserToolAccess[]
+}
+
+enum Role {
+  DEVELOPER
+  ADMIN
+  SUPERVISOR
+  EMPLOYEE
+}
+
+model PositionToolAccess {
+  id          String                 @id @default(uuid())
+  position    GroupPosition          @relation(fields: [positionId], references: [uuidPosition])
+  positionId  String
+  tool        Tool                   @relation(fields: [toolId], references: [id])
+  toolId      String
+  accessLevel AccessLevel
+
+  @@unique([positionId, toolId])
+}
+
+model UserToolAccess {
+  id          Int         @id @default(autoincrement())
+  user        User        @relation(fields: [userId], references: [id])
+  userId      String
+  tool        Tool        @relation(fields: [toolId], references: [id])
+  toolId      String
+  accessLevel AccessLevel
+
+  @@unique([userId, toolId])
+}
+
+enum AccessLevel {
+  READONLY
+  CONTRIBUTOR
+  FULL
 }
 
 model News {

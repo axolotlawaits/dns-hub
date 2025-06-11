@@ -33,8 +33,10 @@ import SupplyDocs from '../features/Accounting/SupplyDocs/SupplyDocs'
 import Media from '../features/Adds/Media/Media'
 import Retail from '../features/Retail/Retail'
 import PrintService from '../features/Retail/PrintService/PrintService'
-import Profile from '../app/profile'
 import Birthday from '../app/Birthday'
+import ProfileInfo from './profile/ProfileInfo'
+import Profile from './profile/Profile'
+import Management from './profile/Management'
 
 function App() {
   const { user } = useUserContext()
@@ -66,6 +68,8 @@ function App() {
               <Routes>
                 <Route path='/' element={<Home />} />
                 <Route path='/profile' element={<Profile />} />
+                  <Route path='/profile/info' element={<ProfileInfo />} />
+                  <Route path='/profile/management' element={user.role !== 'EMPLOYEE' ? <Management /> : <Navigate to='/' />} />
                 <Route path='/birthday' element={<Birthday />} />
                 <Route path='/finance' element={<Finance />} />
                 <Route path='/accounting' element={<Accounting />} />

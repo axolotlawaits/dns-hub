@@ -33,7 +33,7 @@ export const login = async (req: Request, res: Response): Promise<any>=> {
       console.log('New user created:', newUser);
       return res.status(200).json(newUser);
     }
-    
+    console.log(user)
     return res.status(200).json(user);
   } catch (error) {
     console.error('Login error:', error);
