@@ -150,3 +150,12 @@ export const searchPositions = async (req: Request, res: Response): Promise<any>
     res.status(400).json({error: 'ошибка при поиске'})
   }
 }
+
+export const getAllPositions = async (req: Request, res: Response): Promise<any> => {
+  const positions = await prisma.groupPosition.findMany({})
+  if (positions) {
+    res.status(200).json(positions) 
+  } else {
+    res.status(400).json({error: 'ошибка при поиске должностей'})
+  }
+}
