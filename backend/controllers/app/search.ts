@@ -151,10 +151,10 @@ export const searchPositions = async (req: Request, res: Response): Promise<any>
   }
 }
 
-export const getAllPositions = async (req: Request, res: Response): Promise<any> => {
-  const positions = await prisma.groupPosition.findMany({})
-  if (positions) {
-    res.status(200).json(positions) 
+export const getAllGroups = async (req: Request, res: Response): Promise<any> => {
+  const group = await prisma.group.findMany({include: { groupToolAccesses: true }})
+  if (group) {
+    res.status(200).json(group) 
   } else {
     res.status(400).json({error: 'ошибка при поиске должностей'})
   }

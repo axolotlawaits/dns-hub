@@ -3,6 +3,7 @@ import cors from "cors"
 import { PrismaClient } from "@prisma/client"
 import path from 'path'
 import userRouter from './routes/app/user.js'
+import accessRouter from './routes/app/access.js'
 import newsRouter from './routes/app/news.js'
 import meterReadingRouter from './routes/aho/meterReading.js'
 import searchRouter from './routes/app/search.js'
@@ -29,6 +30,7 @@ app.use(express.json())
 app.use("/hub-api", express.static(__dirname))
 
 app.use('/hub-api/user', userRouter)
+app.use('/hub-api/access', accessRouter)
 app.use('/hub-api/news', newsRouter)
 app.use('/hub-api/profile', profileRouter)
 app.use('/hub-api/birthday', birthdayRouter)
