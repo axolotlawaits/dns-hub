@@ -1,6 +1,15 @@
 import { useEffect, useState } from "react"
 import { API } from "../../config/constants"
-import { Button, Select } from "@mantine/core"
+import { Button, Modal, Select } from "@mantine/core"
+import { useDisclosure } from "@mantine/hooks"
+
+type AccessLevel = 'READONLY' | 'CONTRIBUTOR' | 'FULL'
+
+const accessLevels = [
+  {type: 'READONLY', name: 'чтение'},
+  {type: 'CONTRIBUTOR', name: 'без удаления'},
+  {type: 'FULL', name: 'полный'}
+]
 
 function Management() {
   const [positions, setPositions] = useState([])
@@ -31,11 +40,10 @@ function Management() {
   }, [])
 
   const getAccessedTools = async () => {
-    console.log('hey')
     const response = await fetch(`${API}/access/group/${curGroup}`)
     const json = await response.json()
     if (response.ok) {
-      console.log(json)
+      setCurAccess(json)
     }
   }
 
@@ -51,10 +59,22 @@ function Management() {
     })
     const json = await response.json()
     if (response.ok) {
-      console.log(json)
+      setCurAccess(curAccess.map(access => access.id === json.id ? json : access))
     }
   }
-  console.log(curGroup)
+
+  const deleteGroupAccess = async (toolId) => {
+    const response = await fetch(`${API}/access/group/${curGroup}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({toolId}),
+    })
+    const json = await response.json()
+    if (response.ok) {
+      setCurAccess(curAccess.filter(access => access.id !== json.id))
+    }
+  }
+  console.log(curAccess)
   return (
     <>
       <Select 
@@ -68,16 +88,52 @@ function Management() {
       />
       <div className="access-tools">
         {tools.map(tool => {
-          return (
+          const accessLevel = curAccess.find(t => t.toolId === tool.id)?.accessLevel
+          return curAccess.some(t => t.toolId === tool.id) ?
+            <div key={tool.id} className="access-tool-exist">
+              <span>{tool.name}</span>
+              <span>{accessLevel}</span>
+              <Button onClick={() => deleteGroupAccess(tool.id)} color="red">убрать доступ</Button>
+              <ChangeAccessLevelModal 
+                tool={tool} 
+                updateGroupAccess={updateGroupAccess}
+                accessLevel={accessLevel}
+              />
+            </div>
+            :
             <div key={tool.id} className="access-tool">
               <span>{tool.name}</span>
-              <Button onClick={() => updateGroupAccess(tool.id, 'READONLY')}>выдать доступ 1</Button>
-              <Button onClick={() => updateGroupAccess(tool.id, 'CONTRIBUTOR')}>выдать доступ 2</Button>
-              <Button onClick={() => updateGroupAccess(tool.id, 'FULL')}>выдать доступ 3</Button>
+              <ChangeAccessLevelModal 
+                tool={tool} 
+                updateGroupAccess={updateGroupAccess} 
+                accessLevel={accessLevel} 
+              />
             </div>
-          )
         })}
       </div>
+    </>
+  )
+}
+
+function ChangeAccessLevelModal({tool, updateGroupAccess, accessLevel}) {
+  const [opened, { open, close }] = useDisclosure(false)
+
+  return (
+    <>
+      <Button onClick={open}>изменить уровень доступа</Button>
+      <Modal opened={opened} onClose={close} title="Изменение уровня доступа" centered>
+        {accessLevels.map(lvl => {
+          console.log(lvl, accessLevel)
+          return (
+            <Button 
+              color={accessLevel === lvl.type ? 'green' : undefined}
+              onClick={() => updateGroupAccess(tool.id, lvl.type)}
+            >
+              {lvl.name}
+            </Button>
+          )
+        })}
+      </Modal>
     </>
   )
 }
