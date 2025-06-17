@@ -1,28 +1,34 @@
 import { useEffect, useState } from "react"
 import { API } from "../../config/constants"
-import { ActionIcon, Button, Modal, Select, Tooltip } from "@mantine/core"
+import { ActionIcon, Button, Modal, Select, TextInput, Tooltip } from "@mantine/core"
 import { useDisclosure } from "@mantine/hooks"
 import { Tool } from "../../components/Tools"
-import { IconLockAccess, IconLockOpen2 } from "@tabler/icons-react"
+import { IconLockAccess, IconLockOpen2, IconSearch } from "@tabler/icons-react"
 
 type AccessLevel = 'READONLY' | 'CONTRIBUTOR' | 'FULL'
 
-type GroupAccess = {
-  toolId: string
-  groupName: string
+type AccessLevelName = {
+  type: AccessLevel
+  name: string
 }
 
-const accessLevels = [
+type GroupAccess = {
+  id: string
+  toolId: string
+  groupName: string
+  accessLevel: AccessLevel
+}
+
+const accessLevels: AccessLevelName[] = [
   {type: 'READONLY', name: 'чтение'},
   {type: 'CONTRIBUTOR', name: 'без удаления'},
   {type: 'FULL', name: 'полный'}
 ]
 
 function Management() {
-  const [positions, setPositions] = useState([])
   const [groups, setGroups] = useState([])
   const [curGroup, setCurGroup] = useState<string | null>('')
-  const [curAccess, setCurAccess] = useState([])
+  const [curAccess, setCurAccess] = useState<GroupAccess[]>([])
   const [tools, setTools] = useState<Tool[]>([])
 
   const getGroups = async () => {
@@ -33,8 +39,8 @@ function Management() {
     }
   }
 
-  const getTools = async () => {
-    const response = await fetch(`${API}/navigation/all-sub`)
+  const getTools = async (search?: string) => {
+    const response = await fetch(`${API}/search/tool?text=${search || ''}`)
     const json = await response.json()
     if (response.ok) {
       setTools(json)
@@ -66,7 +72,12 @@ function Management() {
     })
     const json = await response.json()
     if (response.ok) {
-      setCurAccess(curAccess.map(access => access.id === json.id ? json : access))
+      setCurAccess(prevAccess => {
+        const exists = prevAccess.some(access => access.id === json.id);
+        return exists
+          ? prevAccess.map(access => access.id === json.id ? json : access)
+          : [...prevAccess, json];
+      })
     }
   }
 
@@ -85,13 +96,20 @@ function Management() {
   return (
     <div id="profile-management">
       <Select 
-        data={groups.map(g => g.name)} 
+        data={groups.map((g: any) => g.name)} 
         value={curGroup} 
         onChange={setCurGroup} 
         placeholder="Выбрать группу должностей" 
         style={{ width: 300 }}
         searchable
         clearable
+      />
+      <TextInput
+        data-autofocus
+        size='md'
+        placeholder="поиск"
+        leftSection={<IconSearch size={20} />}
+        onChange={(e) => e.target.value ? (getTools(e.target.value)) : getTools()}
       />
       <div className="access-tools">
         {tools.map(tool => {
@@ -138,7 +156,13 @@ function Management() {
   )
 }
 
-function ChangeAccessLevelModal({tool, updateGroupAccess, accessLevel}) {
+type ChangeAccessLevelModalProps = {
+  tool: Tool
+  updateGroupAccess: (toolId: string, accessLevel: AccessLevel) => void
+  accessLevel: AccessLevel | undefined
+}
+
+function ChangeAccessLevelModal({tool, updateGroupAccess, accessLevel}: ChangeAccessLevelModalProps) {
   const [opened, { open, close }] = useDisclosure(false)
 
   return (
@@ -154,7 +178,7 @@ function ChangeAccessLevelModal({tool, updateGroupAccess, accessLevel}) {
             return (
               <Button 
                 color={accessLevel === lvl.type ? 'green' : undefined}
-                onClick={() => updateGroupAccess(tool.id, lvl.type)}
+                onClick={() => {updateGroupAccess(tool.id, lvl.type), close()}}
               >
                 {lvl.name}
               </Button>

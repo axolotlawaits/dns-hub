@@ -52,12 +52,14 @@ export const searchAll = async (req: Request, res: Response): Promise<any>  => {
 /* tools */
 
 export const searchTools = async (req: Request, res: Response): Promise<any>  => {
-  const text = req.query.text as string
+  const text = req.query.text as string || undefined
 
-  const result = await prisma.tool.findMany({
-    where: {name: {contains: text, mode: 'insensitive'}, parent_id: {not: null}},
-    take: 5,
-  })
+  let where: any = { parent_id: { not: null } }
+  if (text) {
+    where.name = { contains: text, mode: 'insensitive' }
+  }
+
+  const result = await prisma.tool.findMany({ where })
   if (result) {
     return res.status(200).json(result)
   }
