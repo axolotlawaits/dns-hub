@@ -3,3 +3,23 @@
   flex-direction: column;
   gap: 10px;
 }
+
+#profile-management {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.access-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.access-modal-action {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  justify-content: space-between;
+}
