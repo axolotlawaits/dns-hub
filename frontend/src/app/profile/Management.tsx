@@ -3,9 +3,12 @@ import { API } from "../../config/constants"
 import { ActionIcon, Button, Modal, Select, TextInput, Tooltip } from "@mantine/core"
 import { useDisclosure } from "@mantine/hooks"
 import { Tool } from "../../components/Tools"
-import { IconLockAccess, IconLockOpen2, IconSearch } from "@tabler/icons-react"
+import { IconExternalLink, IconLockAccess, IconLockOpen2, IconSearch } from "@tabler/icons-react"
+import { useNavigate } from "react-router"
 
 type AccessLevel = 'READONLY' | 'CONTRIBUTOR' | 'FULL'
+
+type EntityType = 'group' | 'position' | 'user'
 
 type AccessLevelName = {
   type: AccessLevel
@@ -26,18 +29,29 @@ const accessLevels: AccessLevelName[] = [
 ]
 
 function Management() {
+  const [entityType, setEntityType] = useState<EntityType>('group')
   const [groups, setGroups] = useState([])
-  const [curGroup, setCurGroup] = useState<string | null>('')
+  const [positions, setPositions] = useState([])
+  const [users, setUsers] = useState([])
+  const [curEntity, setCurEntity] = useState<string | null>(null)
   const [curAccess, setCurAccess] = useState<GroupAccess[]>([])
   const [tools, setTools] = useState<Tool[]>([])
+  const navigate = useNavigate()
 
-  const getGroups = async () => {
-    const response = await fetch(`${API}/search/all-groups`)
+  const getEntities = async () => {
+    const response = await fetch(`${API}/search/${entityType}/all`)
     const json = await response.json()
     if (response.ok) {
-      setGroups(json)
+      entityType === 'group' && (setGroups(json), setUsers([]), setPositions([]))
+      entityType === 'position' && (setPositions(json), setUsers([]), setGroups([]))
+      entityType === 'user' && (setUsers(json), setGroups([]), setPositions([]))
     }
   }
+
+  useEffect(() => {
+    getEntities()
+    setCurEntity(null)
+  }, [entityType])
 
   const getTools = async (search?: string) => {
     const response = await fetch(`${API}/search/tool?text=${search || ''}`)
@@ -48,12 +62,11 @@ function Management() {
   }
 
   useEffect(() => {
-    getGroups()
     getTools()
   }, [])
 
   const getAccessedTools = async () => {
-    const response = await fetch(`${API}/access/group/${curGroup}`)
+    const response = await fetch(`${API}/access/${entityType}/${curEntity}`)
     const json = await response.json()
     if (response.ok) {
       setCurAccess(json)
@@ -61,11 +74,12 @@ function Management() {
   }
 
   useEffect(() => {
-    curGroup && getAccessedTools()
-  }, [curGroup])
+    !curEntity && setCurAccess([])
+    curEntity && getAccessedTools()
+  }, [curEntity])
 
   const updateGroupAccess = async (toolId: string, accessLevel: AccessLevel) => {
-    const response = await fetch(`${API}/access/group/${curGroup}`, {
+    const response = await fetch(`${API}/access/${entityType}/${curEntity}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({toolId, accessLevel}),
@@ -82,7 +96,7 @@ function Management() {
   }
 
   const deleteGroupAccess = async (toolId: string) => {
-    const response = await fetch(`${API}/access/group/${curGroup}`, {
+    const response = await fetch(`${API}/access/${entityType}/${curEntity}`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({toolId}),
@@ -95,62 +109,115 @@ function Management() {
 
   return (
     <div id="profile-management">
-      <Select 
-        data={groups.map((g: any) => g.name)} 
-        value={curGroup} 
-        onChange={setCurGroup} 
-        placeholder="Выбрать группу должностей" 
-        style={{ width: 300 }}
-        searchable
-        clearable
-      />
-      <TextInput
-        data-autofocus
-        size='md'
-        placeholder="поиск"
-        leftSection={<IconSearch size={20} />}
-        onChange={(e) => e.target.value ? (getTools(e.target.value)) : getTools()}
-      />
-      <div className="access-tools">
-        {tools.map(tool => {
-          const accessLevel = curAccess.find(t => t.toolId === tool.id)?.accessLevel
-          return curAccess.some(t => t.toolId === tool.id) ?
-            <div 
-              key={tool.id} 
-              className={`tool-card access ${
-                accessLevel === 'READONLY' ? 'lvl1' : 
-                accessLevel === 'CONTRIBUTOR' ? 'lvl2' : 'lvl3'
-              }`}
-            >
-              <div className="tool-text">
+      <div className="access-selection-area">
+        <div className="access-select-block">
+          <h2 className="access-heading">Кому выдать права?</h2>
+          <Select 
+            data={[
+              {value: 'group', label: 'Группе должностей'}, 
+              {value: 'position', label: 'Должности'}, 
+              {value: 'user', label: 'Сотруднику'}
+            ]} 
+            value={entityType} 
+            onChange={(value) => setEntityType(value as EntityType)} 
+            placeholder="Выбрать тип доступа" 
+            style={{ width: 300 }}
+            searchable
+            clearable
+          />
+        </div>
+        <div className="access-select-block">
+          <h2 className="access-heading">
+            {`Выберите ${
+              entityType === 'group' ? 'группу' : entityType === 'user' ? 'сотрудника' : 'должность'
+            }`}
+          </h2>
+          {entityType === 'user' ?
+            <Select 
+              data={users.map((u: any) => ({value: u.id, label: u.name}))} 
+              value={curEntity} 
+              onChange={setCurEntity} 
+              placeholder="Выбрать группу должностей" 
+              style={{ width: 300 }}
+              searchable
+              clearable
+            />
+          :
+            <Select 
+              data={entityType === 'group' ? groups.map((e: any) => e.name) : positions.map((e: any) => e.name)} 
+              value={curEntity} 
+              onChange={setCurEntity} 
+              placeholder="Выбрать группу должностей" 
+              style={{ width: 300 }}
+              searchable
+              clearable
+            />
+          }
+        </div>
+      </div>
+      <div className="access-tools-block">
+        <TextInput
+          data-autofocus
+          size='md'
+          placeholder="поиск"
+          leftSection={<IconSearch size={20} />}
+          onChange={(e) => e.target.value ? (getTools(e.target.value)) : getTools()}
+        />
+        <div className="access-tools">
+          {tools.map(tool => {
+            const accessLevel = curAccess.find(t => t.toolId === tool.id)?.accessLevel
+            return curAccess.some(t => t.toolId === tool.id) ?
+              <div 
+                key={tool.id} 
+                className={`tool-card access ${
+                  accessLevel === 'READONLY' ? 'lvl1' : 
+                  accessLevel === 'CONTRIBUTOR' ? 'lvl2' : 'lvl3'
+                }`}
+              >
+                <div className="tool-text">
+                  <span className="tool-name">{tool.name}</span>
+                  <span className="tool-access">{accessLevels.find(lvl => lvl.type === accessLevel)?.name}</span>
+                </div>
+                <div className="tool-card-action">
+                  <Tooltip label="убрать доступ">
+                    <ActionIcon variant="filled" aria-label="Settings" onClick={() => deleteGroupAccess(tool.id)} color="red" size="lg">
+                      <IconLockAccess size={24}/>
+                    </ActionIcon>
+                  </Tooltip>
+                  {curEntity &&
+                    <ChangeAccessLevelModal 
+                      tool={tool} 
+                      updateGroupAccess={updateGroupAccess} 
+                      accessLevel={accessLevel} 
+                    />
+                  }
+                  <Tooltip label="к инструменту">
+                    <ActionIcon variant="default" aria-label="Settings" onClick={() => navigate(`/${tool.link}`)} size="lg">
+                      <IconExternalLink size={24}/>
+                    </ActionIcon>
+                  </Tooltip>
+                </div>
+              </div>
+              :
+              <div key={tool.id} className={`tool-card access ${curEntity ? '' : 'showcase'}`}>
                 <span className="tool-name">{tool.name}</span>
-                <span className="tool-access">{accessLevels.find(lvl => lvl.type === accessLevel)?.name}</span>
+                <div className="tool-card-action">
+                  {curEntity &&
+                    <ChangeAccessLevelModal 
+                      tool={tool} 
+                      updateGroupAccess={updateGroupAccess} 
+                      accessLevel={accessLevel} 
+                    />
+                  }
+                  <Tooltip label="к инструменту">
+                    <ActionIcon variant="default" aria-label="Settings" onClick={() => navigate(`/${tool.link}`)} size="lg">
+                      <IconExternalLink size={24}/>
+                    </ActionIcon>
+                  </Tooltip>
+                </div>
               </div>
-              <div className="tool-card-action">
-                <Tooltip label="убрать доступ">
-                  <ActionIcon variant="filled" aria-label="Settings" onClick={() => deleteGroupAccess(tool.id)} color="red" size="lg">
-                    <IconLockAccess size={24}/>
-                  </ActionIcon>
-                </Tooltip>
-                <ChangeAccessLevelModal 
-                  tool={tool} 
-                  updateGroupAccess={updateGroupAccess}
-                  accessLevel={accessLevel}
-                />
-              </div>
-            </div>
-            :
-            <div key={tool.id} className="tool-card access">
-              <span className="tool-name">{tool.name}</span>
-              <div className="tool-card-action">
-                <ChangeAccessLevelModal 
-                  tool={tool} 
-                  updateGroupAccess={updateGroupAccess} 
-                  accessLevel={accessLevel} 
-                />
-              </div>
-            </div>
-        })}
+          })}
+        </div>
       </div>
     </div>
   )

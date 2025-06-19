@@ -18,7 +18,7 @@ export const getGroupAccessInfo = async (req: Request, res: Response): Promise<a
 export const updateGroupAccessInfo = async (req: Request, res: Response): Promise<any>  => {
   const { toolId, accessLevel } = req.body
   const groupName = req.params.id
-  console.log(toolId, accessLevel, groupName)
+
   const access = await prisma.groupToolAccess.upsert({
     where: {
       groupName_toolId: { groupName, toolId,}
@@ -57,5 +57,80 @@ export const getUserAccessInfo = async (req: Request, res: Response): Promise<an
     res.status(200).json(access)
   } else {
     res.status(400).json({error: 'ошибка при поиске информации о доступе'})
+  }
+}
+
+export const updateUserAccessInfo = async (req: Request, res: Response): Promise<any>  => {
+  const { toolId, accessLevel } = req.body
+  const userId = req.params.id
+
+  const access = await prisma.userToolAccess.upsert({
+    where: { userId_toolId: { userId, toolId }},
+    update: { accessLevel },
+    create: { userId, toolId, accessLevel }
+  })
+  if (access) {
+    res.status(200).json(access)
+  } else {
+    res.status(400).json({error: 'ошибка обновления доступа'})
+  }
+}
+
+export const deleteUserAccessInfo = async (req: Request, res: Response): Promise<any>  => {
+  const { toolId } = req.body
+  const userId = req.params.id
+
+  const access = await prisma.userToolAccess.delete({
+    where: { userId_toolId: { userId, toolId }}
+  })
+  if (access) {
+    res.status(200).json(access)
+  } else {
+    res.status(400).json({error: 'ошибка обновления доступа'})
+  }
+}
+
+/* position access */
+
+export const getPositionAccessInfo = async (req: Request, res: Response): Promise<any>  => {
+  const positionName = req.params.id
+  
+  const access = await prisma.positionToolAccess.findMany({where: { positionName }})
+  if (access) {
+    res.status(200).json(access)
+  } else {
+    res.status(400).json({error: 'ошибка при поиске информации о доступе'})
+  }
+}
+
+export const updatePositionAccessInfo = async (req: Request, res: Response): Promise<any>  => {
+  const { toolId, accessLevel } = req.body
+  const positionName = req.params.id
+
+  const access = await prisma.positionToolAccess.upsert({
+    where: {
+      positionName_toolId: { positionName, toolId,}
+    },
+    update: { accessLevel },
+    create: { positionName, toolId, accessLevel }
+  })
+  if (access) {
+    res.status(200).json(access)
+  } else {
+    res.status(400).json({error: 'ошибка обновления доступа'})
+  }
+}
+
+export const deletePositionAccessInfo = async (req: Request, res: Response): Promise<any>  => {
+  const { toolId } = req.body
+  const positionName = req.params.id
+
+  const access = await prisma.positionToolAccess.delete({
+    where: { positionName_toolId: { positionName, toolId }}
+  })
+  if (access) {
+    res.status(200).json(access)
+  } else {
+    res.status(400).json({error: 'ошибка обновления доступа'})
   }
 }

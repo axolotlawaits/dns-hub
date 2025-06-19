@@ -15,6 +15,10 @@
   background-color: #ff6b6b;
 }
 
+.tool-card.access.showcase {
+  background-color: var(--select);
+}
+
 .tool-card.lvl1 {
   background-color: #339af0;
 }

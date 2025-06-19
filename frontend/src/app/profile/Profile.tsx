@@ -14,7 +14,7 @@ function Profile() {
       <div className="profile-page-wrapper">
         <Tabs.List grow>
           <Tabs.Tab value="first">Ваши данные</Tabs.Tab>
-          {user?.role !== 'EMPLOYEE' && <Tabs.Tab value="second">Управление</Tabs.Tab>}
+          {user?.role !== 'EMPLOYEE' && <Tabs.Tab value="second">Управление доступом</Tabs.Tab>}
         </Tabs.List>
 
         <Tabs.Panel value="first"><ProfileInfo /></Tabs.Panel>
