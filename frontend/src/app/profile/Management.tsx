@@ -6,7 +6,7 @@ import { Tool } from "../../components/Tools"
 import { IconExternalLink, IconLockAccess, IconLockOpen2, IconSearch } from "@tabler/icons-react"
 import { useNavigate } from "react-router"
 
-type AccessLevel = 'READONLY' | 'CONTRIBUTOR' | 'FULL'
+export type AccessLevel = 'READONLY' | 'CONTRIBUTOR' | 'FULL'
 
 type EntityType = 'group' | 'position' | 'user'
 

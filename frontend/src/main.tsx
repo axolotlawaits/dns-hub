@@ -9,6 +9,7 @@ import { ThemeContextProvider } from './contexts/ThemeContext.tsx'
 import 'dayjs/locale/ru'
 import { useThemeContext } from './hooks/useThemeContext.tsx'
 import '@mantine/carousel/styles.css'
+import { AccessContextProvider } from './contexts/AccessContext.tsx'
 
 dayjs.locale('ru')
 
@@ -33,9 +34,11 @@ function Root() {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <UserContextProvider>
-      <ThemeContextProvider>
-        <Root />
-      </ThemeContextProvider>
+      <AccessContextProvider>
+        <ThemeContextProvider>
+          <Root />
+        </ThemeContextProvider>
+      </AccessContextProvider>
     </UserContextProvider>
   </StrictMode>,
 )

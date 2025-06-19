@@ -16,13 +16,13 @@ model UserData {
   code                                String         
   branch                              Branch                 @relation(fields: [branch_uuid], references: [uuid])
   branch_uuid                         String         
-  position                            String                 
+  positionId                          String                 
   email                               String                 @unique
   status                              String         
   start_date                          DateTime         
   end_date                            DateTime         
   last_update                         DateTime               @updatedAt
-  positonUuid                         Position?              @relation(fields: [position], references: [uuid])
+  position                            Position?              @relation(fields: [positionId], references: [uuid])
 }
 
 model Position{

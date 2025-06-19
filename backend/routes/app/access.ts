@@ -3,6 +3,7 @@ import {
   deleteGroupAccessInfo, 
   deletePositionAccessInfo, 
   deleteUserAccessInfo, 
+  getFullAccessInfo, 
   getGroupAccessInfo, 
   getPositionAccessInfo, 
   getUserAccessInfo, 
@@ -12,6 +13,8 @@ import {
 } from '../../controllers/app/access.js';
 
 const router = express.Router();
+
+router.get('/:id', getFullAccessInfo)
 
 router.get('/user/:id', getUserAccessInfo)
 
