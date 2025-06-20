@@ -90,7 +90,7 @@ function Handbook() {
     setPositionFilter('')
     getSearchResults()
   }
-  console.log(cityFilter)
+
   return (
     <div id="search-page">
       <div id="search-filters">

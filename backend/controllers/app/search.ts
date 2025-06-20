@@ -52,12 +52,14 @@ export const searchAll = async (req: Request, res: Response): Promise<any>  => {
 /* tools */
 
 export const searchTools = async (req: Request, res: Response): Promise<any>  => {
-  const text = req.query.text as string
+  const text = req.query.text as string || undefined
 
-  const result = await prisma.tool.findMany({
-    where: {name: {contains: text, mode: 'insensitive'}, parent_id: {not: null}},
-    take: 5,
-  })
+  let where: any = { parent_id: { not: null } }
+  if (text) {
+    where.name = { contains: text, mode: 'insensitive' }
+  }
+
+  const result = await prisma.tool.findMany({ where })
   if (result) {
     return res.status(200).json(result)
   }
@@ -151,10 +153,30 @@ export const searchPositions = async (req: Request, res: Response): Promise<any>
   }
 }
 
+/* get all items */
+
+export const getAllGroups = async (req: Request, res: Response): Promise<any> => {
+  const groups = await prisma.group.findMany({include: { groupToolAccesses: true }})
+  if (groups) {
+    res.status(200).json(groups) 
+  } else {
+    res.status(400).json({error: 'ошибка при поиске должностей'})
+  }
+}
+
 export const getAllPositions = async (req: Request, res: Response): Promise<any> => {
-  const positions = await prisma.groupPosition.findMany({})
+  const positions = await prisma.position.findMany({include: { positionToolAccesses: true }})
   if (positions) {
     res.status(200).json(positions) 
+  } else {
+    res.status(400).json({error: 'ошибка при поиске должностей'})
+  }
+}
+
+export const getAllUsers = async (req: Request, res: Response): Promise<any> => {
+  const users = await prisma.user.findMany({include: { userToolAccesses: true }})
+  if (users) {
+    res.status(200).json(users) 
   } else {
     res.status(400).json({error: 'ошибка при поиске должностей'})
   }

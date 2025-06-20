@@ -20,6 +20,22 @@ export const getRootMenuItems = async (
   }
 };
 
+export const getAllNonRootMenuItems = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const menuList = await prisma.tool.findMany({
+      where: { parent_id: { not: null } },
+      orderBy: { order: 'asc' },
+    });
+    res.status(200).json(menuList);
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Получение списка дочерних элементов меню по parent_id
 export const getNonRootMenuItems = async (
     req: Request,

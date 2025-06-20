@@ -8,6 +8,27 @@
   background-color: var(--select);
   border-radius: 10px;
   transition: box-shadow 0.2s ease-out;
+  position: relative;
+}
+
+.tool-card.access {
+  background-color: #ff6b6b;
+}
+
+.tool-card.access.showcase {
+  background-color: var(--select);
+}
+
+.tool-card.lvl1 {
+  background-color: #339af0;
+}
+
+.tool-card.lvl2 {
+  background-color: #22b8cf;
+}
+
+.tool-card.lvl3 {
+  background-color: #20c997;
 }
 
 .tool-card:hover {
@@ -30,4 +51,16 @@
 
 .tool-description {
   color: var(--font-info-contrast);
+}
+
+.tool-access {
+  color: var(--font-contrast);
+}
+
+.tool-card-action {
+  display: flex;
+  gap: 5px;
+  position: absolute;
+  right: 20px;
+  bottom: 10px;
 }

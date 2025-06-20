@@ -3,3 +3,45 @@
   flex-direction: column;
   gap: 10px;
 }
+
+#profile-management {
+  display: flex;
+  flex-direction: column;
+  gap: 50px;
+}
+
+.access-tools-block {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.access-heading {
+  font-size: 20px;
+  color: var(--font);
+}
+
+.access-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.access-selection-area {
+  display: flex;
+  justify-content: space-around;
+}
+
+.access-select-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.access-modal-action {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  justify-content: space-between;
+}

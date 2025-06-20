@@ -16,29 +16,30 @@ model UserData {
   code                                String         
   branch                              Branch                 @relation(fields: [branch_uuid], references: [uuid])
   branch_uuid                         String         
-  position                            String                 
+  positionId                          String                 
   email                               String                 @unique
   status                              String         
   start_date                          DateTime         
   end_date                            DateTime         
   last_update                         DateTime               @updatedAt
-  positonUuid                         Position?              @relation(fields: [position], references: [uuid])
+  position                            Position?              @relation(fields: [positionId], references: [uuid])
 }
 
 model Position{
   uuid                                String                 @id @default(uuid())
-  name                                String         
+  name                                String                 @unique
   userData                            UserData[]
-  groupToolAccesses                   PositionToolAccess[] 
+  positionToolAccesses                PositionToolAccess[] 
   groupUuid                           String             
   group                               Group?                 @relation(fields: [groupUuid], references: [uuid])
 }
 
 model Group{
-  uuid                                String           @id @default(uuid())
+  uuid                                String              @id @default(uuid())
   uuidPosition                        String          
   positions                           Position[]
-  name                                String 
+  name                                String              @unique
+  groupToolAccesses                   GroupToolAccess[] 
 }
 
 model Branch {
@@ -76,17 +77,18 @@ model Type {
 }
 
 model Tool {
-  id                  String       @id @default(uuid())
-  parent_id           String?
-  name                String
-  icon                String
-  link                String
-  description         String?
-  order               Int
-  included            Boolean?    @default(true)
-  types               Type[]
-  groupToolAccesses   PositionToolAccess[]
-  userToolAccesses    UserToolAccess[]
+  id                      String       @id @default(uuid())
+  parent_id               String?
+  name                    String
+  icon                    String
+  link                    String
+  description             String?
+  order                   Int
+  included                Boolean?    @default(true)
+  types                   Type[]
+  groupToolAccesses       GroupToolAccess[]
+  positionToolAccesses    PositionToolAccess[]
+  userToolAccesses        UserToolAccess[]
 }
 
 model BranchImage {
@@ -127,26 +129,37 @@ enum Role {
   EMPLOYEE
 }
 
-model PositionToolAccess {
+model GroupToolAccess {
   id          String                 @id @default(uuid())
-  position    Position               @relation(fields: [positionId], references: [uuid])
-  positionId  String
+  group       Group                  @relation(fields: [groupName], references: [name])
+  groupName   String
   tool        Tool                   @relation(fields: [toolId], references: [id])
   toolId      String
   accessLevel AccessLevel
 
-  @@unique([positionId, toolId])
+  @@unique([groupName, toolId], name: "groupName_toolId")
+}
+
+model PositionToolAccess {
+  id            String                 @id @default(uuid())
+  position      Position               @relation(fields: [positionName], references: [name])
+  positionName  String
+  tool          Tool                   @relation(fields: [toolId], references: [id])
+  toolId        String
+  accessLevel   AccessLevel
+
+  @@unique([positionName, toolId], name: "positionName_toolId")
 }
 
 model UserToolAccess {
-  id          Int         @id @default(autoincrement())
+  id          String      @id @default(uuid())
   user        User        @relation(fields: [userId], references: [id])
   userId      String
   tool        Tool        @relation(fields: [toolId], references: [id])
   toolId      String
   accessLevel AccessLevel
 
-  @@unique([userId, toolId])
+  @@unique([userId, toolId], name: "userId_toolId")
 }
 
 enum AccessLevel {

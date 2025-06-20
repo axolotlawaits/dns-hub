@@ -37,6 +37,8 @@ import Birthday from '../app/Birthday'
 import ProfileInfo from './profile/ProfileInfo'
 import Profile from './profile/Profile'
 import Management from './profile/Management'
+import ProtectedRoute from '../components/ProtectedRoute'
+import NoAccess from '../components/NoAccess'
 
 function App() {
   const { user } = useUserContext()
@@ -73,26 +75,29 @@ function App() {
                 <Route path='/birthday' element={<Birthday />} />
                 <Route path='/finance' element={<Finance />} />
                 <Route path='/accounting' element={<Accounting />} />
-                  <Route path="/accounting/supply-docs" element={<SupplyDocs />} />
                 <Route path='/add' element={<Adds />} />
-                    <Route path="/add/media" element={<Media />} />
                 <Route path='/aho' element={<Aho />} />
-                  <Route path="/aho/meter-reading" element={<MeterReading />} />
-                    <Route path="/aho/correspondence" element={<Correspondence />} />
                 <Route path='/automation' element={<Automation />} />
                 <Route path='/jurists' element={<Jurists />} />
                 <Route path='/problem-books' element={<ProblemBooks />} />
                 <Route path='/service' element={<Service />} />
                 <Route path='/settlements' element={<Settlements />} />
                 <Route path='/retail' element={<Retail />} />
-                    <Route path='/retail/print-service' element={<PrintService />} />
                 <Route path='/supply' element={<Supply />} />
-                  <Route path='/supply/loaders' element={<LoadersHome />} />
-                  <Route path='/supply/loaders/route/:id' element={<RouteComponent />} />
                 <Route path='/transformation' element={<Transformation />} />
                 <Route path='/search/*' element={<Handbook />} />
                 <Route path='/branch/:id' element={<Branch />} />
                 <Route path='/employee/:id' element={<Employee />} />
+                <Route path='/no-access' element={<NoAccess />} />
+                <Route element={<ProtectedRoute />}>
+                  <Route path="/aho/meter-reading" element={<MeterReading />} />
+                  <Route path="/aho/correspondence" element={<Correspondence />} />
+                  <Route path="/add/media" element={<Media />} />
+                  <Route path="/accounting/supply-docs" element={<SupplyDocs />} />
+                  <Route path='/retail/print-service' element={<PrintService />} />
+                  <Route path='/supply/loaders' element={<LoadersHome />} />
+                  <Route path='/supply/loaders/route/:id' element={<RouteComponent />} />
+                </Route>
               </Routes>
             </AppShell.Main>
             <Footer />
