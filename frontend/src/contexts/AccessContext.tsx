@@ -9,6 +9,7 @@ type Props = {
 
 type ToolAccessType = {
   toolId: string
+  link: string
   accessLevel: AccessLevel
 }
 

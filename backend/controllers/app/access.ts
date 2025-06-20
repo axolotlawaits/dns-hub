@@ -25,23 +25,38 @@ export const getFullAccessInfo = async (req: Request, res: Response): Promise<an
     const positionName = userPosAndGroup?.position?.name
 
     const [user, group, position] = await Promise.all([
-      prisma.userToolAccess.findMany({where: {userId}, select: {toolId: true, accessLevel: true}}),
-      prisma.groupToolAccess.findMany({where: {groupName}, select: {toolId: true, accessLevel: true}}),
-      prisma.positionToolAccess.findMany({where: {positionName}, select: {toolId: true, accessLevel: true}})
+      prisma.userToolAccess.findMany({where: {userId}, select: {
+        tool: {select: {id: true, link: true}}, accessLevel: true
+      }}),
+      prisma.groupToolAccess.findMany({where: {groupName}, select: {
+        tool: {select: {id: true, link: true}}, accessLevel: true
+      }}),
+      prisma.positionToolAccess.findMany({where: {positionName}, select: {
+        tool: {select: {id: true, link: true}}, accessLevel: true
+      }})
     ])
 
     if (user && group && position) {
       const combined = [...user, ...group, ...position]
       const levels: Record<AccessLevel, number> = { READONLY: 1, CONTRIBUTOR: 2, FULL: 3 }
-      const accessMap = new Map<string, {toolId: string, accessLevel: string}>()
-      
+
+      type FlattenedAccessEntry = {
+        toolId: string
+        link: string
+        accessLevel: AccessLevel
+      }
+      const accessMap = new Map<string, FlattenedAccessEntry>()
+
       for (const entry of combined) {
-        const existing = accessMap.get(entry.toolId)
+        const toolId = entry.tool.id
+        const link = entry.tool.link
+        const existing = accessMap.get(toolId)
+        
         if (!existing) {
-          accessMap.set(entry.toolId, entry)
+            accessMap.set(toolId, {toolId, link, accessLevel: entry.accessLevel})
         } else {
           if (levels[entry.accessLevel] > levels[existing.accessLevel as AccessLevel]) {
-            accessMap.set(entry.toolId, entry)
+            accessMap.set(toolId, {toolId, link, accessLevel: entry.accessLevel})
           }
         }
       }
