@@ -224,8 +224,9 @@ function Login() {
       
       if (response.ok) {
         localStorage.setItem(LAST_LOGIN_KEY, userData.login);
-        contextLogin(json);
-        localStorage.setItem('user', JSON.stringify(json));
+        contextLogin(json.user, json.token);
+        localStorage.setItem('user', JSON.stringify(json.user));
+        localStorage.setItem('token', JSON.stringify(json.token));
         navigate('/');
       } else {
         setValidationErrors(json.errors || {});

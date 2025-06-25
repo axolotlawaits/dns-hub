@@ -18,7 +18,8 @@ type Props = {
 
 type UserContextTypes = {
   user: User | null
-  login: (data: User) => void
+  token: string | null
+  login: (user: User, token: string) => void
   logout: () => void
 }
 
@@ -29,17 +30,20 @@ export const UserContextProvider = ({ children }: Props) => {
     const value = localStorage.getItem('user')
     if (value != null) return JSON.parse(value)
   })
+  const [token, setToken] = useState<string | null>(localStorage.getItem('token'))
 
-  const login = (data: User) => {
-    setUser(data)
+  const login = (user: User, token: string) => {
+    setUser(user)
+    setToken(token)
   }
 
   const logout = () => {
     setUser(null)
+    setToken(null)
   }
 
   return (
-    <UserContext.Provider value={{user, login, logout}}>
+    <UserContext.Provider value={{user, token, login, logout}}>
       {children}
     </UserContext.Provider>
   )

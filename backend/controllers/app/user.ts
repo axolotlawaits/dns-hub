@@ -1,5 +1,7 @@
 import { prisma } from "../../server.js";
 import { Request, Response } from "express";
+import jwt from 'jsonwebtoken'
+import { privateKey } from "../../server.js";
 
 // Существующая функция login (без изменений)
 export const login = async (req: Request, res: Response): Promise<any> => {
@@ -30,11 +32,26 @@ export const login = async (req: Request, res: Response): Promise<any> => {
       const newUser = await prisma.user.create({
         data: userData
       });
-      
-      console.log('New user created:', newUser);
-      return res.status(200).json(newUser);
+      const getGroupName = await prisma.position.findUnique({
+        where: {name: newUser.position},
+        select: {group: {select: {name: true}}}
+      })
+      const groupName = getGroupName?.group?.name
+      const payload = { userId: newUser.id, positionName: newUser.position, groupName }
+      const token = jwt.sign(payload, privateKey, { algorithm: 'RS256', expiresIn: '1h' })
+
+      return res.status(200).json({user: newUser, token})
     }
-    return res.status(200).json(user);
+
+    const getGroupName = await prisma.position.findUnique({
+        where: {name: user.position},
+        select: {group: {select: {name: true}}}
+      })
+    const groupName = getGroupName?.group?.name
+    const payload = { userId: user.id, positionName: user.position, groupName }
+    const token = jwt.sign(payload, privateKey, { algorithm: 'RS256', expiresIn: '1h' })
+    
+    return res.status(200).json({user, token})
   } catch (error) {
     console.error('Login error:', error);
     return res.status(500).json({ error: 'Login failed' });

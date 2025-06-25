@@ -20,10 +20,16 @@ import mediaRouter from './routes/add/media.js'
 import printServiceRouter from './routes/retail/printService.js'
 import schedule from 'node-schedule'
 import { scheduleRouteDay } from './controllers/supply/routeDay.js';
+import fs from 'fs'
 
 const app = express()
 export const prisma = new PrismaClient()
 const __dirname = path.resolve()
+
+export const privateKey = fs.readFileSync(path.join(__dirname, 'keys/private.key'), 'utf8');
+export const publicKey = fs.readFileSync(path.join(__dirname, 'keys/public.key'), 'utf8');
+
+
   
 app.use(cors())
 app.use(express.json())
