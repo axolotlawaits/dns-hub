@@ -1,4 +1,5 @@
 import { createContext, useState } from "react";
+import { API } from "../config/constants";
 
 export type User = {
   id: string
@@ -21,6 +22,7 @@ type UserContextTypes = {
   token: string | null
   login: (user: User, token: string) => void
   logout: () => void
+  refreshAccessToken: () => void
 }
 
 export const UserContext = createContext<UserContextTypes | undefined>(undefined)
@@ -42,8 +44,22 @@ export const UserContextProvider = ({ children }: Props) => {
     setToken(null)
   }
 
+  const refreshAccessToken = async () => {
+    const response = await fetch(`${API}/refresh-token`, {
+      method: 'POST',
+      credentials: 'include'
+    });
+
+    if (response.ok) {
+      const json = await response.json();
+      console.log(json)
+      setToken(json)
+      localStorage.setItem('token', JSON.stringify(json))
+    }
+  }
+
   return (
-    <UserContext.Provider value={{user, token, login, logout}}>
+    <UserContext.Provider value={{user, token, login, logout, refreshAccessToken}}>
       {children}
     </UserContext.Provider>
   )

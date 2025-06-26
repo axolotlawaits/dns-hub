@@ -1,21 +1,21 @@
 import { NextFunction, Request, Response } from 'express'
 import jwt from 'jsonwebtoken'
-import { publicKey, prisma } from '../server.js';
+import { accessPublicKey, refreshPublicKey, prisma, accessPrivateKey } from '../server.js';
 
 export const authenticateToken = async (req: Request, res: Response, next: NextFunction) => {
-  const authHeader = req.headers['authorization']
-
-  const token = authHeader && authHeader.split(' ')[1]
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) return res.sendStatus(401);
 
   try {
-    const token = jwt.verify(token, publicKey, { algorithms: ['RS256'] })
-    req.token = token;
-    console.log(token)
+    const decodedToken = jwt.verify(token, accessPublicKey, { algorithms: ['RS256'] });
+    req.token = decodedToken;
+
     next();
   } catch (err) {
-    return res.sendStatus(403);
+    console.log(err);
+    return res.sendStatus(401);
   }
 }
 
@@ -43,4 +43,21 @@ export const checkAccess = async (req: Request, res: Response, next: NextFunctio
   if (groupAccess) return next()
 
   return res.status(403).json({ message: 'Access denied' });
+}
+
+export const refreshToken = async (req: Request, res: Response): Promise<any> => {
+  const token = req.cookies.refreshToken
+
+  if (!token) {
+    return res.status(401).json({ message: 'No refresh token provided' });
+  }
+  jwt.verify(token, refreshPublicKey, async (err, payload) => {
+    if (err) {
+      return res.status(403).json({ message: 'Invalid refresh token' });
+    }
+
+    const newAccessToken = jwt.sign(payload, accessPrivateKey, { algorithm: 'RS256', expiresIn: '1m' })
+
+    res.json(newAccessToken)
+  });
 }
