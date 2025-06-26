@@ -25,6 +25,7 @@ function Handbook() {
     const json = await response.json()
     if (response.ok) {
       setBranches(json.branches)
+      console.log(json.users)
       setEmployees(json.users)
       setTools(json.tools)
     }
@@ -34,7 +35,6 @@ function Handbook() {
     const response = await fetch(`${API}/search/branch?text=${query}&city=${cityFilter || ''}`)
     const json = await response.json()
     if (response.ok) {
-      console.log(json)
       setBranches(json)
     }
   }
@@ -43,6 +43,7 @@ function Handbook() {
     const response = await fetch(`${API}/search/employee?text=${query}&position=${positionFilter || ''}`)
     const json = await response.json()
     if (response.ok) {
+      console.log(json)
       setEmployees(json)
     }
   }
@@ -90,7 +91,7 @@ function Handbook() {
     setPositionFilter('')
     getSearchResults()
   }
-
+  console.log(employees[0]?.position?.name)
   return (
     <div id="search-page">
       <div id="search-filters">
@@ -154,11 +155,12 @@ function Handbook() {
         <div className="employee-cards-wrapper">
           <h2>Сотрудники</h2>
           {employees.map(employee => {
+            console.log(employee)
             return (
               <div key={employee.uuid} className="employee-card">
                 <h1 className="employee-card-title">{employee.fio}</h1>
                 <div className="employee-info">
-                  <span>Должность: {employee.position}</span>
+                  <span>Должность: {employee.position.name}</span>
                   <span>Почта: {employee.email}</span>
                   <span>Статус: {employee.status}</span>
                   <span>Филиал: {employee.branch.name}</span>

@@ -3,10 +3,15 @@ import { API } from "../../config/constants"
 import { useEffect, useState } from "react"
 import { BranchType } from "./Branch"
 
+export type PositionType = {
+  uuid: string
+  name: string
+}
+
 export type EmployeeType = {
   uuid: string
   fio: string
-  position: string
+  position: PositionType
   email: string
   status: string
   branch: BranchType

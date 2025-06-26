@@ -1,3 +1,9 @@
+-- CreateEnum
+CREATE TYPE "Role" AS ENUM ('DEVELOPER', 'ADMIN', 'SUPERVISOR', 'EMPLOYEE');
+
+-- CreateEnum
+CREATE TYPE "AccessLevel" AS ENUM ('READONLY', 'CONTRIBUTOR', 'FULL');
+
 -- CreateTable
 CREATE TABLE "UserData" (
     "uuid" TEXT NOT NULL,
@@ -5,7 +11,7 @@ CREATE TABLE "UserData" (
     "fio" TEXT NOT NULL,
     "code" TEXT NOT NULL,
     "branch_uuid" TEXT NOT NULL,
-    "position" TEXT NOT NULL,
+    "positionId" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "status" TEXT NOT NULL,
     "start_date" TIMESTAMP(3) NOT NULL,
@@ -13,6 +19,24 @@ CREATE TABLE "UserData" (
     "last_update" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "UserData_pkey" PRIMARY KEY ("uuid")
+);
+
+-- CreateTable
+CREATE TABLE "Position" (
+    "uuid" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "groupUuid" TEXT NOT NULL,
+
+    CONSTRAINT "Position_pkey" PRIMARY KEY ("uuid")
+);
+
+-- CreateTable
+CREATE TABLE "Group" (
+    "uuid" TEXT NOT NULL,
+    "uuidPosition" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+
+    CONSTRAINT "Group_pkey" PRIMARY KEY ("uuid")
 );
 
 -- CreateTable
@@ -80,8 +104,39 @@ CREATE TABLE "User" (
     "image" TEXT,
     "login" TEXT NOT NULL,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "role" "Role" NOT NULL DEFAULT 'EMPLOYEE',
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "GroupToolAccess" (
+    "id" TEXT NOT NULL,
+    "groupName" TEXT NOT NULL,
+    "toolId" TEXT NOT NULL,
+    "accessLevel" "AccessLevel" NOT NULL,
+
+    CONSTRAINT "GroupToolAccess_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PositionToolAccess" (
+    "id" TEXT NOT NULL,
+    "positionName" TEXT NOT NULL,
+    "toolId" TEXT NOT NULL,
+    "accessLevel" "AccessLevel" NOT NULL,
+
+    CONSTRAINT "PositionToolAccess_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "UserToolAccess" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "toolId" TEXT NOT NULL,
+    "accessLevel" "AccessLevel" NOT NULL,
+
+    CONSTRAINT "UserToolAccess_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -220,7 +275,6 @@ CREATE TABLE "Media" (
     "userAddId" TEXT NOT NULL,
     "userUpdatedId" TEXT,
     "name" TEXT,
-    "sketch" TEXT,
     "information" TEXT,
     "urlMedia2" TEXT,
     "typeContentId" TEXT,
@@ -260,10 +314,25 @@ CREATE TABLE "PrintService" (
 CREATE UNIQUE INDEX "UserData_email_key" ON "UserData"("email");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Position_name_key" ON "Position"("name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Group_name_key" ON "Group"("name");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "User_login_key" ON "User"("login");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "GroupToolAccess_groupName_toolId_key" ON "GroupToolAccess"("groupName", "toolId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PositionToolAccess_positionName_toolId_key" ON "PositionToolAccess"("positionName", "toolId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "UserToolAccess_userId_toolId_key" ON "UserToolAccess"("userId", "toolId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Route_name_key" ON "Route"("name");
@@ -275,10 +344,34 @@ CREATE UNIQUE INDEX "RouteDay_day_key" ON "RouteDay"("day");
 ALTER TABLE "UserData" ADD CONSTRAINT "UserData_branch_uuid_fkey" FOREIGN KEY ("branch_uuid") REFERENCES "Branch"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "UserData" ADD CONSTRAINT "UserData_positionId_fkey" FOREIGN KEY ("positionId") REFERENCES "Position"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Position" ADD CONSTRAINT "Position_groupUuid_fkey" FOREIGN KEY ("groupUuid") REFERENCES "Group"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Type" ADD CONSTRAINT "Type_model_uuid_fkey" FOREIGN KEY ("model_uuid") REFERENCES "Tool"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "BranchImage" ADD CONSTRAINT "BranchImage_branch_uuid_fkey" FOREIGN KEY ("branch_uuid") REFERENCES "Branch"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "GroupToolAccess" ADD CONSTRAINT "GroupToolAccess_groupName_fkey" FOREIGN KEY ("groupName") REFERENCES "Group"("name") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "GroupToolAccess" ADD CONSTRAINT "GroupToolAccess_toolId_fkey" FOREIGN KEY ("toolId") REFERENCES "Tool"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PositionToolAccess" ADD CONSTRAINT "PositionToolAccess_positionName_fkey" FOREIGN KEY ("positionName") REFERENCES "Position"("name") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PositionToolAccess" ADD CONSTRAINT "PositionToolAccess_toolId_fkey" FOREIGN KEY ("toolId") REFERENCES "Tool"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "UserToolAccess" ADD CONSTRAINT "UserToolAccess_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "UserToolAccess" ADD CONSTRAINT "UserToolAccess_toolId_fkey" FOREIGN KEY ("toolId") REFERENCES "Tool"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "News" ADD CONSTRAINT "News_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
