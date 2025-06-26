@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { prisma } from '../../server';
+import { prisma } from '../../server.js';
 
 // Получение данных пользователя и связанных данных филиала по email
 export const getUserDataByEmail = async (

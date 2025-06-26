@@ -10,7 +10,7 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
 
   try {
     const decodedToken = jwt.verify(token, accessPublicKey, { algorithms: ['RS256'] });
-    req.token = decodedToken;
+    (req as any).token = decodedToken;
 
     next();
   } catch (err) {
@@ -20,7 +20,7 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
 }
 
 export const checkAccess = async (req: Request, res: Response, next: NextFunction) => {
-  const { userId, positionName, groupName } = req.token
+  const { userId, positionName, groupName } = (req as any).token
   /* need to get toolId here */
   const temp = 'dd6ec264-4e8c-477a-b2d6-c62a956422c0'
 
@@ -51,7 +51,7 @@ export const refreshToken = async (req: Request, res: Response): Promise<any> =>
   if (!token) {
     return res.status(401).json({ message: 'No refresh token provided' });
   }
-  jwt.verify(token, refreshPublicKey, async (err, payload) => {
+  jwt.verify(token, refreshPublicKey, async (err: any, payload: any) => {
     if (err) {
       return res.status(403).json({ message: 'Invalid refresh token' });
     }

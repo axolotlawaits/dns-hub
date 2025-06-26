@@ -94,10 +94,10 @@ function App() {
                   <Route path="/aho/correspondence" element={<Correspondence />} />
                   <Route path="/add/media" element={<Media />} />
                   <Route path="/accounting/supply-docs" element={<SupplyDocs />} />
-                  <Route path='/retail/print-service' element={<PrintService />} />
                   <Route path='/supply/loaders' element={<LoadersHome />} />
                   <Route path='/supply/loaders/route/:id' element={<RouteComponent />} />
                 </Route>
+                <Route path='/retail/print-service' element={<PrintService />} />
               </Routes>
             </AppShell.Main>
             <Footer />
