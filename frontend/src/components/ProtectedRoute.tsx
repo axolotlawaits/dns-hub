@@ -6,7 +6,10 @@ const ProtectedRoute = () => {
   const location = useLocation()
   
   const path = location.pathname.replace(/^\//, '')
-  const hasAccess = access.some((tool) => tool.link === path)
+  const parts = path.split('/')
+  const toolDir = parts.slice(0, 2).join('/')
+
+  const hasAccess = access.some((tool) => tool.link === toolDir)
 
   return !hasAccess ? <Navigate to="/no-access" replace /> : <Outlet />
 }

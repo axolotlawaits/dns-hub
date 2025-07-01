@@ -63,7 +63,7 @@ function LoadersHome() {
       close()
     }
   }
-  console.log(filialsData)
+
   return (
     <div id='routes-page-wrapper'>
       <Button onClick={open}>создать новый маршрут</Button>

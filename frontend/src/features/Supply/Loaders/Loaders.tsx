@@ -1,4 +1,4 @@
-import { ActionIcon, Stack } from "@mantine/core"
+import { ActionIcon, NumberInput, Stack } from "@mantine/core"
 import { TimeInput } from "@mantine/dates"
 import { IconClock } from "@tabler/icons-react";
 import { useRef, useState } from "react";
@@ -12,13 +12,15 @@ export type LoaderType = {
 type LoadersProps = {
   index: number
   handleLoadersData: (time: string, index: number, isStart: boolean) => void
+  handleLoadersAmount: (index: number, amount: number) => void
 }
 
-function Loaders({index, handleLoadersData}: LoadersProps) {
+function Loaders({index, handleLoadersData, handleLoadersAmount}: LoadersProps) {
   const startTimeRef = useRef<HTMLInputElement>(null)
   const [startTime, setStartTime] = useState('')
   const endTimeRef = useRef<HTMLInputElement>(null)
   const [endTime, setEndTime] = useState('')
+  const [amount, setAmount] = useState<string | number>(1)
 
   const pickerControl = (
     <ActionIcon variant="subtle" color="gray" onClick={() => startTimeRef.current?.showPicker()}>
@@ -42,9 +44,14 @@ function Loaders({index, handleLoadersData}: LoadersProps) {
     handleLoadersData(time, index, isStart)
   }
 
+  const updateLoadersAmount = (amount: number | string) => {
+    console.log(typeof amount)
+    setAmount(amount)
+    handleLoadersAmount(index, Number(amount))
+  }
+
   return (
     <Stack gap={10}>
-      <p>{`Грузчик ${index + 1}`}</p>
       <p>Время начала</p>
       <TimeInput 
         value={startTime}
@@ -59,6 +66,8 @@ function Loaders({index, handleLoadersData}: LoadersProps) {
         ref={endTimeRef} 
         rightSection={pickerControl2}
       />
+      <p>Кол-во грузчиков с данным временем</p>
+      <NumberInput value={amount} onChange={updateLoadersAmount}></NumberInput>
     </Stack>
   )
 }
