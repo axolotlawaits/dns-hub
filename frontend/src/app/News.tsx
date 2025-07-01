@@ -11,13 +11,14 @@ import {
   Group, 
   ActionIcon,
   Box,
-  LoadingOverlay
+  LoadingOverlay,
+  ThemeIcon
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { useUserContext } from '../hooks/useUserContext';
 import dayjs from 'dayjs';
 import TiptapEditor from '../utils/editor';
-import { IconPencil, IconTrash } from '@tabler/icons-react';
+import { IconNews, IconPencil, IconTrash } from '@tabler/icons-react';
 import './styles/News.css'
 import { useThemeContext } from '../hooks/useThemeContext';
 
@@ -147,7 +148,12 @@ export default function NewsList() {
       >
         Добавить новость
       </Button>
-      <Title order={2} mt="md" mb="lg">Последние новости</Title>
+        <Group gap="xs">
+          <ThemeIcon variant="light" color="blue" size="lg" radius="xl">
+            <IconNews size={18} />
+          </ThemeIcon>
+          <Title order={2} mt="md" mb="lg">Последние новости</Title>
+        </Group>
       {news.length === 0 ? (
         <Text color="dimmed">Пока нет новостей</Text>
       ) : (

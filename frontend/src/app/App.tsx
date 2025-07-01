@@ -39,6 +39,7 @@ import Profile from './profile/Profile'
 import Management from './profile/Management'
 import ProtectedRoute from '../components/ProtectedRoute'
 import NoAccess from '../components/NoAccess'
+import Bookmarks from './Bookmarks'
 
 function App() {
   const { user } = useUserContext()
@@ -73,6 +74,7 @@ function App() {
                   <Route path='/profile/info' element={<ProfileInfo />} />
                   <Route path='/profile/management' element={user.role !== 'EMPLOYEE' ? <Management /> : <Navigate to='/' />} />
                 <Route path='/birthday' element={<Birthday />} />
+                <Route path='/bookmarks' element={<Bookmarks />} />
                 <Route path='/finance' element={<Finance />} />
                 <Route path='/accounting' element={<Accounting />} />
                 <Route path='/add' element={<Adds />} />

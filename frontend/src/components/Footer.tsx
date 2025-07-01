@@ -1,19 +1,72 @@
 import { AppShell, Loader, Group, Popover, Stack, Text, Divider, Box } from "@mantine/core";
 import { IconBasket, IconBriefcase, IconCube, IconNews } from "@tabler/icons-react";
 import { useWeather, WeatherCondition } from "../app/Weather";
-import { useState, useEffect, useCallback, useContext } from "react";
+import { useState, useEffect, useCallback, useContext, useMemo } from "react";
 import DatePicker from "react-datepicker";
-import { registerLocale } from "react-datepicker";
-import { ru } from "date-fns/locale/ru";
 import "react-datepicker/dist/react-datepicker.css";
 import dayjs from "dayjs";
 import 'dayjs/locale/ru';
 import "./styles/Footer.css";
 import { ThemeContext } from "../contexts/ThemeContext";
 
-// Регистрируем русскую локаль для календаря
-registerLocale('ru', ru);
-dayjs.locale('ru');
+interface ForecastDay {
+  date: string;
+  day: {
+    avgtemp_c: number;
+    condition: {
+      text: string;
+    };
+  };
+}
+
+const WEATHER_API_KEY = '7a61de9f85134f88a9273945250904';
+const FORECAST_DAYS = 3;
+
+const navLinks = [
+  {
+    href: "https://dns-shop.ru",
+    icon: IconBasket,
+    name: "DNS-Shop",
+    description: "Магазин"
+  },
+  {
+    href: "https://dns-zs.partner.ru/uweb",
+    icon: IconCube,
+    name: "Uweb",
+    description: "3D планограммы"
+  },
+  {
+    href: "https://docs.dns-shop.ru/",
+    icon: IconBriefcase,
+    name: "Docs",
+    description: "Документация"
+  },
+  {
+    href: "https://ecosystem.dns-shop.ru/stream",
+    icon: IconNews,
+    name: "EcoSystem",
+    description: "Новости компании"
+  }
+];
+
+const getWeatherIcon = (condition: WeatherCondition) => {
+  const icons = {
+    clear: "☀️",
+    cloudy: "☁️",
+    rain: "🌧️",
+    snow: "❄️",
+    default: "🌤️"
+  };
+  
+  return icons[condition] || icons.default;
+};
+
+const getDayWeatherIcon = (conditionText: string) => {
+  if (conditionText.toLowerCase().includes("дождь")) return "🌧️";
+  if (conditionText.toLowerCase().includes("снег")) return "❄️";
+  if (conditionText.toLowerCase().includes("облач")) return "☁️";
+  return "☀️";
+};
 
 function Footer() {
   const themeContext = useContext(ThemeContext);
@@ -23,35 +76,45 @@ function Footer() {
   const { location, weatherCondition, isWeatherLoading } = useWeather();
   
   // Состояния для погоды
-  const [forecast, setForecast] = useState<any[]>([]);
+  const [forecast, setForecast] = useState<ForecastDay[]>([]);
   const [weatherOpened, setWeatherOpened] = useState(false);
   const [currentTemp, setCurrentTemp] = useState<number | null>(null);
 
   // Состояния для даты и времени
-  const [currentTime, setCurrentTime] = useState<string>("");
-  const [currentDate, setCurrentDate] = useState<string>("");
+  const [currentTime, setCurrentTime] = useState("");
+  const [currentDate, setCurrentDate] = useState("");
   const [calendarOpened, setCalendarOpened] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
 
-  // Загрузка текущей температуры при монтировании
-  useEffect(() => {
-    const fetchCurrentWeather = async () => {
-      try {
-        const response = await fetch(
-          `https://api.weatherapi.com/v1/current.json?key=7a61de9f85134f88a9273945250904&q=auto:ip`
-        );
-        
-        if (!response.ok) throw new Error("Ошибка получения погоды");
-        
-        const data = await response.json();
-        setCurrentTemp(Math.round(data.current.temp_c));
-      } catch (error) {
-        console.error("Ошибка погоды:", error);
+  // Загрузка текущей температуры и прогноза
+  const fetchWeatherData = useCallback(async () => {
+    try {
+      // Параллельная загрузка текущей погоды и прогноза
+      const [currentResponse, forecastResponse] = await Promise.all([
+        fetch(`https://api.weatherapi.com/v1/current.json?key=${WEATHER_API_KEY}&q=auto:ip`),
+        fetch(`https://api.weatherapi.com/v1/forecast.json?key=${WEATHER_API_KEY}&q=auto:ip&days=5`)
+      ]);
+
+      if (!currentResponse.ok || !forecastResponse.ok) {
+        throw new Error("Ошибка получения данных о погоде");
       }
-    };
-    
-    fetchCurrentWeather();
+
+      const [currentData, forecastData] = await Promise.all([
+        currentResponse.json(),
+        forecastResponse.json()
+      ]);
+
+      setCurrentTemp(Math.round(currentData.current.temp_c));
+      setForecast(forecastData.forecast.forecastday);
+    } catch (error) {
+      console.error("Ошибка при загрузке данных о погоде:", error);
+    }
   }, []);
+
+  // Загрузка данных о погоде при монтировании
+  useEffect(() => {
+    fetchWeatherData();
+  }, [fetchWeatherData]);
 
   // Обновление времени
   useEffect(() => {
@@ -69,74 +132,58 @@ function Footer() {
     return () => clearInterval(timer);
   }, []);
 
-  // Загрузка прогноза погоды
-  const fetchForecast = useCallback(async () => {
-    try {
-      const response = await fetch(
-        `https://api.weatherapi.com/v1/forecast.json?key=7a61de9f85134f88a9273945250904&q=auto:ip&days=5`
-      );
-      
-      if (!response.ok) throw new Error("Ошибка получения прогноза");
-      
-      const data = await response.json();
-      setForecast(data.forecast.forecastday);
-    } catch (error) {
-      console.error("Ошибка прогноза:", error);
+  // Загрузка прогноза при открытии попапа погоды
+  const handleWeatherClick = useCallback(() => {
+    const newState = !weatherOpened;
+    setWeatherOpened(newState);
+    if (newState && forecast.length === 0) {
+      fetchWeatherData();
     }
-  }, []);
+  }, [weatherOpened, forecast.length, fetchWeatherData]);
 
-  // Получение иконки погоды
-  const getWeatherIcon = (condition: WeatherCondition) => {
-    switch (condition) {
-      case "clear": return "☀️";
-      case "cloudy": return "☁️";
-      case "rain": return "🌧️";
-      case "snow": return "❄️";
-      default: return "🌤️";
-    }
-  };
+  // Мемоизированное отображение прогноза
+  const forecastDisplay = useMemo(() => (
+    forecast.slice(0, FORECAST_DAYS).map((day) => (
+      <Group key={day.date} justify="space-between">
+        <Text size="sm">{dayjs(day.date).format('dd DD.MM')}</Text>
+        <Text size="sm" fw={500}>{Math.round(day.day.avgtemp_c)}°C</Text>
+        <Text size="sm">{getDayWeatherIcon(day.day.condition.text)}</Text>
+      </Group>
+    ))
+  ), [forecast]);
 
   return (
     <AppShell.Footer id="footer-wrapper">
       <div id="footer">
         <div id="footer-nav">
           {/* Основные ссылки */}
-          <a href="https://dns-shop.ru" className="footer-nav-option" target="_blank" rel="noopener noreferrer">
-            <IconBasket size={35} />
-            <div className="footer-nav-text">
-              <span className="footer-nav-name">DNS-Shop</span>
-              <span className="footer-nav-description">Магазин</span>
-            </div>
-          </a>
-          
-          <a href="https://dns-zs.partner.ru/uweb" className="footer-nav-option" target="_blank" rel="noopener noreferrer">
-            <IconCube size={35} />
-            <div className="footer-nav-text">
-              <span className="footer-nav-name">Uweb</span>
-              <span className="footer-nav-description">3D планограммы</span>
-            </div>
-          </a>
-          
-          <a href="https://docs.dns-shop.ru/" className="footer-nav-option" target="_blank" rel="noopener noreferrer">
-            <IconBriefcase size={35} />
-            <div className="footer-nav-text">
-              <span className="footer-nav-name">Docs</span>
-              <span className="footer-nav-description">Документация</span>
-            </div>
-          </a>
-          
-          <a href="https://ecosystem.dns-shop.ru/stream" className="footer-nav-option" target="_blank" rel="noopener noreferrer">
-            <IconNews size={35} />
-            <div className="footer-nav-text">
-              <span className="footer-nav-name">EcoSystem</span>
-              <span className="footer-nav-description">Новости компании</span>
-            </div>
-          </a>
+          {navLinks.map((link) => {
+            const Icon = link.icon;
+            return (
+              <a 
+                key={link.href}
+                href={link.href} 
+                className="footer-nav-option" 
+                target="_blank" 
+                rel="noopener noreferrer"
+              >
+                <Icon size={35} />
+                <div className="footer-nav-text">
+                  <span className="footer-nav-name">{link.name}</span>
+                  <span className="footer-nav-description">{link.description}</span>
+                </div>
+              </a>
+            );
+          })}
 
           {/* Правый блок с разделителем */}
           <div className="footer-right-section">
             <Divider orientation="vertical" className="footer-divider" />
             
+
+            
+            {/* Отступ между погодой и календарем */}
+            <Box w={10} />
             {/* Погода */}
             <Popover 
               opened={weatherOpened} 
@@ -147,10 +194,7 @@ function Footer() {
               <Popover.Target>
                 <div 
                   className="footer-weather-option" 
-                  onClick={() => {
-                    if (!weatherOpened && forecast.length === 0) fetchForecast();
-                    setWeatherOpened(!weatherOpened);
-                  }}
+                  onClick={handleWeatherClick}
                 >
                   {isWeatherLoading ? (
                     <Loader size="sm" />
@@ -167,25 +211,11 @@ function Footer() {
               </Popover.Target>
               <Popover.Dropdown>
                 <Stack gap="sm">
-                  <Text size="sm" fw={500}>Прогноз на 3 дня</Text>
-                  {forecast.slice(0, 3).map((day) => (
-                    <Group key={day.date} justify="space-between">
-                      <Text size="sm">{dayjs(day.date).format('dd DD.MM')}</Text>
-                      <Text size="sm" fw={500}>{Math.round(day.day.avgtemp_c)}°C</Text>
-                      <Text size="sm">
-                        {day.day.condition.text.toLowerCase().includes("дождь") ? "🌧️" :
-                        day.day.condition.text.toLowerCase().includes("снег") ? "❄️" :
-                        day.day.condition.text.toLowerCase().includes("облач") ? "☁️" : "☀️"}
-                      </Text>
-                    </Group>
-                  ))}
+                  <Text size="sm" fw={500}>Прогноз на {FORECAST_DAYS} дня</Text>
+                  {forecastDisplay}
                 </Stack>
               </Popover.Dropdown>
-            </Popover>
-            
-            {/* Отступ между погодой и календарем */}
-            <Box w={10} />
-            
+            </Popover>            
             {/* Календарь */}
             <Popover 
               opened={calendarOpened} 
@@ -194,32 +224,35 @@ function Footer() {
               classNames={{ dropdown: isDark ? 'dark-theme-dropdown' : '' }}
             >
               <Popover.Target>
-                <div className="footer-time-option" onClick={() => setCalendarOpened(!calendarOpened)}>
+                <div 
+                  className="footer-time-option" 
+                  onClick={() => setCalendarOpened(!calendarOpened)}
+                >
                   <div className="footer-time-text">
                     <span className="footer-time">{currentTime}</span>
                     <span className="footer-date">{currentDate}</span>
                   </div>
                 </div>
               </Popover.Target>
-                  <Popover.Dropdown p={0} bg="transparent">
-                    <DatePicker
-                      selected={selectedDate}
-                      onChange={(date) => {
-                        setSelectedDate(date);
-                        setCalendarOpened(false);
-                      }}
-                      inline
-                      locale="ru"
-                      calendarStartDay={1}
-                      showMonthDropdown
-                      showYearDropdown
-                      dropdownMode="select"
-                      dateFormat="dd.MM.yyyy"
-                      className={isDark ? "dark-theme-datepicker" : ""}
-                      popperClassName="no-border-popper"
-                      calendarClassName={isDark ? "dark-calendar" : ""}
-                    />
-                  </Popover.Dropdown>
+              <Popover.Dropdown p={0} bg="transparent">
+                <DatePicker
+                  selected={selectedDate}
+                  onChange={(date) => {
+                    setSelectedDate(date);
+                    setCalendarOpened(false);
+                  }}
+                  inline
+                  locale="ru"
+                  calendarStartDay={1}
+                  showMonthDropdown
+                  showYearDropdown
+                  dropdownMode="select"
+                  dateFormat="dd.MM.yyyy"
+                  className={isDark ? "dark-theme-datepicker" : ""}
+                  popperClassName="no-border-popper"
+                  calendarClassName={isDark ? "dark-calendar" : ""}
+                />
+              </Popover.Dropdown>
             </Popover>
           </div>
         </div>

@@ -9,6 +9,7 @@ import meterReadingRouter from './routes/aho/meterReading.js'
 import searchRouter from './routes/app/search.js'
 import profileRouter from './routes/app/profile.js'
 import birthdayRouter from './routes/app/birthday.js'
+import bookmarksRouter from './routes/app/bookmarks.js'
 import correspondenceRouter from './routes/aho/correspondence.js'
 import supplydocsRouter from './routes/accounting/supplydocs.js'
 import navigationRouter from './routes/app/navigation.js'
@@ -34,6 +35,7 @@ app.use('/hub-api/access', accessRouter)
 app.use('/hub-api/news', newsRouter)
 app.use('/hub-api/profile', profileRouter)
 app.use('/hub-api/birthday', birthdayRouter)
+app.use('/hub-api/bookmarks', bookmarksRouter)
 app.use('/hub-api/aho/meter-reading', meterReadingRouter)
 app.use('/hub-api/aho/correspondence', correspondenceRouter)
 app.use('/hub-api/accounting/supply-docs', supplydocsRouter)
@@ -46,6 +48,7 @@ app.use('/hub-api/retail/print-service', printServiceRouter);
 app.use('/hub-api/loaders/route', routeRouter)
 app.use('/hub-api/loaders/routeDay', routeDayRouter)
 app.use('/hub-api/loaders/filial', filialRouter)
+
 /* */
 
 app.use(express.static(path.join(__dirname, 'public')))
