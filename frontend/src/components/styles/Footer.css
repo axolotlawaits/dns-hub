@@ -1,0 +1,129 @@
+/* Правый блок с разделителем */
+.footer-right-section {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  height: 100%;
+}
+
+.footer-divider {
+  height: 60%;
+  margin: 0 16px;
+  align-self: center;
+  border-color: var(--mantine-color-gray-3);
+}
+
+/* Блок времени */
+.footer-time-option {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.footer-time-option:hover {
+  background-color: var(--footer-link-hover);
+}
+
+.footer-time-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.footer-time {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.footer-date {
+  font-size: 12px;
+  color: var(--mantine-color-dimmed);
+}
+
+/* Блок погоды */
+.footer-weather-option {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  gap: 8px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.footer-weather-option:hover {
+  background-color: var(--footer-link-hover);
+}
+
+.footer-weather-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.weather-icon {
+  font-size: 24px;
+}
+
+.weather-temp {
+  font-weight: 500;
+  font-size: 16px;
+}
+
+.weather-location {
+  font-size: 12px;
+  color: var(--mantine-color-dimmed);
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Календарь */
+.calendar-dropdown {
+  padding: 0;
+  border: none;
+  box-shadow: var(--mantine-shadow-md);
+}
+/* Темная тема для календаря */
+/* Полностью прозрачный контейнер */
+.no-border-popper {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+/* Темная тема для календаря */
+.dark-calendar {
+  background-color: var(--mantine-color-dark-7) !important;
+  border: none !important;
+  color: var(--mantine-color-gray-1) !important;
+}
+
+.dark-calendar .react-datepicker__header {
+  background-color: var(--mantine-color-dark-7) !important;
+  border-bottom: 1px solid var(--mantine-color-dark-5) !important;
+}
+
+.dark-calendar .react-datepicker__current-month,
+.dark-calendar .react-datepicker__day-name,
+.dark-calendar .react-datepicker__day {
+  color: var(--mantine-color-gray-1) !important;
+}
+
+.dark-calendar .react-datepicker__day:hover {
+  background-color: var(--mantine-color-dark-5) !important;
+}
+
+.dark-calendar .react-datepicker__day--selected {
+  background-color: var(--mantine-color-blue-6) !important;
+  color: white !important;
+}
+
+.dark-calendar .react-datepicker__day--today {
+  font-weight: bold;
+  color: var(--mantine-color-blue-4) !important;
+}
+
+.dark-calendar .react-datepicker__navigation-icon::before {
+  border-color: var(--mantine-color-gray-3) !important;
+}

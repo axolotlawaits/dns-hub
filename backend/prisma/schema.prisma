@@ -112,6 +112,7 @@ model User {
   correspondences         Correspondence[]
   attachments             CorrespondenceAttachment[]
   news                    News[]
+  bookmarks               Bookmarks[]
   meterReadings           MeterReading[]
   SupplyDocsAttachments   SupplyDocsAttachment[]
   SupplyDocs              SupplyDocs[]               @relation("SupplyDocs_SettlementSpecialist")
@@ -175,6 +176,15 @@ model News {
   user              User          @relation(fields: [userId], references: [id])
   userId            String          
   createdAt         DateTime      @default(now())
+}
+
+model Bookmarks{
+  id                String        @id @default(uuid())
+  name              String
+  url               String        @unique
+  user              User          @relation(fields: [userId], references: [id])
+  userId            String
+  order             Int           @default(0)
 }
 
 /* Instruments models */

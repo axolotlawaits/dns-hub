@@ -10,8 +10,11 @@ import 'dayjs/locale/ru'
 import { useThemeContext } from './hooks/useThemeContext.tsx'
 import '@mantine/carousel/styles.css'
 import { AccessContextProvider } from './contexts/AccessContext.tsx'
+import { registerLocale } from 'react-datepicker'
+import { ru } from 'date-fns/locale/ru'
 
-dayjs.locale('ru')
+registerLocale('ru', ru);
+dayjs.locale('ru');
 
 function Root() {
   const { isDark } = useThemeContext()

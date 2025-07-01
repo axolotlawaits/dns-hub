@@ -11,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@hello-pangea/dnd": "^18.0.1",
     "@mantine/carousel": "^7.17.4",
     "@mantine/core": "^7.17.4",
     "@mantine/dates": "^7.17.4",
