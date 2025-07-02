@@ -23,18 +23,18 @@ CREATE TABLE "UserData" (
 
 -- CreateTable
 CREATE TABLE "Position" (
-    "uuid" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
     "groupUuid" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "uuid" TEXT NOT NULL,
 
     CONSTRAINT "Position_pkey" PRIMARY KEY ("uuid")
 );
 
 -- CreateTable
 CREATE TABLE "Group" (
-    "uuid" TEXT NOT NULL,
     "uuidPosition" TEXT NOT NULL,
     "name" TEXT NOT NULL,
+    "uuid" TEXT NOT NULL,
 
     CONSTRAINT "Group_pkey" PRIMARY KEY ("uuid")
 );
@@ -122,9 +122,9 @@ CREATE TABLE "GroupToolAccess" (
 -- CreateTable
 CREATE TABLE "PositionToolAccess" (
     "id" TEXT NOT NULL,
-    "positionName" TEXT NOT NULL,
     "toolId" TEXT NOT NULL,
     "accessLevel" "AccessLevel" NOT NULL,
+    "positionName" TEXT NOT NULL,
 
     CONSTRAINT "PositionToolAccess_pkey" PRIMARY KEY ("id")
 );
@@ -148,6 +148,17 @@ CREATE TABLE "News" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "News_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Bookmarks" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "url" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "order" INTEGER NOT NULL DEFAULT 0,
+
+    CONSTRAINT "Bookmarks_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -335,6 +346,9 @@ CREATE UNIQUE INDEX "PositionToolAccess_positionName_toolId_key" ON "PositionToo
 CREATE UNIQUE INDEX "UserToolAccess_userId_toolId_key" ON "UserToolAccess"("userId", "toolId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Bookmarks_url_key" ON "Bookmarks"("url");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Route_name_key" ON "Route"("name");
 
 -- CreateIndex
@@ -368,13 +382,16 @@ ALTER TABLE "PositionToolAccess" ADD CONSTRAINT "PositionToolAccess_positionName
 ALTER TABLE "PositionToolAccess" ADD CONSTRAINT "PositionToolAccess_toolId_fkey" FOREIGN KEY ("toolId") REFERENCES "Tool"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "UserToolAccess" ADD CONSTRAINT "UserToolAccess_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "UserToolAccess" ADD CONSTRAINT "UserToolAccess_toolId_fkey" FOREIGN KEY ("toolId") REFERENCES "Tool"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "UserToolAccess" ADD CONSTRAINT "UserToolAccess_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "News" ADD CONSTRAINT "News_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Bookmarks" ADD CONSTRAINT "Bookmarks_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "MeterReading" ADD CONSTRAINT "MeterReading_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -392,19 +409,16 @@ ALTER TABLE "CorrespondenceAttachment" ADD CONSTRAINT "CorrespondenceAttachment_
 ALTER TABLE "RouteDay" ADD CONSTRAINT "RouteDay_routeId_fkey" FOREIGN KEY ("routeId") REFERENCES "Route"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Filial" ADD CONSTRAINT "Filial_routeId_fkey" FOREIGN KEY ("routeId") REFERENCES "Route"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Filial" ADD CONSTRAINT "Filial_routeDayId_fkey" FOREIGN KEY ("routeDayId") REFERENCES "RouteDay"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Filial" ADD CONSTRAINT "Filial_routeDayId_fkey" FOREIGN KEY ("routeDayId") REFERENCES "RouteDay"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Filial" ADD CONSTRAINT "Filial_routeId_fkey" FOREIGN KEY ("routeId") REFERENCES "Route"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Loader" ADD CONSTRAINT "Loader_filialId_fkey" FOREIGN KEY ("filialId") REFERENCES "Filial"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "SupplyDocs" ADD CONSTRAINT "SupplyDocs_addedById_fkey" FOREIGN KEY ("addedById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "SupplyDocs" ADD CONSTRAINT "SupplyDocs_statusRequirements_fkey" FOREIGN KEY ("statusRequirements") REFERENCES "Type"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "SupplyDocs" ADD CONSTRAINT "SupplyDocs_costBranchId_fkey" FOREIGN KEY ("costBranchId") REFERENCES "Branch"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -416,10 +430,16 @@ ALTER TABLE "SupplyDocs" ADD CONSTRAINT "SupplyDocs_settlementSpecialistId_fkey"
 ALTER TABLE "SupplyDocs" ADD CONSTRAINT "SupplyDocs_statusOfPTiU_fkey" FOREIGN KEY ("statusOfPTiU") REFERENCES "Type"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "SupplyDocs" ADD CONSTRAINT "SupplyDocs_statusRequirements_fkey" FOREIGN KEY ("statusRequirements") REFERENCES "Type"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "SupplyDocsAttachment" ADD CONSTRAINT "SupplyDocsAttachment_recordId_fkey" FOREIGN KEY ("recordId") REFERENCES "SupplyDocs"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "SupplyDocsAttachment" ADD CONSTRAINT "SupplyDocsAttachment_userAdd_fkey" FOREIGN KEY ("userAdd") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Media" ADD CONSTRAINT "Media_typeContentId_fkey" FOREIGN KEY ("typeContentId") REFERENCES "Type"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Media" ADD CONSTRAINT "Media_userAddId_fkey" FOREIGN KEY ("userAddId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -428,13 +448,10 @@ ALTER TABLE "Media" ADD CONSTRAINT "Media_userAddId_fkey" FOREIGN KEY ("userAddI
 ALTER TABLE "Media" ADD CONSTRAINT "Media_userUpdatedId_fkey" FOREIGN KEY ("userUpdatedId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Media" ADD CONSTRAINT "Media_typeContentId_fkey" FOREIGN KEY ("typeContentId") REFERENCES "Type"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "MediaAttachment" ADD CONSTRAINT "MediaAttachment_recordId_fkey" FOREIGN KEY ("recordId") REFERENCES "Media"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "MediaAttachment" ADD CONSTRAINT "MediaAttachment_userAddId_fkey" FOREIGN KEY ("userAddId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "MediaAttachment" ADD CONSTRAINT "MediaAttachment_recordId_fkey" FOREIGN KEY ("recordId") REFERENCES "Media"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "PrintService" ADD CONSTRAINT "PrintService_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES "Branch"("uuid") ON DELETE RESTRICT ON UPDATE CASCADE;

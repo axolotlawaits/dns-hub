@@ -1,126 +1,328 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
-/* Handbook models */
-
 model UserData {
-  uuid                                String                 @id @default(uuid())
-  birthday                            DateTime         
-  fio                                 String         
-  code                                String         
-  branch                              Branch                 @relation(fields: [branch_uuid], references: [uuid])
-  branch_uuid                         String         
-  positionId                          String                 
-  email                               String                 @unique
-  status                              String         
-  start_date                          DateTime         
-  end_date                            DateTime         
-  last_update                         DateTime               @updatedAt
-  position                            Position?              @relation(fields: [positionId], references: [uuid])
+  uuid        String   @id @default(uuid())
+  birthday    DateTime
+  fio         String
+  code        String
+  branch_uuid String
+  positionId  String
+  email       String   @unique
+  status      String
+  start_date  DateTime
+  end_date    DateTime
+  last_update DateTime @updatedAt
+  branch      Branch   @relation(fields: [branch_uuid], references: [uuid])
+  position    Position @relation(fields: [positionId], references: [uuid])
 }
 
-model Position{
-  uuid                                String                 @id @default(uuid())
-  name                                String                 @unique
-  userData                            UserData[]
-  positionToolAccesses                PositionToolAccess[] 
-  groupUuid                           String             
-  group                               Group?                 @relation(fields: [groupUuid], references: [uuid])
+model Position {
+  groupUuid            String
+  name                 String               @unique
+  uuid                 String               @id @default(uuid())
+  group                Group                @relation(fields: [groupUuid], references: [uuid])
+  positionToolAccesses PositionToolAccess[]
+  userData             UserData[]
 }
 
-model Group{
-  uuid                                String              @id @default(uuid())
-  uuidPosition                        String          
-  positions                           Position[]
-  name                                String              @unique
-  groupToolAccesses                   GroupToolAccess[] 
+model Group {
+  uuidPosition      String
+  name              String            @unique
+  uuid              String            @id @default(uuid())
+  groupToolAccesses GroupToolAccess[]
+  positions         Position[]
 }
 
 model Branch {
-  uuid                                String                 @id @default(uuid())
-  division                            String          
-  code                                String
-  rrs                                 String
-  name                                String
-  status                              Int
-  city                                String
-  address                             String
-  last_update                         DateTime
-  latitude                            Float
-  longitude                           Float
-  totalArea                           Int
-  tradingArea                         Int
-  warehouseArea                       Int
-  type                                String
-  userData                            UserData[]
-  images                              BranchImage[]
-  supplyDocs SupplyDocs[]                                   @relation("SupplyDocs_Branch")
-  printService  PrintService[]                              @relation("BranchPrint")
+  uuid          String         @id @default(uuid())
+  division      String
+  code          String
+  rrs           String
+  name          String
+  status        Int
+  city          String
+  address       String
+  last_update   DateTime
+  latitude      Float
+  longitude     Float
+  totalArea     Int
+  tradingArea   Int
+  warehouseArea Int
+  type          String
+  images        BranchImage[]
+  printService  PrintService[] @relation("BranchPrint")
+  supplyDocs    SupplyDocs[]   @relation("SupplyDocs_Branch")
+  userData      UserData[]
 }
 
 model Type {
-  id                              String            @id @default(uuid())
-  model_uuid                      String      
-  chapter                         String      
-  name                            String      
-  colorHex                        String?     
-  Tool                            Tool              @relation(fields: [model_uuid], references: [id])
-  SupplyDocsRequirements          SupplyDocs[]      @relation("SupplyDocs_Requirements")
-  SupplyDocsPTiU                  SupplyDocs[]      @relation("SupplyDocs_PTiU")
-  Media                           Media[]           @relation("TypeMedia")
+  id                     String       @id @default(uuid())
+  model_uuid             String
+  chapter                String
+  name                   String
+  colorHex               String?
+  Media                  Media[]      @relation("TypeMedia")
+  SupplyDocsPTiU         SupplyDocs[] @relation("SupplyDocs_PTiU")
+  SupplyDocsRequirements SupplyDocs[] @relation("SupplyDocs_Requirements")
+  Tool                   Tool         @relation(fields: [model_uuid], references: [id])
 }
 
 model Tool {
-  id                      String       @id @default(uuid())
-  parent_id               String?
-  name                    String
-  icon                    String
-  link                    String
-  description             String?
-  order                   Int
-  included                Boolean?    @default(true)
-  types                   Type[]
-  groupToolAccesses       GroupToolAccess[]
-  positionToolAccesses    PositionToolAccess[]
-  userToolAccesses        UserToolAccess[]
+  id                   String               @id @default(uuid())
+  parent_id            String?
+  name                 String
+  icon                 String
+  link                 String
+  description          String?
+  order                Int
+  included             Boolean?             @default(true)
+  groupToolAccesses    GroupToolAccess[]
+  positionToolAccesses PositionToolAccess[]
+  types                Type[]
+  userToolAccesses     UserToolAccess[]
 }
 
 model BranchImage {
-  id              String        @id @default(uuid())
-  link            String
-  branch          Branch        @relation(fields: [branch_uuid], references: [uuid])
-  branch_uuid     String
+  id          String @id @default(uuid())
+  link        String
+  branch_uuid String
+  branch      Branch @relation(fields: [branch_uuid], references: [uuid])
 }
 
-/* App models */
+/// App models
 model User {
-  id                      String                     @id @default(uuid())
-  name                    String
-  email                   String                     @unique
-  position                String
-  branch                  String
-  image                   String?
-  login                   String                     @unique
-  updatedAt               DateTime                   @updatedAt
-  role                    Role                       @default(EMPLOYEE)
-  correspondences         Correspondence[]
-  attachments             CorrespondenceAttachment[]
-  news                    News[]
-  bookmarks               Bookmarks[]
-  meterReadings           MeterReading[]
-  SupplyDocsAttachments   SupplyDocsAttachment[]
-  SupplyDocs              SupplyDocs[]               @relation("SupplyDocs_SettlementSpecialist")
-  AddedSupplyDocs         SupplyDocs[]               @relation("SupplyDocs_AddedBy")
-  MediaAttachment         MediaAttachment[]
-  MediaAdd                Media[]                    @relation("Media_UserAdd")
-  MediaUpdated            Media[]                    @relation("Media_UserUpdated")
-  userToolAccesses        UserToolAccess[]
+  id                    String                     @id @default(uuid())
+  name                  String
+  email                 String                     @unique
+  position              String
+  branch                String
+  image                 String?
+  login                 String                     @unique
+  updatedAt             DateTime                   @updatedAt
+  role                  Role                       @default(EMPLOYEE)
+  bookmarks             Bookmarks[]
+  correspondences       Correspondence[]
+  attachments           CorrespondenceAttachment[]
+  MediaAdd              Media[]                    @relation("Media_UserAdd")
+  MediaUpdated          Media[]                    @relation("Media_UserUpdated")
+  MediaAttachment       MediaAttachment[]
+  meterReadings         MeterReading[]
+  news                  News[]
+  AddedSupplyDocs       SupplyDocs[]               @relation("SupplyDocs_AddedBy")
+  SupplyDocs            SupplyDocs[]               @relation("SupplyDocs_SettlementSpecialist")
+  SupplyDocsAttachments SupplyDocsAttachment[]
+  userToolAccesses      UserToolAccess[]
+}
+
+model GroupToolAccess {
+  id          String      @id @default(uuid())
+  groupName   String
+  toolId      String
+  accessLevel AccessLevel
+  group       Group       @relation(fields: [groupName], references: [name])
+  tool        Tool        @relation(fields: [toolId], references: [id])
+
+  @@unique([groupName, toolId], name: "groupName_toolId")
+}
+
+model PositionToolAccess {
+  id           String      @id @default(uuid())
+  toolId       String
+  accessLevel  AccessLevel
+  positionName String
+  position     Position    @relation(fields: [positionName], references: [name])
+  tool         Tool        @relation(fields: [toolId], references: [id])
+
+  @@unique([positionName, toolId], name: "positionName_toolId")
+}
+
+model UserToolAccess {
+  id          String      @id @default(uuid())
+  userId      String
+  toolId      String
+  accessLevel AccessLevel
+  tool        Tool        @relation(fields: [toolId], references: [id])
+  user        User        @relation(fields: [userId], references: [id])
+
+  @@unique([userId, toolId], name: "userId_toolId")
+}
+
+model News {
+  id          String   @id @default(uuid())
+  name        String
+  description String
+  userId      String
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+model Bookmarks {
+  id     String @id @default(uuid())
+  name   String
+  url    String @unique
+  userId String
+  order  Int    @default(0)
+  user   User   @relation(fields: [userId], references: [id])
+}
+
+/// AXO
+model MeterReading {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  date      DateTime
+  userId    String
+  counter   Float
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Correspondence {
+  id          String                     @id @default(uuid())
+  createdAt   DateTime                   @default(now())
+  ReceiptDate DateTime
+  userAdd     String
+  from        String
+  to          String
+  content     String
+  typeMail    String
+  numberMail  String
+  user        User                       @relation(fields: [userAdd], references: [id])
+  attachments CorrespondenceAttachment[]
+}
+
+model CorrespondenceAttachment {
+  id             String         @id @default(uuid())
+  createdAt      DateTime       @default(now())
+  record_id      String
+  userAdd        String
+  source         String
+  correspondence Correspondence @relation(fields: [record_id], references: [id])
+  user           User           @relation(fields: [userAdd], references: [id])
+}
+
+model Route {
+  id         String     @id @default(uuid())
+  name       String     @unique
+  rrs        String
+  contractor String
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  filials    Filial[]
+  days       RouteDay[]
+}
+
+model RouteDay {
+  id        String   @id @default(uuid())
+  day       DateTime @unique
+  routeId   String
+  createdAt DateTime @default(now())
+  filials   Filial[]
+  route     Route    @relation(fields: [routeId], references: [id])
+}
+
+model Filial {
+  id         String    @id @default(uuid())
+  name       String
+  place      Int?
+  accepted   Boolean   @default(false)
+  feedback   String?
+  routeId    String
+  routeDayId String?
+  updatedAt  DateTime  @updatedAt
+  routeDay   RouteDay? @relation(fields: [routeDayId], references: [id])
+  route      Route     @relation(fields: [routeId], references: [id])
+  loaders    Loader[]
+}
+
+model Loader {
+  id        String   @id @default(uuid())
+  startTime DateTime
+  endTime   DateTime
+  filialId  String
+  filial    Filial   @relation(fields: [filialId], references: [id])
+}
+
+model SupplyDocs {
+  id                     String                 @id @default(uuid())
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime
+  addedById              String
+  inn                    Int
+  counterParty           String
+  demandsForPayment      String
+  statusRequirements     String
+  fileInvoicePayment     String
+  costBranchId           String
+  settlementSpecialistId String?
+  statusOfPTiU           String
+  filePTiU               String
+  note                   String
+  fileNote               String
+  requirementNumber      String
+  addedBy                User                   @relation("SupplyDocs_AddedBy", fields: [addedById], references: [id])
+  costBranch             Branch                 @relation("SupplyDocs_Branch", fields: [costBranchId], references: [uuid])
+  settlementSpecialist   User?                  @relation("SupplyDocs_SettlementSpecialist", fields: [settlementSpecialistId], references: [id])
+  statusOfPTiUId         Type                   @relation("SupplyDocs_PTiU", fields: [statusOfPTiU], references: [id])
+  statusRequirementsId   Type                   @relation("SupplyDocs_Requirements", fields: [statusRequirements], references: [id])
+  supplyDocs             SupplyDocsAttachment[]
+}
+
+model SupplyDocsAttachment {
+  id         String     @id @default(uuid())
+  createdAt  DateTime   @default(now())
+  userAdd    String
+  source     String
+  type       String
+  recordId   String
+  supplyDocs SupplyDocs @relation(fields: [recordId], references: [id])
+  user       User       @relation(fields: [userAdd], references: [id])
+}
+
+model Media {
+  id              String            @id @default(uuid())
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime?         @updatedAt
+  userAddId       String
+  userUpdatedId   String?
+  name            String?
+  information     String?
+  urlMedia2       String?
+  typeContentId   String?
+  typeContent     Type?             @relation("TypeMedia", fields: [typeContentId], references: [id])
+  userAdd         User              @relation("Media_UserAdd", fields: [userAddId], references: [id])
+  userUpdated     User?             @relation("Media_UserUpdated", fields: [userUpdatedId], references: [id])
+  MediaAttachment MediaAttachment[]
+}
+
+model MediaAttachment {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  userAddId String
+  source    String
+  type      String
+  recordId  String
+  media     Media    @relation(fields: [recordId], references: [id])
+  userAdd   User     @relation(fields: [userAddId], references: [id])
+}
+
+model PrintService {
+  id        String   @id @default(uuid())
+  branchId  String
+  tovarName String
+  tovarCode Int
+  price     Float
+  createdAt DateTime
+  updatedAt DateTime
+  brand     String
+  tovarId   String
+  format    Int
+  branch    Branch   @relation("BranchPrint", fields: [branchId], references: [uuid])
 }
 
 enum Role {
@@ -130,216 +332,8 @@ enum Role {
   EMPLOYEE
 }
 
-model GroupToolAccess {
-  id          String                 @id @default(uuid())
-  group       Group                  @relation(fields: [groupName], references: [name])
-  groupName   String
-  tool        Tool                   @relation(fields: [toolId], references: [id])
-  toolId      String
-  accessLevel AccessLevel
-
-  @@unique([groupName, toolId], name: "groupName_toolId")
-}
-
-model PositionToolAccess {
-  id            String                 @id @default(uuid())
-  position      Position               @relation(fields: [positionName], references: [name])
-  positionName  String
-  tool          Tool                   @relation(fields: [toolId], references: [id])
-  toolId        String
-  accessLevel   AccessLevel
-
-  @@unique([positionName, toolId], name: "positionName_toolId")
-}
-
-model UserToolAccess {
-  id          String      @id @default(uuid())
-  user        User        @relation(fields: [userId], references: [id])
-  userId      String
-  tool        Tool        @relation(fields: [toolId], references: [id])
-  toolId      String
-  accessLevel AccessLevel
-
-  @@unique([userId, toolId], name: "userId_toolId")
-}
-
 enum AccessLevel {
   READONLY
   CONTRIBUTOR
   FULL
-}
-
-model News {
-  id                String        @id @default(uuid())
-  name              String
-  description       String
-  user              User          @relation(fields: [userId], references: [id])
-  userId            String          
-  createdAt         DateTime      @default(now())
-}
-
-model Bookmarks{
-  id                String        @id @default(uuid())
-  name              String
-  url               String        @unique
-  user              User          @relation(fields: [userId], references: [id])
-  userId            String
-  order             Int           @default(0)
-}
-
-/* Instruments models */
-
-/* AXO */
-model MeterReading {
-  id               String        @id @default(uuid())
-  createdAt        DateTime      @default(now())
-  date             DateTime
-  user             User          @relation(fields: [userId], references: [id])
-  userId           String
-  counter          Float
-}
-
-model Correspondence {
-  id               String                     @id @default(uuid())
-  createdAt        DateTime                   @default(now())
-  ReceiptDate      DateTime
-  userAdd          String
-  from             String
-  to               String
-  content          String
-  typeMail         String
-  numberMail       String
-  attachments      CorrespondenceAttachment[]
-  user             User                       @relation(fields: [userAdd], references: [id])
-}
-
-model CorrespondenceAttachment {
-  id               String                     @id @default(uuid())
-  createdAt        DateTime                   @default(now())
-  record_id        String                     
-  userAdd          String
-  source           String
-  correspondence   Correspondence             @relation(fields: [record_id], references: [id])
-  user             User                       @relation(fields: [userAdd], references: [id])
-}
-
-/* Supply models */
-
-model Route {
-  id              String        @id @default(uuid())
-  name            String        @unique
-  rrs             String
-  contractor      String
-  filials         Filial[]
-  days            RouteDay[]
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-}
-
-model RouteDay {
-  id              String          @id @default(uuid())
-  day             DateTime        @unique
-  route           Route           @relation(fields: [routeId], references: [id])
-  routeId         String        
-  createdAt       DateTime        @default(now())
-  filials         Filial[]
-}
-
-model Filial {
-  id              String        @id @default(uuid())
-  name            String
-  place           Int?             
-  accepted        Boolean       @default(false)
-  feedback        String?
-  loaders         Loader[]
-  route           Route         @relation(fields: [routeId], references: [id])
-  routeId         String  
-  routeDay        RouteDay?     @relation(fields: [routeDayId], references: [id])
-  routeDayId      String?
-  updatedAt       DateTime      @updatedAt        
-}
-
-model Loader {
-  id              String        @id @default(uuid())
-  startTime       DateTime
-  endTime         DateTime
-  filial          Filial        @relation(fields: [filialId], references: [id])
-  filialId        String
-}
-
-model SupplyDocs {
-  id                      String               @id @default(uuid())
-  createdAt               DateTime             @default(now())
-  updatedAt               DateTime
-  addedById               String
-  addedBy                 User                 @relation("SupplyDocs_AddedBy", fields: [addedById], references: [id])
-  inn                     Int
-  counterParty            String
-  demandsForPayment       String
-  statusRequirements      String               
-  statusRequirementsId    Type?                 @relation("SupplyDocs_Requirements", fields: [statusRequirements], references: [id])
-  fileInvoicePayment      String
-  costBranchId            String
-  supplyDocs              SupplyDocsAttachment[]
-  costBranch              Branch               @relation("SupplyDocs_Branch", fields: [costBranchId], references: [uuid])
-  settlementSpecialistId  String?              
-  settlementSpecialist    User?                @relation("SupplyDocs_SettlementSpecialist", fields: [settlementSpecialistId], references: [id])
-  statusOfPTiU            String
-  statusOfPTiUId          Type?                @relation("SupplyDocs_PTiU", fields: [statusOfPTiU], references: [id])
-  filePTiU                String
-  note                    String
-  fileNote                String
-  requirementNumber       String  
-}
-
-model SupplyDocsAttachment {
-  id               String                     @id @default(uuid())
-  createdAt        DateTime                   @default(now())                    
-  userAdd          String
-  source           String
-  type             String
-  supplyDocs       SupplyDocs                 @relation(fields: [recordId], references: [id])
-  recordId         String 
-  user             User                       @relation(fields: [userAdd], references: [id])
-}
-
-model Media {       
-  id              String                @id @default(uuid())
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime?             @updatedAt
-  userAdd         User                  @relation("Media_UserAdd", fields: [userAddId], references: [id])
-  userAddId       String        
-  userUpdated     User?                 @relation("Media_UserUpdated", fields: [userUpdatedId], references: [id])
-  userUpdatedId   String?       
-  name            String?       
-  MediaAttachment MediaAttachment[]
-  information     String?       
-  urlMedia2       String?       
-  typeContent     Type?                 @relation("TypeMedia", fields: [typeContentId], references: [id])
-  typeContentId   String?
-}
-
-model MediaAttachment {
-  id               String         @id @default(uuid())
-  createdAt        DateTime       @default(now())                    
-  userAdd          User           @relation(fields: [userAddId], references: [id])
-  userAddId        String     
-  source           String     
-  type             String     
-  media            Media          @relation(fields: [recordId], references: [id])
-  recordId         String       
-}
-
-model PrintService{
-  id                    String          @id @default(uuid())
-  branch                Branch          @relation("BranchPrint", fields: [branchId] ,references: [uuid])
-  branchId              String
-  tovarName             String
-  tovarCode             Int
-  price                 Float
-  createdAt             DateTime
-  updatedAt             DateTime
-  brand                 String
-  tovarId               String
-  format                Int
 }
