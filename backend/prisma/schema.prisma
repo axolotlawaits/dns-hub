@@ -196,7 +196,7 @@ model MeterReading {
   date             DateTime
   user             User          @relation(fields: [userId], references: [id])
   userId           String
-  counter          Float
+  dataJson         String
 }
 
 model Correspondence {

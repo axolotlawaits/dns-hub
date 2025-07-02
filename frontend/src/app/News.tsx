@@ -18,7 +18,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { useUserContext } from '../hooks/useUserContext';
 import dayjs from 'dayjs';
 import TiptapEditor from '../utils/editor';
-import { IconNews, IconPencil, IconTrash } from '@tabler/icons-react';
+import { IconNews, IconPencil, IconPlus, IconTrash } from '@tabler/icons-react';
 import './styles/News.css'
 import { useThemeContext } from '../hooks/useThemeContext';
 
@@ -138,9 +138,8 @@ export default function NewsList() {
   return (
     <Box p="md">
       <Button 
-        fullWidth 
-        mt="xl" 
-        size="md" 
+        leftSection={<IconPlus size={18} />}
+        variant="light"
         onClick={() => {
           setNewsForm({ name: '', description: '' });
           openCreateModal();
@@ -157,7 +156,8 @@ export default function NewsList() {
       {news.length === 0 ? (
         <Text color="dimmed">Пока нет новостей</Text>
       ) : (
-        <Box style={{ display: 'grid', gap: 15 }}>
+        
+        <Box style={{ display: 'flex', flexDirection:'column', gap: 15, overflow: 'auto', height:'540px'}}>
           {news.map(newsItem => (
             <Box
               key={newsItem.id}
