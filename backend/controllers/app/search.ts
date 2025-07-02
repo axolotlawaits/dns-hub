@@ -34,7 +34,7 @@ export const searchAll = async (req: Request, res: Response): Promise<any>  => {
     }),
     prisma.userData.findMany({
       where: {fio: {contains: text, mode: 'insensitive'}},
-      include: {branch: true},
+      include: {branch: true, position: true},
       take: 10
     }),
     prisma.tool.findMany({
@@ -101,7 +101,7 @@ export const getEmployee = async (req: Request, res: Response): Promise<any> => 
   const employeeId = req.params.id as string
   const employee = await prisma.userData.findUnique({
     where: {uuid: employeeId},
-    include: {branch: true}
+    include: {branch: true, position: true}
   })
   if (employee) {
     return res.status(200).json(employee)
@@ -111,12 +111,12 @@ export const getEmployee = async (req: Request, res: Response): Promise<any> => 
 
 export const searchEmployees = async (req: Request, res: Response): Promise<any> => {
   const text = req.query.text as string
-  const position = (req.query.position as string) || undefined
+  const positionName = (req.query.position as string) || undefined
 
   const employees = await prisma.userData.findMany({
-    where: {fio: {contains: text, mode: 'insensitive'}, position},
+    where: {fio: {contains: text, mode: 'insensitive'}, position: {name: positionName}},
     take: 10,
-    include: {branch: true}
+    include: {branch: true, position: true}
   })
   if (employees) {
     res.status(200).json(employees)
@@ -141,13 +141,13 @@ export const searchCities = async (req: Request, res: Response): Promise<any> =>
 }
 
 export const searchPositions = async (req: Request, res: Response): Promise<any> => {
-  const positions = await prisma.userData.findMany({
-    select: {position: true},
-    distinct: ['position'],
-    orderBy: {position: 'asc'}
+  const positions = await prisma.position.findMany({
+    select: {name: true},
+    distinct: ['name'],
+    orderBy: {name: 'asc'}
   })
   if (positions) {
-    res.status(200).json(positions.map(pos => pos.position))
+    res.status(200).json(positions.map(pos => pos.name))
   } else {
     res.status(400).json({error: 'ошибка при поиске'})
   }

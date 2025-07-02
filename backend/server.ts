@@ -21,13 +21,32 @@ import mediaRouter from './routes/add/media.js'
 import printServiceRouter from './routes/retail/printService.js'
 import schedule from 'node-schedule'
 import { scheduleRouteDay } from './controllers/supply/routeDay.js';
+import fs from 'fs'
+import cookieParser from 'cookie-parser'
+import jwt from 'jsonwebtoken'
+import { refreshToken } from './middleware/auth.js';
 
 const app = express()
 export const prisma = new PrismaClient()
 const __dirname = path.resolve()
-  
-app.use(cors())
+
+export const accessPrivateKey = fs.readFileSync(path.join(__dirname, 'keys/access_private.pem'), 'utf8');
+export const accessPublicKey = fs.readFileSync(path.join(__dirname, 'keys/access_public.pem'), 'utf8');
+export const refreshPrivateKey = fs.readFileSync(path.join(__dirname, 'keys/refresh_private.pem'), 'utf8');
+export const refreshPublicKey = fs.readFileSync(path.join(__dirname, 'keys/refresh_public.pem'), 'utf8');
+
+const allowedOrigin = process.env.NODE_ENV === 'production' ? 'https://dns-zs.partner.ru/' : 'http://localhost:5173'
+
+const corsOptions = {
+  origin: allowedOrigin,
+  credentials: true,                
+}
+
+app.use(cors(corsOptions))
 app.use(express.json())
+app.use(cookieParser())
+app.use(express.static(path.join(__dirname, 'public')))
+
 app.use("/hub-api", express.static(__dirname))
 
 app.use('/hub-api/user', userRouter)
@@ -51,7 +70,7 @@ app.use('/hub-api/loaders/filial', filialRouter)
 
 /* */
 
-app.use(express.static(path.join(__dirname, 'public')))
+app.post('/hub-api/refresh-token', refreshToken)
 
 app.listen(2000, function() { 
   console.log('server running on port 2000')

@@ -1,4 +1,5 @@
 import { createContext, useState } from "react";
+import { API } from "../config/constants";
 
 export type User = {
   id: string
@@ -18,8 +19,10 @@ type Props = {
 
 type UserContextTypes = {
   user: User | null
-  login: (data: User) => void
+  token: string | null
+  login: (user: User, token: string) => void
   logout: () => void
+  refreshAccessToken: () => void
 }
 
 export const UserContext = createContext<UserContextTypes | undefined>(undefined)
@@ -29,17 +32,34 @@ export const UserContextProvider = ({ children }: Props) => {
     const value = localStorage.getItem('user')
     if (value != null) return JSON.parse(value)
   })
+  const [token, setToken] = useState<string | null>(localStorage.getItem('token'))
 
-  const login = (data: User) => {
-    setUser(data)
+  const login = (user: User, token: string) => {
+    setUser(user)
+    setToken(token)
   }
 
   const logout = () => {
     setUser(null)
+    setToken(null)
+  }
+
+  const refreshAccessToken = async () => {
+    const response = await fetch(`${API}/refresh-token`, {
+      method: 'POST',
+      credentials: 'include'
+    });
+
+    if (response.ok) {
+      const json = await response.json();
+      console.log(json)
+      setToken(json)
+      localStorage.setItem('token', JSON.stringify(json))
+    }
   }
 
   return (
-    <UserContext.Provider value={{user, login, logout}}>
+    <UserContext.Provider value={{user, token, login, logout, refreshAccessToken}}>
       {children}
     </UserContext.Provider>
   )

@@ -217,15 +217,17 @@ function Login() {
       const response = await fetch(`${API}/user/login`, {
         method: 'POST',
         body: JSON.stringify(userData),
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include'
       });
       
       const json = await response.json();
       
       if (response.ok) {
         localStorage.setItem(LAST_LOGIN_KEY, userData.login);
-        contextLogin(json);
-        localStorage.setItem('user', JSON.stringify(json));
+        contextLogin(json.user, json.token);
+        localStorage.setItem('user', JSON.stringify(json.user));
+        localStorage.setItem('token', JSON.stringify(json.token));
         navigate('/');
       } else {
         setValidationErrors(json.errors || {});

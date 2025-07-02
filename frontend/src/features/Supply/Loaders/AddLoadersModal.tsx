@@ -5,21 +5,26 @@ import { useState } from "react"
 import { API } from "../../../config/constants"
 import { FilialType } from "./Day"
 
-type LoadersTimeDataType = {
+type LoadersDataType = {
   startTime: Date
   endTime: Date
+  amount: number
 }
 
 function AddLoadersModal({filial}: {filial: FilialType}) {
   const [opened, { open, close }] = useDisclosure(false)
   const [loadersNumber, setLoadersNumber] = useState(1)
   const [feedback, setFeedback] = useState('')
-  const [loadersData, setLoadersData] = useState<LoadersTimeDataType[]>([])
+  const [loadersData, setLoadersData] = useState<LoadersDataType[]>([])
 
   const addLoaders = async (filialId: string) => {
+    const flatLoaders = loadersData.flatMap(({ amount, ...rest }) =>
+      Array(amount).fill(null).map(() => ({ ...rest }))
+    )
+
     const response = await fetch(`${API}/loaders/filial/${filialId}`, {
       method: 'POST',
-      body: JSON.stringify({loaders: loadersData, feedback}),
+      body: JSON.stringify({loaders: flatLoaders, feedback}),
       headers: { 'Content-type': 'application/json' }
     })
 
@@ -50,13 +55,17 @@ function AddLoadersModal({filial}: {filial: FilialType}) {
     }
   }
 
+  const handleLoadersAmount = (index: number, amount: number) => {
+    setLoadersData(loadersData.map((item, i) => i === index ? {...item, amount} : item))
+  }
+
   function createDateWithTime(timeString: string) {
     const currentDate = new Date()
     const newDateString = `${currentDate.toDateString()} ${timeString}`
     const newDate = new Date(newDateString)
     return newDate
   }
-  
+  console.log(loadersData)
   return (
     <>
       <Button size="xs" variant="outline" onClick={open}>добавить</Button>
@@ -67,12 +76,13 @@ function AddLoadersModal({filial}: {filial: FilialType}) {
               <Loaders 
                 key={i}
                 index={i} 
-                handleLoadersData={handleLoadersData} 
+                handleLoadersData={handleLoadersData}
+                handleLoadersAmount={handleLoadersAmount}
               >
               </Loaders>
             )
           })}
-          <Button variant="outline" onClick={() => setLoadersNumber(prev => prev + 1)}>добавить грузчика</Button>
+          <Button variant="outline" onClick={() => setLoadersNumber(prev => prev + 1)}>добавить грузчика с другим временем</Button>
           <TextInput 
             label="Обратная связь" 
             value={feedback} 
