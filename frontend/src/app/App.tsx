@@ -52,15 +52,23 @@ function App() {
           <Navigate to='/login' />
         :
           <AppShell
+            layout="alt"
             header={{ height: 60 }}
             footer={{ height: 65 }}
             navbar={{
               width: navOpened ? 225 : 55,
               breakpoint: 'sm',
-              
             }}
-            padding="xl"
+            padding="md"
             id='page'
+            styles={{
+              header: {
+                border: 'none'
+              },
+              navbar: {
+                border: 'none'
+              },
+            }}
           >
             <Header />
             <Navigation 

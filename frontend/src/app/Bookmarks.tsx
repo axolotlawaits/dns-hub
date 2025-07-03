@@ -337,69 +337,69 @@ export default function BookmarksList() {
                         ref={provided.innerRef}
                         {...provided.draggableProps}
                       >
-<Card
-  withBorder
-  p={0}
-  radius="md"
-  className={`${styles.card} ${isSorting ? styles.sorting : ''}`}
->
-  <div className={styles.imageContainer}>
-    {isSorting && (
-      <div
-        {...provided.dragHandleProps}
-        className={styles.dragHandle}
-      >
-        <IconGripVertical size={18} color="white" />
-      </div>
-    )}
-    <img
-      src={bookmark.preview}
-      alt={bookmark.name}
-      className={styles.image}
-      loading="lazy"
-    />
-    <Tooltip label={isSecureUrl(bookmark.url).message} position="left">
-      <div style={{ position: 'absolute', top: '10px', right: '10px' }}>
-        {isSecureUrl(bookmark.url).icon}
-      </div>
-    </Tooltip>
-  </div>
-  <div className={styles.content}>
-    <Text fw={500} truncate className={styles.name}>
-      {bookmark.name}
-    </Text>
-    <div className={styles.actions}>
-      <Group justify="space-between">
-        <Anchor href={bookmark.url} target="_blank" size="sm" c="gray.3">
-          <IconExternalLink size={14} style={{ marginRight: 5 }} />
-          Перейти
-        </Anchor>
-        <Group gap={4}>
-          <ActionIcon
-            variant="subtle"
-            color="gray.3"
-            onClick={(e) => {
-              e.stopPropagation();
-              openEditModalWithBookmark(bookmark);
-            }}
-          >
-            <IconEdit size={16} />
-          </ActionIcon>
-          <ActionIcon
-            variant="subtle"
-            color="gray.3"
-            onClick={(e) => {
-              e.stopPropagation();
-              openDeleteModalWithBookmark(bookmark);
-            }}
-          >
-            <IconTrash size={16} />
-          </ActionIcon>
-        </Group>
-      </Group>
-    </div>
-  </div>
-</Card>
+                        <Card
+                          withBorder
+                          p={0}
+                          radius="md"
+                          className={`${styles.card} ${isSorting ? styles.sorting : ''}`}
+                        >
+                          <div className={styles.imageContainer}>
+                            {isSorting && (
+                              <div
+                                {...provided.dragHandleProps}
+                                className={styles.dragHandle}
+                              >
+                                <IconGripVertical size={18} color="white" />
+                              </div>
+                            )}
+                            <img
+                              src={bookmark.preview}
+                              alt={bookmark.name}
+                              className={styles.image}
+                              loading="lazy"
+                            />
+                            <Tooltip label={isSecureUrl(bookmark.url).message} position="left">
+                              <div style={{ position: 'absolute', top: '10px', right: '10px' }}>
+                                {isSecureUrl(bookmark.url).icon}
+                              </div>
+                            </Tooltip>
+                          </div>
+                          <div className={styles.content}>
+                            <Text fw={500} truncate className={styles.name}>
+                              {bookmark.name}
+                            </Text>
+                            <div className={styles.actions}>
+                              <Group justify="space-between">
+                                <Anchor href={bookmark.url} target="_blank" size="sm" c="gray.3">
+                                  <IconExternalLink size={14} style={{ marginRight: 5 }} />
+                                  Перейти
+                                </Anchor>
+                                <Group gap={4}>
+                                  <ActionIcon
+                                    variant="subtle"
+                                    color="gray.3"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openEditModalWithBookmark(bookmark);
+                                    }}
+                                  >
+                                    <IconEdit size={16} />
+                                  </ActionIcon>
+                                  <ActionIcon
+                                    variant="subtle"
+                                    color="gray.3"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openDeleteModalWithBookmark(bookmark);
+                                    }}
+                                  >
+                                    <IconTrash size={16} />
+                                  </ActionIcon>
+                                </Group>
+                              </Group>
+                            </div>
+                          </div>
+                        </Card>
 
                       </Grid.Col>
                     )}

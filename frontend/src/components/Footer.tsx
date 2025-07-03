@@ -175,13 +175,9 @@ function Footer() {
               </a>
             );
           })}
-
           {/* Правый блок с разделителем */}
           <div className="footer-right-section">
             <Divider orientation="vertical" className="footer-divider" />
-            
-
-            
             {/* Отступ между погодой и календарем */}
             <Box w={10} />
             {/* Погода */}
@@ -215,7 +211,8 @@ function Footer() {
                   {forecastDisplay}
                 </Stack>
               </Popover.Dropdown>
-            </Popover>            
+            </Popover>  
+
             {/* Календарь */}
             <Popover 
               opened={calendarOpened} 

@@ -1,7 +1,4 @@
 import Search from "./Search";
-import { Link } from "react-router";
-import logoLight from '../assets/images/logo-light.png';
-import logoDark from '../assets/images/logo-dark.png';
 import { ActionIcon, AppShell, Avatar, Menu, Divider } from "@mantine/core";
 import { IconBrightnessDown, IconLogin, IconLogout, IconMoon, IconUser } from "@tabler/icons-react";
 import { useNavigate } from "react-router";
@@ -23,13 +20,6 @@ function Header() {
   return (
     <AppShell.Header id='header'>
       <div id="header-left">
-        <Link to={'/'} id="header-logo-group">
-          {isDark ? (
-            <img src={logoDark} id="header-logo" alt="Dark Logo" />
-          ) : (
-            <img src={logoLight} id="header-logo" alt="Light Logo" />
-          )}
-        </Link>
       </div>
       <div id="header-right">
         <Search /> 

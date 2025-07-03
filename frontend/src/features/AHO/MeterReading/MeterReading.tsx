@@ -2,14 +2,13 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { API } from '../../../config/constants';
 import { useUserContext } from '../../../hooks/useUserContext';
 import { formatName } from '../../../utils/format';
-import { dateRange, FilterGroup } from '../../../utils/filter';
-import { Button, Title, Box, LoadingOverlay, Grid, Card, Group, ActionIcon } from '@mantine/core';
+import { FilterGroup } from '../../../utils/filter';
+import { Button, Title, Box, LoadingOverlay, Grid, Card, Group, ActionIcon, Text, Stack, SimpleGrid, Badge } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
 import { IconPencil, IconTrash } from '@tabler/icons-react';
-import { ColumnDef, ColumnFiltersState, SortingState, OnChangeFn } from '@tanstack/react-table';
+import { ColumnFiltersState } from '@tanstack/react-table';
 import { DynamicFormModal } from '../../../utils/formModal';
-import { TableComponent } from '../../../utils/table';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
 import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
@@ -106,7 +105,6 @@ const useMeterReadings = () => {
   const [selectedReading, setSelectedReading] = useState<MeterReading | null>(null);
   const [readingForm, setReadingForm] = useState<ReadingFormValues>(DEFAULT_READING_FORM);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'displayDate', desc: true }]);
 
   const modals = {
     view: useDisclosure(false),
@@ -251,16 +249,13 @@ const useMeterReadings = () => {
         }),
       });
   
-      // Проверяем Content-Type ответа
       const contentType = response.headers.get('content-type');
       
       if (!response.ok) {
-        // Если ответ не JSON, читаем как текст
         const errorText = await response.text();
         throw new Error(errorText || `HTTP error! status: ${response.status}`);
       }
   
-      // Проверяем, что ответ действительно JSON
       if (!contentType || !contentType.includes('application/json')) {
         const text = await response.text();
         throw new Error(`Expected JSON but received: ${text.substring(0, 100)}...`);
@@ -281,20 +276,6 @@ const useMeterReadings = () => {
       }
     }
   }, [user, selectedReading, modals]);
-
-  const handleColumnFiltersChange: OnChangeFn<ColumnFiltersState> = useCallback(
-    (updaterOrValue) => setColumnFilters(prev => 
-      typeof updaterOrValue === 'function' ? updaterOrValue(prev) : updaterOrValue
-    ),
-    []
-  );
-
-  const handleSortingChange: OnChangeFn<SortingState> = useCallback(
-    (updaterOrValue) => setSorting(prev => 
-      typeof updaterOrValue === 'function' ? updaterOrValue(prev) : updaterOrValue
-    ),
-    []
-  );
 
   const handleFilterChange = useCallback((columnId: string, value: any) => {
     setColumnFilters(prev => [
@@ -327,19 +308,73 @@ const useMeterReadings = () => {
     filteredData,
     userFilterOptions,
     columnFilters,
-    sorting,
     readingForm,
     selectedReading,
     modals,
     handleTableAction,
     handleDeleteConfirm,
     handleFormSubmit,
-    handleColumnFiltersChange,
-    handleSortingChange,
     handleFilterChange,
     setReadingForm,
     setColumnFilters,
   };
+};
+
+const ReadingCard = ({ 
+  reading, 
+  onEdit, 
+  onDelete 
+}: { 
+  reading: MeterReadingWithFormattedData; 
+  onEdit: () => void; 
+  onDelete: () => void; 
+}) => {
+  return (
+    <Card withBorder shadow="sm" radius="md" p="md">
+      <Stack gap="xs">
+        <Group justify="space-between">
+          <Text fw={500}>{reading.formattedDate}</Text>
+          <Badge color="blue" variant="light">
+            {reading.userName}
+          </Badge>
+        </Group>
+        
+        <SimpleGrid cols={2} spacing="xs" verticalSpacing="xs">
+          <div>
+            <Text size="sm" c="dimmed">Показание</Text>
+            <Text fw={500}>{reading.formattedCounter} м³</Text>
+          </div>
+          <div>
+            <Text size="sm" c="dimmed">Расход</Text>
+            <Text fw={500}>{reading.formattedConsumption} м³</Text>
+          </div>
+        </SimpleGrid>
+        
+        <Group justify="flex-end" mt="sm">
+          <ActionIcon
+            color="blue"
+            variant="subtle"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit();
+            }}
+          >
+            <IconPencil size={18} />
+          </ActionIcon>
+          <ActionIcon
+            color="red"
+            variant="subtle"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+          >
+            <IconTrash size={18} />
+          </ActionIcon>
+        </Group>
+      </Stack>
+    </Card>
+  );
 };
 
 const MeterReadingsList = () => {
@@ -348,15 +383,12 @@ const MeterReadingsList = () => {
     filteredData,
     userFilterOptions,
     columnFilters,
-    sorting,
     readingForm,
     selectedReading,
     modals,
     handleTableAction,
     handleDeleteConfirm,
     handleFormSubmit,
-    handleColumnFiltersChange,
-    handleSortingChange,
     handleFilterChange,
     setReadingForm,
     setColumnFilters,
@@ -406,65 +438,6 @@ const MeterReadingsList = () => {
     },
   ], [userFilterOptions]);
 
-  const columns = useMemo<ColumnDef<MeterReadingWithFormattedData>[]>(
-    () => [
-      {
-        accessorKey: 'displayDate',
-        header: 'Дата',
-        cell: (info) => info.row.original.formattedDate,
-        filterFn: dateRange,
-        sortingFn: 'datetime',
-      },
-      {
-        accessorKey: 'formattedCounter',
-        header: 'Показание (м³)',
-        size: 120,
-      },
-      {
-        accessorKey: 'formattedConsumption',
-        header: 'Израсходовано (м³)',
-        size: 140,
-      },
-      {
-        accessorKey: 'userName',
-        header: 'Пользователь',
-        size: 150,
-        filterFn: 'includesString',
-      },
-      {
-        id: 'actions',
-        header: 'Действия',
-        cell: ({ row }) => (
-          <Group wrap="nowrap" align="center">
-            <ActionIcon
-              color="blue"
-              variant="subtle"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleTableAction('edit', row.original);
-              }}
-            >
-              <IconPencil size={18} />
-            </ActionIcon>
-            <ActionIcon
-              color="red"
-              variant="subtle"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleTableAction('delete', row.original);
-              }}
-            >
-              <IconTrash size={18} />
-            </ActionIcon>
-          </Group>
-        ),
-        size: 100,
-        enableSorting: false,
-      },
-    ],
-    [handleTableAction]
-  );
-
   if (loading) return <LoadingOverlay visible />;
 
   return (
@@ -499,17 +472,26 @@ const MeterReadingsList = () => {
       </Box>
       <Grid>
         <Grid.Col span={{ base: 12, md: 7 }}>
-          <Card withBorder shadow="sm" radius="md" h="100%">
-            <TableComponent<MeterReadingWithFormattedData>
-              data={filteredData}
-              columns={columns}
-              columnFilters={columnFilters}
-              sorting={sorting}
-              onColumnFiltersChange={handleColumnFiltersChange}
-              onSortingChange={handleSortingChange}
-              filterFns={{ dateRange }}
-              onRowClick={(rowData) => handleTableAction('view', rowData)}
-            />
+          <Card withBorder shadow="sm" radius="md" p="md">
+            <Title order={4} mb="md">
+              Показания
+            </Title>
+            <Stack gap="md">
+              {filteredData.length > 0 ? (
+                filteredData.map((reading) => (
+                  <ReadingCard
+                    key={reading.id}
+                    reading={reading}
+                    onEdit={() => handleTableAction('edit', reading)}
+                    onDelete={() => handleTableAction('delete', reading)}
+                  />
+                ))
+              ) : (
+                <Text c="dimmed" ta="center" py="md">
+                  Нет данных для отображения
+                </Text>
+              )}
+            </Stack>
           </Card>
         </Grid.Col>
         <Grid.Col span={{ base: 12, md: 5 }}>

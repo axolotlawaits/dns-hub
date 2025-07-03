@@ -167,7 +167,7 @@ CREATE TABLE "MeterReading" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "date" TIMESTAMP(3) NOT NULL,
     "userId" TEXT NOT NULL,
-    "counter" DOUBLE PRECISION NOT NULL,
+    "dataJson" TEXT NOT NULL,
 
     CONSTRAINT "MeterReading_pkey" PRIMARY KEY ("id")
 );
