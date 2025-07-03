@@ -4,7 +4,7 @@ import Bookmarks from './Bookmarks';
 
 function Home() {
   return (
-    <div style={{ 
+    <div id='Home' style={{ 
       display: 'flex', 
       width: '100%',
       height: '100vh' // Добавляем высоту контейнера

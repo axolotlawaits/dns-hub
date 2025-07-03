@@ -1,9 +1,14 @@
 import { ActionIcon, AppShell, Tooltip } from "@mantine/core"
 import { IconChevronLeftPipe, IconChevronRightPipe} from "@tabler/icons-react"
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import * as TablerIcons from "@tabler/icons-react";
 import { API } from "../config/constants";
+import logoLight from '../assets/images/logo-light.svg';
+import logoDark from '../assets/images/logo-dark.svg';
+import logoLightMini from '../assets/images/logo-light-mini.svg';
+import logoDarkMini from '../assets/images/logo-dark-mini.svg';
+import { useThemeContext } from "../hooks/useThemeContext";
 
 interface Tool {
   id: string;
@@ -25,6 +30,7 @@ function Navigation({navOpened, toggleNav}: NavProps) {
   const [tools, setTools] = useState<Tool[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { isDark } = useThemeContext();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -67,6 +73,21 @@ function Navigation({navOpened, toggleNav}: NavProps) {
 
   return (
     <AppShell.Navbar id="navigation" className={!navOpened ? 'collapsed' : ''}>
+      <Link to={'/'} id="header-logo-group">
+        {isDark ? (
+          <img 
+            src={navOpened ? logoDark : logoDarkMini} 
+            id="header-logo" 
+            alt="Dark Logo" 
+          />
+        ) : (
+          <img 
+            src={navOpened ? logoLight : logoLightMini} 
+            id="header-logo" 
+            alt="Light Logo" 
+          />
+        )}
+      </Link>
       <ActionIcon
         variant="filled"
         size="md"

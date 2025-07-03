@@ -137,6 +137,13 @@ export default function NewsList() {
 
   return (
     <Box p="md">
+      <Group justify="space-between" align="flex-start">
+         <Group gap="xs" align="flex-start">
+          <ThemeIcon variant="light" color="blue" size="lg" radius="xl">
+            <IconNews size={18} />
+          </ThemeIcon>
+          <Title order={2}  mb="lg" >Последние новости</Title>
+        </Group>
       <Button 
         leftSection={<IconPlus size={18} />}
         variant="light"
@@ -147,12 +154,8 @@ export default function NewsList() {
       >
         Добавить новость
       </Button>
-        <Group gap="xs">
-          <ThemeIcon variant="light" color="blue" size="lg" radius="xl">
-            <IconNews size={18} />
-          </ThemeIcon>
-          <Title order={2} mt="md" mb="lg">Последние новости</Title>
-        </Group>
+      </Group>
+
       {news.length === 0 ? (
         <Text color="dimmed">Пока нет новостей</Text>
       ) : (
