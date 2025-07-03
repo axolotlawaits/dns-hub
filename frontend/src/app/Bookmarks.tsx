@@ -28,18 +28,19 @@ export default function BookmarksList() {
   const [deleteModalOpen, { open: openDeleteModal, close: closeDeleteModal }] = useDisclosure(false);
   const [addModalOpen, { open: openAddModal, close: closeAddModal }] = useDisclosure(false);
   const [editModalOpen, { open: openEditModal, close: closeEditModal }] = useDisclosure(false);
+  const [viewAllModalOpen, { open: openViewAllModal, close: closeViewAllModal }] = useDisclosure(false);
   const [selectedBookmark, setSelectedBookmark] = useState<Bookmark | null>(null);
   const [newBookmark, setNewBookmark] = useState(DEFAULT_BOOKMARK);
   const [urlError, setUrlError] = useState<string | null>(null);
-  const [notification, setNotification] = useState<{message: string, color: string} | null>(null);
+  const [notification, setNotification] = useState<{ message: string; color: string } | null>(null);
   const [isSorting, setIsSorting] = useState(false);
 
-  // Мемоизированные значения для оптимизации рендеринга
   const hasBookmarks = useMemo(() => bookmarks.length > 0, [bookmarks]);
   const isAddDisabled = useMemo(
     () => !newBookmark.name || !newBookmark.url || !!urlError,
     [newBookmark.name, newBookmark.url, urlError]
   );
+
   const isEditDisabled = useMemo(
     () => !selectedBookmark?.name || !selectedBookmark?.url || !!urlError,
     [selectedBookmark, urlError]
@@ -56,19 +57,16 @@ export default function BookmarksList() {
       setLoading(false);
       return;
     }
-
     try {
       setLoading(true);
       const response = await fetch(`${API}/bookmarks/${user.id}`);
       if (!response.ok) throw new Error(`Ошибка загрузки данных: ${response.status}`);
       const data = await response.json();
-
       const bookmarksWithSecurity = data.map((bookmark: Bookmark) => ({
         ...bookmark,
         secure: isSecureUrl(bookmark.url),
         preview: getPreviewUrl(bookmark.url)
       }));
-
       setBookmarks(bookmarksWithSecurity);
       setOriginalBookmarks([...bookmarksWithSecurity]);
     } catch (err) {
@@ -87,7 +85,6 @@ export default function BookmarksList() {
     try {
       const response = await fetch(`${API}/bookmarks/${id}`, { method: 'DELETE' });
       if (!response.ok) throw new Error('Не удалось удалить закладку');
-
       setBookmarks(prev => prev.filter(b => b.id !== id));
       setOriginalBookmarks(prev => prev.filter(b => b.id !== id));
       showNotification('Закладка удалена', 'green');
@@ -103,7 +100,6 @@ export default function BookmarksList() {
       setUrlError('Некорректный URL');
       return;
     }
-
     try {
       const normalizedUrl = normalizeUrl(newBookmark.url);
       const response = await fetch(`${API}/bookmarks`, {
@@ -116,16 +112,13 @@ export default function BookmarksList() {
           order: bookmarks.length
         })
       });
-
       if (!response.ok) throw new Error('Не удалось добавить закладку');
-
       const addedBookmark = await response.json();
       const newBookmarkWithPreview = {
         ...addedBookmark,
         secure: isSecureUrl(addedBookmark.url),
         preview: getPreviewUrl(addedBookmark.url)
       };
-
       setBookmarks(prev => [...prev, newBookmarkWithPreview]);
       setOriginalBookmarks(prev => [...prev, newBookmarkWithPreview]);
       setNewBookmark(DEFAULT_BOOKMARK);
@@ -142,7 +135,6 @@ export default function BookmarksList() {
       setUrlError('Некорректный URL');
       return;
     }
-
     try {
       const normalizedUrl = normalizeUrl(selectedBookmark.url);
       const response = await fetch(`${API}/bookmarks/${selectedBookmark.id}`, {
@@ -153,16 +145,13 @@ export default function BookmarksList() {
           url: normalizedUrl
         })
       });
-
       if (!response.ok) throw new Error('Не удалось обновить закладку');
-
       const updatedBookmark = await response.json();
       const updatedBookmarkWithPreview = {
         ...updatedBookmark,
         secure: isSecureUrl(updatedBookmark.url),
         preview: getPreviewUrl(updatedBookmark.url)
       };
-
       setBookmarks(prev => prev.map(b => b.id === updatedBookmark.id ? updatedBookmarkWithPreview : b));
       setOriginalBookmarks(prev => prev.map(b => b.id === updatedBookmark.id ? updatedBookmarkWithPreview : b));
       showNotification('Закладка обновлена', 'green');
@@ -174,16 +163,13 @@ export default function BookmarksList() {
 
   const handleDragEnd = useCallback((result: DropResult) => {
     if (!result.destination || !isSorting) return;
-
     const items = Array.from(bookmarks);
     const [reorderedItem] = items.splice(result.source.index, 1);
     items.splice(result.destination.index, 0, reorderedItem);
-
     const updatedBookmarks = items.map((item, index) => ({
       ...item,
       order: index
     }));
-
     setBookmarks(updatedBookmarks);
   }, [bookmarks, isSorting]);
 
@@ -200,12 +186,10 @@ export default function BookmarksList() {
           userId: user?.id
         })
       });
-
       if (!response.ok) {
         const data = await response.json();
         throw new Error(data.message || 'Failed to save order');
       }
-
       setOriginalBookmarks([...bookmarks]);
       setIsSorting(false);
       showNotification('Сортировка сохранена', 'green');
@@ -252,6 +236,9 @@ export default function BookmarksList() {
   if (loading) return <LoadingOverlay visible />;
   if (error) return <Text c="red">Ошибка: {error}</Text>;
 
+  const visibleBookmarks = bookmarks.slice(0, 8);
+  const hasMoreBookmarks = bookmarks.length > 8;
+
   return (
     <Box p="md">
       {notification && (
@@ -264,7 +251,6 @@ export default function BookmarksList() {
           {notification.message}
         </Alert>
       )}
-
       <Group justify="space-between" mb="md">
         <Group gap="xs">
           <ThemeIcon variant="light" color="blue" size="lg" radius="xl">
@@ -312,7 +298,6 @@ export default function BookmarksList() {
           )}
         </Group>
       </Group>
-
       {!hasBookmarks ? (
         <Text c="dimmed">У вас пока нет сохраненных закладок</Text>
       ) : (
@@ -324,7 +309,7 @@ export default function BookmarksList() {
                 ref={provided.innerRef}
                 {...provided.droppableProps}
               >
-                {bookmarks.map((bookmark, index) => (
+                {visibleBookmarks.map((bookmark, index) => (
                   <Draggable
                     key={bookmark.id}
                     draggableId={bookmark.id}
@@ -400,7 +385,6 @@ export default function BookmarksList() {
                             </div>
                           </div>
                         </Card>
-
                       </Grid.Col>
                     )}
                   </Draggable>
@@ -411,7 +395,164 @@ export default function BookmarksList() {
           </Droppable>
         </DragDropContext>
       )}
+      {hasMoreBookmarks && (
+      <Button
+        onClick={openViewAllModal}
+        mt="md"
+        leftSection={<IconBookmark size={18} />}
+        variant="light"
+      >
+        Посмотреть все
+      </Button>
 
+      )}
+      <Modal
+        opened={viewAllModalOpen}
+        onClose={closeViewAllModal}
+        title={
+          <Group justify="space-between">
+            <Title order={3}>Все закладки</Title>
+            <Group>
+              {isSorting ? (
+                <Group gap="xs">
+                  <Button
+                    leftSection={<IconX size={18} />}
+                    onClick={cancelSorting}
+                    variant="light"
+                    color="red"
+                    size="xs"
+                  >
+                    Отмена
+                  </Button>
+                  <Button
+                    leftSection={<IconDeviceFloppy size={18} />}
+                    onClick={saveSorting}
+                    variant="light"
+                    color="green"
+                    size="xs"
+                  >
+                    Сохранить
+                  </Button>
+                </Group>
+              ) : (
+                <>
+                  <Button
+                    leftSection={<IconSortAscending size={18} />}
+                    onClick={startSorting}
+                    variant="light"
+                    size="xs"
+                  >
+                    Сортировать
+                  </Button>
+                  <Button
+                    leftSection={<IconPlus size={18} />}
+                    onClick={resetAddForm}
+                    variant="light"
+                    size="xs"
+                  >
+                    Добавить
+                  </Button>
+                </>
+              )}
+            </Group>
+          </Group>
+        }
+        size="70%"
+      >
+        <DragDropContext onDragEnd={handleDragEnd}>
+          <Droppable droppableId="allBookmarks" direction="horizontal">
+            {(provided) => (
+              <Grid
+                gutter="md"
+                ref={provided.innerRef}
+                {...provided.droppableProps}
+              >
+                {bookmarks.map((bookmark, index) => (
+                  <Draggable
+                    key={bookmark.id}
+                    draggableId={bookmark.id}
+                    index={index}
+                    isDragDisabled={!isSorting}
+                  >
+                    {(provided) => (
+                      <Grid.Col
+                        span={{ base: 12, sm: 6, md: 4, lg: 3 }}
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                      >
+                        <Card
+                          withBorder
+                          p={0}
+                          radius="md"
+                          className={styles.card}
+                        >
+                          <div className={styles.imageContainer}>
+                            {isSorting && (
+                              <div
+                                {...provided.dragHandleProps}
+                                className={styles.dragHandle}
+                              >
+                                <IconGripVertical size={18} color="white" />
+                              </div>
+                            )}
+                            <img
+                              src={bookmark.preview}
+                              alt={bookmark.name}
+                              className={styles.image}
+                              loading="lazy"
+                            />
+                            <Tooltip label={isSecureUrl(bookmark.url).message} position="left">
+                              <div style={{ position: 'absolute', top: '10px', right: '10px' }}>
+                                {isSecureUrl(bookmark.url).icon}
+                              </div>
+                            </Tooltip>
+                          </div>
+                          <div className={styles.content}>
+                            <Text fw={500} truncate className={styles.name}>
+                              {bookmark.name}
+                            </Text>
+                            <div className={styles.actions}>
+                              <Group justify="space-between">
+                                <Anchor href={bookmark.url} target="_blank" size="sm" c="gray.3">
+                                  <IconExternalLink size={14} style={{ marginRight: 5 }} />
+                                  Перейти
+                                </Anchor>
+                                <Group gap={4}>
+                                  <ActionIcon
+                                    variant="subtle"
+                                    color="gray.3"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openEditModalWithBookmark(bookmark);
+                                    }}
+                                  >
+                                    <IconEdit size={16} />
+                                  </ActionIcon>
+                                  <ActionIcon
+                                    variant="subtle"
+                                    color="gray.3"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openDeleteModalWithBookmark(bookmark);
+                                    }}
+                                  >
+                                    <IconTrash size={16} />
+                                  </ActionIcon>
+                                </Group>
+                              </Group>
+                            </div>
+                          </div>
+                        </Card>
+                      </Grid.Col>
+                    )}
+                  </Draggable>
+                ))}
+                {provided.placeholder}
+              </Grid>
+            )}
+          </Droppable>
+        </DragDropContext>
+      </Modal>
       <Modal opened={deleteModalOpen} onClose={closeDeleteModal} title="Удаление закладки">
         <Text mb="md">Вы уверены, что хотите удалить закладку "{selectedBookmark?.name}"?</Text>
         <Group justify="flex-end">
@@ -421,28 +562,25 @@ export default function BookmarksList() {
           </Button>
         </Group>
       </Modal>
-
       <Modal opened={addModalOpen} onClose={closeAddModal} title="Добавление закладки">
         <TextInput
           label="Название"
           placeholder="Мой любимый сайт"
           value={newBookmark.name}
-          onChange={(e) => setNewBookmark(prev => ({...prev, name: e.target.value}))}
+          onChange={(e) => setNewBookmark(prev => ({ ...prev, name: e.target.value }))}
           mb="md"
         />
-
         <TextInput
           label="URL"
           placeholder="https://example.ru или example.ru"
           value={newBookmark.url}
           onChange={(e) => {
-            setNewBookmark(prev => ({...prev, url: e.target.value}));
+            setNewBookmark(prev => ({ ...prev, url: e.target.value }));
             validateUrl(e.target.value);
           }}
           error={urlError}
           mb="md"
         />
-
         <Group justify="flex-end">
           <Button variant="default" onClick={closeAddModal}>Отмена</Button>
           <Button
@@ -454,30 +592,27 @@ export default function BookmarksList() {
           </Button>
         </Group>
       </Modal>
-
       <Modal opened={editModalOpen} onClose={closeEditModal} title="Редактирование закладки">
         <TextInput
           label="Название"
           placeholder="Мой любимый сайт"
           value={selectedBookmark?.name || ''}
-          onChange={(e) => selectedBookmark && setSelectedBookmark({...selectedBookmark, name: e.target.value})}
+          onChange={(e) => selectedBookmark && setSelectedBookmark({ ...selectedBookmark, name: e.target.value })}
           mb="md"
         />
-
         <TextInput
           label="URL"
           placeholder="https://example.ru или example.ru"
           value={selectedBookmark?.url || ''}
           onChange={(e) => {
             if (selectedBookmark) {
-              setSelectedBookmark({...selectedBookmark, url: e.target.value});
+              setSelectedBookmark({ ...selectedBookmark, url: e.target.value });
               validateUrl(e.target.value);
             }
           }}
           error={urlError}
           mb="md"
         />
-
         <Group justify="flex-end">
           <Button variant="default" onClick={closeEditModal}>Отмена</Button>
           <Button

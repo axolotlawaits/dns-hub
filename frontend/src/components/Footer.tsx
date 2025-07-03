@@ -1,5 +1,5 @@
 import { AppShell, Loader, Group, Popover, Stack, Text, Divider, Box } from "@mantine/core";
-import { IconBasket, IconBriefcase, IconCube, IconNews } from "@tabler/icons-react";
+import { IconAppWindow, IconBasket, IconBrandRumble, IconBriefcase, IconCube, IconNews } from "@tabler/icons-react";
 import { useWeather, WeatherCondition } from "../app/Weather";
 import { useState, useEffect, useCallback, useContext, useMemo } from "react";
 import DatePicker from "react-datepicker";
@@ -46,6 +46,18 @@ const navLinks = [
     icon: IconNews,
     name: "EcoSystem",
     description: "Новости компании"
+  },
+  {
+    href: "https://media2.dns-shop.ru/",
+    icon: IconBrandRumble,
+    name: "Media2",
+    description: "Медиа портал"
+  },
+  {
+    href: "http://sale.partner.ru//",
+    icon: IconAppWindow,
+    name: "Web - База",
+    description: "Портал продаж"
   }
 ];
 

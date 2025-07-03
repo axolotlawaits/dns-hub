@@ -2,18 +2,7 @@ import { useState, useEffect } from 'react';
 import { API } from '../config/constants';
 import { User } from '../contexts/UserContext';
 import { formatName, truncateText } from '../utils/format';
-import { 
-  Button, 
-  Modal, 
-  TextInput, 
-  Title, 
-  Text, 
-  Group, 
-  ActionIcon,
-  Box,
-  LoadingOverlay,
-  ThemeIcon
-} from '@mantine/core';
+import { Button, Modal, TextInput, Title, Text, Group, ActionIcon, Box, LoadingOverlay, ThemeIcon } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { useUserContext } from '../hooks/useUserContext';
 import dayjs from 'dayjs';

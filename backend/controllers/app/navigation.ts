@@ -10,7 +10,7 @@ export const getRootMenuItems = async (
 ): Promise<void> => {
   try {
     const menuList = await prisma.tool.findMany({
-      where: { parent_id: null },
+      where: { parent_id: null, included: true },
       orderBy: { order: 'asc' },
     });
 
@@ -27,7 +27,7 @@ export const getAllNonRootMenuItems = async (
 ): Promise<void> => {
   try {
     const menuList = await prisma.tool.findMany({
-      where: { parent_id: { not: null } },
+      where: { parent_id: { not: null }, included: true },
       orderBy: { order: 'asc' },
     });
     res.status(200).json(menuList);
@@ -50,7 +50,7 @@ export const getNonRootMenuItems = async (
       }
   
       const menuList = await prisma.tool.findMany({
-        where: { parent_id: parent_id as string },
+        where: { parent_id: parent_id as string, included: true },
         orderBy: { order: 'asc' },
       });
   

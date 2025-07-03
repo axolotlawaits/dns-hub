@@ -1,10 +1,9 @@
-import React from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
-import { useEffect } from 'react';
-import '../utils/styles/editor.css'
+import '../utils/styles/editor.css';
 
 type TiptapEditorProps = {
   content: string;
@@ -26,6 +25,26 @@ const TiptapEditor: React.FC<TiptapEditorProps> = ({ content, onChange }) => {
     },
   });
 
+  const setLink = useCallback(() => {
+    const previousUrl = editor?.getAttributes('link').href;
+    const url = window.prompt('URL', previousUrl);
+
+    if (url === null) return;
+    if (url === '') {
+      editor?.chain().focus().extendMarkRange('link').unsetLink().run();
+      return;
+    }
+
+    editor?.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+  }, [editor]);
+
+  const setImage = useCallback(() => {
+    const url = window.prompt('Enter the URL of the image:');
+    if (url) {
+      editor?.chain().focus().setImage({ src: url }).run();
+    }
+  }, [editor]);
+
   useEffect(() => {
     if (editor && content !== editor.getHTML()) {
       editor.commands.setContent(content);
@@ -36,66 +55,28 @@ const TiptapEditor: React.FC<TiptapEditorProps> = ({ content, onChange }) => {
     return <div>Loading editor...</div>;
   }
 
+  const buttons = [
+    { name: 'Bold', action: () => editor.chain().focus().toggleBold().run(), isActive: editor.isActive('bold') },
+    { name: 'Italic', action: () => editor.chain().focus().toggleItalic().run(), isActive: editor.isActive('italic') },
+    { name: 'H2', action: () => editor.chain().focus().toggleHeading({ level: 2 }).run(), isActive: editor.isActive('heading', { level: 2 }) },
+    { name: 'List', action: () => editor.chain().focus().toggleBulletList().run(), isActive: editor.isActive('bulletList') },
+    { name: 'Image', action: setImage },
+    { name: 'Link', action: setLink, isActive: editor.isActive('link') },
+  ];
+
   return (
     <div className="tiptap-editor">
       <div className="menu-bar">
-        <button
-          type="button"
-          onClick={() => editor.chain().focus().toggleBold().run()}
-          className={editor.isActive('bold') ? 'is-active' : ''}
-        >
-          Bold
-        </button>
-        <button
-          type="button"
-          onClick={() => editor.chain().focus().toggleItalic().run()}
-          className={editor.isActive('italic') ? 'is-active' : ''}
-        >
-          Italic
-        </button>
-        <button
-          type="button"
-          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          className={editor.isActive('heading', { level: 2 }) ? 'is-active' : ''}
-        >
-          H2
-        </button>
-        <button
-          type="button"
-          onClick={() => editor.chain().focus().toggleBulletList().run()}
-          className={editor.isActive('bulletList') ? 'is-active' : ''}
-        >
-          List
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            const url = window.prompt('Enter the URL of the image:');
-            if (url) {
-              editor.chain().focus().setImage({ src: url }).run();
-            }
-          }}
-        >
-          Image
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            const previousUrl = editor.getAttributes('link').href;
-            const url = window.prompt('URL', previousUrl);
-
-            if (url === null) return;
-            if (url === '') {
-              editor.chain().focus().extendMarkRange('link').unsetLink().run();
-              return;
-            }
-
-            editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
-          }}
-          className={editor.isActive('link') ? 'is-active' : ''}
-        >
-          Link
-        </button>
+        {buttons.map((button) => (
+          <button
+            key={button.name}
+            type="button"
+            onClick={button.action}
+            className={button.isActive ? 'is-active' : ''}
+          >
+            {button.name}
+          </button>
+        ))}
       </div>
       <EditorContent editor={editor} className="editor-content" />
     </div>

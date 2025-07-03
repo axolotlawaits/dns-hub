@@ -1,74 +1,93 @@
 /* Стили редактора Tiptap */
 .tiptap-editor {
     border: 1px solid var(--bg-alpha);
-    border-radius: 4px;
+    border-radius: 8px;
     background: var(--bg);
-    margin-bottom: 15px;
-  }
-  
-  .tiptap-editor .menu-bar {
-    padding: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.tiptap-editor .menu-bar {
+    padding: 12px;
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
     border-bottom: 1px solid var(--bg-alpha);
     background: var(--layer);
-    border-top-left-radius: 4px;
-    border-top-right-radius: 4px;
-  }
-  
-  .tiptap-editor .menu-bar button {
-    background: var(--bg-alpha);
-    border: none;
-    border-radius: 4px;
-    padding: 4px 8px;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+
+.tiptap-editor .menu-bar button {
+    background: var(--bg);
+    border: 1px solid var(--bg-alpha);
+    border-radius: 6px;
+    padding: 6px 12px;
     color: var(--font);
     cursor: pointer;
     font-size: 14px;
-  }
-  
-  .tiptap-editor .menu-bar button:hover {
+    font-weight: 500;
+    transition: background 0.2s, color 0.2s;
+}
+
+.tiptap-editor .menu-bar button:hover {
     background: var(--select);
-  }
-  
-  .tiptap-editor .menu-bar button.is-active {
-    background: var(--select);
-  }
-  
-  .tiptap-editor .editor-content {
-    padding: 15px;
-    min-height: 200px;
-  }
-  
-  /* Стили контента редактора */
-  .tiptap-editor .editor-content p {
-    margin: 0 0 1em 0;
     color: var(--font);
-    height: 100%;
-  }
-  
-  .tiptap-editor .editor-content h1,
-  .tiptap-editor .editor-content h2,
-  .tiptap-editor .editor-content h3 {
+}
+
+.tiptap-editor .menu-bar button.is-active {
+    background: var(--select);
+    color: var(--bg);
+    border-color: var(--select);
+}
+
+.tiptap-editor .editor-content {
+    flex-grow: 1;
+    padding: 20px;
+    min-height: 300px; /* Увеличиваем минимальную высоту */
+    color: var(--font);
+    line-height: 1.6;
+}
+
+.tiptap-editor .editor-content .tiptap {
+    outline: none; /* Убираем границу при фокусировке */
+    min-height: inherit; /* Наследуем минимальную высоту от родителя */
+}
+
+/* Стили контента редактора */
+.tiptap-editor .editor-content p {
+    margin: 0 0 1em 0;
+}
+
+.tiptap-editor .editor-content h1,
+.tiptap-editor .editor-content h2,
+.tiptap-editor .editor-content h3 {
     margin: 1em 0 0.5em 0;
     line-height: 1.2;
     color: var(--font-aux);
-  }
-  
-  .tiptap-editor .editor-content ul,
-  .tiptap-editor .editor-content ol {
+}
+
+.tiptap-editor .editor-content ul,
+.tiptap-editor .editor-content ol {
     padding: 0 0 0 2em;
     margin: 0 0 1em 0;
-    color: var(--font-aux);
-  }
-  
-  .tiptap-editor .editor-content img {
+}
+
+.tiptap-editor .editor-content img {
     max-width: 100%;
     height: auto;
-  }
-  
-  .tiptap-editor .editor-content a {
+    border-radius: 4px;
+}
+
+.tiptap-editor .editor-content a {
     color: var(--select);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.tiptap-editor .editor-content a:hover {
     text-decoration: underline;
-  }
-  
+}
