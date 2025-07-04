@@ -38,7 +38,7 @@ function Employee() {
     <div className="employee-card">
       <h1 className="employee-card-title">{employee.fio}</h1>
       <div className="employee-info">
-        <span>Должность: {employee.position}</span>
+        <span>Должность: {employee.position.name}</span>
         <span>Почта: {employee.email}</span>
         <span>Статус: {employee.status}</span>
         <span>Филиал: {employee.branch.name}</span>

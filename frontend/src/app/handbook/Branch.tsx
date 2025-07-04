@@ -62,9 +62,9 @@ function Branch() {
               </div>
               <div className="branch-card-block">
                 {branch.userData.map(user => {
-                  return user.position.includes('Управляющий') &&
+                  return user.position.name.includes('Управляющий') &&
                     <Fragment key={user.uuid}>
-                      <span className="branch-card-text">{user.position}</span>
+                      <span className="branch-card-text">{user.position.name}</span>
                       <span className="branch-card-text">{user.fio}</span>
                     </Fragment>
                   
