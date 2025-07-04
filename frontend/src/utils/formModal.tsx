@@ -62,7 +62,6 @@ interface DynamicFormModalProps {
 const getFileIcon = (fileName: string) => {
   const extension = fileName.split('.').pop()?.toLowerCase();
   const iconSize = 20;
-
   const iconMap: Record<string, JSX.Element> = {
     jpg: <IconPhoto size={iconSize} />,
     jpeg: <IconPhoto size={iconSize} />,
@@ -85,7 +84,6 @@ const getFileIcon = (fileName: string) => {
     txt: <IconFileTypeTxt size={iconSize} />,
     csv: <IconFileTypeCsv size={iconSize} />,
   };
-
   return iconMap[extension as string] || <IconFile size={iconSize} />;
 };
 
@@ -111,9 +109,9 @@ const FileUploadComponent = ({
               <Image src={`${API}/${attachment.source}`} width={100} mt="sm" alt="Preview" />
             )}
           </Group>
-          <Button 
-            variant="subtle" 
-            color="red" 
+          <Button
+            variant="subtle"
+            color="red"
             size="sm"
             onClick={() => onRemoveAttachment(attachment.id)}
           >
@@ -196,7 +194,6 @@ export const DynamicFormModal = ({
 
   const renderField = useCallback((field: FormField) => {
     const commonProps = {
-      key: field.name,
       label: field.label,
       required: field.required,
       ...form.getInputProps(field.name),
@@ -205,19 +202,19 @@ export const DynamicFormModal = ({
 
     switch (field.type) {
       case 'text':
-        return <TextInput {...commonProps} />;
+        return <TextInput key={field.name} {...commonProps} />;
       case 'textarea':
-        return <Textarea {...commonProps} />;
+        return <Textarea key={field.name} {...commonProps} />;
       case 'select':
-        return <Select {...commonProps} data={field.options || []} />;
+        return <Select key={field.name} {...commonProps} data={field.options || []} />;
       case 'selectSearch':
-        return <Select {...commonProps} data={field.options || []} searchable nothingFoundMessage="Ничего не найдено" clearable />;
+        return <Select key={field.name} {...commonProps} data={field.options || []} searchable nothingFoundMessage="Ничего не найдено" clearable />;
       case 'date':
-        return <TextInput {...commonProps} type="date" />;
+        return <TextInput key={field.name} {...commonProps} type="date" />;
       case 'datetime':
-        return <TextInput {...commonProps} type="datetime-local" />;
+        return <TextInput key={field.name} {...commonProps} type="datetime-local" />;
       case 'number':
-        return <TextInput {...commonProps} type="number" step={field.step || "any"} min={field.min} max={field.max} />;
+        return <TextInput key={field.name} {...commonProps} type="number" step={field.step || "any"} min={field.min} max={field.max} />;
       case 'file':
         return (
           <div key={field.name}>
@@ -256,9 +253,9 @@ export const DynamicFormModal = ({
             {getFileIcon(fileName)}
             <Text size="sm">{fileName}</Text>
           </Group>
-          <Text 
-            size="sm" 
-            c="blue" 
+          <Text
+            size="sm"
+            c="blue"
             style={{ cursor: 'pointer' }}
             onClick={(e) => {
               e.stopPropagation();
@@ -268,7 +265,6 @@ export const DynamicFormModal = ({
             Скачать
           </Text>
         </Group>
-
         <FilePreviewModal
           opened={previewId === fileId}
           onClose={() => setPreviewId(null)}

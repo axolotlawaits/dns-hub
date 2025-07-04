@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { API } from '../../../config/constants';
 import { useUserContext } from '../../../hooks/useUserContext';
+import { notificationSystem } from '../../../utils/Push';
 import { formatName } from '../../../utils/format';
 import { dateRange, FilterGroup } from '../../../utils/filter';
 import { Button, Title, Box, LoadingOverlay, Grid, Card, Group, ActionIcon } from '@mantine/core';
@@ -12,7 +13,10 @@ import { DndProviderWrapper } from '../../../utils/dnd';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { TableComponent } from '../../../utils/table';
 
-// Types
+type Updater<T> = T | ((prev: T) => T);
+const MODEL_UUID = 'dd6ec264-4e8c-477a-b2d6-c62a956422c0';
+const CHAPTER = 'Тип медиа';
+
 interface TypeContentOption {
   value: string;
   label: string;
@@ -27,10 +31,11 @@ interface MediaAttachment {
   id: string;
   createdAt: Date;
   recordId: string;
-  userAdd: string; // Changed from string to User
+  userAdd: string;
   source: string;
   user: User;
 }
+
 interface Type {
   id: string;
   name: string;
@@ -43,7 +48,7 @@ interface Media {
   name?: string;
   information?: string;
   urlMedia2?: string;
-  typeContent?: Type | null; // ✅ Теперь это объект или null
+  typeContent?: Type | null;
   MediaAttachment: MediaAttachment[];
   userAdd: User;
   userUpdated?: User;
@@ -65,7 +70,6 @@ interface MediaForm {
   attachments: Array<{ id?: string; userAdd?: string; source: File | string }>;
 }
 
-// Constants
 const DEFAULT_MEDIA_FORM: MediaForm = {
   name: '',
   information: '',
@@ -74,10 +78,6 @@ const DEFAULT_MEDIA_FORM: MediaForm = {
   attachments: [],
 };
 
-const MODEL_UUID = 'dd6ec264-4e8c-477a-b2d6-c62a956422c0';
-const CHAPTER = 'Тип медиа';
-
-// Utility functions
 const formatTableData = (data: Media[]): MediaWithFormattedData[] => {
   return data.map((item) => ({
     ...item,
@@ -85,7 +85,7 @@ const formatTableData = (data: Media[]): MediaWithFormattedData[] => {
     formattedUpdatedAt: item.updatedAt ? dayjs(item.updatedAt).format('DD.MM.YYYY HH:mm') : '-',
     userName: item.userAdd?.name ? formatName(item.userAdd.name) : 'Unknown',
     updatedUserName: item.userUpdated?.name ? formatName(item.userUpdated.name) : '-',
-    typeContentName: item.typeContent?.name || 'Без типа', // ✅ Теперь используем .name
+    typeContentName: item.typeContent?.name || 'Без типа',
   }));
 };
 
@@ -93,20 +93,21 @@ const getFilterOptions = <T,>(data: T[], mapper: (item: T) => string) => {
   const values = data
     .map(mapper)
     .filter((v, i, a) => a.indexOf(v) === i);
-    
   return values.map(value => ({ value, label: value }));
 };
 
 export default function MediaList() {
   const { user } = useUserContext();
-  const [media, setMedia] = useState<Media[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedMedia, setSelectedMedia] = useState<Media | null>(null);
-  const [mediaForm, setMediaForm] = useState(DEFAULT_MEDIA_FORM);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'formattedCreatedAt', desc: true }]);
-  const [typeContentOptions, setTypeContentOptions] = useState<TypeContentOption[]>([]);
+  const [state, setState] = useState({
+    media: [] as Media[],
+    loading: true,
+    selectedMedia: null as Media | null,
+    mediaForm: DEFAULT_MEDIA_FORM,
+    uploadError: null as string | null,
+    columnFilters: [] as ColumnFiltersState,
+    sorting: [{ id: 'formattedCreatedAt', desc: true }] as SortingState,
+    typeContentOptions: [] as TypeContentOption[],
+  });
 
   const modals = {
     view: useDisclosure(false),
@@ -115,23 +116,37 @@ export default function MediaList() {
     delete: useDisclosure(false),
   };
 
+  const showNotification = useCallback((type: 'success' | 'error', message: string) => {
+    notificationSystem.addNotification(
+      type === 'success' ? 'Успех' : 'Ошибка',
+      message,
+      type
+    );
+  }, []);
+
   const fetchData = useCallback(async (url: string, options?: RequestInit) => {
     try {
       const response = await fetch(url, {
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           ...(options?.method !== 'DELETE' && { 'Content-Type': 'application/json' })
         },
         ...options,
       });
-
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        showNotification('error', `Ошибка запроса: ${errorText}`);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      if (options?.method === 'DELETE') {
+        return {};
+      }
       return await response.json();
     } catch (error) {
       console.error(`Error fetching data from ${url}:`, error);
       throw error;
     }
-  }, []);
+  }, [showNotification]);
 
   const fetchTypeOptions = useCallback(async () => {
     const data = await fetchData(`${API}/type/sub?model_uuid=${MODEL_UUID}&chapter=${CHAPTER}`);
@@ -145,15 +160,17 @@ export default function MediaList() {
           fetchData(`${API}/add/media`),
           fetchTypeOptions()
         ]);
-        setMedia(mediaData);
-        setTypeContentOptions(typeOptions);
+        setState(prev => ({
+          ...prev,
+          media: mediaData,
+          typeContentOptions: typeOptions,
+          loading: false
+        }));
       } catch (error) {
         console.error('Failed to load data:', error);
-      } finally {
-        setLoading(false);
+        setState(prev => ({ ...prev, loading: false }));
       }
     };
-
     loadData();
   }, [fetchData, fetchTypeOptions]);
 
@@ -179,7 +196,7 @@ export default function MediaList() {
         name: 'typeContent',
         label: 'Тип контента',
         type: 'select' as const,
-        options: typeContentOptions,
+        options: state.typeContentOptions,
         required: true
       },
       {
@@ -195,114 +212,23 @@ export default function MediaList() {
       }
     ],
     initialValues: DEFAULT_MEDIA_FORM,
-  }), [typeContentOptions]);
+  }), [state.typeContentOptions]);
 
-const viewFieldsConfig = useMemo(() => [
-  { label: 'Название', value: (item: Media) => item.name || null, },
-  { label: 'Тип контента', value: (item: Media) => item.typeContent?.name || null,},
-  { label: 'Создал', value: (item: Media) => item.userAdd?.name || null, },
-  { label: 'Обновил', value: (item: Media) => item.userUpdated?.name || null, },
-  { label: 'Дата создания', value: (item: Media) => dayjs(item.createdAt).format('DD.MM.YYYY HH:mm'), },
-  { label: 'Последнее обновление', value: (item: Media) => item.updatedAt ? dayjs(item.updatedAt).format('DD.MM.YYYY HH:mm') : null, },
-], []);
+  const viewFieldsConfig = useMemo(() => [
+    { label: 'Название', value: (item: MediaWithFormattedData) => item.name || null },
+    { label: 'Тип контента', value: (item: MediaWithFormattedData) => item.typeContentName || null },
+    { label: 'Создал', value: (item: MediaWithFormattedData) => item.userName || null },
+    { label: 'Обновил', value: (item: MediaWithFormattedData) => item.updatedUserName || null },
+    { label: 'Дата создания', value: (item: MediaWithFormattedData) => item.formattedCreatedAt },
+    { label: 'Последнее обновление', value: (item: MediaWithFormattedData) => item.formattedUpdatedAt },
+  ], []);
 
-  const tableData = useMemo(() => formatTableData(media), [media]);
-  
+  const tableData = useMemo(() => formatTableData(state.media), [state.media]);
+
   const filterOptions = useMemo(() => ({
-    user: getFilterOptions(media, m => m.userAdd?.name ? formatName(m.userAdd.name) : 'Unknown'),
-    type: getFilterOptions(media, m => m.typeContent?.name || 'Без типа')
-  }), [media]);
-
-  const handleTableAction = useCallback((action: 'view' | 'edit' | 'delete', data: Media) => {
-    setSelectedMedia(data);
-    if (action === 'edit') {
-      setMediaForm({
-        name: data.name,
-        information: data.information,
-        urlMedia2: data.urlMedia2,
-        typeContent: data.typeContent?.id || '', // ✅ Добавлено
-        attachments: data.MediaAttachment.map(a => ({
-          id: a.id,
-          userAdd: a.userAdd,
-          source: a.source,
-        })),
-      });
-    }
-    modals[action][1].open();
-  }, [modals]);
-
-  const handleDeleteConfirm = useCallback(async () => {
-    if (!selectedMedia) return;
-    
-    try {
-      await fetchData(`${API}/add/media/${selectedMedia.id}`, { method: 'DELETE' });
-      setMedia(prev => prev.filter(m => m.id !== selectedMedia.id));
-      modals.delete[1].close();
-    } catch (error) {
-      console.error('Failed to delete media:', error);
-      setUploadError(error instanceof Error ? error.message : 'Ошибка удаления');
-    }
-  }, [selectedMedia, fetchData, modals.delete]);
-
-  const handleFormSubmit = useCallback(async (values: Record<string, any>, mode: 'create' | 'edit') => {
-    const formData = new FormData();
-    const { attachments, ...cleanedValues } = values;
-
-    // Добавляем пользователя
-    formData.append(mode === 'create' ? 'userAdd' : 'userUpdated', user!.id);
-
-    // Добавляем остальные поля
-    Object.entries(cleanedValues).forEach(([key, value]) => {
-      if (value !== undefined) {
-        formData.append(key, String(value));
-      }
-    });
-
-    // Обрабатываем вложения
-    if (attachments) {
-      attachments.forEach((attachment: { source: File | string }) => {
-        if (attachment.source instanceof File) {
-          formData.append('attachments', attachment.source);
-        }
-      });
-
-      // Для редактирования - удаленные вложения
-      if (mode === 'edit' && selectedMedia) {
-        const removedAttachments = selectedMedia.MediaAttachment
-          .filter(a => !attachments.some((va: any) => va.id === a.id))
-          .map(a => a.id);
-        
-        if (removedAttachments.length) {
-          formData.append('removedAttachments', JSON.stringify(removedAttachments));
-        }
-      }
-    }
-
-    try {
-      const url = mode === 'create' 
-        ? `${API}/add/media` 
-        : `${API}/add/media/${selectedMedia!.id}`;
-
-      const response = await fetch(url, {
-        method: mode === 'create' ? 'POST' : 'PUT',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-        body: formData,
-      });
-
-      if (!response.ok) throw new Error(await response.text());
-
-      const result = await response.json();
-      setMedia(prev => mode === 'create' 
-        ? [result, ...prev] 
-        : prev.map(m => m.id === selectedMedia!.id ? result : m));
-        
-      modals[mode][1].close();
-      setUploadError(null);
-    } catch (error) {
-      console.error(`Media ${mode} error:`, error);
-      setUploadError(error instanceof Error ? error.message : 'Unknown error');
-    }
-  }, [user, selectedMedia, modals]);
+    user: getFilterOptions(state.media, m => m.userAdd?.name ? formatName(m.userAdd.name) : 'Unknown'),
+    type: getFilterOptions(state.media, m => m.typeContent?.name || 'Без типа')
+  }), [state.media]);
 
   const filters = useMemo(() => [
     {
@@ -364,22 +290,163 @@ const viewFieldsConfig = useMemo(() => [
         <Group wrap="nowrap">
           <ActionIcon
             color="blue"
-            onClick={(e) => { e.stopPropagation(); handleTableAction('edit', row.original); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleTableAction('edit', row.original);
+            }}
           >
             <IconPencil size={18} />
           </ActionIcon>
           <ActionIcon
             color="red"
-            onClick={() => handleTableAction('delete', row.original)}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleTableAction('delete', row.original);
+            }}
           >
             <IconTrash size={18} />
           </ActionIcon>
         </Group>
       ),
     },
-  ], [handleTableAction]);
+  ], []);
 
-  if (loading) return <LoadingOverlay visible />;
+  const handleTableAction = useCallback((action: 'view' | 'edit' | 'delete', data: Media) => {
+    setState(prev => ({ ...prev, selectedMedia: data }));
+    if (action === 'edit') {
+      setState(prev => ({
+        ...prev,
+        mediaForm: {
+          name: data.name,
+          information: data.information,
+          urlMedia2: data.urlMedia2,
+          typeContent: data.typeContent?.id || '',
+          attachments: data.MediaAttachment.map(a => ({
+            id: a.id,
+            userAdd: a.userAdd,
+            source: a.source,
+          })),
+        }
+      }));
+    }
+    modals[action][1].open();
+  }, [modals]);
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!state.selectedMedia) return;
+    try {
+      await fetchData(`${API}/add/media/${state.selectedMedia.id}`, {
+        method: 'DELETE'
+      });
+      setState(prev => ({
+        ...prev,
+        media: prev.media.filter(m => m.id !== state.selectedMedia!.id),
+        uploadError: null
+      }));
+      modals.delete[1].close();
+      showNotification('success', 'Медиа успешно удалено');
+    } catch (error) {
+      console.error('Failed to delete media:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Ошибка удаления';
+      setState(prev => ({ ...prev, uploadError: errorMsg }));
+      showNotification('error', errorMsg);
+    }
+  }, [state.selectedMedia, fetchData, modals.delete, showNotification]);
+
+  const handleColumnFiltersChange = useCallback((updaterOrValue: Updater<ColumnFiltersState>) => {
+    setState(prev => ({
+      ...prev,
+      columnFilters: typeof updaterOrValue === 'function'
+        ? updaterOrValue(prev.columnFilters)
+        : updaterOrValue
+    }));
+  }, []);
+
+  const handleSortingChange = useCallback((updaterOrValue: Updater<SortingState>) => {
+    setState(prev => ({
+      ...prev,
+      sorting: typeof updaterOrValue === 'function'
+        ? updaterOrValue(prev.sorting)
+        : updaterOrValue
+    }));
+  }, []);
+
+  const handleFormSubmit = useCallback(async (values: Record<string, any>, mode: 'create' | 'edit') => {
+    const formData = new FormData();
+    const { attachments, ...cleanedValues } = values;
+
+    formData.append(mode === 'create' ? 'userAdd' : 'userUpdated', user!.id);
+    Object.entries(cleanedValues).forEach(([key, value]) => {
+      if (value !== undefined) {
+        formData.append(key, String(value));
+      }
+    });
+
+    if (attachments) {
+      attachments.forEach((attachment: { source: File | string }) => {
+        if (attachment.source instanceof File) {
+          formData.append('attachments', attachment.source);
+        }
+      });
+
+      if (mode === 'edit' && state.selectedMedia) {
+        const removedAttachments = state.selectedMedia.MediaAttachment
+          .filter(a => !attachments.some((va: any) => va.id === a.id))
+          .map(a => a.id);
+
+        if (removedAttachments.length) {
+          formData.append('removedAttachments', JSON.stringify(removedAttachments));
+        }
+      }
+    }
+
+    try {
+      const url = mode === 'create'
+        ? `${API}/add/media`
+        : `${API}/add/media/${state.selectedMedia!.id}`;
+
+      const response = await fetch(url, {
+        method: mode === 'create' ? 'POST' : 'PUT',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText);
+      }
+
+      const result = await response.json();
+
+      // Обновляем состояние с учетом данных пользователя
+      const updatedResult = {
+        ...result,
+        userAdd: user,
+        userUpdated: mode === 'edit' ? user : result.userUpdated,
+      };
+
+      setState(prev => ({
+        ...prev,
+        media: mode === 'create'
+          ? [updatedResult, ...prev.media]
+          : prev.media.map(m => m.id === state.selectedMedia!.id ? updatedResult : m),
+        uploadError: null
+      }));
+
+      modals[mode][1].close();
+      showNotification(
+        'success',
+        mode === 'create' ? 'Медиа успешно создано' : 'Медиа успешно обновлено'
+      );
+    } catch (error) {
+      console.error(`Media ${mode} error:`, error);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      setState(prev => ({ ...prev, uploadError: errorMsg }));
+      showNotification('error', errorMsg);
+    }
+  }, [user, state.selectedMedia, modals, showNotification]);
+
+  if (state.loading) return <LoadingOverlay visible />;
 
   return (
     <DndProviderWrapper>
@@ -392,64 +459,61 @@ const viewFieldsConfig = useMemo(() => [
         >
           Добавить медиа
         </Button>
-        
         <Title order={2} mt="md" mb="lg">
           Медиа библиотека
         </Title>
-        
         <Grid>
           <Grid.Col span={12}>
             <FilterGroup
               filters={filters}
-              columnFilters={columnFilters}
-              onColumnFiltersChange={(columnId, value) => 
-                setColumnFilters(prev => [
-                  ...prev.filter(f => f.id !== columnId),
-                  ...(value ? [{ id: columnId, value }] : [])
-                ])
+              columnFilters={state.columnFilters}
+              onColumnFiltersChange={(columnId, value) =>
+                setState(prev => ({
+                  ...prev,
+                  columnFilters: [
+                    ...prev.columnFilters.filter(f => f.id !== columnId),
+                    ...(value ? [{ id: columnId, value }] : [])
+                  ]
+                }))
               }
             />
           </Grid.Col>
-          
           <Grid.Col span={12}>
             <Card withBorder shadow="sm">
               <TableComponent<MediaWithFormattedData>
                 data={tableData}
                 columns={columns}
-                columnFilters={columnFilters}
-                sorting={sorting}
-                onColumnFiltersChange={setColumnFilters}
-                onSortingChange={setSorting}
+                columnFilters={state.columnFilters}
+                sorting={state.sorting}
+                onColumnFiltersChange={handleColumnFiltersChange}
+                onSortingChange={handleSortingChange}
                 filterFns={{ dateRange }}
                 onRowClick={(rowData) => handleTableAction('view', rowData)}
               />
             </Card>
           </Grid.Col>
         </Grid>
-
         <DynamicFormModal
           opened={modals.view[0]}
           onClose={modals.view[1].close}
           title="Просмотр медиа"
           mode="view"
           initialValues={{
-            ...selectedMedia,
-            attachments: selectedMedia?.MediaAttachment || [],
+            ...state.selectedMedia,
+            attachments: state.selectedMedia?.MediaAttachment || [],
           }}
           viewFieldsConfig={viewFieldsConfig}
         />
-
         <DynamicFormModal
           opened={modals.edit[0]}
           onClose={modals.edit[1].close}
           title="Редактирование медиа"
           mode="edit"
           fields={formConfig.fields}
-          initialValues={mediaForm}
+          initialValues={state.mediaForm}
           onSubmit={(values: Record<string, any>) => handleFormSubmit(values, 'edit')}
-          error={uploadError}
+          error={state.uploadError}
         />
-
         <DynamicFormModal
           opened={modals.create[0]}
           onClose={modals.create[1].close}
@@ -458,16 +522,15 @@ const viewFieldsConfig = useMemo(() => [
           fields={formConfig.fields}
           initialValues={DEFAULT_MEDIA_FORM}
           onSubmit={(values: Record<string, any>) => handleFormSubmit(values, 'create')}
-          error={uploadError}
+          error={state.uploadError}
         />
-
         <DynamicFormModal
           opened={modals.delete[0]}
           onClose={modals.delete[1].close}
           title="Подтвердите удаление"
           mode="delete"
           onConfirm={handleDeleteConfirm}
-          initialValues={selectedMedia || {}}
+          initialValues={state.selectedMedia || {}}
         />
       </Box>
     </DndProviderWrapper>

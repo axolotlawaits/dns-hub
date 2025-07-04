@@ -1,12 +1,6 @@
 import { Router } from 'express';
-import {
-  getAllMedia,
-  createMedia,
-  getMediaById,
-  updateMedia,
-  deleteMedia,
-} from '../../controllers/add/media.js'; // Обновленный путь к контроллерам
-import uploadMedia from '../../middleware/uploader.js'; // Переименованный middleware
+import { getAllMedia, createMedia, getMediaById, updateMedia, deleteMedia } from '../../controllers/add/media.js'; // Обновленный путь к контроллерам
+import uploadMedia from '../../middleware/uploaderMedia.js'; // Переименованный middleware
 
 const router = Router();
 

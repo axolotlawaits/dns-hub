@@ -1,18 +1,18 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { API } from '../../../config/constants';
 import { useUserContext } from '../../../hooks/useUserContext';
+import { notificationSystem } from '../../../utils/Push';
 import { formatName } from '../../../utils/format';
 import { dateRange, FilterGroup } from '../../../utils/filter';
 import { Button, Title, Box, LoadingOverlay, Grid, Card, Group, ActionIcon } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
 import { IconPencil, IconTrash } from '@tabler/icons-react';
-import { ColumnDef, ColumnFiltersState, SortingState} from '@tanstack/react-table';
+import { ColumnDef, ColumnFiltersState, SortingState } from '@tanstack/react-table';
 import { DndProviderWrapper } from '../../../utils/dnd';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { TableComponent } from '../../../utils/table';
 
-// Types
 interface TypeMailOption {
   value: string;
   label: string;
@@ -50,24 +50,21 @@ interface CorrespondenceWithFormattedData extends Correspondence {
   formattedReceiptDate: string;
   formattedCreatedAt: string;
   userName: string;
-  typeMail: string;
+  typeMailName: string;
 }
 
 interface CorrespondenceForm {
   ReceiptDate: string;
-  userAdd: string;
   from: string;
   to: string;
   content: string;
   typeMail: string;
   numberMail: string;
-  attachments: Array<{ id?: string; userAdd: string; source: File | string }>;
+  attachments: Array<{ id?: string; userAdd?: string; source: File | string }>;
 }
 
-// Constants
 const DEFAULT_CORRESPONDENCE_FORM: CorrespondenceForm = {
   ReceiptDate: dayjs().format('YYYY-MM-DDTHH:mm'),
-  userAdd: '',
   from: '',
   to: '',
   content: '',
@@ -76,45 +73,38 @@ const DEFAULT_CORRESPONDENCE_FORM: CorrespondenceForm = {
   attachments: [],
 };
 
-const MODEL_UUID = '7be62529-3fb5-430d-9017-48b752841e54';
-const CHAPTER = 'Тип письма';
-
-// Utility functions
-const formatTableData = (data: Correspondence[]): CorrespondenceWithFormattedData[] => {
-  return data.map((item) => ({
-    ...item,
-    formattedReceiptDate: dayjs(item.ReceiptDate).format('DD.MM.YYYY HH:mm'),
-    formattedCreatedAt: dayjs(item.createdAt).format('DD.MM.YYYY HH:mm'),
-    userName: item.user?.name ? formatName(item.user.name) : 'Unknown',
-    typeMail: item.typeMail
-  }));
+const formatTableData = (data: Correspondence[], typeMailOptions: TypeMailOption[]): CorrespondenceWithFormattedData[] => {
+  return data.map((item) => {
+    const typeMailName = typeMailOptions.find(option => option.value === item.typeMail)?.label || 'Без типа';
+    return {
+      ...item,
+      formattedReceiptDate: dayjs(item.ReceiptDate).format('DD.MM.YYYY HH:mm'),
+      formattedCreatedAt: dayjs(item.createdAt).format('DD.MM.YYYY HH:mm'),
+      userName: item.user?.name ? formatName(item.user.name) : 'Unknown',
+      typeMailName,
+    };
+  });
 };
 
-const getUserFilterOptions = (data: Correspondence[]) => {
-  const uniqueNames = Array.from(
-    new Set(data.map((c) => c.user?.name ? formatName(c.user.name) : 'Unknown'))
-  );
-  return uniqueNames.map((name) => ({ value: name, label: name }));
+const getFilterOptions = <T,>(data: T[], mapper: (item: T) => string) => {
+  const values = data
+    .map(mapper)
+    .filter((v, i, a) => a.indexOf(v) === i);
+  return values.map(value => ({ value, label: value }));
 };
 
-const getTypeFilterOptions = (data: Correspondence[]) => {
-    const uniqueType = Array.from(
-      new Set(data.map((c) => c.typeMail ? c.typeMail : 'Unknown')
-    ));
-    return uniqueType.map((typeMail) => ({ value: typeMail, label: typeMail }));
-  };
-
-// Main component
 export default function CorrespondenceList() {
   const { user } = useUserContext();
-  const [correspondence, setCorrespondence] = useState<Correspondence[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedCorrespondence, setSelectedCorrespondence] = useState<Correspondence | null>(null);
-  const [correspondenceForm, setCorrespondenceForm] = useState(DEFAULT_CORRESPONDENCE_FORM);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'formattedReceiptDate', desc: true }]);
-  const [typeMailOptions, setTypeMailOptions] = useState<TypeMailOption[]>([]);
+  const [state, setState] = useState({
+    correspondence: [] as Correspondence[],
+    loading: true,
+    selectedCorrespondence: null as Correspondence | null,
+    correspondenceForm: DEFAULT_CORRESPONDENCE_FORM,
+    uploadError: null as string | null,
+    columnFilters: [] as ColumnFiltersState,
+    sorting: [{ id: 'formattedReceiptDate', desc: true }] as SortingState,
+    typeMailOptions: [] as TypeMailOption[],
+  });
 
   const modals = {
     view: useDisclosure(false),
@@ -123,100 +113,106 @@ export default function CorrespondenceList() {
     delete: useDisclosure(false),
   };
 
-  // API functions
+  const showNotification = useCallback((type: 'success' | 'error', message: string) => {
+    notificationSystem.addNotification(
+      type === 'success' ? 'Успех' : 'Ошибка',
+      message,
+      type
+    );
+  }, []);
+
   const fetchData = useCallback(async (url: string, options?: RequestInit) => {
     try {
       const response = await fetch(url, {
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': options?.method === 'PATCH' ? 'application/json' : 'application/json'
+          ...(options?.method !== 'DELETE' && { 'Content-Type': 'application/json' })
         },
         ...options,
       });
-
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(errorText || `HTTP error! status: ${response.status}`);
+        showNotification('error', `Ошибка запроса: ${errorText}`);
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-
-      return response.status !== 204 ? await response.json() : null;
+      if (options?.method === 'DELETE') {
+        return {};
+      }
+      return await response.json();
     } catch (error) {
       console.error(`Error fetching data from ${url}:`, error);
       throw error;
     }
-  }, []);
+  }, [showNotification]);
 
   const fetchTypeMailOptions = useCallback(async () => {
     const data = await fetchData(`${API}/type/sub?model_uuid=${MODEL_UUID}&chapter=${CHAPTER}`);
-    return data.map((type: any) => ({
-      value: type.name,
-      label: type.name,
-    }));
+    return data.map((type: any) => ({ value: type.id, label: type.name }));
   }, [fetchData]);
 
-  // Initial data loading
   useEffect(() => {
     const loadData = async () => {
       try {
         const [correspondenceData, typeOptions] = await Promise.all([
           fetchData(`${API}/aho/correspondence`),
-          fetchTypeMailOptions(),
+          fetchTypeMailOptions()
         ]);
-        setCorrespondence(correspondenceData);
-        setTypeMailOptions(typeOptions);
+        setState(prev => ({
+          ...prev,
+          correspondence: correspondenceData,
+          typeMailOptions: typeOptions,
+          loading: false
+        }));
       } catch (error) {
         console.error('Failed to load data:', error);
-      } finally {
-        setLoading(false);
+        setState(prev => ({ ...prev, loading: false }));
       }
     };
-
     loadData();
   }, [fetchData, fetchTypeMailOptions]);
 
-  // Form configurations
   const formConfig = useMemo(() => ({
     fields: [
       {
         name: 'ReceiptDate',
         label: 'Дата получения',
         type: 'datetime' as const,
-        required: true,
+        required: true
       },
       {
         name: 'from',
         label: 'От',
         type: 'text' as const,
-        required: true,
+        required: true
       },
       {
         name: 'to',
         label: 'Кому',
         type: 'text' as const,
-        required: true,
-      },
-      {
-        name: 'typeMail',
-        label: 'Тип письма',
-        type: 'select' as const,
-        required: true,
-        options: typeMailOptions,
-      },
-      {
-        name: 'numberMail',
-        label: 'Номер письма',
-        type: 'text' as const,
-        required: true,
+        required: true
       },
       {
         name: 'content',
         label: 'Содержание',
         type: 'textarea' as const,
-        required: true,
+        required: true
+      },
+      {
+        name: 'typeMail',
+        label: 'Тип письма',
+        type: 'select' as const,
+        options: state.typeMailOptions,
+        required: true
+      },
+      {
+        name: 'numberMail',
+        label: 'Номер письма',
+        type: 'text' as const,
+        required: true
       },
       {
         name: 'attachments',
-        label: 'Файлы',
+        label: 'Вложения',
         type: 'file' as const,
         withDnd: true,
         onRemove: (index: number, values: any, setFieldValue: any) => {
@@ -224,232 +220,260 @@ export default function CorrespondenceList() {
           newAttachments.splice(index, 1);
           setFieldValue('attachments', newAttachments);
         }
-      },
+      }
     ],
     initialValues: DEFAULT_CORRESPONDENCE_FORM,
-  }), [typeMailOptions]);
+  }), [state.typeMailOptions]);
 
   const viewFieldsConfig = useMemo(() => [
-    { label: 'Дата получения', value: (item: Correspondence) => dayjs(item.ReceiptDate).format('DD.MM.YYYY HH:mm') },
-    { label: 'От', value: (item: Correspondence) => item.from },
-    { label: 'Кому', value: (item: Correspondence) => item.to },
-    { label: 'Тип письма', value: (item: Correspondence) => item.typeMail },
-    { label: 'Номер письма', value: (item: Correspondence) => item.numberMail },
-    { label: 'Содержание', value: (item: Correspondence) => item.content },
-    { label: 'Добавил', value: (item: Correspondence) => item.user?.name || 'Unknown' },
-    { label: 'Дата создания', value: (item: Correspondence) => dayjs(item.createdAt).format('DD.MM.YYYY HH:mm') },
+    { label: 'Дата получения', value: (item: CorrespondenceWithFormattedData) => item.formattedReceiptDate },
+    { label: 'От', value: (item: CorrespondenceWithFormattedData) => item.from },
+    { label: 'Кому', value: (item: CorrespondenceWithFormattedData) => item.to },
+    { label: 'Тип письма', value: (item: CorrespondenceWithFormattedData) => item.typeMailName },
+    { label: 'Номер письма', value: (item: CorrespondenceWithFormattedData) => item.numberMail },
+    { label: 'Содержание', value: (item: CorrespondenceWithFormattedData) => item.content },
+    { label: 'Создал', value: (item: CorrespondenceWithFormattedData) => item.user?.name || 'Unknown' },
+    { label: 'Дата создания', value: (item: CorrespondenceWithFormattedData) => item.formattedCreatedAt },
   ], []);
 
-  // Memoized data
-  const tableData = useMemo(() => formatTableData(correspondence), [correspondence]);
-  const userFilterOptions = useMemo(() => getUserFilterOptions(correspondence), [correspondence]);
-  const typeFilterOptions = useMemo(() => getTypeFilterOptions(correspondence), [correspondence]);
 
-  // Handlers
-  const handleTableAction = useCallback((action: 'view' | 'edit' | 'delete', data: Correspondence) => {
-    setSelectedCorrespondence(data);
-    if (action === 'edit') {
-      setCorrespondenceForm({
-        ReceiptDate: dayjs(data.ReceiptDate).format('YYYY-MM-DDTHH:mm'),
-        userAdd: data.userAdd,
-        from: data.from,
-        to: data.to,
-        content: data.content,
-        typeMail: data.typeMail,
-        numberMail: data.numberMail,
-        attachments: data.attachments.map((a) => ({
-          id: a.id,
-          userAdd: a.userAdd,
-          source: a.source,
-        })),
-      });
-    }
-    modals[action][1].open();
-  }, [modals]);
+  const tableData = useMemo(() => formatTableData(state.correspondence, state.typeMailOptions), [state.correspondence, state.typeMailOptions]);
 
-  const handleDeleteConfirm = useCallback(async () => {
-    if (!selectedCorrespondence) return;
-    
-    try {
-      await fetchData(`${API}/aho/correspondence/${selectedCorrespondence.id}`, {
-        method: 'DELETE',
-      });
-  
-      setCorrespondence(prev => prev.filter(item => item.id !== selectedCorrespondence.id));
-      modals.delete[1].close();
-    } catch (error) {
-      console.error('Failed to delete correspondence:', error);
-      setUploadError(error instanceof Error ? error.message : 'Failed to delete correspondence');
-    }
-  }, [selectedCorrespondence, fetchData, modals.delete]);
+  const filterOptions = useMemo(() => ({
+    user: getFilterOptions(state.correspondence, c => c.user?.name ? formatName(c.user.name) : 'Unknown'),
+    type: getFilterOptions(state.correspondence, c => {
+      const typeMailName = state.typeMailOptions.find(option => option.value === c.typeMail)?.label || 'Без типа';
+      return typeMailName;
+    })
+  }), [state.correspondence, state.typeMailOptions]);
 
-  const handleFormSubmit = useCallback(async (values: Record<string, any>, mode: 'create' | 'edit') => {
-    if (!user && mode === 'create') return;
-    
-    try {
-      const formData = new FormData();
-      formData.append('ReceiptDate', new Date(values.ReceiptDate).toISOString());
-      formData.append('userAdd', mode === 'create' ? user!.id : values.userAdd);
-      formData.append('from', values.from);
-      formData.append('to', values.to);
-      formData.append('content', values.content);
-      formData.append('typeMail', values.typeMail);
-      formData.append('numberMail', values.numberMail);
-  
-      // Handle attachments
-      if (values.attachments?.length > 0) {
-        values.attachments.forEach((attachment: { id?: string; source: File | string }) => {
-          if (attachment.source instanceof File) {
-            formData.append('attachments', attachment.source);
-          }
-        });
-      }
-  
-      // Handle removed attachments for edit mode
-      if (mode === 'edit' && selectedCorrespondence) {
-        const valuesAttachments = values.attachments || []; // Ensure it's always an array
-        const removedAttachments = selectedCorrespondence.attachments
-          .filter(originalAttachment => 
-            !valuesAttachments.some((a: { id?: string }) => a.id === originalAttachment.id)
-          )
-          .map(a => a.id);
-        
-        if (removedAttachments.length > 0) {
-          formData.append('removedAttachments', JSON.stringify(removedAttachments));
-        }
-      }
-  
-      const url = mode === 'create' 
-        ? `${API}/aho/correspondence` 
-        : `${API}/aho/correspondence/${selectedCorrespondence!.id}`;
-      
-      const response = await fetch(url, {
-        method: mode === 'create' ? 'POST' : 'PUT',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-        body: formData,
-      });
-  
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || `HTTP error! status: ${response.status}`);
-      }
-  
-      const responseData = await response.json();
-  
-      setCorrespondence(prev => 
-        mode === 'create' 
-          ? [responseData, ...prev] 
-          : prev.map(item => item.id === selectedCorrespondence!.id ? responseData : item)
-      );
-      setCorrespondenceForm(DEFAULT_CORRESPONDENCE_FORM);
-      setUploadError(null);
-      modals[mode][1].close();
-    } catch (error) {
-      console.error(`Failed to ${mode} correspondence:`, error);
-      setUploadError(error instanceof Error ? error.message : 'Unknown error');
-    }
-  }, [user, selectedCorrespondence, modals]);
-
-  // Table configuration
   const filters = useMemo(() => [
     {
       type: 'date' as const,
       columnId: 'formattedReceiptDate',
-      label: 'Фильтр по дате',
+      label: 'Дата получения',
       width: 200,
     },
     {
       type: 'select' as const,
       columnId: 'userName',
-      label: 'Фильтр по пользователю',
+      label: 'Автор',
       placeholder: 'Выберите пользователя',
-      options: userFilterOptions,
+      options: filterOptions.user,
       width: 200,
     },
     {
       type: 'select' as const,
-      columnId: 'typeMail',
-      options: typeFilterOptions,
-      label: 'Фильтр по типу',
+      columnId: 'typeMailName',
+      label: 'Тип письма',
       placeholder: 'Выберите тип',
+      options: filterOptions.type,
       width: 200,
-      },
-  ], [userFilterOptions]);
+    },
+  ], [filterOptions]);
 
-  const columns = useMemo<ColumnDef<CorrespondenceWithFormattedData>[]>(
-    () => [
-      {
-        accessorKey: 'formattedReceiptDate',
-        header: 'Дата получения',
-        cell: (info) => info.getValue<string>(),
-        filterFn: dateRange,
-        sortingFn: 'datetime',
-      },
-      {
-        accessorKey: 'from',
-        header: 'От',
-        size: 150,
-        filterFn: 'includesString',
-      },
-      {
-        accessorKey: 'to',
-        header: 'Кому',
-        size: 150,
-        filterFn: 'includesString',
-      },
-      {
-        accessorKey: 'typeMail',
-        header: 'Тип письма',
-        size: 150,
-        filterFn: 'includesString',
-      },
-      {
-        accessorKey: 'numberMail',
-        header: 'Номер письма',
-        size: 150,
-        filterFn: 'includesString',
-      },
-      {
-        accessorKey: 'userName',
-        header: 'Добавил',
-        size: 150,
-        filterFn: 'includesString',
-      },
-      {
-        id: 'actions',
-        header: 'Действия',
-        cell: ({ row }) => (
-          <Group wrap="nowrap" align="center">
-            <ActionIcon
-              color="blue"
-              variant="subtle"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleTableAction('edit', row.original);
-              }}
-            >
-              <IconPencil size={18} />
-            </ActionIcon>
-            <ActionIcon
-              color="red"
-              variant="subtle"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleTableAction('delete', row.original);
-              }}
-            >
-              <IconTrash size={18} />
-            </ActionIcon>
-          </Group>
-        ),
-        size: 100,
-        enableSorting: false,
-      },
-    ],
-    [handleTableAction]
-  );
+  const columns = useMemo<ColumnDef<CorrespondenceWithFormattedData>[]>(() => [
+    {
+      accessorKey: 'formattedReceiptDate',
+      header: 'Дата получения',
+      filterFn: dateRange,
+      sortingFn: 'datetime',
+    },
+    {
+      accessorKey: 'from',
+      header: 'От',
+      filterFn: 'includesString',
+    },
+    {
+      accessorKey: 'to',
+      header: 'Кому',
+      filterFn: 'includesString',
+    },
+    {
+      accessorKey: 'typeMailName',
+      header: 'Тип письма',
+      filterFn: 'includesString',
+    },
+    {
+      accessorKey: 'numberMail',
+      header: 'Номер письма',
+      filterFn: 'includesString',
+    },
+    {
+      accessorKey: 'userName',
+      header: 'Автор',
+      filterFn: 'includesString',
+    },
+    {
+      id: 'actions',
+      header: 'Действия',
+      cell: ({ row }) => (
+        <Group wrap="nowrap">
+          <ActionIcon
+            color="blue"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleTableAction('edit', row.original);
+            }}
+          >
+            <IconPencil size={18} />
+          </ActionIcon>
+          <ActionIcon
+            color="red"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleTableAction('delete', row.original);
+            }}
+          >
+            <IconTrash size={18} />
+          </ActionIcon>
+        </Group>
+      ),
+    },
+  ], []);
 
-  if (loading) return <LoadingOverlay visible />;
+  const handleTableAction = useCallback((action: 'view' | 'edit' | 'delete', data: Correspondence) => {
+    setState(prev => ({ ...prev, selectedCorrespondence: data }));
+    if (action === 'edit') {
+      setState(prev => ({
+        ...prev,
+        correspondenceForm: {
+          ReceiptDate: dayjs(data.ReceiptDate).format('YYYY-MM-DDTHH:mm'),
+          from: data.from,
+          to: data.to,
+          content: data.content,
+          typeMail: data.typeMail,
+          numberMail: data.numberMail,
+          attachments: data.attachments.map(a => ({
+            id: a.id,
+            userAdd: a.userAdd,
+            source: a.source,
+          })),
+        }
+      }));
+    }
+    modals[action][1].open();
+  }, [modals]);
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!state.selectedCorrespondence) return;
+    try {
+      await fetchData(`${API}/aho/correspondence/${state.selectedCorrespondence.id}`, {
+        method: 'DELETE'
+      });
+      setState(prev => ({
+        ...prev,
+        correspondence: prev.correspondence.filter(c => c.id !== state.selectedCorrespondence!.id),
+        uploadError: null
+      }));
+      modals.delete[1].close();
+      showNotification('success', 'Корреспонденция успешно удалена');
+    } catch (error) {
+      console.error('Failed to delete correspondence:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Ошибка удаления';
+      setState(prev => ({ ...prev, uploadError: errorMsg }));
+      showNotification('error', errorMsg);
+    }
+  }, [state.selectedCorrespondence, fetchData, modals.delete, showNotification]);
+
+  const handleColumnFiltersChange = useCallback((updaterOrValue: any) => {
+    setState(prev => ({
+      ...prev,
+      columnFilters: typeof updaterOrValue === 'function'
+        ? updaterOrValue(prev.columnFilters)
+        : updaterOrValue
+    }));
+  }, []);
+
+  const handleSortingChange = useCallback((updaterOrValue: any) => {
+    setState(prev => ({
+      ...prev,
+      sorting: typeof updaterOrValue === 'function'
+        ? updaterOrValue(prev.sorting)
+        : updaterOrValue
+    }));
+  }, []);
+
+  const handleFormSubmit = useCallback(async (values: Record<string, any>, mode: 'create' | 'edit') => {
+    const formData = new FormData();
+    const { attachments, ...cleanedValues } = values;
+  
+    if (cleanedValues.ReceiptDate) {
+      cleanedValues.ReceiptDate = dayjs(cleanedValues.ReceiptDate).toISOString();
+    }
+  
+    formData.append('userAdd', user!.id);
+    Object.entries(cleanedValues).forEach(([key, value]) => {
+      if (value !== undefined) {
+        formData.append(key, String(value));
+      }
+    });
+  
+    if (attachments) {
+      attachments.forEach((attachment: { source: File | string }) => {
+        if (attachment.source instanceof File) {
+          formData.append('attachments', attachment.source);
+        }
+      });
+    
+      if (mode === 'edit' && state.selectedCorrespondence) {
+        const removedAttachments = state.selectedCorrespondence.attachments
+          .filter(a => !attachments.some((va: any) => va.id === a.id))
+          .map(a => a.id);
+      
+        if (removedAttachments.length) {
+          formData.append('removedAttachments', JSON.stringify(removedAttachments));
+        }
+      }
+    }
+  
+    try {
+      const url = mode === 'create'
+        ? `${API}/aho/correspondence`
+        : `${API}/aho/correspondence/${state.selectedCorrespondence!.id}`;
+    
+      const response = await fetch(url, {
+        method: mode === 'create' ? 'POST' : 'PUT',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+        body: formData,
+      });
+    
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText);
+      }
+    
+      const result = await response.json();
+    
+      // Обновляем состояние с учетом данных пользователя
+      const updatedResult = {
+        ...result,
+        user: user // Убедитесь, что данные пользователя включены
+      };
+    
+      setState(prev => ({
+        ...prev,
+        correspondence: mode === 'create'
+          ? [updatedResult, ...prev.correspondence]
+          : prev.correspondence.map(c => c.id === state.selectedCorrespondence!.id ? updatedResult : c),
+        uploadError: null
+      }));
+    
+      modals[mode][1].close();
+      showNotification(
+        'success',
+        mode === 'create' ? 'Корреспонденция успешно создана' : 'Корреспонденция успешно обновлена'
+      );
+    } catch (error) {
+      console.error(`Correspondence ${mode} error:`, error);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      setState(prev => ({ ...prev, uploadError: errorMsg }));
+      showNotification('error', errorMsg);
+    }
+  }, [user, state.selectedCorrespondence, modals, showNotification]);
+
+
+  if (state.loading) return <LoadingOverlay visible />;
 
   return (
     <DndProviderWrapper>
@@ -459,37 +483,38 @@ export default function CorrespondenceList() {
           mt="xl"
           size="md"
           onClick={() => {
-            setCorrespondenceForm(DEFAULT_CORRESPONDENCE_FORM);
+            setState(prev => ({
+              ...prev,
+              correspondenceForm: {
+                ...DEFAULT_CORRESPONDENCE_FORM,
+                ReceiptDate: dayjs().format('YYYY-MM-DDTHH:mm')
+              }
+            }));
             modals.create[1].open();
           }}
         >
           Добавить корреспонденцию
         </Button>
         <Title order={2} mt="md" mb="lg">
-          Корреспонденции
+          Корреспонденция
         </Title>
         <Grid>
           <Grid.Col span={12}>
             <FilterGroup
               filters={filters}
-              columnFilters={columnFilters}
-              onColumnFiltersChange={(columnId, value) => 
-                setColumnFilters(prev => [
-                  ...prev.filter(f => f.id !== columnId),
-                  ...(value ? [{ id: columnId, value }] : [])
-                ])
-              }
+              columnFilters={state.columnFilters}
+              onColumnFiltersChange={handleColumnFiltersChange}
             />
           </Grid.Col>
           <Grid.Col span={12}>
-            <Card withBorder shadow="sm" radius="md">
+            <Card withBorder shadow="sm">
               <TableComponent<CorrespondenceWithFormattedData>
                 data={tableData}
                 columns={columns}
-                columnFilters={columnFilters}
-                sorting={sorting}
-                onColumnFiltersChange={setColumnFilters}
-                onSortingChange={setSorting}
+                columnFilters={state.columnFilters}
+                sorting={state.sorting}
+                onColumnFiltersChange={handleColumnFiltersChange}
+                onSortingChange={handleSortingChange}
                 filterFns={{ dateRange }}
                 onRowClick={(rowData) => handleTableAction('view', rowData)}
               />
@@ -501,18 +526,21 @@ export default function CorrespondenceList() {
           onClose={modals.view[1].close}
           title="Просмотр корреспонденции"
           mode="view"
-          initialValues={selectedCorrespondence || {}}
+          initialValues={{
+            ...state.selectedCorrespondence,
+            attachments: state.selectedCorrespondence?.attachments || [],
+          }}
           viewFieldsConfig={viewFieldsConfig}
         />
         <DynamicFormModal
           opened={modals.edit[0]}
           onClose={modals.edit[1].close}
-          title="Редактировать корреспонденцию"
+          title="Редактирование корреспонденции"
           mode="edit"
           fields={formConfig.fields}
-          initialValues={correspondenceForm}
+          initialValues={state.correspondenceForm}
           onSubmit={(values) => handleFormSubmit(values, 'edit')}
-          error={uploadError}
+          error={state.uploadError}
         />
         <DynamicFormModal
           opened={modals.create[0]}
@@ -520,19 +548,22 @@ export default function CorrespondenceList() {
           title="Добавить корреспонденцию"
           mode="create"
           fields={formConfig.fields}
-          initialValues={DEFAULT_CORRESPONDENCE_FORM}
+          initialValues={state.correspondenceForm}
           onSubmit={(values) => handleFormSubmit(values, 'create')}
-          error={uploadError}
+          error={state.uploadError}
         />
         <DynamicFormModal
           opened={modals.delete[0]}
           onClose={modals.delete[1].close}
           title="Подтверждение удаления"
           mode="delete"
-          initialValues={selectedCorrespondence || {}}
+          initialValues={state.selectedCorrespondence || {}}
           onConfirm={handleDeleteConfirm}
         />
       </Box>
     </DndProviderWrapper>
   );
 }
+
+const MODEL_UUID = '7be62529-3fb5-430d-9017-48b752841e54';
+const CHAPTER = 'Тип письма';

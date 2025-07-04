@@ -1,4 +1,4 @@
-import { Modal, Image, Button, Loader, Stack, Text, Group } from '@mantine/core';
+import { Modal, Image, Button, Loader, Stack, Text, Group, Paper } from '@mantine/core';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 
 interface Attachment {
@@ -17,6 +17,8 @@ interface FilePreviewModalProps {
 const SUPPORTED_IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
 const SUPPORTED_AUDIO_EXTS = ['mp3', 'ogg', 'wav'];
 const SUPPORTED_VIDEO_EXTS = ['mp4', 'webm', 'ogg'];
+const SUPPORTED_PDF_EXTS = ['pdf'];
+const SUPPORTED_TEXT_EXTS = ['txt', 'csv', 'json', 'xml'];
 
 export const FilePreviewModal = ({
   opened,
@@ -28,11 +30,20 @@ export const FilePreviewModal = ({
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-
+  const [activeTab, setActiveTab] = useState<string | null>('preview');
+  const [fileContent, setFileContent] = useState<string>('');
   const currentAttachment = attachments[currentIndex];
-  
-  // Мемоизированные вычисления свойств файла
-  const { isImage, isPdf, isText, isAudio, isVideo, fileName, fileUrl } = useMemo(() => {
+
+  const {
+    isImage,
+    isPdf,
+    isText,
+    isAudio,
+    isVideo,
+    fileName,
+    fileUrl,
+    fileExt
+  } = useMemo(() => {
     if (!currentAttachment) {
       return {
         ext: '',
@@ -42,7 +53,8 @@ export const FilePreviewModal = ({
         isAudio: false,
         isVideo: false,
         fileName: '',
-        fileUrl: ''
+        fileUrl: '',
+        fileExt: ''
       };
     }
 
@@ -51,32 +63,53 @@ export const FilePreviewModal = ({
       ? source.split('.').pop()?.toLowerCase() || ''
       : source.name.split('.').pop()?.toLowerCase() || '';
 
+    const isImage = SUPPORTED_IMAGE_EXTS.includes(ext);
+    const isPdf = SUPPORTED_PDF_EXTS.includes(ext);
+    const isText = SUPPORTED_TEXT_EXTS.includes(ext);
+    const isAudio = SUPPORTED_AUDIO_EXTS.includes(ext);
+    const isVideo = SUPPORTED_VIDEO_EXTS.includes(ext);
+
     return {
       ext,
-      isImage: SUPPORTED_IMAGE_EXTS.includes(ext),
-      isPdf: ext === 'pdf',
-      isText: ext === 'txt',
-      isAudio: SUPPORTED_AUDIO_EXTS.includes(ext),
-      isVideo: SUPPORTED_VIDEO_EXTS.includes(ext),
+      isImage,
+      isPdf,
+      isText,
+      isAudio,
+      isVideo,
       fileName: typeof source === 'string'
-        ? decodeURIComponent(source.split('\\').pop() || 'Файл')
+        ? decodeURIComponent(source.split('\\').pop() || source.split('/').pop() || 'Файл')
         : source.name,
       fileUrl: typeof source === 'string'
         ? `${apiBaseUrl}/${source}`
-        : URL.createObjectURL(source)
+        : URL.createObjectURL(source),
+      fileExt: ext
     };
   }, [currentAttachment, apiBaseUrl]);
 
-  // Обработчики навигации с useCallback
   const handleNext = useCallback(() => {
-    setCurrentIndex(prev => (prev < attachments.length - 1 ? prev + 1 : prev));
+    setCurrentIndex(prev => {
+      const nextIndex = prev < attachments.length - 1 ? prev + 1 : prev;
+      return nextIndex;
+    });
+    setLoading(true);
+    setActiveTab('preview');
   }, [attachments.length]);
 
   const handlePrev = useCallback(() => {
-    setCurrentIndex(prev => (prev > 0 ? prev - 1 : prev));
+    setCurrentIndex(prev => {
+      const prevIndex = prev > 0 ? prev - 1 : prev;
+      return prevIndex;
+    });
+    setLoading(true);
+    setActiveTab('preview');
   }, []);
 
-  // Эффекты для управления состоянием загрузки и очистки URL
+  const handleFileSelect = (index: number) => {
+    setCurrentIndex(index);
+    setLoading(true);
+    setActiveTab('preview');
+  };
+
   useEffect(() => {
     if (!opened) {
       setCurrentIndex(initialIndex);
@@ -89,43 +122,99 @@ export const FilePreviewModal = ({
     if (!currentAttachment) return;
 
     setLoading(true);
-    const timer = setTimeout(() => setLoading(false), 500);
+
+    if (isText && typeof currentAttachment.source === 'string') {
+      fetch(fileUrl)
+        .then(response => response.text())
+        .then(text => {
+          setFileContent(text);
+          setLoading(false);
+        })
+        .catch(() => {
+          setError(true);
+        });
+    } else if (isText && currentAttachment.source instanceof File) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setFileContent(event.target?.result as string);
+        setLoading(false);
+      };
+      reader.readAsText(currentAttachment.source);
+    } else {
+      const timer = setTimeout(() => setLoading(false), 500);
+      return () => clearTimeout(timer);
+    }
 
     return () => {
-      clearTimeout(timer);
       if (typeof currentAttachment.source !== 'string') {
         URL.revokeObjectURL(fileUrl);
       }
     };
-  }, [currentAttachment, fileUrl]);
+  }, [currentAttachment, fileUrl, isText]);
 
-  if (!currentAttachment) return null;
+  if (!opened || attachments.length === 0) return null;
 
-  // Общий компонент для навигации между файлами
   const FileNavigation = () => (
-    <Group mt="auto">
-      <Button disabled={currentIndex <= 0} onClick={handlePrev}>
+    <Group justify="space-between" align="center" mt="md">
+      <Button
+        disabled={currentIndex <= 0}
+        onClick={handlePrev}
+        variant="outline"
+      >
         Предыдущий
       </Button>
-      <Text>{`${currentIndex + 1} из ${attachments.length}`}</Text>
-      <Button disabled={currentIndex >= attachments.length - 1} onClick={handleNext}>
+      <Text fw={500}>
+        {currentIndex + 1} из {attachments.length}
+      </Text>
+      <Button
+        disabled={currentIndex >= attachments.length - 1}
+        onClick={handleNext}
+        variant="outline"
+      >
         Следующий
       </Button>
     </Group>
   );
 
-  // Компонент для скачивания файла
+  const FileSelector = () => (
+    <Group gap="xs">
+      {attachments.map((attachment, index) => {
+        const src = typeof attachment.source === 'string'
+          ? attachment.source.split('\\').pop() || attachment.source.split('/').pop() || 'Файл'
+          : attachment.source.name;
+        return (
+          <Button
+            key={attachment.id || `attachment-${index}`}
+            variant={currentIndex === index ? 'filled' : 'outline'}
+            size="xs"
+            onClick={() => handleFileSelect(index)}
+            title={src}
+          >
+            {index === currentIndex ? `✓ ${src.substring(0, 15)}${src.length > 15 ? '...' : ''}` : src.substring(0, 15) + (src.length > 15 ? '...' : '')}
+          </Button>
+        );
+      })}
+    </Group>
+  );
+
   const DownloadButton = () => (
-    <Button component="a" href={fileUrl} target="_blank" rel="noopener noreferrer">
+    <Button
+      component="a"
+      href={fileUrl}
+      download={fileName}
+      target="_blank"
+      rel="noopener noreferrer"
+      variant="outline"
+      size="xs"
+    >
       Скачать файл
     </Button>
   );
 
-  // Рендер содержимого в зависимости от типа файла
   const renderContent = () => {
     if (loading) {
       return (
-        <Stack align="center" justify="center" h="90vh">
+        <Stack align="center" justify="center" style={{ minHeight: 400 }}>
           <Loader size="lg" />
           <Text>Загружается файл...</Text>
         </Stack>
@@ -134,82 +223,125 @@ export const FilePreviewModal = ({
 
     if (error) {
       return (
-        <Stack align="center" justify="center" h="90vh">
+        <Stack align="center" justify="center" style={{ minHeight: 400 }}>
           <Text color="red">Не удалось открыть файл</Text>
-          <DownloadButton />
         </Stack>
       );
     }
 
     if (isImage) {
       return (
-        <Stack align="center" h="90vh">
-          <Image 
-            src={fileUrl} 
-            alt={fileName} 
-            fit="contain" 
-            style={{ maxWidth: '100%', maxHeight: 'calc(90vh - 60px)' }} 
-            onLoad={() => setLoading(false)}
-            onError={() => setError(true)}
-          />
-          <FileNavigation />
-        </Stack>
-      );
-    }
-
-    if (isPdf || isText) {
-      return (
-        <Stack h="90vh">
-          <iframe
-            title={`${isPdf ? 'PDF' : 'Text'} Viewer`}
+        <Stack align="center" style={{ minHeight: 400 }}>
+          <Image
             src={fileUrl}
-            style={{ 
-              width: '100%', 
-              height: '100%', 
-              border: 'none',
-              ...(isText && { fontFamily: 'monospace' })
+            alt={fileName}
+            fit="contain"
+            style={{
+              maxWidth: '100%',
+              maxHeight: 'calc(100vh - 300px)',
+              margin: 'auto'
             }}
             onLoad={() => setLoading(false)}
             onError={() => setError(true)}
           />
-          <FileNavigation />
+        </Stack>
+      );
+    }
+
+    if (isPdf) {
+      return (
+        <Stack style={{ minHeight: 400 }}>
+          <iframe
+            title="PDF Viewer"
+            src={`${fileUrl}#toolbar=0&navpanes=0`}
+            style={{
+              width: '100%',
+              height: 'calc(100vh - 350px)',
+              border: 'none',
+              minHeight: 400
+            }}
+            onLoad={() => setLoading(false)}
+            onError={() => setError(true)}
+          />
+        </Stack>
+      );
+    }
+
+    if (isText) {
+      return (
+        <Stack style={{ minHeight: 400 }}>
+          <Paper withBorder p="md" style={{
+            width: '100%',
+            height: 'calc(100vh - 300px)',
+            overflow: 'auto',
+            whiteSpace: 'pre-wrap',
+            fontFamily: 'monospace',
+            backgroundColor: 'inherit'
+          }}>
+            <pre style={{ margin: 0 }}>
+              {fileContent}
+            </pre>
+          </Paper>
         </Stack>
       );
     }
 
     if (isAudio) {
       return (
-        <Stack align="center" justify="center" h="90vh">
-          <audio controls src={fileUrl}>
+        <Stack align="center" justify="center" style={{ minHeight: 400 }}>
+          <audio
+            controls
+            src={fileUrl}
+            style={{ width: '100%', maxWidth: 400 }}
+            onLoadedData={() => setLoading(false)}
+            onError={() => setError(true)}
+          >
             Ваш браузер не поддерживает элемент audio.
           </audio>
-          <FileNavigation />
         </Stack>
       );
     }
 
     if (isVideo) {
       return (
-        <Stack align="center" justify="center" h="90vh">
-          <video controls style={{ maxWidth: '80%', maxHeight: '80%' }} src={fileUrl}>
+        <Stack align="center" justify="center" style={{ minHeight: 400 }}>
+          <video
+            controls
+            style={{ maxWidth: '100%', maxHeight: 'calc(100vh - 300px)' }}
+            src={fileUrl}
+            onLoadedData={() => setLoading(false)}
+            onError={() => setError(true)}
+          >
             Ваш браузер не поддерживает видео.
           </video>
-          <FileNavigation />
         </Stack>
       );
     }
 
     return (
-      <Stack align="center" justify="center" h="90vh">
-        <Text>Формат файла не поддерживает встроенный просмотр.</Text>
-        <DownloadButton />
+      <Stack align="center" justify="center" style={{ minHeight: 400 }}>
+        <Text>Формат файла {fileExt.toUpperCase()} не поддерживает встроенный просмотр.</Text>
       </Stack>
     );
   };
 
   return (
-    <Modal opened={opened} onClose={onClose} fullScreen title={fileName}>
-      {renderContent()}
+    <Modal
+      opened={opened}
+      onClose={onClose}
+      fullScreen
+      title={fileName}
+      styles={{
+        body: { padding: '0 1rem 1rem' },
+        header: { padding: '1rem' },
+      }}
+    >
+      <Stack gap="md">
+        {renderContent()}
+        <FileSelector />
+        <DownloadButton />
+        <FileNavigation />
+      </Stack>
     </Modal>
   );
 };
