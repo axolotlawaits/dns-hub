@@ -72,7 +72,7 @@ export const getBranch = async (req: Request, res: Response): Promise<any>  => {
   const branchId = req.params.id as string
   const branch = await prisma.branch.findUnique({
     where: {uuid: branchId},
-    include: {userData: true, images: true}
+    include: {userData: {include: {position: true}}, images: true}
   })
   if (branch) {
     return res.status(200).json(branch)
