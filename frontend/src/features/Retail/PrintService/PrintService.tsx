@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { API } from '../../../config/constants';
 import { Button, Title, Box, LoadingOverlay, Group, Select, Modal, TextInput, PasswordInput, Text, ActionIcon, Divider, Badge, Flex, Card, Stack, MultiSelect, Alert } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
+import { notificationSystem } from '../../../utils/Push';
 import { formatPrice } from '../../../utils/format';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ru';
@@ -45,9 +46,9 @@ interface PreviewData {
 
 const TEMPLATES: PriceTagTemplate[] = [
   { value: 'StandardAutoprinter-Atol', label: 'Стандартный ценник (Атол)', numericFormat: 25 },
-  { value: 'BigAutoprinter-Atol', label: 'Большой ценник (Атол)', numericFormat: 26  },
-  { value: 'Termo', label: 'Термоэтикетка', numericFormat: 99  },
-  { value: 'Standart', label: 'Стандартный ценник', numericFormat: 1  },
+  { value: 'BigAutoprinter-Atol', label: 'Большой ценник (Атол)', numericFormat: 26 },
+  { value: 'Termo', label: 'Термоэтикетка', numericFormat: 99 },
+  { value: 'Standart', label: 'Стандартный ценник', numericFormat: 1 },
 ];
 
 const PriceTagPrinting = () => {
@@ -60,6 +61,14 @@ const PriceTagPrinting = () => {
   const [brand, setBrand] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [arePopupsBlocked, setArePopupsBlocked] = useState(false);
+
+  const showNotification = useCallback((type: 'success' | 'error', message: string) => {
+    notificationSystem.addNotification(
+      type === 'success' ? 'Успех' : 'Ошибка',
+      message,
+      type
+    );
+  }, []);
 
   const getUniqueOptions = useCallback((items: PreviewItem[], key: keyof PreviewItem) => {
     const uniqueValues = [...new Set(items.map(item => item[key]))];
@@ -100,63 +109,73 @@ const PriceTagPrinting = () => {
         setAuthTokens(data.tokens);
         closeModal();
         setErrorMessage(null);
+        showNotification('success', 'Авторизация успешна');
       } else {
         throw new Error('Неверные данные авторизации');
       }
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Неизвестная ошибка');
+      const errorMsg = error instanceof Error ? error.message : 'Неизвестная ошибка';
+      setErrorMessage(errorMsg);
+      showNotification('error', errorMsg);
     } finally {
       setLoading(false);
     }
-  }, [loginData, closeModal]);
+  }, [loginData, closeModal, showNotification]);
 
-// Обновленный метод для получения данных
-const fetchPreview = useCallback(async () => {
-  if (!dateFrom || !authTokens) return;
+  const fetchPreview = useCallback(async () => {
+    if (!dateFrom || !authTokens) {
+      showNotification('error', 'Дата или токены авторизации отсутствуют');
+      return;
+    }
 
-  try {
-    setLoading(true);
-    const response = await fetch(`${API}/retail/print-service/preview`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
-      },
-      body: JSON.stringify({
-        dateFrom: dateFrom.toISOString(),
-        templateName: 'StandardAutoprinter-Atol',
-        tokens: authTokens,
-      }),
-    });
-
-    if (!response.ok) throw new Error('Ошибка получения предпросмотра');
-
-    const data = await response.json();
-    const filterDate = dayjs(dateFrom);
-
-    const filteredItems = data.sampleItems
-      .filter((item: PreviewItem) => dayjs(item.updatedAt).isSameOrAfter(filterDate))
-      .map((item: PreviewItem) => {
-        // Сопоставляем format с TEMPLATES
-        const template = TEMPLATES.find(t => t.numericFormat === item.format);
-        return { ...item, size: template ? template.value : 'StandardAutoprinter-Atol' };
+    try {
+      setLoading(true);
+      const response = await fetch(`${API}/retail/print-service/preview`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({
+          dateFrom: dateFrom.toISOString(),
+          templateName: 'StandardAutoprinter-Atol',
+          tokens: authTokens,
+        }),
       });
 
-    setPreviewData({ ...data, sampleItems: filteredItems });
-  } catch (error) {
-    console.error('Preview error:', error);
-  } finally {
-    setLoading(false);
-  }
-}, [dateFrom, authTokens]);
+      if (!response.ok) throw new Error('Ошибка получения предпросмотра');
+
+      const data = await response.json();
+      const filterDate = dayjs(dateFrom);
+      const filteredItems = data.sampleItems
+        .filter((item: PreviewItem) => dayjs(item.updatedAt).isSameOrAfter(filterDate))
+        .map((item: PreviewItem) => {
+          const template = TEMPLATES.find(t => t.numericFormat === item.format);
+          return { ...item, size: template ? template.value : 'StandardAutoprinter-Atol' };
+        });
+
+      setPreviewData({ ...data, sampleItems: filteredItems });
+      showNotification('success', 'Данные успешно сформированы');
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Ошибка при формировании данных';
+      console.error('Preview error:', errorMsg);
+      showNotification('error', errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  }, [dateFrom, authTokens, showNotification]);
 
   const handlePrint = useCallback(async () => {
     if (checkPopupBlocked()) {
       setErrorMessage('Разрешите всплывающие окна для печати!');
+      showNotification('error', 'Всплывающие окна заблокированы');
       return;
     }
 
-    if (!dateFrom || !authTokens || !previewData) return;
+    if (!dateFrom || !authTokens || !previewData) {
+      showNotification('error', 'Дата, токены или данные для печати отсутствуют');
+      return;
+    }
 
     try {
       setLoading(true);
@@ -194,12 +213,16 @@ const fetchPreview = useCallback(async () => {
         const blob = await response.blob();
         window.open(URL.createObjectURL(blob), '_blank');
       }
+
+      showNotification('success', 'Печать успешно выполнена');
     } catch (error) {
-      console.error('Print error:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Ошибка при печати';
+      console.error('Print error:', errorMsg);
+      showNotification('error', errorMsg);
     } finally {
       setLoading(false);
     }
-  }, [dateFrom, authTokens, previewData, brand, checkPopupBlocked]);
+  }, [dateFrom, authTokens, previewData, brand, checkPopupBlocked, showNotification]);
 
   const handleRemoveItem = useCallback((id: string) => {
     if (!previewData) return;
@@ -213,7 +236,7 @@ const fetchPreview = useCallback(async () => {
     if (!previewData || !size) return;
     setPreviewData(prev => ({
       ...prev!,
-      sampleItems: prev!.sampleItems.map(item => 
+      sampleItems: prev!.sampleItems.map(item =>
         item.id === id ? { ...item, size } : item
       ),
     }));
@@ -228,12 +251,12 @@ const fetchPreview = useCallback(async () => {
     });
   }, [previewData, brand, dateFrom]);
 
-  const shouldShowBrandFilter = useMemo(() => 
+  const shouldShowBrandFilter = useMemo(() =>
     previewData && previewData.sampleItems.length >= 1,
     [previewData]
   );
 
-  const brandOptions = useMemo(() => 
+  const brandOptions = useMemo(() =>
     previewData ? getUniqueOptions(previewData.sampleItems, 'brand') : [],
     [previewData, getUniqueOptions]
   );
@@ -243,7 +266,7 @@ const fetchPreview = useCallback(async () => {
       <Box p="md">
         <Title order={2} mb="xl">Печать ценников</Title>
         <Button onClick={openModal}>Авторизация (WEB База)</Button>
-        
+
         <Modal opened={modalOpened} onClose={closeModal} title="Авторизация (WEB База)">
           <TextInput
             label="Логин"
@@ -268,11 +291,11 @@ const fetchPreview = useCallback(async () => {
     <Box p="md">
       {arePopupsBlocked && (
         <Alert variant="light" color="red" title="Предупреждение" icon='❌'>
-        В вашем браузере заблокированы всплывающие окна. Разрешите их для этого сайта и перезагрузите страницу, чтобы печать работала корректно.
+          В вашем браузере заблокированы всплывающие окна. Разрешите их для этого сайта и перезагрузите страницу, чтобы печать работала корректно.
         </Alert>
       )}
-      
-      <Title order={2} mb="xl">Печать ценников</Title> 
+
+      <Title order={2} mb="xl">Печать ценников</Title>
       <Group align="flex-end" mb="xl">
         <TextInput
           type="datetime-local"
@@ -349,7 +372,7 @@ const fetchPreview = useCallback(async () => {
             Печать
           </Button>
         </Box>
-      )}      
+      )}
       <LoadingOverlay visible={loading} />
     </Box>
   );

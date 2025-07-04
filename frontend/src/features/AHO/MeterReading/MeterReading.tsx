@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { API } from '../../../config/constants';
 import { useUserContext } from '../../../hooks/useUserContext';
+import { notificationSystem } from '../../../utils/Push';
 import { formatName } from '../../../utils/format';
 import { FilterGroup } from '../../../utils/filter';
 import { Button, Title, Box, LoadingOverlay, Grid, Card, Group, ActionIcon, Text, Stack, SimpleGrid, Badge } from '@mantine/core';
@@ -62,17 +63,17 @@ const ReadingsChart = ({ data }: { data: MeterReadingWithFormattedData[] }) => (
   <ResponsiveContainer width="100%" height={400}>
     <LineChart data={data}>
       <CartesianGrid strokeDasharray="3 3" />
-      <XAxis 
-        dataKey="formattedDate" 
-        label={{ value: 'Дата', position: 'insideBottomRight', offset: -5 }} 
+      <XAxis
+        dataKey="formattedDate"
+        label={{ value: 'Дата', position: 'insideBottomRight', offset: -5 }}
       />
-      <YAxis 
-        label={{ value: 'м³', angle: -90, position: 'insideLeft' }} 
-        unit=" м³" 
+      <YAxis
+        label={{ value: 'м³', angle: -90, position: 'insideLeft' }}
+        unit=" м³"
       />
       <Tooltip
         formatter={(value: number, name: string) => [
-          `${value.toFixed(2)} м³`, 
+          `${value.toFixed(2)} м³`,
           name === 'consumption' ? 'Расход' : 'Показание'
         ]}
         labelFormatter={(label) => `Дата: ${label}`}
@@ -113,6 +114,15 @@ const useMeterReadings = () => {
     delete: useDisclosure(false),
   };
 
+  const showNotification = useCallback((type: 'success' | 'error', message: string) => {
+    notificationSystem.addNotification(
+      type === 'success' ? 'Успех' : 'Ошибка',
+      message,
+      type
+    );
+  }, []);
+
+
   const fetchData = useCallback(async (url: string, options?: RequestInit) => {
     try {
       const response = await fetch(url, {
@@ -151,7 +161,7 @@ const useMeterReadings = () => {
 
   const filteredData = useMemo(() => {
     let result = [...tableData];
-    
+
     columnFilters.forEach(filter => {
       if (filter.id === 'displayDate' && filter.value) {
         const { start, end } = filter.value as DateFilterValue;
@@ -172,7 +182,7 @@ const useMeterReadings = () => {
         }
       }
     });
-    
+
     return result;
   }, [tableData, columnFilters]);
 
@@ -196,46 +206,38 @@ const useMeterReadings = () => {
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!selectedReading) return;
-    
+
     try {
       const response = await fetch(`${API}/aho/meter-reading/${selectedReading.id}`, {
         method: 'DELETE',
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'
         }
       });
-  
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-  
-      const text = await response.text();
-      if (text) {
-        try {
-          const data = JSON.parse(text);
-          console.log('Delete response:', data);
-        } catch (e) {
-          console.log('Non-JSON response:', text);
-        }
-      }
-  
+
       setReadings(prev => prev.filter(item => item.id !== selectedReading.id));
       modals.delete[1].close();
+      showNotification('success', 'Показание успешно удалено');
     } catch (error) {
       console.error('Failed to delete reading:', error);
+      showNotification('error', 'Ошибка при удалении показания');
     }
-  }, [selectedReading, modals.delete]);
+  }, [selectedReading, modals.delete, showNotification]);
 
   const handleFormSubmit = useCallback(async (values: ReadingFormValues, mode: 'create' | 'edit') => {
     if (!user) return;
-    
+
     try {
       const url = mode === 'create'
         ? `${API}/aho/meter-reading`
         : `${API}/aho/meter-reading/${selectedReading!.id}`;
       const method = mode === 'create' ? 'POST' : 'PATCH';
-  
+
       const response = await fetch(url, {
         method,
         headers: {
@@ -248,34 +250,27 @@ const useMeterReadings = () => {
           userId: user.id,
         }),
       });
-  
-      const contentType = response.headers.get('content-type');
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(errorText || `HTTP error! status: ${response.status}`);
       }
-  
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await response.text();
-        throw new Error(`Expected JSON but received: ${text.substring(0, 100)}...`);
-      }
-  
+
       const result = await response.json();
-      
+
       setReadings(prev => mode === 'create'
         ? [result, ...prev]
         : prev.map(item => item.id === selectedReading!.id ? result : item)
       );
+
       setReadingForm(DEFAULT_READING_FORM);
       modals[mode][1].close();
+      showNotification('success', mode === 'create' ? 'Показание успешно добавлено' : 'Показание успешно обновлено');
     } catch (error) {
       console.error(`Failed to ${mode} reading:`, error);
-      if (error instanceof Error) {
-        alert(`Ошибка: ${error.message}`);
-      }
+      showNotification('error', `Ошибка при ${mode === 'create' ? 'добавлении' : 'обновлении'} показания`);
     }
-  }, [user, selectedReading, modals]);
+  }, [user, selectedReading, modals, showNotification]);
 
   const handleFilterChange = useCallback((columnId: string, value: any) => {
     setColumnFilters(prev => [
@@ -320,14 +315,14 @@ const useMeterReadings = () => {
   };
 };
 
-const ReadingCard = ({ 
-  reading, 
-  onEdit, 
-  onDelete 
-}: { 
-  reading: MeterReadingWithFormattedData; 
-  onEdit: () => void; 
-  onDelete: () => void; 
+const ReadingCard = ({
+  reading,
+  onEdit,
+  onDelete
+}: {
+  reading: MeterReadingWithFormattedData;
+  onEdit: () => void;
+  onDelete: () => void;
 }) => {
   return (
     <Card withBorder shadow="sm" radius="md" p="md">
@@ -338,7 +333,7 @@ const ReadingCard = ({
             {reading.userName}
           </Badge>
         </Group>
-        
+
         <SimpleGrid cols={2} spacing="xs" verticalSpacing="xs">
           <div>
             <Text size="sm" c="dimmed">Показание</Text>
@@ -349,7 +344,7 @@ const ReadingCard = ({
             <Text fw={500}>{reading.formattedConsumption} м³</Text>
           </div>
         </SimpleGrid>
-        
+
         <Group justify="flex-end" mt="sm">
           <ActionIcon
             color="blue"
@@ -462,7 +457,7 @@ const MeterReadingsList = () => {
           columnFilters={columnFilters}
           onColumnFiltersChange={handleFilterChange}
         />
-        <Button 
+        <Button
           variant="outline"
           onClick={() => setColumnFilters([])}
           mt="sm"

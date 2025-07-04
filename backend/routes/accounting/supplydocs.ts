@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { getSupplyDocs, createSupplyDoc, getSupplyDocById, updateSupplyDoc, deleteSupplyDoc } from '../../controllers/accounting/supplydocs.js';
-import uploadSupplyDocs from '../../middleware/uploader.js';
+import uploadSupplyDocs from '../../middleware/uploaderCorrespondence.js';
 
 const router = Router();
 

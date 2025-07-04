@@ -118,7 +118,7 @@ model User {
   AddedSupplyDocs       SupplyDocs[]               @relation("SupplyDocs_AddedBy")
   SupplyDocs            SupplyDocs[]               @relation("SupplyDocs_SettlementSpecialist")
   SupplyDocsAttachments SupplyDocsAttachment[]
-  userToolAccesses      UserToolAccess[]
+  userToolAccesses      UserToolAccess[]            
 }
 
 model GroupToolAccess {

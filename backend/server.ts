@@ -10,6 +10,7 @@ import searchRouter from './routes/app/search.js'
 import profileRouter from './routes/app/profile.js'
 import birthdayRouter from './routes/app/birthday.js'
 import bookmarksRouter from './routes/app/bookmarks.js'
+import notificationRouter from './routes/app/notification.js'
 import correspondenceRouter from './routes/aho/correspondence.js'
 import supplydocsRouter from './routes/accounting/supplydocs.js'
 import navigationRouter from './routes/app/navigation.js'
@@ -55,6 +56,7 @@ app.use('/hub-api/news', newsRouter)
 app.use('/hub-api/profile', profileRouter)
 app.use('/hub-api/birthday', birthdayRouter)
 app.use('/hub-api/bookmarks', bookmarksRouter)
+app.use('/hub-api/notification', notificationRouter)
 app.use('/hub-api/aho/meter-reading', meterReadingRouter)
 app.use('/hub-api/aho/correspondence', correspondenceRouter)
 app.use('/hub-api/accounting/supply-docs', supplydocsRouter)
