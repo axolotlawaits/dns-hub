@@ -1,18 +1,18 @@
-// controllers/app/meterReading.ts
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../../server.js';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 
+// Define Zod schemas for validation
 const createMeterReadingSchema = z.object({
   date: z.string().datetime(),
-  counter: z.number().positive(),
+  dataJson: z.string(), // Assuming dataJson is a stringified JSON
   userId: z.string().uuid(),
 });
 
 const updateMeterReadingSchema = z.object({
   date: z.string().datetime().optional(),
-  counter: z.number().positive().optional(),
+  dataJson: z.string().optional(), // Assuming dataJson is a stringified JSON
 });
 
 // Получение всех показаний счетчиков
@@ -43,12 +43,10 @@ export const getMeterReadingById = async (
       where: { id: req.params.id },
       include: { user: true },
     });
-
     if (!meterReading) {
       res.status(404).json({ error: 'Meter reading not found' });
       return;
     }
-
     res.status(200).json(meterReading);
   } catch (error) {
     next(error);
@@ -66,12 +64,11 @@ export const createMeterReading = async (
     const newMeterReading = await prisma.meterReading.create({
       data: {
         date: new Date(validatedData.date),
-        counter: validatedData.counter,
+        dataJson: validatedData.dataJson,
         userId: validatedData.userId,
       },
       include: { user: true },
     });
-
     res.status(201).json(newMeterReading);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -91,7 +88,7 @@ export const updateMeterReading = async (
   try {
     const validatedData = updateMeterReadingSchema.parse(req.body);
     const updateData: any = { ...validatedData };
-    
+
     if (validatedData.date) {
       updateData.date = new Date(validatedData.date);
     }
@@ -101,19 +98,17 @@ export const updateMeterReading = async (
       data: updateData,
       include: { user: true },
     });
-
     res.status(200).json(updatedMeterReading);
   } catch (error) {
     if (error instanceof z.ZodError) {
       res.status(400).json({ errors: error.errors });
       return;
     }
-
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
       res.status(404).json({ error: 'Meter reading not found' });
       return;
     }
-    
+
     next(error);
   }
 };
@@ -128,14 +123,13 @@ export const deleteMeterReading = async (
     await prisma.meterReading.delete({
       where: { id: req.params.id },
     });
-
     res.status(204).end();
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
       res.status(404).json({ error: 'Meter reading not found' });
       return;
     }
-    
+
     next(error);
   }
 };
