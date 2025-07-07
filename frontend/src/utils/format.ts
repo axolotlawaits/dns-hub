@@ -50,3 +50,13 @@ export const formatPrice = (price: number | string): string => {
   // Добавляем символ рубля
   return `${formatted} ₽`;
 };
+
+export const formatValue = (key: string, value: number): string => {
+  if (key.includes('Электричество')) {
+    return `${value} кВт·ч`;
+  }
+  if (key.includes('вода')) {
+    return `${value} м³`;
+  }
+  return value.toString();
+};

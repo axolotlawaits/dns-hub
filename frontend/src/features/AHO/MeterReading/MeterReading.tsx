@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { API } from '../../../config/constants';
 import { useUserContext } from '../../../hooks/useUserContext';
 import { notificationSystem } from '../../../utils/Push';
-import { formatName } from '../../../utils/format';
+import { formatName, formatValue } from '../../../utils/format';
 import { FilterGroup } from '../../../utils/filter';
-import { Button, Title, Box, LoadingOverlay, Grid, Card, Group, ActionIcon, Text, Stack, SimpleGrid, Badge } from '@mantine/core';
+import { Button, Title, Box, LoadingOverlay, Grid, Group, ActionIcon, Text, Stack, Divider, Paper, Pagination, Select } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
 import { IconPencil, IconTrash } from '@tabler/icons-react';
@@ -13,8 +13,8 @@ import { DynamicFormModal } from '../../../utils/formModal';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
 import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
-import 'dayjs/locale/ru';
 import isBetween from 'dayjs/plugin/isBetween';
+import 'dayjs/locale/ru';
 
 dayjs.locale('ru');
 dayjs.extend(isSameOrAfter);
@@ -24,12 +24,22 @@ dayjs.extend(isBetween);
 interface User {
   id: string;
   name: string;
+  organization?: string;
+}
+
+interface MeterData {
+  'Офис - Холодная вода'?: number;
+  'ProДвери - Электричество'?: number;
+  'КакДома - Электричество'?: number;
+  'КакДома - Холодная вода'?: number;
+  'КакДома - Горячая вода'?: number;
+  [key: string]: number | undefined;
 }
 
 interface MeterReading {
   id: string;
   date: Date;
-  counter: number;
+  dataJson: string;
   userId: string;
   createdAt: Date;
   user: User;
@@ -39,7 +49,7 @@ interface MeterReadingWithFormattedData extends MeterReading {
   consumption: number;
   formattedDate: string;
   displayDate: string;
-  formattedCounter: string;
+  formattedData: MeterData;
   formattedConsumption: string;
   userName: string;
 }
@@ -51,61 +61,86 @@ interface DateFilterValue {
 
 interface ReadingFormValues {
   date: string;
-  counter: number;
+  officeColdWater: number;
+  proDveriElectricity: number;
+  kakDomaElectricity: number;
+  kakDomaColdWater: number;
+  kakDomaHotWater: number;
 }
 
 const DEFAULT_READING_FORM: ReadingFormValues = {
   date: dayjs().format('YYYY-MM-DDTHH:mm'),
-  counter: 0,
+  officeColdWater: 0,
+  proDveriElectricity: 0,
+  kakDomaElectricity: 0,
+  kakDomaColdWater: 0,
+  kakDomaHotWater: 0,
 };
 
-const ReadingsChart = ({ data }: { data: MeterReadingWithFormattedData[] }) => (
-  <ResponsiveContainer width="100%" height={400}>
-    <LineChart data={data}>
-      <CartesianGrid strokeDasharray="3 3" />
-      <XAxis
-        dataKey="formattedDate"
-        label={{ value: 'Дата', position: 'insideBottomRight', offset: -5 }}
-      />
-      <YAxis
-        label={{ value: 'м³', angle: -90, position: 'insideLeft' }}
-        unit=" м³"
-      />
-      <Tooltip
-        formatter={(value: number, name: string) => [
-          `${value.toFixed(2)} м³`,
-          name === 'consumption' ? 'Расход' : 'Показание'
-        ]}
-        labelFormatter={(label) => `Дата: ${label}`}
-      />
-      <Legend />
-      <Line
-        type="monotone"
-        dataKey="consumption"
-        name="Расход"
-        stroke="#82ca9d"
-        activeDot={{ r: 6 }}
-        strokeWidth={2}
-      />
-      <Line
-        type="monotone"
-        dataKey="counter"
-        name="Показание"
-        stroke="#8884d8"
-        activeDot={{ r: 6 }}
-        strokeWidth={2}
-      />
-    </LineChart>
-  </ResponsiveContainer>
-);
+const COLORS = ['#4E79A7', '#F28E2B', '#E15759', '#76B7B2', '#59A14F', '#EDC948'];
+
+const ReadingsChart = React.memo(({ data }: { data: MeterReadingWithFormattedData[] }) => {
+  const chartData = useMemo(() => data.map(reading => ({
+    date: reading.formattedDate,
+    displayDate: reading.displayDate,
+    ...reading.formattedData,
+    'КакДома - Электричество': (reading.formattedData['КакДома - Электричество'] || 0) - (reading.formattedData['ProДвери - Электричество'] || 0)
+  })), [data]);
+
+  const meterTypes = useMemo(() => {
+    const types = new Set<string>();
+    data.forEach(reading => Object.keys(reading.formattedData).forEach(type => types.add(type)));
+    return Array.from(types);
+  }, [data]);
+
+  return (
+    <Paper withBorder p="md" radius="md" shadow="sm" h="67%">
+      <Title order={4} mb="md">График показаний</Title>
+      <ResponsiveContainer width="100%" height={500}>
+        <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+          <XAxis dataKey="displayDate" tick={{ fill: '#555' }} tickMargin={10} />
+          <YAxis tick={{ fill: '#555' }} tickMargin={10} />
+          <Tooltip
+            contentStyle={{
+              background: '#fff',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+            }}
+            formatter={(value: number, name: string) => [`${value} ${name.includes('Электричество') ? 'кВт·ч' : 'м³'}`, name]}
+            labelFormatter={(label) => `Дата: ${label}`}
+          />
+          <Legend wrapperStyle={{ paddingTop: '20px' }} />
+          {meterTypes.map((type, index) => (
+            <Line
+              key={type}
+              type="monotone"
+              dataKey={type}
+              name={type}
+              stroke={COLORS[index % COLORS.length]}
+              strokeWidth={2}
+              activeDot={{ r: 6, strokeWidth: 0 }}
+              dot={{ r: 3 }}
+            />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+    </Paper>
+  );
+});
 
 const useMeterReadings = () => {
   const { user } = useUserContext();
-  const [readings, setReadings] = useState<MeterReading[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedReading, setSelectedReading] = useState<MeterReading | null>(null);
-  const [readingForm, setReadingForm] = useState<ReadingFormValues>(DEFAULT_READING_FORM);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [state, setState] = useState({
+    readings: [] as MeterReading[],
+    loading: true,
+    selectedReading: null as MeterReading | null,
+    readingForm: DEFAULT_READING_FORM,
+    columnFilters: [] as ColumnFiltersState,
+    currentPage: 1,
+    pageSize: 5
+  });
 
   const modals = {
     view: useDisclosure(false),
@@ -122,17 +157,13 @@ const useMeterReadings = () => {
     );
   }, []);
 
-
   const fetchData = useCallback(async (url: string, options?: RequestInit) => {
     try {
       const response = await fetch(url, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
         ...options,
       });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Failed to fetch data from ${url}: ${errorData.message || 'Unknown error'}`);
-      }
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
       console.error(`Error fetching data from ${url}:`, error);
@@ -141,35 +172,39 @@ const useMeterReadings = () => {
   }, []);
 
   const formatTableData = useCallback((data: MeterReading[]): MeterReadingWithFormattedData[] => {
-    const sortedByDate = [...data].sort((a, b) => dayjs(a.date).diff(dayjs(b.date)));
-    return sortedByDate.map((reading, index, array) => {
-      const prevReading = array[index - 1];
-      const consumption = prevReading ? Math.max(0, reading.counter - prevReading.counter) : 0;
-      return {
-        ...reading,
-        consumption,
-        formattedDate: dayjs(reading.date).format('MMMM YYYY'),
-        displayDate: dayjs(reading.date).format('DD.MM.YYYY HH:mm'),
-        formattedCounter: reading.counter.toFixed(2),
-        formattedConsumption: consumption.toFixed(2),
-        userName: reading.user?.name ? formatName(reading.user.name) : 'Unknown',
-      };
-    });
+    return [...data]
+      .sort((a, b) => dayjs(a.date).diff(dayjs(b.date)))
+      .map((reading, index, array) => {
+        const prevReading = array[index - 1];
+        const currentData = JSON.parse(reading.dataJson || '{}') as MeterData;
+        const prevData = prevReading ? JSON.parse(prevReading.dataJson || '{}') as MeterData : {};
+        const consumption = Object.keys(currentData).reduce((sum, key) => {
+          const currentValue = currentData[key] || 0;
+          const prevValue = prevData[key] || 0;
+          return sum + (currentValue - prevValue);
+        }, 0);
+
+        return {
+          ...reading,
+          consumption,
+          formattedDate: dayjs(reading.date).format('MMMM YYYY'),
+          displayDate: dayjs(reading.date).format('MMMM YYYY'),
+          formattedData: currentData,
+          formattedConsumption: consumption.toFixed(2),
+          userName: reading.user?.name ? formatName(reading.user.name) : 'Unknown',
+        };
+      });
   }, []);
 
-  const tableData = useMemo(() => formatTableData(readings), [readings, formatTableData]);
+  const tableData = useMemo(() => formatTableData(state.readings), [state.readings, formatTableData]);
 
   const filteredData = useMemo(() => {
-    let result = [...tableData];
-
-    columnFilters.forEach(filter => {
+    return state.columnFilters.reduce((result, filter) => {
       if (filter.id === 'displayDate' && filter.value) {
         const { start, end } = filter.value as DateFilterValue;
-        result = result.filter(row => {
+        return result.filter(row => {
           const rowDate = new Date(row.date);
-          if (start && end) {
-            return rowDate >= new Date(start) && rowDate <= new Date(end);
-          }
+          if (start && end) return rowDate >= new Date(start) && rowDate <= new Date(end);
           if (start) return rowDate >= new Date(start);
           if (end) return rowDate <= new Date(end);
           return true;
@@ -177,67 +212,84 @@ const useMeterReadings = () => {
       }
       if (filter.id === 'userName' && filter.value) {
         const users = filter.value as string[];
-        if (users.length > 0) {
-          result = result.filter(row => users.includes(row.userName));
-        }
+        return users.length ? result.filter(row => users.includes(row.userName)) : result;
       }
-    });
+      return result;
+    }, [...tableData]);
+  }, [tableData, state.columnFilters]);
 
-    return result;
-  }, [tableData, columnFilters]);
+  const paginatedData = useMemo(() => {
+    const startIndex = (state.currentPage - 1) * state.pageSize;
+    return filteredData.slice(startIndex, startIndex + state.pageSize);
+  }, [filteredData, state.currentPage, state.pageSize]);
 
   const userFilterOptions = useMemo(() => {
-    const uniqueNames = Array.from(
-      new Set(readings.map(r => r.user?.name ? formatName(r.user.name) : 'Unknown'))
-    );
+    const uniqueNames = Array.from(new Set(state.readings.map(r => r.user?.name ? formatName(r.user.name) : 'Unknown')));
     return uniqueNames.map(name => ({ value: name, label: name }));
-  }, [readings]);
+  }, [state.readings]);
 
-  const handleTableAction = useCallback((action: 'view' | 'edit' | 'delete', data: MeterReading) => {
-    setSelectedReading(data);
+  const handleTableAction = useCallback((action: 'view' | 'edit' | 'delete', reading: MeterReading) => {
+    setState(prev => ({ ...prev, selectedReading: reading }));
     if (action === 'edit') {
-      setReadingForm({
-        date: dayjs(data.date).format('YYYY-MM-DDTHH:mm'),
-        counter: data.counter,
-      });
+      const readingData = JSON.parse(reading.dataJson || '{}') as MeterData;
+      setState(prev => ({
+        ...prev,
+        readingForm: {
+          date: dayjs(reading.date).format('YYYY-MM-DDTHH:mm'),
+          officeColdWater: readingData['Офис - Холодная вода'] || 0,
+          proDveriElectricity: readingData['ProДвери - Электричество'] || 0,
+          kakDomaElectricity: readingData['КакДома - Электричество'] || 0,
+          kakDomaColdWater: readingData['КакДома - Холодная вода'] || 0,
+          kakDomaHotWater: readingData['КакДома - Горячая вода'] || 0,
+        }
+      }));
     }
     modals[action][1].open();
   }, [modals]);
 
   const handleDeleteConfirm = useCallback(async () => {
-    if (!selectedReading) return;
-
+    if (!state.selectedReading) return;
     try {
-      const response = await fetch(`${API}/aho/meter-reading/${selectedReading.id}`, {
+      await fetch(`${API}/aho/meter-reading/${state.selectedReading.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'
         }
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      setReadings(prev => prev.filter(item => item.id !== selectedReading.id));
+      setState(prev => ({
+        ...prev,
+        readings: prev.readings.filter(item => item.id !== state.selectedReading!.id)
+      }));
       modals.delete[1].close();
       showNotification('success', 'Показание успешно удалено');
     } catch (error) {
       console.error('Failed to delete reading:', error);
       showNotification('error', 'Ошибка при удалении показания');
     }
-  }, [selectedReading, modals.delete, showNotification]);
+  }, [state.selectedReading, modals.delete, showNotification]);
 
   const handleFormSubmit = useCallback(async (values: ReadingFormValues, mode: 'create' | 'edit') => {
     if (!user) return;
-
+    const selectedMonth = dayjs(values.date).format('YYYY-MM');
+    if (mode === 'create' && state.readings.some(reading =>
+      dayjs(reading.date).format('YYYY-MM') === selectedMonth
+    )) {
+      showNotification('error', 'Запись для этого месяца уже существует');
+      return;
+    }
     try {
       const url = mode === 'create'
         ? `${API}/aho/meter-reading`
-        : `${API}/aho/meter-reading/${selectedReading!.id}`;
+        : `${API}/aho/meter-reading/${state.selectedReading!.id}`;
       const method = mode === 'create' ? 'POST' : 'PATCH';
-
+      const dataJson = JSON.stringify({
+        'Офис - Холодная вода': values.officeColdWater,
+        'ProДвери - Электричество': values.proDveriElectricity,
+        'КакДома - Электричество': values.kakDomaElectricity,
+        'КакДома - Холодная вода': values.kakDomaColdWater,
+        'КакДома - Горячая вода': values.kakDomaHotWater,
+      });
       const response = await fetch(url, {
         method,
         headers: {
@@ -246,76 +298,78 @@ const useMeterReadings = () => {
         },
         body: JSON.stringify({
           date: new Date(values.date).toISOString(),
-          counter: parseFloat(values.counter.toString()),
+          dataJson,
           userId: user.id,
         }),
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || `HTTP error! status: ${response.status}`);
-      }
-
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const result = await response.json();
-
-      setReadings(prev => mode === 'create'
-        ? [result, ...prev]
-        : prev.map(item => item.id === selectedReading!.id ? result : item)
-      );
-
-      setReadingForm(DEFAULT_READING_FORM);
+      setState(prev => ({
+        ...prev,
+        readings: mode === 'create'
+          ? [result, ...prev.readings]
+          : prev.readings.map(item => item.id === state.selectedReading!.id ? result : item),
+        readingForm: DEFAULT_READING_FORM
+      }));
       modals[mode][1].close();
       showNotification('success', mode === 'create' ? 'Показание успешно добавлено' : 'Показание успешно обновлено');
     } catch (error) {
       console.error(`Failed to ${mode} reading:`, error);
       showNotification('error', `Ошибка при ${mode === 'create' ? 'добавлении' : 'обновлении'} показания`);
     }
-  }, [user, selectedReading, modals, showNotification]);
+  }, [user, state.selectedReading, state.readings, modals, showNotification]);
 
   const handleFilterChange = useCallback((columnId: string, value: any) => {
-    setColumnFilters(prev => [
-      ...prev.filter(f => f.id !== columnId),
-      ...(value !== undefined ? [{ id: columnId, value }] : [])
-    ]);
+    setState(prev => ({
+      ...prev,
+      columnFilters: [
+        ...prev.columnFilters.filter(f => f.id !== columnId),
+        ...(value !== undefined ? [{ id: columnId, value }] : [])
+      ]
+    }));
   }, []);
 
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
         const readingsData = await fetchData(`${API}/aho/meter-reading`);
-        const formattedReadings = readingsData.map((r: { date: string | number | Date; createdAt: string | number | Date; }) => ({
+        const formattedReadings = readingsData.map((r: any) => ({
           ...r,
           date: new Date(r.date),
           createdAt: new Date(r.createdAt),
         }));
-        setReadings(formattedReadings);
+        setState(prev => ({ ...prev, readings: formattedReadings, loading: false }));
       } catch (error) {
         console.error('Failed to load data:', error);
-      } finally {
-        setLoading(false);
+        setState(prev => ({ ...prev, loading: false }));
       }
     };
     fetchInitialData();
   }, [fetchData]);
 
   return {
-    loading,
+    loading: state.loading,
     filteredData,
+    paginatedData,
     userFilterOptions,
-    columnFilters,
-    readingForm,
-    selectedReading,
+    columnFilters: state.columnFilters,
+    readingForm: state.readingForm,
+    selectedReading: state.selectedReading,
     modals,
+    currentPage: state.currentPage,
+    pageSize: state.pageSize,
+    setCurrentPage: (page: number) => setState(prev => ({ ...prev, currentPage: page })),
+    setPageSize: (size: number) => setState(prev => ({ ...prev, pageSize: size })),
     handleTableAction,
     handleDeleteConfirm,
     handleFormSubmit,
     handleFilterChange,
-    setReadingForm,
-    setColumnFilters,
+    setReadingForm: (form: ReadingFormValues) => setState(prev => ({ ...prev, readingForm: form })),
+    setColumnFilters: (filters: ColumnFiltersState) => setState(prev => ({ ...prev, columnFilters: filters })),
   };
 };
 
-const ReadingCard = ({
+const ReadingRow = React.memo(({
   reading,
   onEdit,
   onDelete
@@ -324,63 +378,151 @@ const ReadingCard = ({
   onEdit: () => void;
   onDelete: () => void;
 }) => {
+  const formattedData = useMemo(() => {
+    const data = reading.formattedData;
+    return {
+      ...data,
+      'КакДома - Электричество': (data['КакДома - Электричество'] || 0) - (data['ProДвери - Электричество'] || 0)
+    };
+  }, [reading.formattedData]);
+
+  const hasKakDomaData = useMemo(() =>
+    formattedData['КакДома - Электричество'] !== undefined ||
+    formattedData['КакДома - Холодная вода'] !== undefined ||
+    formattedData['КакДома - Горячая вода'] !== undefined
+  , [formattedData]);
+
   return (
-    <Card withBorder shadow="sm" radius="md" p="md">
-      <Stack gap="xs">
-        <Group justify="space-between">
-          <Text fw={500}>{reading.formattedDate}</Text>
-          <Badge color="blue" variant="light">
-            {reading.userName}
-          </Badge>
-        </Group>
-
-        <SimpleGrid cols={2} spacing="xs" verticalSpacing="xs">
-          <div>
-            <Text size="sm" c="dimmed">Показание</Text>
-            <Text fw={500}>{reading.formattedCounter} м³</Text>
-          </div>
-          <div>
-            <Text size="sm" c="dimmed">Расход</Text>
-            <Text fw={500}>{reading.formattedConsumption} м³</Text>
-          </div>
-        </SimpleGrid>
-
-        <Group justify="flex-end" mt="sm">
-          <ActionIcon
-            color="blue"
-            variant="subtle"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit();
-            }}
-          >
+    <Paper withBorder p="md" radius="md" shadow="xs" mb="sm">
+      <Group align="flex-start" wrap="nowrap">
+        <Box style={{ flex: 1 }}>
+          <Text size="sm" c="dimmed" mb={4} ta="left">Офис</Text>
+          {formattedData['Офис - Холодная вода'] !== undefined ? (
+            <Text ta="left">
+              <Text span fw={500}>Холодная вода: </Text>
+              <Text span>{formatValue('Холодная вода', formattedData['Офис - Холодная вода'])}</Text>
+            </Text>
+          ) : (
+            <Text c="dimmed" ta="left">Нет данных</Text>
+          )}
+        </Box>
+        <Divider orientation="vertical" />
+        <Box style={{ flex: 1 }}>
+          <Text size="sm" c="dimmed" mb={4} ta="left">ProДвери</Text>
+          {formattedData['ProДвери - Электричество'] !== undefined ? (
+            <Text ta="left">
+              <Text span fw={500}>Электричество: </Text>
+              <Text span>{formatValue('Электричество', formattedData['ProДвери - Электричество'])}</Text>
+            </Text>
+          ) : (
+            <Text c="dimmed" ta="left">Нет данных</Text>
+          )}
+        </Box>
+        <Divider orientation="vertical" />
+        <Box style={{ flex: 1 }}>
+          <Text size="sm" c="dimmed" mb={4} ta="left">Как дома</Text>
+          <Stack gap={4}>
+            {formattedData['КакДома - Электричество'] !== undefined && (
+              <Text ta="left">
+                <Text span fw={500}>Электричество: </Text>
+                <Text span>{formatValue('Электричество', formattedData['КакДома - Электричество'])}</Text>
+              </Text>
+            )}
+            {formattedData['КакДома - Холодная вода'] !== undefined && (
+              <Text ta="left">
+                <Text span fw={500}>Холодная вода: </Text>
+                <Text span>{formatValue('Холодная вода', formattedData['КакДома - Холодная вода'])}</Text>
+              </Text>
+            )}
+            {formattedData['КакДома - Горячая вода'] !== undefined && (
+              <Text ta="left">
+                <Text span fw={500}>Горячая вода: </Text>
+                <Text span>{formatValue('Горячая вода', formattedData['КакДома - Горячая вода'])}</Text>
+              </Text>
+            )}
+            {!hasKakDomaData && <Text c="dimmed" ta="left">Нет данных</Text>}
+          </Stack>
+        </Box>
+        <Stack gap="xs" justify="center" style={{ width: 'auto', marginLeft: 'auto', height: '100%', padding: '4px 0' }}>
+          <ActionIcon color="blue" variant="light" onClick={(e) => { e.stopPropagation(); onEdit(); }} style={{ margin: '0 auto' }}>
             <IconPencil size={18} />
           </ActionIcon>
-          <ActionIcon
-            color="red"
-            variant="subtle"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-          >
+          <ActionIcon color="red" variant="light" onClick={(e) => { e.stopPropagation(); onDelete(); }} style={{ margin: '0 auto' }}>
             <IconTrash size={18} />
           </ActionIcon>
-        </Group>
-      </Stack>
-    </Card>
+        </Stack>
+      </Group>
+      <Text size="sm" c="dimmed" mt="sm">Автор: {reading.userName}</Text>
+      <Text size="sm" c="dimmed">Дата: {reading.displayDate}</Text>
+    </Paper>
   );
-};
+});
+
+const TotalsBlock = React.memo(({ totals }: { totals: {
+  officeColdWater: number;
+  proDveriElectricity: number;
+  kakDomaElectricity: number;
+  kakDomaColdWater: number;
+  kakDomaHotWater: number;
+} }) => {
+  const adjustedKakDomaElectricity = totals.kakDomaElectricity - totals.proDveriElectricity;
+  return (
+    <Paper withBorder p="md" radius="md" shadow="sm" mt="md" style={{ marginBottom: '20px', height: '22.7%' }}>
+      <Title order={4} mb="md">Общие итоги</Title>
+      <Group align="flex-start" wrap="nowrap">
+        <Box style={{ flex: 1 }}>
+          <Text size="sm" c="dimmed" mb={4} ta="left">Офис</Text>
+          <Text ta="left">
+            <Text span fw={500}>Холодная вода: </Text>
+            <Text span>{formatValue('Холодная вода', totals.officeColdWater)}</Text>
+          </Text>
+        </Box>
+        <Divider orientation="vertical" />
+        <Box style={{ flex: 1 }}>
+          <Text size="sm" c="dimmed" mb={4} ta="left">ProДвери</Text>
+          <Text ta="left">
+            <Text span fw={500}>Электричество: </Text>
+            <Text span>{formatValue('Электричество', totals.proDveriElectricity)}</Text>
+          </Text>
+        </Box>
+        <Divider orientation="vertical" />
+        <Box style={{ flex: 1 }}>
+          <Text size="sm" c="dimmed" mb={4} ta="left">Как дома</Text>
+          <Stack gap={4}>
+            <Text ta="left">
+              <Text span fw={500}>Электричество: </Text>
+              <Text span>{formatValue('Электричество', adjustedKakDomaElectricity)}</Text>
+            </Text>
+            <Text ta="left">
+              <Text span fw={500}>Холодная вода: </Text>
+              <Text span>{formatValue('Холодная вода', totals.kakDomaColdWater)}</Text>
+            </Text>
+            <Text ta="left">
+              <Text span fw={500}>Горячая вода: </Text>
+              <Text span>{formatValue('Горячая вода', totals.kakDomaHotWater)}</Text>
+            </Text>
+          </Stack>
+        </Box>
+        <Box style={{ width: 60 }}></Box>
+      </Group>
+    </Paper>
+  );
+});
 
 const MeterReadingsList = () => {
   const {
     loading,
     filteredData,
+    paginatedData,
     userFilterOptions,
     columnFilters,
     readingForm,
     selectedReading,
     modals,
+    currentPage,
+    pageSize,
+    setCurrentPage,
+    setPageSize,
     handleTableAction,
     handleDeleteConfirm,
     handleFormSubmit,
@@ -389,29 +531,52 @@ const MeterReadingsList = () => {
     setColumnFilters,
   } = useMeterReadings();
 
+  const totals = useMemo(() => {
+    if (filteredData.length === 0) return {
+      officeColdWater: 0,
+      proDveriElectricity: 0,
+      kakDomaElectricity: 0,
+      kakDomaColdWater: 0,
+      kakDomaHotWater: 0,
+    };
+    const lastReading = filteredData[filteredData.length - 1];
+    const data = lastReading.formattedData;
+    return {
+      officeColdWater: data['Офис - Холодная вода'] || 0,
+      proDveriElectricity: data['ProДвери - Электричество'] || 0,
+      kakDomaElectricity: data['КакДома - Электричество'] || 0,
+      kakDomaColdWater: data['КакДома - Холодная вода'] || 0,
+      kakDomaHotWater: data['КакДома - Горячая вода'] || 0,
+    };
+  }, [filteredData]);
+
   const viewFieldsConfig = useMemo(() => [
-    { label: 'Дата', value: (item: MeterReading) => item?.date ? dayjs(item.date).format('DD.MM.YYYY HH:mm') : 'N/A' },
-    { label: 'Показание', value: (item: MeterReading) => item?.counter ? `${item.counter.toFixed(2)} м³` : 'N/A' },
+    { label: 'Дата', value: (item: MeterReading) => item?.date ? dayjs(item.date).format('MMMM YYYY') : 'N/A' },
+    {
+      label: 'Показания',
+      value: (item: MeterReading) => {
+        try {
+          const data = item.dataJson ? JSON.parse(item.dataJson) as MeterData : {};
+          return Object.entries(data)
+            .map(([key, value]) => `${key}: ${value} ${key.includes('Электричество') ? 'кВт·ч' : 'м³'}`)
+            .join(', ');
+        } catch {
+          return 'N/A';
+        }
+      }
+    },
     { label: 'Пользователь', value: (item: MeterReading) => item?.user?.name || 'Unknown' },
     { label: 'Дата создания', value: (item: MeterReading) => item?.createdAt ? dayjs(item.createdAt).format('DD.MM.YYYY HH:mm') : 'N/A' },
   ], []);
 
   const formConfig = useMemo(() => ({
     fields: [
-      {
-        name: 'date',
-        label: 'Дата',
-        type: 'datetime' as const,
-        required: true,
-      },
-      {
-        name: 'counter',
-        label: 'Показание (м³)',
-        type: 'number' as const,
-        required: true,
-        min: 0,
-        step: "0.01",
-      },
+      { name: 'date', label: 'Дата', type: 'date' as const, required: true },
+      { name: 'officeColdWater', label: 'Офис - Холодная вода (м³)', type: 'number' as const, required: true },
+      { name: 'proDveriElectricity', label: 'ProДвери - Электричество (кВт·ч)', type: 'number' as const, required: true },
+      { name: 'kakDomaElectricity', label: 'КакДома - Электричество (кВт·ч)', type: 'number' as const, required: true },
+      { name: 'kakDomaColdWater', label: 'КакДома - Холодная вода (м³)', type: 'number' as const, required: true },
+      { name: 'kakDomaHotWater', label: 'КакДома - Горячая вода (м³)', type: 'number' as const, required: true },
     ],
     initialValues: DEFAULT_READING_FORM,
   }), []);
@@ -437,20 +602,6 @@ const MeterReadingsList = () => {
 
   return (
     <Box p="md">
-      <Button
-        fullWidth
-        mt="xl"
-        size="md"
-        onClick={() => {
-          setReadingForm(DEFAULT_READING_FORM);
-          modals.create[1].open();
-        }}
-      >
-        Добавить показание
-      </Button>
-      <Title order={2} mt="md" mb="lg">
-        Показания счетчиков
-      </Title>
       <Box mb="md">
         <FilterGroup
           filters={filters}
@@ -461,43 +612,72 @@ const MeterReadingsList = () => {
           variant="outline"
           onClick={() => setColumnFilters([])}
           mt="sm"
+          style={{ marginRight: 'auto', display: 'block' }}
         >
           Сбросить все фильтры
         </Button>
       </Box>
-      <Grid>
-        <Grid.Col span={{ base: 12, md: 7 }}>
-          <Card withBorder shadow="sm" radius="md" p="md">
-            <Title order={4} mb="md">
-              Показания
-            </Title>
-            <Stack gap="md">
-              {filteredData.length > 0 ? (
-                filteredData.map((reading) => (
-                  <ReadingCard
-                    key={reading.id}
-                    reading={reading}
-                    onEdit={() => handleTableAction('edit', reading)}
-                    onDelete={() => handleTableAction('delete', reading)}
-                  />
-                ))
-              ) : (
-                <Text c="dimmed" ta="center" py="md">
-                  Нет данных для отображения
-                </Text>
-              )}
+        <Grid style={{ display: 'flex', alignItems: 'flex-start' }}>
+          <Grid.Col span={{ base: 12, md: 6 }}>
+            <Stack style={{ height: '100%' }}>
+              <Group justify="space-between" mb="md">
+                <Title order={2}>Показания счетчиков</Title>
+                <Button
+                  size="md"
+                  variant="light"
+                  onClick={() => {
+                    setReadingForm(DEFAULT_READING_FORM);
+                    modals.create[1].open();
+                  }}
+                >
+                  Добавить показание
+                </Button>
+              </Group>
+              <Stack gap="md" style={{ flex: 1, overflowY: 'auto' }}>
+                {paginatedData.length > 0 ? (
+                  paginatedData.map((reading) => (
+                    <ReadingRow
+                      key={reading.id}
+                      reading={reading}
+                      onEdit={() => handleTableAction('edit', reading)}
+                      onDelete={() => handleTableAction('delete', reading)}
+                    />
+                  ))
+                ) : (
+                  <Paper withBorder p="xl" radius="md" shadow="xs">
+                    <Text c="dimmed" ta="center">Нет данных для отображения</Text>
+                  </Paper>
+                )}
+              </Stack>
+              <Group justify="space-between" mt="md">
+                <Select
+                  value={pageSize.toString()}
+                  onChange={(value) => {
+                    setPageSize(Number(value));
+                    setCurrentPage(1);
+                  }}
+                  data={[
+                    { value: '5', label: '5' },
+                    { value: '10', label: '10' },
+                    { value: '20', label: '20' },
+                  ]}
+                />
+                <Pagination
+                  value={currentPage}
+                  onChange={setCurrentPage}
+                  total={Math.ceil(filteredData.length / pageSize)}
+                />
+              </Group>
             </Stack>
-          </Card>
-        </Grid.Col>
-        <Grid.Col span={{ base: 12, md: 5 }}>
-          <Card withBorder shadow="sm" radius="md" h="100%">
-            <Title order={4} mb="md">
-              График показаний
-            </Title>
-            <ReadingsChart data={filteredData} />
-          </Card>
-        </Grid.Col>
-      </Grid>
+          </Grid.Col>
+          <Grid.Col span={{ base: 12, md: 6 }}>
+            <Box style={{ height: '100%', marginTop: '73px' }}>
+              <TotalsBlock totals={totals} />
+              <ReadingsChart data={paginatedData} />
+            </Box>
+          </Grid.Col>
+        </Grid>
+
       <DynamicFormModal
         opened={modals.view[0]}
         onClose={modals.view[1].close}

@@ -1,18 +1,5 @@
 import { useState } from 'react';
-import {
-  useReactTable,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  flexRender,
-  type ColumnDef,
-  type ColumnFiltersState,
-  type SortingState,
-  type PaginationState,
-  type FilterFn,
-  type OnChangeFn,
-} from '@tanstack/react-table';
+import { useReactTable, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, flexRender, type ColumnDef, type ColumnFiltersState, type SortingState, type PaginationState, type FilterFn, type OnChangeFn } from '@tanstack/react-table';
 import { Pagination, Select, Flex, Group, Box, Text } from '@mantine/core';
 import { IconArrowUp, IconArrowDown } from '@tabler/icons-react';
 
