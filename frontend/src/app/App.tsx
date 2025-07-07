@@ -14,7 +14,7 @@ import Navigation from '../components/Navigation';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import Accounting from '../features/Accounting/Accounting';
-import Adds from '../features/Adds/Adds';
+import Ad from '../features/Ad/Ad';
 import Aho from '../features/AHO/Aho';
 import Jurists from '../features/Jurists/Jurists';
 import ProblemBooks from '../features/ProblemBooks/ProblemBooks';
@@ -32,7 +32,7 @@ import Handbook from './handbook/Handbook';
 import RouteComponent from '../features/Supply/Loaders/RouteComponent';
 import LoadersHome from '../features/Supply/Loaders/LoadersHome';
 import SupplyDocs from '../features/Accounting/SupplyDocs/SupplyDocs';
-import Media from '../features/Adds/Media/Media';
+import Media from '../features/Ad/Media/Media';
 import Retail from '../features/Retail/Retail';
 import PrintService from '../features/Retail/PrintService/PrintService';
 import Birthday from './Birthday';
@@ -90,7 +90,7 @@ function App() {
                 <Route path='/notification' element={<Notification />} />
                 <Route path='/finance' element={<Finance />} />
                 <Route path='/accounting' element={<Accounting />} />
-                <Route path='/add' element={<Adds />} />
+                <Route path='/ad' element={<Ad />} />
                 <Route path='/aho' element={<Aho />} />
                 <Route path='/automation' element={<Automation />} />
                 <Route path='/jurists' element={<Jurists />} />

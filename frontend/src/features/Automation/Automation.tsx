@@ -1,6 +1,6 @@
 function Automation() {
   return (
-    <>automation</>
+    <></>
   )
 }
 

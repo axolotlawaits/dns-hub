@@ -5,7 +5,7 @@ import Tools from "../../components/Tools";
 import { API } from "../../config/constants";
 import { Tool } from "../../components/Tools"; // Импортируем интерфейс из Tools
 
-function Adds() {
+function Ad() {
   const [tools, setTools] = useState<Tool[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,4 +46,4 @@ function Adds() {
   );
 }
 
-export default Adds;
+export default Ad;

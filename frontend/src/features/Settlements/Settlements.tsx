@@ -1,6 +1,6 @@
 function Settlements() {
   return (
-    <>settlements</>
+    <></>
   )
 }
 
