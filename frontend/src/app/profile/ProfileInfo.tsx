@@ -8,7 +8,6 @@ interface UserData {
   fio: string;
   birthday: string;
   code: string;
-  position: string;
   email: string;
   status: string;
   branch: {
@@ -17,6 +16,9 @@ interface UserData {
     name: string;
     city: string;
     address: string;
+  };
+    position: {
+      name:string;
   };
 }
 
@@ -99,7 +101,7 @@ const ProfileInfo = () => {
             </Badge>
           </Group>
           <Text size="sm" c="dimmed" mt={4}>
-            {userData.position || 'Не указано'}
+            {userData.position.name || 'Не указано'}
           </Text>
           <Group gap="xl" mt="md">
             <Stack gap="xs">
