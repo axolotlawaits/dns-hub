@@ -4,7 +4,7 @@ import { useUserContext } from '../../../hooks/useUserContext';
 import { notificationSystem } from '../../../utils/Push';
 import { formatName, formatValue } from '../../../utils/format';
 import { FilterGroup } from '../../../utils/filter';
-import { Button, Title, Box, LoadingOverlay, Grid, Group, ActionIcon, Text, Stack, Divider, Paper, Pagination, Select } from '@mantine/core';
+import { Button, Title, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Divider, Paper, Pagination, Select } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
 import { IconPencil, IconTrash } from '@tabler/icons-react';
@@ -94,9 +94,9 @@ const ReadingsChart = React.memo(({ data }: { data: MeterReadingWithFormattedDat
   }, [data]);
 
   return (
-    <Paper withBorder p="md" radius="md" shadow="sm" h="67%">
-      <Title order={4} mb="md">График показаний</Title>
-      <ResponsiveContainer width="100%" height={500}>
+    <Paper withBorder p="md" radius="md" shadow="sm" style={{ height: '100%', backgroundColor: 'var(--layer)' }}>
+      <Title order={4} mb="md" style={{ color: 'var(--font)' }}>График показаний</Title>
+      <ResponsiveContainer width="100%" height={400}>
         <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
           <XAxis dataKey="displayDate" tick={{ fill: '#555' }} tickMargin={10} />
@@ -393,12 +393,25 @@ const ReadingRow = React.memo(({
   , [formattedData]);
 
   return (
-    <Paper withBorder p="md" radius="md" shadow="xs" mb="sm">
+    <Paper
+      withBorder
+      p="md"
+      radius="md"
+      shadow="xs"
+      mb="sm"
+      style={{
+        backgroundColor: 'var(--layer)',
+        cursor: 'pointer',
+        '&:hover': {
+          backgroundColor: 'var(--layer)',
+        },
+      }}
+    >
       <Group align="flex-start" wrap="nowrap">
         <Box style={{ flex: 1 }}>
           <Text size="sm" c="dimmed" mb={4} ta="left">Офис</Text>
           {formattedData['Офис - Холодная вода'] !== undefined ? (
-            <Text ta="left">
+            <Text ta="left" style={{ color: 'var(--font)' }}>
               <Text span fw={500}>Холодная вода: </Text>
               <Text span>{formatValue('Холодная вода', formattedData['Офис - Холодная вода'])}</Text>
             </Text>
@@ -410,7 +423,7 @@ const ReadingRow = React.memo(({
         <Box style={{ flex: 1 }}>
           <Text size="sm" c="dimmed" mb={4} ta="left">ProДвери</Text>
           {formattedData['ProДвери - Электричество'] !== undefined ? (
-            <Text ta="left">
+            <Text ta="left" style={{ color: 'var(--font)' }}>
               <Text span fw={500}>Электричество: </Text>
               <Text span>{formatValue('Электричество', formattedData['ProДвери - Электричество'])}</Text>
             </Text>
@@ -423,19 +436,19 @@ const ReadingRow = React.memo(({
           <Text size="sm" c="dimmed" mb={4} ta="left">Как дома</Text>
           <Stack gap={4}>
             {formattedData['КакДома - Электричество'] !== undefined && (
-              <Text ta="left">
+              <Text ta="left" style={{ color: 'var(--font)' }}>
                 <Text span fw={500}>Электричество: </Text>
                 <Text span>{formatValue('Электричество', formattedData['КакДома - Электричество'])}</Text>
               </Text>
             )}
             {formattedData['КакДома - Холодная вода'] !== undefined && (
-              <Text ta="left">
+              <Text ta="left" style={{ color: 'var(--font)' }}>
                 <Text span fw={500}>Холодная вода: </Text>
                 <Text span>{formatValue('Холодная вода', formattedData['КакДома - Холодная вода'])}</Text>
               </Text>
             )}
             {formattedData['КакДома - Горячая вода'] !== undefined && (
-              <Text ta="left">
+              <Text ta="left" style={{ color: 'var(--font)' }}>
                 <Text span fw={500}>Горячая вода: </Text>
                 <Text span>{formatValue('Горячая вода', formattedData['КакДома - Горячая вода'])}</Text>
               </Text>
@@ -467,12 +480,13 @@ const TotalsBlock = React.memo(({ totals }: { totals: {
 } }) => {
   const adjustedKakDomaElectricity = totals.kakDomaElectricity - totals.proDveriElectricity;
   return (
-    <Paper withBorder p="md" radius="md" shadow="sm" mt="md" style={{ marginBottom: '20px', height: '22.7%' }}>
-      <Title order={4} mb="md">Общие итоги</Title>
+    <Paper withBorder p="md" radius="md" shadow="sm" style={{ marginBottom: '20px', backgroundColor: 'var(--layer)' }}>
+      
+      <Title order={4} mb="md" style={{ color: 'var(--font)' }}>Общие итоги</Title>
       <Group align="flex-start" wrap="nowrap">
         <Box style={{ flex: 1 }}>
           <Text size="sm" c="dimmed" mb={4} ta="left">Офис</Text>
-          <Text ta="left">
+          <Text ta="left" style={{ color: '  var(--font)' }}>
             <Text span fw={500}>Холодная вода: </Text>
             <Text span>{formatValue('Холодная вода', totals.officeColdWater)}</Text>
           </Text>
@@ -480,7 +494,7 @@ const TotalsBlock = React.memo(({ totals }: { totals: {
         <Divider orientation="vertical" />
         <Box style={{ flex: 1 }}>
           <Text size="sm" c="dimmed" mb={4} ta="left">ProДвери</Text>
-          <Text ta="left">
+          <Text ta="left" style={{ color: 'var(--font)' }}>
             <Text span fw={500}>Электричество: </Text>
             <Text span>{formatValue('Электричество', totals.proDveriElectricity)}</Text>
           </Text>
@@ -489,15 +503,15 @@ const TotalsBlock = React.memo(({ totals }: { totals: {
         <Box style={{ flex: 1 }}>
           <Text size="sm" c="dimmed" mb={4} ta="left">Как дома</Text>
           <Stack gap={4}>
-            <Text ta="left">
+            <Text ta="left" style={{ color: 'var(--font)' }}>
               <Text span fw={500}>Электричество: </Text>
               <Text span>{formatValue('Электричество', adjustedKakDomaElectricity)}</Text>
             </Text>
-            <Text ta="left">
+            <Text ta="left" style={{ color: 'var(--font)' }}>
               <Text span fw={500}>Холодная вода: </Text>
               <Text span>{formatValue('Холодная вода', totals.kakDomaColdWater)}</Text>
             </Text>
-            <Text ta="left">
+            <Text ta="left" style={{ color: 'var(--font)' }}>
               <Text span fw={500}>Горячая вода: </Text>
               <Text span>{formatValue('Горячая вода', totals.kakDomaHotWater)}</Text>
             </Text>
@@ -601,38 +615,41 @@ const MeterReadingsList = () => {
   if (loading) return <LoadingOverlay visible />;
 
   return (
-    <Box p="md">
-      <Box mb="md">
-        <FilterGroup
-          filters={filters}
-          columnFilters={columnFilters}
-          onColumnFiltersChange={handleFilterChange}
-        />
-        <Button
-          variant="outline"
-          onClick={() => setColumnFilters([])}
-          mt="sm"
-          style={{ marginRight: 'auto', display: 'block' }}
-        >
-          Сбросить все фильтры
-        </Button>
-      </Box>
-        <Grid style={{ display: 'flex', alignItems: 'flex-start' }}>
-          <Grid.Col span={{ base: 12, md: 6 }}>
+      <Box p="md">
+        <Box mb="md">
+          <FilterGroup
+            filters={filters}
+            columnFilters={columnFilters}
+            onColumnFiltersChange={handleFilterChange}
+          />
+          <Button
+            variant="outline"
+            onClick={() => setColumnFilters([])}
+            mt="sm"
+            style={{ marginRight: 'auto', display: 'block' }}
+          >
+            Сбросить все фильтры
+          </Button>
+        </Box>
+        
+        {/* Переносим заголовок и кнопку сюда */}
+        <Group justify="space-between" mb="md">
+          <Title order={2} style={{ color: 'var(--font)' }}>Показания счетчиков</Title>
+          <Button
+            size="md"
+            variant="light"
+            onClick={() => {
+              setReadingForm(DEFAULT_READING_FORM);
+              modals.create[1].open();
+            }}
+          >
+            Добавить показание
+          </Button>
+        </Group>
+          
+        <Box style={{ display: 'flex', alignItems: 'flex-start' }}>
+          <Box style={{ flex: 1, marginRight: '16px' }}>
             <Stack style={{ height: '100%' }}>
-              <Group justify="space-between" mb="md">
-                <Title order={2}>Показания счетчиков</Title>
-                <Button
-                  size="md"
-                  variant="light"
-                  onClick={() => {
-                    setReadingForm(DEFAULT_READING_FORM);
-                    modals.create[1].open();
-                  }}
-                >
-                  Добавить показание
-                </Button>
-              </Group>
               <Stack gap="md" style={{ flex: 1, overflowY: 'auto' }}>
                 {paginatedData.length > 0 ? (
                   paginatedData.map((reading) => (
@@ -644,7 +661,7 @@ const MeterReadingsList = () => {
                     />
                   ))
                 ) : (
-                  <Paper withBorder p="xl" radius="md" shadow="xs">
+                  <Paper withBorder p="xl" radius="md" shadow="xs" style={{ backgroundColor: 'var(--layer)' }}>
                     <Text c="dimmed" ta="center">Нет данных для отображения</Text>
                   </Paper>
                 )}
@@ -669,15 +686,14 @@ const MeterReadingsList = () => {
                 />
               </Group>
             </Stack>
-          </Grid.Col>
-          <Grid.Col span={{ base: 12, md: 6 }}>
-            <Box style={{ height: '100%', marginTop: '73px' }}>
+          </Box>
+          <Box style={{ flex: 1 }}>
+            <Box style={{ height: '100%' }}>
               <TotalsBlock totals={totals} />
               <ReadingsChart data={paginatedData} />
             </Box>
-          </Grid.Col>
-        </Grid>
-
+          </Box>
+        </Box>
       <DynamicFormModal
         opened={modals.view[0]}
         onClose={modals.view[1].close}
