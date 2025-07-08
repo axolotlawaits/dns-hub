@@ -1,9 +1,14 @@
-import { Button, Modal, Space, Table } from "@mantine/core"
+import { Button, Modal, Space, Stack, Table } from "@mantine/core"
 import dayjs from "dayjs"
 import LoadersTimeRow from "./LoadersTimeRow"
 import { LoaderType } from "./Loaders"
 import AddLoadersModal from "./AddLoadersModal"
 import { useDisclosure } from "@mantine/hooks"
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import { useRef } from "react"
+import { RouteType } from "./LoadersHome"
+import { IconDownload } from "@tabler/icons-react"
 
 export type FilialType = {
   id: string
@@ -17,12 +22,14 @@ export type DayType = {
   id: string,
   day: Date
   filials: FilialType[]
+  route: RouteType
 }
 
 function Day({day}: {day: DayType}) {
   const [opened, { open, close }] = useDisclosure(false)
+  const contentRef = useRef(null)
 
-  function calculateWorkHours() {
+  const calculateWorkHours = () => {
     let obj: Record<number, number> = {}
     for (let filial in day.filials) {
       for (let [index, loader] of day.filials[filial].loaders.entries()) {
@@ -32,8 +39,29 @@ function Day({day}: {day: DayType}) {
     return Object.values(obj)
   }
 
-  function calculateTotalTime() {
+  const calculateTotalTime = () => {
     return calculateWorkHours().reduce((total, cur) => total + cur, 0)
+  }
+
+  const downloadSummary = () => {
+    const input = contentRef.current;
+    if (!input) return;
+
+    html2canvas(input, { scale: 2, useCORS: true }).then((canvas) => {
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+
+      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+      const imgX = (pdfWidth - imgWidth * ratio) / 2;
+      const imgY = 10; // верхний отступ
+
+      pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+      pdf.save('downloaded-file.pdf');
+    });
   }
   
   return (
@@ -70,13 +98,42 @@ function Day({day}: {day: DayType}) {
       <Space h="md" />
       <>
         <Button onClick={open} variant="light">общее количество работы грузчиков</Button>
-        <Modal opened={opened} onClose={close}>
-          {calculateWorkHours().length > 0 && calculateWorkHours().map((loader, index) => {
-            return (
-              <p key={index}>{`Общее время работы ${index + 1} грузчика - ${Math.floor(loader / 60)} часа ${loader % 60} минут`}</p>
-            )
-          })}
-          <p>{`Общее время работы по всем грузчикам - ${Math.floor(calculateTotalTime() / 60)} часа ${calculateTotalTime() % 60} минут`}</p>
+        <Modal opened={opened} onClose={close} ref={contentRef}>
+          <Stack gap="md">
+            <div ref={contentRef} className="day-summary">
+              <h1 className="day-title">Сводка по маршруту {day.route.name} за {dayjs(day.day).format('MMMM D, YYYY')}</h1>
+              <p>Подрядчик: {day.route.contractor}</p>
+              <p id="test">{`Общее время работы: часы: ${Math.floor(calculateTotalTime() / 60)} минуты: ${calculateTotalTime() % 60}`}</p>
+              <p>Детальная информация по грузчикам:</p>
+              <div className="day-summary-block">
+                {calculateWorkHours().length > 0 && calculateWorkHours().map((loader, index) => {
+                  return (
+                    <p key={index} className="day-loader">
+                      {`Общее время работы ${index + 1} грузчика - часы: ${Math.floor(loader / 60)} минуты: ${loader % 60}`}
+                    </p>
+                  )
+                })}
+              </div>
+              {day.filials.some(fil => fil.feedback) && 
+                <div className="day-summary-block">
+                  <p>Обратная связь по филиалам:</p>
+                  {day.filials.map(fil => {
+                    return (
+                      <p className="day-feedback">{fil.name}: {fil.feedback ? fil.feedback : 'нет отзыва'}</p>
+                    )
+                  })}
+                </div>
+              }
+            </div>
+            <Button 
+              onClick={downloadSummary} 
+              variant="light" 
+              rightSection={<IconDownload size={18} />} 
+              fullWidth
+            >
+              скачать в PDF
+            </Button>
+          </Stack>
         </Modal>
       </>
     </div>

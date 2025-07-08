@@ -76,7 +76,7 @@ app.post('/hub-api/refresh-token', refreshToken)
 
 app.listen(2000, function() { 
   console.log('server running on port 2000')
-  //uncomment scheduler for production
-  //schedule.scheduleJob('0 0 * * *', () => scheduleRouteDay())
+
+  schedule.scheduleJob('0 0 * * *', () => scheduleRouteDay())
 }) 
  

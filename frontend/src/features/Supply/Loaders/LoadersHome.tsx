@@ -7,6 +7,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { FilialType } from './Day';
 import dayjs from 'dayjs';
 import RouteEdit from './RouteEdit';
+import { IconPlus } from '@tabler/icons-react';
 
 export const rrsInitData = ['Алтай', 'Барнаул', 'Кемерово', 'Новокузнецк', 'Новосибирск', 'Новосибирская область', 'Омск', 'Томск']
 
@@ -66,7 +67,13 @@ function LoadersHome() {
 
   return (
     <div id='routes-page-wrapper'>
-      <Button onClick={open}>создать новый маршрут</Button>
+      <Button 
+        onClick={open} 
+        leftSection={<IconPlus size={18} />} 
+        variant='light'
+      >
+        создать новый маршрут
+      </Button>
       <Modal opened={opened} onClose={close}>
         <Stack gap="md">
           <TextInput
