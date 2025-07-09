@@ -7,8 +7,8 @@ import { useDisclosure } from "@mantine/hooks"
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { useRef } from "react"
-import { RouteType } from "./LoadersHome"
-import { IconDownload } from "@tabler/icons-react"
+import { RouteType } from "./LoadersRoutes"
+import { IconDownload, IconFileInfo } from "@tabler/icons-react"
 
 export type FilialType = {
   id: string
@@ -97,11 +97,11 @@ function Day({day}: {day: DayType}) {
       </Table>
       <Space h="md" />
       <>
-        <Button onClick={open} variant="light">общее количество работы грузчиков</Button>
+        <Button onClick={open} variant="light" rightSection={<IconFileInfo size={18} />}>Общий отчет</Button>
         <Modal opened={opened} onClose={close} ref={contentRef}>
           <Stack gap="md">
             <div ref={contentRef} className="day-summary">
-              <h1 className="day-title">Сводка по маршруту {day.route.name} за {dayjs(day.day).format('MMMM D, YYYY')}</h1>
+              <h1 className="day-title">Общий отчет по маршруту {day.route.name} за {dayjs(day.day).format('MMMM D, YYYY')}</h1>
               <p>Подрядчик: {day.route.contractor}</p>
               <p id="test">{`Общее время работы: часы: ${Math.floor(calculateTotalTime() / 60)} минуты: ${calculateTotalTime() % 60}`}</p>
               <p>Детальная информация по грузчикам:</p>
@@ -119,7 +119,7 @@ function Day({day}: {day: DayType}) {
                   <p>Обратная связь по филиалам:</p>
                   {day.filials.map(fil => {
                     return (
-                      <p className="day-feedback">{fil.name}: {fil.feedback ? fil.feedback : 'нет отзыва'}</p>
+                      <p key={fil.id} className="day-feedback">{fil.name}: {fil.feedback ? fil.feedback : 'нет отзыва'}</p>
                     )
                   })}
                 </div>
