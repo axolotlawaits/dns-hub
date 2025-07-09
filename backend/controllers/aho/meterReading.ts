@@ -6,13 +6,13 @@ import { Prisma } from '@prisma/client';
 // Define Zod schemas for validation
 const createMeterReadingSchema = z.object({
   date: z.string().datetime(),
-  dataJson: z.string(), // Assuming dataJson is a stringified JSON
+  indications: z.record(z.string(), z.number()), // Теперь ожидаем объект
   userId: z.string().uuid(),
 });
 
 const updateMeterReadingSchema = z.object({
   date: z.string().datetime().optional(),
-  dataJson: z.string().optional(), // Assuming dataJson is a stringified JSON
+  indications: z.record(z.string(), z.number()).optional(), // Теперь ожидаем объект
 });
 
 // Получение всех показаний счетчиков
@@ -64,7 +64,7 @@ export const createMeterReading = async (
     const newMeterReading = await prisma.meterReading.create({
       data: {
         date: new Date(validatedData.date),
-        dataJson: validatedData.dataJson,
+        indications: validatedData.indications, // Передаем объект напрямую
         userId: validatedData.userId,
       },
       include: { user: true },
@@ -108,7 +108,6 @@ export const updateMeterReading = async (
       res.status(404).json({ error: 'Meter reading not found' });
       return;
     }
-
     next(error);
   }
 };
@@ -129,7 +128,6 @@ export const deleteMeterReading = async (
       res.status(404).json({ error: 'Meter reading not found' });
       return;
     }
-
     next(error);
   }
 };

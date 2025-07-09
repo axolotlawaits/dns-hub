@@ -23,6 +23,32 @@ model UserData {
   position    Position @relation(fields: [positionId], references: [uuid])
 }
 
+model Notifications {
+  id                              String                          @id @default(uuid())
+  type                            NotificationType       
+  channel                         NotificationChannel[]        
+  action                          Json?        
+  title                           String       
+  message                         String       
+  senderId                        String       
+  sender                          User                            @relation(name: "sender", fields: [senderId], references: [id])
+  receiverId                      String       
+  receiver                        User                            @relation(name: "receiver",fields: [receiverId], references: [id])
+  read                            Boolean                         @default(false)
+  tool                            Tool?                           @relation(fields: [toolId], references: [id])
+  toolId                          String?        
+  priority                        NotificationPriority            @default(MEDIUM)
+  expiresAt                       DateTime?        
+  createdAt                       DateTime                        @default(now())
+  updatedAt                       DateTime                        @updatedAt
+            
+  @@index([receiverId])
+  @@index([read])
+  @@index([createdAt])
+  @@index([senderId])
+  @@index([toolId])
+}
+
 model Position {
   groupUuid            String
   name                 String               @unique
@@ -87,6 +113,7 @@ model Tool {
   positionToolAccesses PositionToolAccess[]
   types                Type[]
   userToolAccesses     UserToolAccess[]
+  Notifications Notifications[]
 }
 
 model BranchImage {
@@ -98,28 +125,30 @@ model BranchImage {
 
 /// App models
 model User {
-  id                    String                     @id @default(uuid())
-  name                  String
-  email                 String                     @unique
-  position              String
-  branch                String
-  image                 String?
-  login                 String                     @unique
-  updatedAt             DateTime                   @updatedAt
-  role                  Role                       @default(EMPLOYEE)
-  bookmarks             Bookmarks[]
-  correspondences       Correspondence[]
-  attachments           CorrespondenceAttachment[]
-  MediaAdd              Media[]                    @relation("Media_UserAdd")
-  MediaUpdated          Media[]                    @relation("Media_UserUpdated")
-  MediaAttachment       MediaAttachment[]
-  meterReadings         MeterReading[]
-  news                  News[]
-  AddedSupplyDocs       SupplyDocs[]               @relation("SupplyDocs_AddedBy")
-  SupplyDocs            SupplyDocs[]               @relation("SupplyDocs_SettlementSpecialist")
-  SupplyDocsAttachments SupplyDocsAttachment[]
-  userToolAccesses      UserToolAccess[]            
-}
+  id                              String                            @id @default(uuid())
+  name                            String        
+  email                           String                            @unique
+  position                        String        
+  branch                          String        
+  image                           String?       
+  login                           String                            @unique
+  updatedAt                       DateTime                          @updatedAt
+  role                            Role                              @default(EMPLOYEE)
+  bookmarks                       Bookmarks[]       
+  correspondences                 Correspondence[]        
+  attachments                     CorrespondenceAttachment[]        
+  MediaAdd                        Media[]                           @relation("Media_UserAdd")
+  MediaUpdated                    Media[]                           @relation("Media_UserUpdated")
+  MediaAttachment                 MediaAttachment[]       
+  meterReadings                   MeterReading[]        
+  news                            News[]        
+  AddedSupplyDocs                 SupplyDocs[]                      @relation("SupplyDocs_AddedBy")
+  SupplyDocs                      SupplyDocs[]                      @relation("SupplyDocs_SettlementSpecialist")
+  SupplyDocsAttachments           SupplyDocsAttachment[]        
+  userToolAccesses                UserToolAccess[]                
+  Notifications_Receiver          Notifications[]                   @relation(name: "receiver")
+  Notifications_Sender            Notifications[]                   @relation(name: "sender")
+}          
 
 model GroupToolAccess {
   id          String      @id @default(uuid())
@@ -179,7 +208,7 @@ model MeterReading {
   date             DateTime
   user             User          @relation(fields: [userId], references: [id])
   userId           String
-  dataJson         String
+  indications      Json
 }
 
 model Correspondence {
@@ -336,4 +365,29 @@ enum AccessLevel {
   READONLY
   CONTRIBUTOR
   FULL
+}
+
+enum NotificationType {
+  INFO
+  WARNING
+  ERROR
+  SUCCESS
+  ALERT
+  SYSTEM
+  EVENT
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  PUSH
+  SMS
+  WEBHOOK
+}
+
+enum NotificationPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
 }
