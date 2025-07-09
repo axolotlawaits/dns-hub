@@ -1,6 +1,6 @@
 function Finance() {
   return (
-    <>finance</>
+    <></>
   )
 }
 

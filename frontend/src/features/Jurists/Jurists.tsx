@@ -1,6 +1,6 @@
 function Jurists() {
   return (
-    <>jurists</>
+    <></>
   )
 }
 
