@@ -17,3 +17,23 @@
 .card-text-link:hover{
   text-decoration: underline;
 }
+
+/* summary */
+
+.loaders-summary-wrapper {
+  display: flex;
+  justify-content: space-around;
+}
+
+.loaders-summary-block {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.day-summary-card {
+  background-color: var(--layer);
+  padding: 15px;
+  border-radius: 10px;
+  box-shadow: var(--soft-shadow);
+}
