@@ -104,10 +104,16 @@ export async function ldapAuth(req: Request, res: Response, next: NextFunction):
         // Получаем фото из LDAP с проверкой
         let ldapPhoto = null;
         if (entry.thumbnailPhoto) {
+            let photoData: Buffer | string;
+            if (Array.isArray(entry.thumbnailPhoto)) {
+                photoData = entry.thumbnailPhoto[0];
+            } else {
+                photoData = entry.thumbnailPhoto;
+            }
             try {
                 const photoBuffer = Buffer.isBuffer(entry.thumbnailPhoto) 
                     ? entry.thumbnailPhoto 
-                    : Buffer.from(entry.thumbnailPhoto);
+                    : Buffer.from(photoData);
 
                 if (isValidImageBuffer(photoBuffer)) {
                     ldapPhoto = photoBuffer.toString('base64');
