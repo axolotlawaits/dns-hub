@@ -1,6 +1,7 @@
 import { Tabs } from "@mantine/core"
 import { useState } from "react"
 import LoadersRoutes from "./LoadersRoutes"
+import LoadersSummary from "./LoadersSummary"
 
 function LoadersHome() {
   const [activeTab, setActiveTab] = useState<string | null>('routes')
@@ -18,7 +19,9 @@ function LoadersHome() {
       <Tabs.Panel value="routes">
         <LoadersRoutes />
       </Tabs.Panel>
-      <Tabs.Panel value="summaries">Second panel</Tabs.Panel>
+      <Tabs.Panel value="summaries">
+        <LoadersSummary />
+      </Tabs.Panel>
     </Tabs>
   )
 }

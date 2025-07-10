@@ -64,3 +64,25 @@ export const getRouteDays = async (req: Request, res: Response): Promise<any> =>
     res.status(400).json({error: 'не найдено маршрута'})
   }
 }
+
+/* day */
+
+export const getAllRoutesDay = async (req: Request, res: Response): Promise<any> => {
+  const queryDate = req.query.date as string
+
+  const startDate = new Date(queryDate)
+  const endDate = new Date(queryDate)
+  startDate.setDate(startDate.getDate() - 1)
+  console.log(startDate, endDate)
+  const dayData = await prisma.routeDay.findMany({ 
+    where: { createdAt: { gte: startDate, lt: endDate }},
+    include: { filials: { include: { loaders: { include: { filial: true }}}, orderBy: {place: 'asc'}}, route: true},
+    orderBy: {day: 'desc'}
+  })
+  console.log(dayData)
+  if (dayData) {
+    res.status(200).json(dayData)
+  } else {
+    res.status(400).json({error: 'не найдено маршрута'})
+  }
+}

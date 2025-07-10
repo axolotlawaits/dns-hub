@@ -74,7 +74,7 @@ function LoadersRoutes() {
       >
         создать новый маршрут
       </Button>
-      <Modal opened={opened} onClose={close}>
+      <Modal opened={opened} onClose={close} closeOnClickOutside={false}>
         <Stack gap="md">
           <TextInput
             placeholder='Наименование'
