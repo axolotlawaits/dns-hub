@@ -1,15 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { API } from '../config/constants';
 import { User } from '../contexts/UserContext';
 import { formatName, truncateText } from '../utils/format';
-import { Button, Modal, TextInput, Title, Text, Group, ActionIcon, Box, LoadingOverlay, ThemeIcon } from '@mantine/core';
+import { Button, Modal, TextInput, Title, Text, Group, ActionIcon, Box, LoadingOverlay, ThemeIcon, Avatar, Flex, Paper, Divider } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { useUserContext } from '../hooks/useUserContext';
 import dayjs from 'dayjs';
 import TiptapEditor from '../utils/editor';
-import { IconNews, IconPencil, IconPlus, IconTrash } from '@tabler/icons-react';
-import './styles/News.css'
-import { useThemeContext } from '../hooks/useThemeContext';
+import { IconNews, IconPencil, IconPlus, IconTrash, IconClock, IconChevronRight } from '@tabler/icons-react';
+import './styles/News.css';
 
 type News = {
   id: string;
@@ -22,7 +21,6 @@ type News = {
 
 export default function NewsList() {
   const { user } = useUserContext();
-  const { isDark } = useThemeContext()
   const [news, setNews] = useState<News[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedNews, setSelectedNews] = useState<News | null>(null);
@@ -30,11 +28,14 @@ export default function NewsList() {
     name: '',
     description: '',
   });
+  const [visibleCount, setVisibleCount] = useState(5);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const [viewModalOpened, { open: openViewModal, close: closeViewModal }] = useDisclosure(false);
   const [editModalOpened, { open: openEditModal, close: closeEditModal }] = useDisclosure(false);
   const [createModalOpened, { open: openCreateModal, close: closeCreateModal }] = useDisclosure(false);
   const [deleteModalOpened, { open: openDeleteModal, close: closeDeleteModal }] = useDisclosure(false);
+  const [allNewsModalOpened, { open: openAllNewsModal, close: closeAllNewsModal }] = useDisclosure(false);
 
   useEffect(() => {
     const fetchNews = async () => {
@@ -50,6 +51,42 @@ export default function NewsList() {
     };
     fetchNews();
   }, []);
+
+  useEffect(() => {
+    const calculateVisibleCount = () => {
+      if (!containerRef.current) return;
+      
+      const containerWidth = containerRef.current.offsetWidth;
+      const cardWidth = 280 + 16; // Ширина карточки + отступ
+      const allNewsCardWidth = 280 + 16; // Ширина карточки "Все новости" + отступ
+      
+      // Вычисляем сколько карточек помещается (минус место для карточки "Все новости")
+      const count = Math.floor((containerWidth - allNewsCardWidth) / cardWidth);
+      
+      // Минимум 1 карточка должна быть видна
+      setVisibleCount(Math.max(count, 1));
+    };
+
+    calculateVisibleCount();
+    window.addEventListener('resize', calculateVisibleCount);
+    return () => window.removeEventListener('resize', calculateVisibleCount);
+  }, []);
+
+  const groupNewsByMonth = () => {
+    const grouped: Record<string, News[]> = {};
+    
+    news.forEach(item => {
+      const monthYear = dayjs(item.createdAt).format('MMMM YYYY');
+      if (!grouped[monthYear]) {
+        grouped[monthYear] = [];
+      }
+      grouped[monthYear].push(item);
+    });
+
+    return grouped;
+  };
+
+  const groupedNews = groupNewsByMonth();
 
   const handleViewNews = (item: News) => {
     setSelectedNews(item);
@@ -125,112 +162,215 @@ export default function NewsList() {
   }
 
   return (
-    <Box p="md">
-      <Group justify="space-between" align="flex-start">
-         <Group gap="xs" align="flex-start">
-          <ThemeIcon variant="light" color="blue" size="lg" radius="xl">
-            <IconNews size={18} />
+    <Box p="md" className="news-page-container">
+      <Flex justify="space-between" align="center" mb="xl">
+        <Group gap="sm">
+          <ThemeIcon variant="light" color="blue" size={36} radius="md">
+            <IconNews size={20} />
           </ThemeIcon>
-          <Title order={2}  mb="lg" >Последние новости</Title>
+          <Title order={2} fw={600}>Новости</Title>
         </Group>
-      <Button 
-        leftSection={<IconPlus size={18} />}
-        variant="light"
-        onClick={() => {
-          setNewsForm({ name: '', description: '' });
-          openCreateModal();
-        }}
-      >
-        Добавить новость
-      </Button>
-      </Group>
+        <Group>
+          <Button 
+            variant="outline"
+            radius="md"
+            onClick={openAllNewsModal}
+            rightSection={<IconChevronRight size={18} />}
+          >
+            Все новости
+          </Button>
+          <Button 
+            leftSection={<IconPlus size={18} />}
+            variant="light"
+            radius="md"
+            onClick={() => {
+              setNewsForm({ name: '', description: '' });
+              openCreateModal();
+            }}
+          >
+            Новая запись
+          </Button>
+        </Group>
+      </Flex>
 
       {news.length === 0 ? (
-        <Text color="dimmed">Пока нет новостей</Text>
+        <Paper withBorder p="xl" radius="md" shadow="none" className="empty-state">
+          <Text size="lg" c="dimmed" ta="center">Пока нет новостей</Text>
+        </Paper>
       ) : (
-        
-        <Box style={{ display: 'flex', flexDirection:'column', gap: 15, overflow: 'auto', height:'540px'}}>
-          {news.map(newsItem => (
-            <Box
+        <div className="news-container" ref={containerRef}>
+          {news.slice(0, visibleCount).map(newsItem => (
+            <Paper
               key={newsItem.id}
+              withBorder
+              radius="md"
               p="md"
-              style={{
-                borderRadius: '10px',
-                backgroundColor: isDark ? '#2A2D35' : '#ffffff',
-                cursor: 'pointer',
-                '&:hover': {
-                  backgroundColor: '#3b2121',
-                },
-              }}
+              className="news-item"
               onClick={() => handleViewNews(newsItem)}
             >
-              <Group justify="space-between" mb="xs">
-                <Title order={4} style={{ 
-                  flex: 1,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  fontSize:32
-                }}>
+              <div className="news-item-content">
+                <Text fw={600} size="lg" mb="sm" lineClamp={2}>
                   {newsItem.name}
-                </Title>
-                <Text size="sm" c="dimmed" bg="rgba(255, 255, 255, 0.1)" px="sm" py="xs" style={{ borderRadius: '10px' }}>
-                  {dayjs(newsItem.createdAt).format('D MMMM YYYY')}
                 </Text>
-              </Group>
-              <Text size="xm" c="gray" lineClamp={2} mb="xs">
-                {truncateText(newsItem.description, 200)}
-              </Text>
-              <Group justify="space-between" pt="sm" style={{ borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                <Text size="xs" c="dimmed" fs="italic">
-                  {formatName(newsItem.user.name)}
+                
+                <Text size="sm" c="dimmed" mb="md" lineClamp={3}>
+                  {truncateText(newsItem.description, 200)}
                 </Text>
-                <Group gap="xs">
-                  <ActionIcon 
-                    color="blue" 
-                    variant="subtle"
-                    onClick={(e) => handleEditNews(newsItem, e)}
-                  >
-                    <IconPencil size={18} />
-                  </ActionIcon>
-                  <ActionIcon 
-                    color="red" 
-                    variant="subtle"
-                    onClick={(e) => handleDeleteNews(newsItem, e)}
-                  >
-                    <IconTrash size={18} />
-                  </ActionIcon>
-                </Group>
-              </Group>
-            </Box>
+              </div>
+
+              <div className="news-item-footer">
+                <Flex justify="space-between" align="center">
+                  <Group gap="xs">
+                    <Avatar src={`data:image/png;base64,${newsItem.user.image}`} size="sm" color="blue" radius="xl" />
+                    <Text size="xs">{formatName(newsItem.user.name)}</Text>
+                  </Group>
+                  
+                  <Group gap="xs">
+                    <IconClock size={14} />
+                    <Text size="xs">
+                      {dayjs(newsItem.createdAt).format('D MMM YYYY')}
+                    </Text>
+                  </Group>
+                </Flex>
+
+                {user?.id === newsItem.userId && (
+                  <Flex gap="xs" justify="flex-end" mt="sm">
+                    <ActionIcon 
+                      variant="subtle"
+                      color="blue"
+                      radius="md"
+                      onClick={(e) => handleEditNews(newsItem, e)}
+                    >
+                      <IconPencil size={16} />
+                    </ActionIcon>
+                    <ActionIcon 
+                      variant="subtle"
+                      color="red"
+                      radius="md"
+                      onClick={(e) => handleDeleteNews(newsItem, e)}
+                    >
+                      <IconTrash size={16} />
+                    </ActionIcon>
+                  </Flex>
+                )}
+              </div>
+            </Paper>
           ))}
-        </Box>
+          
+          {news.length > visibleCount && (
+            <Paper
+              withBorder
+              radius="md"
+              p="md"
+              className="news-item all-news-card"
+              onClick={openAllNewsModal}
+            >
+              <Flex direction="column" align="center" justify="center" h="100%">
+                <IconNews size={40} />
+                <Text fw={600} size="lg" mt="md">
+                  Все новости
+                </Text>
+                <Text size="sm" c="dimmed" mt="xs">
+                  +{news.length - visibleCount} новостей
+                </Text>
+              </Flex>
+            </Paper>
+          )}
+        </div>
       )}
+
+      <Modal
+        opened={allNewsModalOpened}
+        onClose={closeAllNewsModal}
+        size="xl"
+        radius="md"
+        title="Архив новостей"
+      >
+        <div className="all-news-container">
+          {Object.entries(groupedNews).map(([monthYear, newsItems]) => (
+            <div key={monthYear} className="news-month-group">
+              <Divider 
+                my="md" 
+                label={
+                  <Text fw={600} size="lg">
+                    {monthYear}
+                  </Text>
+                } 
+                labelPosition="left"
+              />
+              
+              {newsItems.map(item => (
+                <Paper
+                  key={item.id}
+                  withBorder
+                  radius="md"
+                  p="md"
+                  mb="md"
+                  className="news-item-archive"
+                  onClick={() => {
+                    setSelectedNews(item);
+                    closeAllNewsModal();
+                    openViewModal();
+                  }}
+                >
+                  <Text fw={600} size="md" mb="xs">
+                    {item.name}
+                  </Text>
+                  <Text size="sm" c="dimmed" lineClamp={1} mb="xs">
+                    {truncateText(item.description, 100)}
+                  </Text>
+                  <Flex justify="space-between" align="center">
+                    <Group gap="xs">
+                      <Avatar src={`data:image/png;base64,${item.user.image}`} size="sm" color="blue" radius="xl" />
+                      <Text size="xs">{formatName(item.user.name)}</Text>
+                    </Group>
+                    <Group gap="xs">
+                      <IconClock size={14} />
+                      <Text size="xs">
+                        {dayjs(item.createdAt).format('D MMM YYYY')}
+                      </Text>
+                    </Group>
+                  </Flex>
+                </Paper>
+              ))}
+            </div>
+          ))}
+        </div>
+      </Modal>
+
       <Modal
         opened={viewModalOpened}
         onClose={closeViewModal}
         size="xl"
         radius="md"
+        title={
+          <Text fw={600} size="xl">
+            {selectedNews?.name}
+          </Text>
+        }
       >
         {selectedNews && (
           <>
-            <Modal.Header>
-              <Modal.Title style={{ fontSize: '2.5rem', margin:10 }}>{selectedNews.name}</Modal.Title> {/* [[2]] */}
-            </Modal.Header>
-            <Modal.Body>
-              <div dangerouslySetInnerHTML={{ __html: selectedNews.description }} />
-              <Group justify="space-between" mt="xl">
-                <Text size="sm" c="dimmed">
-                  Автор: {formatName(selectedNews.user.name)}
-                </Text>
-                <Text size="sm" c="dimmed">
-                  Дата: {dayjs(selectedNews.createdAt).format('D MMMM YYYY HH:mm')}
+            <div 
+              className="safe-html-content" 
+              dangerouslySetInnerHTML={{ __html: selectedNews.description }} 
+            />
+            <Flex justify="space-between" mt="xl" c="dimmed">
+              <Group gap="xs">
+                <Avatar src={`data:image/png;base64,${selectedNews.user.image}`} size="sm" color="blue" radius="xl" />
+                <Text size="sm">{formatName(selectedNews.user.name)}</Text>
+              </Group>
+              <Group gap="xs">
+                <IconClock size={16} />
+                <Text size="sm">
+                  {dayjs(selectedNews.createdAt).format('D MMMM YYYY, HH:mm')}
                 </Text>
               </Group>
-            </Modal.Body>
+            </Flex>
           </>
         )}
       </Modal>
+
       <Modal
         opened={editModalOpened}
         onClose={closeEditModal}
@@ -245,20 +385,22 @@ export default function NewsList() {
             onChange={(e) => setNewsForm({...newsForm, name: e.target.value})}
             required
             mb="md"
+            radius="md"
           />
           <TiptapEditor
             content={newsForm.description}
             onChange={(content) => setNewsForm({...newsForm, description: content})}
           />
-          <Button type="submit" fullWidth mt="xl">
+          <Button type="submit" fullWidth mt="xl" radius="md">
             Сохранить изменения
           </Button>
         </form>
       </Modal>
+
       <Modal
         opened={createModalOpened}
         onClose={closeCreateModal}
-        title="Добавить новость"
+        title="Новая новость"
         size="xl"
         radius="md"
       >
@@ -269,32 +411,34 @@ export default function NewsList() {
             onChange={(e) => setNewsForm({...newsForm, name: e.target.value})}
             required
             mb="md"
+            radius="md"
           />
           <TiptapEditor
             content={newsForm.description}
             onChange={(content) => setNewsForm({...newsForm, description: content})}
           />
-          <Button type="submit" fullWidth mt="xl">
-            Создать новость
+          <Button type="submit" fullWidth mt="xl" radius="md">
+            Опубликовать
           </Button>
         </form>
       </Modal>
+
       <Modal
         opened={deleteModalOpened}
         onClose={closeDeleteModal}
-        title="Подтверждение удаления"
+        title="Удалить новость?"
         size="sm"
         radius="md"
       >
-        <Text mb="xl">Вы уверены, что хотите удалить новость "{selectedNews?.name}"?</Text>
-        <Group justify="flex-end">
-          <Button variant="default" onClick={closeDeleteModal}>
+        <Text mb="xl">Вы уверены, что хотите удалить "{selectedNews?.name}"? Это действие нельзя отменить.</Text>
+        <Flex justify="flex-end" gap="sm">
+          <Button variant="default" onClick={closeDeleteModal} radius="md">
             Отмена
           </Button>
-          <Button color="red" onClick={handleDeleteConfirm}>
+          <Button color="red" onClick={handleDeleteConfirm} radius="md">
             Удалить
           </Button>
-        </Group>
+        </Flex>
       </Modal>
     </Box>
   );

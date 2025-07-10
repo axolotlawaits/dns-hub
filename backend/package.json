@@ -14,6 +14,7 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@ldapjs/attribute": "^1.0.0",
     "@types/cors": "^2.8.17",
     "@types/node": "^22.14.0",
     "@types/node-schedule": "^2.1.7",
@@ -25,8 +26,10 @@
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "ldapjs": "^3.0.7",
+    "ldapts": "^8.0.5",
     "multer": "^1.4.5-lts.2",
     "node-schedule": "^2.1.1",
+    "sharp": "^0.34.2",
     "tsx": "^4.19.3",
     "zod": "^3.24.2"
   },

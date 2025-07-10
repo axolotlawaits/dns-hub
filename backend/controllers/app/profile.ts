@@ -20,6 +20,7 @@ export const getUserDataByEmail = async (
       where: { email },
       include: {
         branch: true, // Включаем данные филиала
+        position: true
       }
     });
 

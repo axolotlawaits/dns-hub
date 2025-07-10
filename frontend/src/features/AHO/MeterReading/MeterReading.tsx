@@ -39,7 +39,7 @@ interface MeterData {
 interface MeterReading {
   id: string;
   date: Date;
-  dataJson: string;
+  indications: MeterData; // Изменено с string на MeterData
   userId: string;
   createdAt: Date;
   user: User;
@@ -176,8 +176,8 @@ const useMeterReadings = () => {
       .sort((a, b) => dayjs(a.date).diff(dayjs(b.date)))
       .map((reading, index, array) => {
         const prevReading = array[index - 1];
-        const currentData = JSON.parse(reading.dataJson || '{}') as MeterData;
-        const prevData = prevReading ? JSON.parse(prevReading.dataJson || '{}') as MeterData : {};
+        const currentData = reading.indications; // Убрали JSON.parse
+        const prevData = prevReading ? prevReading.indications : {}; // Убрали JSON.parse
         const consumption = Object.keys(currentData).reduce((sum, key) => {
           const currentValue = currentData[key] || 0;
           const prevValue = prevData[key] || 0;
@@ -231,7 +231,7 @@ const useMeterReadings = () => {
   const handleTableAction = useCallback((action: 'view' | 'edit' | 'delete', reading: MeterReading) => {
     setState(prev => ({ ...prev, selectedReading: reading }));
     if (action === 'edit') {
-      const readingData = JSON.parse(reading.dataJson || '{}') as MeterData;
+      const readingData = reading.indications; // Убрали JSON.parse
       setState(prev => ({
         ...prev,
         readingForm: {
@@ -283,13 +283,13 @@ const useMeterReadings = () => {
         ? `${API}/aho/meter-reading`
         : `${API}/aho/meter-reading/${state.selectedReading!.id}`;
       const method = mode === 'create' ? 'POST' : 'PATCH';
-      const dataJson = JSON.stringify({
+      const indications = { // Создаем объект напрямую
         'Офис - Холодная вода': values.officeColdWater,
         'ProДвери - Электричество': values.proDveriElectricity,
         'КакДома - Электричество': values.kakDomaElectricity,
         'КакДома - Холодная вода': values.kakDomaColdWater,
         'КакДома - Горячая вода': values.kakDomaHotWater,
-      });
+      };
       const response = await fetch(url, {
         method,
         headers: {
@@ -298,7 +298,7 @@ const useMeterReadings = () => {
         },
         body: JSON.stringify({
           date: new Date(values.date).toISOString(),
-          dataJson,
+          indications, // Передаем объект напрямую
           userId: user.id,
         }),
       });
@@ -570,7 +570,7 @@ const MeterReadingsList = () => {
       label: 'Показания',
       value: (item: MeterReading) => {
         try {
-          const data = item.dataJson ? JSON.parse(item.dataJson) as MeterData : {};
+          const data = item.indications ? item.indications as MeterData : {};
           return Object.entries(data)
             .map(([key, value]) => `${key}: ${value} ${key.includes('Электричество') ? 'кВт·ч' : 'м³'}`)
             .join(', ');

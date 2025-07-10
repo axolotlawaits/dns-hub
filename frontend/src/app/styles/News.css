@@ -1,4 +1,3 @@
-/* Безопасное отображение HTML */
 .safe-html-content img {
   max-width: 100%;
   height: auto;
@@ -14,4 +13,109 @@
 .safe-html-content h3 {
   margin-top: 1em;
   margin-bottom: 0.5em;
+}
+
+.news-page-container {
+  margin: 0 auto;
+  background-color: transparent;
+}
+
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  background-color: var(--mantine-color-body);
+}
+
+/* Основной контейнер для новостей */
+.news-container {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 16px;
+  overflow: hidden; /* Скрываем скролл */
+  position: relative;
+}
+
+/* Карточка новости */
+.news-item {
+  min-width: 280px;
+  width: 280px;
+  height: 240px;
+  flex-shrink: 0;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
+  background-color: var(--layer);
+}
+
+.news-item:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--mantine-shadow-md);
+}
+
+.news-item-content {
+  flex: 1;
+}
+
+.news-item-footer {
+  margin-top: auto;
+}
+
+/* Карточка "Все новости" */
+.all-news-card {
+  min-width: 280px;
+  width: 280px;
+  height: 240px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--mantine-color-blue-light);
+  border-color: var(--mantine-color-blue-outline);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.all-news-card:hover {
+  background-color: var(--mantine-color-blue-light-hover);
+}
+
+/* Стили для модального окна */
+.all-news-container {
+  max-height: 70vh;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.news-month-group {
+  margin-bottom: 24px;
+}
+
+.news-item-archive {
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.news-item-archive:hover {
+  background-color: var(--mantine-color-blue-light);
+  border-color: var(--mantine-color-blue-outline);
+}
+
+/* Скрываем скроллбар */
+.all-news-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.all-news-container::-webkit-scrollbar-track {
+  background: var(--mantine-color-gray-1);
+  border-radius: 3px;
+}
+
+.all-news-container::-webkit-scrollbar-thumb {
+  background: var(--mantine-color-gray-4);
+  border-radius: 3px;
+}
+
+.all-news-container::-webkit-scrollbar-thumb:hover {
+  background: var(--mantine-color-gray-6);
 }
