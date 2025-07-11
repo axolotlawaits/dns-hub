@@ -1,88 +1,181 @@
-import { Request, Response, NextFunction } from 'express';
+import { z } from 'zod';
 import { prisma } from '../../server.js';
-import dayjs from 'dayjs';
+import { WebSocketService } from '../../websocket.js';
+import { EmailService } from '../../services/email.js';
+import { TelegramService } from '../../services/telegram.js';
+import { Notifications, NotificationType, NotificationChannel, NotificationPriority } from '@prisma/client';
 
-type Notification = {
-  id: string;
-  title: string;
-  message: string;
-  type: 'info' | 'warning' | 'error';
-  createdAt: string;
-  read: boolean;
-};
+const createNotificationSchema = z.object({
+  type: z.nativeEnum(NotificationType),
+  channels: z.array(z.nativeEnum(NotificationChannel)).min(1),
+  action: z.record(z.any()).optional(),
+  title: z.string().min(1).max(100),
+  message: z.string().min(1).max(500),
+  senderId: z.string().uuid(),
+  receiverId: z.string().uuid(),
+  toolId: z.string().uuid().optional(),
+  priority: z.nativeEnum(NotificationPriority).optional().default('MEDIUM'),
+  expiresAt: z.date().optional(),
+});
 
-const mockNotifications: Notification[] = [
-  {
-    id: '1',
-    title: 'Системное обновление',
-    message: 'Запланировано обновление системы на 15:00. Возможны кратковременные перебои в работе.',
-    type: 'info',
-    createdAt: dayjs().subtract(2, 'hours').toISOString(),
-    read: false
-  },
-  {
-    id: '2',
-    title: 'Новое сообщение',
-    message: 'У вас 3 непрочитанных сообщения в чате поддержки.',
-    type: 'info',
-    createdAt: dayjs().subtract(5, 'hours').toISOString(),
-    read: true
-  },
-  {
-    id: '3',
-    title: 'Предупреждение',
-    message: 'Заканчивается место в хранилище документов. Осталось менее 10% свободного места.',
-    type: 'warning',
-    createdAt: dayjs().subtract(1, 'day').toISOString(),
-    read: false
-  },
-  {
-    id: '4',
-    title: 'Ошибка синхронизации',
-    message: 'Обнаружена ошибка при синхронизации с CRM системой. Требуется вмешательство администратора.',
-    type: 'error',
-    createdAt: dayjs().subtract(2, 'days').toISOString(),
-    read: true
-  },
-];
+const markAsReadSchema = z.object({
+  notificationId: z.string().uuid(),
+  userId: z.string().uuid(),
+});
 
-export const getNotifications = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    // В реальной реализации будет запрос к БД:
-    // const notifications = await prisma.notification.findMany({...});
-    
-    // Моковые данные
-    const notifications = mockNotifications;
-    
-    res.status(200).json(notifications);
-  } catch (error) {
-    next(error);
+const getNotificationsSchema = z.object({
+  userId: z.string().uuid(),
+  limit: z.number().min(1).max(100).default(20),
+  offset: z.number().min(0).default(0),
+  read: z.boolean().optional(),
+  include: z.array(z.enum(['sender', 'receiver', 'tool'])).optional(),
+});
+
+export class NotificationController {
+  private wsService = WebSocketService.getInstance();
+  private emailService = EmailService.getInstance();
+  private telegramService = TelegramService.getInstance();
+
+  async create(data: z.infer<typeof createNotificationSchema>) {
+    const notification = await prisma.notifications.create({
+      data: {
+        type: data.type,
+        channel: data.channels,
+        action: data.action,
+        title: data.title,
+        message: data.message,
+        senderId: data.senderId,
+        receiverId: data.receiverId,
+        toolId: data.toolId,
+        priority: data.priority,
+        expiresAt: data.expiresAt,
+      },
+      include: {
+        sender: { select: { id: true, name: true, email: true, telegramChatId: true } },
+        receiver: { select: { id: true, name: true, email: true, telegramChatId: true } },
+        tool: { select: { id: true, name: true, icon: true } },
+      },
+    });
+
+    await this.dispatchNotification(notification);
+    return notification;
   }
-};
 
-export const markAsRead = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    const { id } = req.params;
-    
-    // В реальной реализации:
-    // await prisma.notification.update({ where: { id }, data: { read: true } });
-    
-    // Моковая реализация
-    const notification = mockNotifications.find(n => n.id === id);
-    if (notification) {
-      notification.read = true;
+  private async dispatchNotification(notification: Awaited<ReturnType<typeof this.create>>) {
+    // Если есть EMAIL - исключаем IN_APP
+    const shouldSendInApp = notification.channel.includes('IN_APP') && 
+                          !notification.channel.includes('EMAIL');
+
+    if (shouldSendInApp) {
+      this.wsService.sendToUser(notification.receiver.id, {
+        event: 'notification',
+        data: {
+          id: notification.id,
+          type: notification.type,
+          title: notification.title,
+          message: notification.message,
+          createdAt: notification.createdAt.toISOString(),
+          read: notification.read,
+          sender: notification.sender,
+          tool: notification.tool,
+          action: notification.action,
+        },
+      });
     }
-    
-    res.status(200).json({ success: true });
-  } catch (error) {
-    next(error);
+
+    if (notification.channel.includes('EMAIL')) {
+      await this.emailService.sendNotification(notification);
+    }
+
+    if (notification.channel.includes('TELEGRAM') && notification.receiver.telegramChatId) {
+      await this.telegramService.sendNotification(notification, notification.receiver.telegramChatId);
+    }
   }
-};
+
+  async markAsRead(params: z.infer<typeof markAsReadSchema>) {
+    return prisma.notifications.update({
+      where: { 
+        id: params.notificationId, 
+        receiverId: params.userId 
+      },
+      data: { 
+        read: true, 
+        updatedAt: new Date() 
+      },
+    });
+  }
+
+  async getNotifications(params: z.infer<typeof getNotificationsSchema>) {
+    const where = { receiverId: params.userId };
+    if (params.read !== undefined) where.read = params.read;
+
+    const [notifications, total] = await Promise.all([
+      prisma.notifications.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: params.limit,
+        skip: params.offset,
+        include: this.buildIncludeOptions(params.include),
+      }),
+      prisma.notifications.count({ where }),
+    ]);
+
+    return {
+      data: notifications.map(n => ({
+        ...n,
+        createdAt: n.createdAt.toISOString(),
+        updatedAt: n.updatedAt.toISOString(),
+        expiresAt: n.expiresAt?.toISOString(),
+      })),
+      meta: {
+        total,
+        hasMore: params.offset + notifications.length < total,
+        limit: params.limit,
+        offset: params.offset,
+      },
+    };
+  }
+
+  private buildIncludeOptions(include?: string[]) {
+    return {
+      sender: include?.includes('sender') ? { 
+        select: { 
+          id: true, 
+          name: true, 
+          email: true,
+          telegramChatId: true
+        } 
+      } : false,
+      receiver: include?.includes('receiver') ? { 
+        select: { 
+          id: true, 
+          name: true, 
+          email: true,
+          telegramChatId: true
+        } 
+      } : false,
+      tool: include?.includes('tool') ? { 
+        select: { 
+          id: true, 
+          name: true, 
+          icon: true 
+        } 
+      } : false,
+    };
+  }
+
+  async getUnreadCount(userId: string) {
+    return prisma.notifications.count({
+      where: { receiverId: userId, read: false },
+    });
+  }
+
+  async cleanupExpiredNotifications() {
+    const result = await prisma.notifications.deleteMany({
+      where: { expiresAt: { not: null, lte: new Date() } },
+    });
+    return { count: result.count };
+  }
+}
+
+export const notificationController = new NotificationController();

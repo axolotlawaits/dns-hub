@@ -1,9 +1,9 @@
 import { prisma, refreshPrivateKey } from "../../server.js";
 import { Request, Response } from "express";
-import jwt from 'jsonwebtoken'
+import jwt from 'jsonwebtoken';
 import { accessPrivateKey } from "../../server.js";
+import crypto from 'crypto';
 
-// Существующая функция login (без изменений)
 export const login = async (req: Request, res: Response): Promise<any> => {
   const { login } = req.body;
   const loginLowerCase = login.toLowerCase();
@@ -26,7 +26,9 @@ export const login = async (req: Request, res: Response): Promise<any> => {
         position: data.description || null,
         name: data.displayName || null,
         branch: data.department || null,
-        image: data.thumbnailPhoto
+        image: data.thumbnailPhoto,
+        telegramLinkToken: null,
+        telegramChatId: null
       };
 
       const newUser = await prisma.user.create({
@@ -74,7 +76,29 @@ export const login = async (req: Request, res: Response): Promise<any> => {
   }
 };
 
-// Новая функция для получения данных пользователя
+export const generateTelegramLink = async (req: Request, res: Response): Promise<any> => {
+  const { userId } = req.params;
+
+  if (!userId) {
+    return res.status(400).json({ error: 'User ID is required' });
+  }
+
+  try {
+    const token = crypto.randomBytes(32).toString('hex');
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { telegramLinkToken: token }
+    });
+    
+    const telegramLink = `https://t.me/${process.env.TELEGRAM_BOT_NAME}?start=${token}`;
+    
+    return res.status(200).json({ telegramLink });
+  } catch (error) {
+    console.error('Error generating Telegram link:', error);
+    return res.status(500).json({ error: 'Failed to generate Telegram link' });
+  }
+};
+
 export const getLastUser = async (req: Request, res: Response): Promise<any> => {
   const { login } = req.params;
 
@@ -88,7 +112,8 @@ export const getLastUser = async (req: Request, res: Response): Promise<any> => 
       select: {
         login: true,
         name: true,
-        image: true
+        image: true,
+        telegramChatId: true
       }
     });
 
@@ -99,7 +124,8 @@ export const getLastUser = async (req: Request, res: Response): Promise<any> => 
     return res.status(200).json({
       login: user.login,
       name: user.name,
-      image: user.image
+      image: user.image,
+      hasTelegram: !!user.telegramChatId
     });
   } catch (error) {
     console.error('Error fetching user data:', error);

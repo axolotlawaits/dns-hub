@@ -41,12 +41,24 @@ model Notifications {
   expiresAt                       DateTime?        
   createdAt                       DateTime                        @default(now())
   updatedAt                       DateTime                        @updatedAt
-            
+
   @@index([receiverId])
   @@index([read])
   @@index([createdAt])
   @@index([senderId])
   @@index([toolId])
+}
+
+
+model UserSettings {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parameter String   // Название параметра, например: "notifications.email"
+  value     String   // Значение в виде строки (можно хранить JSON)
+  type      String   // Тип: "boolean", "number", "string", "json"
+  
+  @@unique([userId, parameter]) // Уникальная пара пользователь-параметр
 }
 
 model Position {
@@ -132,6 +144,8 @@ model User {
   branch                          String        
   image                           String?       
   login                           String                            @unique
+  telegramChatId                  String?                           @unique   // Уникальный ID чата
+  telegramLinkToken               String?                           @unique   // Временный токен
   updatedAt                       DateTime                          @updatedAt
   role                            Role                              @default(EMPLOYEE)
   bookmarks                       Bookmarks[]       
@@ -148,6 +162,7 @@ model User {
   userToolAccesses                UserToolAccess[]                
   Notifications_Receiver          Notifications[]                   @relation(name: "receiver")
   Notifications_Sender            Notifications[]                   @relation(name: "sender")
+  UserSettings                    UserSettings[]
 }          
 
 model GroupToolAccess {
@@ -381,8 +396,7 @@ enum NotificationChannel {
   IN_APP
   EMAIL
   PUSH
-  SMS
-  WEBHOOK
+  TELEGRAM
 }
 
 enum NotificationPriority {

@@ -26,10 +26,20 @@ import fs from 'fs'
 import cookieParser from 'cookie-parser'
 import jwt from 'jsonwebtoken'
 import { refreshToken } from './middleware/auth.js';
+import { createServer } from 'http';
+import { WebSocketService } from './websocket.js';
+import { TelegramController } from './controllers/app/telegram.js';
 
 const app = express()
 export const prisma = new PrismaClient()
 const __dirname = path.resolve()
+const telegramController = TelegramController.getInstance();
+const server = createServer(app);
+
+// Инициализируем WebSocket сервер
+const webSocketService = WebSocketService.getInstance();
+webSocketService.initialize(server);
+
 
 export const accessPrivateKey = fs.readFileSync(path.join(__dirname, 'keys/access_private.pem'), 'utf8');
 export const accessPublicKey = fs.readFileSync(path.join(__dirname, 'keys/access_public.pem'), 'utf8');
@@ -59,7 +69,7 @@ app.use('/hub-api/news', newsRouter)
 app.use('/hub-api/profile', profileRouter)
 app.use('/hub-api/birthday', birthdayRouter)
 app.use('/hub-api/bookmarks', bookmarksRouter)
-app.use('/hub-api/notification', notificationRouter)
+app.use('/hub-api/notifications', notificationRouter)
 app.use('/hub-api/aho/meter-reading', meterReadingRouter)
 app.use('/hub-api/aho/correspondence', correspondenceRouter)
 app.use('/hub-api/accounting/supply-docs', supplydocsRouter)
@@ -72,13 +82,25 @@ app.use('/hub-api/retail/print-service', printServiceRouter);
 app.use('/hub-api/loaders/route', routeRouter)
 app.use('/hub-api/loaders/routeDay', routeDayRouter)
 app.use('/hub-api/loaders/filial', filialRouter)
-
+// WebSocket endpoint для проверки
+app.get('/ws-test', (req, res) => {
+  res.send('WebSocket server is running');
+  
+});
 /* */
+app.get('/hub-api/ws/connections', (req, res) => {
+  const wsService = WebSocketService.getInstance();
+  res.json({
+    connectedUsers: wsService.getConnectedUsers(),
+    totalConnections: wsService.getConnectionCount()
+  });
+});
+TelegramController.getInstance();
 
 app.post('/hub-api/refresh-token', refreshToken)
 
-app.listen(2000, function() { 
-  console.log('server running on port 2000')
-  //uncomment scheduler for production
-  //schedule.scheduleJob('0 0 * * *', () => scheduleRouteDay())
-}) 
+  server.listen(2000, () => {
+    console.log('Server running on http://localhost:2000');
+    console.log('WebSocket server ready at ws://localhost:2000');
+    console.log('Telegram bot is running');
+  });

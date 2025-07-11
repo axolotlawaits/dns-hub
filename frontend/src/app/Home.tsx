@@ -1,7 +1,7 @@
 import News from './News';
 import Birthday from './Birthday';
 import Bookmarks from './Bookmarks';
-import Notifications from './Notification'; // Новый компонент для уведомлений
+import Notifications from '../components/Notifications/Notifications';
 
 function Home() {
   return (

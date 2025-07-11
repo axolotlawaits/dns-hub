@@ -16,10 +16,16 @@ import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
 import isBetween from 'dayjs/plugin/isBetween';
 import 'dayjs/locale/ru';
 
+// Setup dayjs plugins and locale
 dayjs.locale('ru');
 dayjs.extend(isSameOrAfter);
 dayjs.extend(isSameOrBefore);
 dayjs.extend(isBetween);
+
+// Constants and types
+const COLORS = ['#4E79A7', '#F28E2B', '#E15759', '#76B7B2', '#59A14F', '#EDC948'];
+const DEFAULT_PAGE_SIZE = 5;
+const PAGE_SIZE_OPTIONS = ['5', '10', '20'].map(value => ({ value, label: value }));
 
 interface User {
   id: string;
@@ -39,7 +45,7 @@ interface MeterData {
 interface MeterReading {
   id: string;
   date: Date;
-  indications: MeterData; // Изменено с string на MeterData
+  indications: MeterData;
   userId: string;
   createdAt: Date;
   user: User;
@@ -69,7 +75,7 @@ interface ReadingFormValues {
 }
 
 const DEFAULT_READING_FORM: ReadingFormValues = {
-  date: dayjs().format('YYYY-MM-DDTHH:mm'),
+  date: dayjs().format('YYYY-MM-DD'), // Изменено здесь
   officeColdWater: 0,
   proDveriElectricity: 0,
   kakDomaElectricity: 0,
@@ -77,14 +83,64 @@ const DEFAULT_READING_FORM: ReadingFormValues = {
   kakDomaHotWater: 0,
 };
 
-const COLORS = ['#4E79A7', '#F28E2B', '#E15759', '#76B7B2', '#59A14F', '#EDC948'];
+// Utility functions
+const formatReadingData = (data: MeterReading[]): MeterReadingWithFormattedData[] => {
+  return [...data]
+    .sort((a, b) => dayjs(a.date).diff(dayjs(b.date)))
+    .map((reading, index, array) => {
+      const prevReading = array[index - 1];
+      const currentData = reading.indications;
+      const prevData = prevReading?.indications || {};
 
+      const consumption = Object.keys(currentData).reduce((sum, key) => {
+        const currentValue = currentData[key] || 0;
+        const prevValue = prevData[key] || 0;
+        return sum + (currentValue - prevValue);
+      }, 0);
+
+      return {
+        ...reading,
+        consumption,
+        formattedDate: dayjs(reading.date).format('MMMM YYYY'),
+        displayDate: dayjs(reading.date).format('MMMM YYYY'),
+        formattedData: currentData,
+        formattedConsumption: consumption.toFixed(2),
+        userName: reading.user?.name ? formatName(reading.user.name) : 'Unknown',
+      };
+    });
+};
+
+const calculateTotals = (readings: MeterReadingWithFormattedData[]) => {
+  if (readings.length === 0) {
+    return {
+      officeColdWater: 0,
+      proDveriElectricity: 0,
+      kakDomaElectricity: 0,
+      kakDomaColdWater: 0,
+      kakDomaHotWater: 0,
+    };
+  }
+
+  const lastReading = readings[readings.length - 1];
+  const indications = lastReading.formattedData;
+
+  return {
+    officeColdWater: indications['Офис - Холодная вода'] ?? 0,
+    proDveriElectricity: indications['ProДвери - Электричество'] ?? 0,
+    kakDomaElectricity: indications['КакДома - Электричество'] ?? 0,
+    kakDomaColdWater: indications['КакДома - Холодная вода'] ?? 0,
+    kakDomaHotWater: indications['КакДома - Горячая вода'] ?? 0,
+  };
+};
+
+// Optimized components
 const ReadingsChart = React.memo(({ data }: { data: MeterReadingWithFormattedData[] }) => {
   const chartData = useMemo(() => data.map(reading => ({
     date: reading.formattedDate,
     displayDate: reading.displayDate,
     ...reading.formattedData,
-    'КакДома - Электричество': (reading.formattedData['КакДома - Электричество'] || 0) - (reading.formattedData['ProДвери - Электричество'] || 0)
+    'КакДома - Электричество': (reading.formattedData['КакДома - Электричество'] || 0) -
+                              (reading.formattedData['ProДвери - Электричество'] || 0)
   })), [data]);
 
   const meterTypes = useMemo(() => {
@@ -130,245 +186,6 @@ const ReadingsChart = React.memo(({ data }: { data: MeterReadingWithFormattedDat
   );
 });
 
-const useMeterReadings = () => {
-  const { user } = useUserContext();
-  const [state, setState] = useState({
-    readings: [] as MeterReading[],
-    loading: true,
-    selectedReading: null as MeterReading | null,
-    readingForm: DEFAULT_READING_FORM,
-    columnFilters: [] as ColumnFiltersState,
-    currentPage: 1,
-    pageSize: 5
-  });
-
-  const modals = {
-    view: useDisclosure(false),
-    edit: useDisclosure(false),
-    create: useDisclosure(false),
-    delete: useDisclosure(false),
-  };
-
-  const showNotification = useCallback((type: 'success' | 'error', message: string) => {
-    notificationSystem.addNotification(
-      type === 'success' ? 'Успех' : 'Ошибка',
-      message,
-      type
-    );
-  }, []);
-
-  const fetchData = useCallback(async (url: string, options?: RequestInit) => {
-    try {
-      const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-        ...options,
-      });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      return await response.json();
-    } catch (error) {
-      console.error(`Error fetching data from ${url}:`, error);
-      throw error;
-    }
-  }, []);
-
-  const formatTableData = useCallback((data: MeterReading[]): MeterReadingWithFormattedData[] => {
-    return [...data]
-      .sort((a, b) => dayjs(a.date).diff(dayjs(b.date)))
-      .map((reading, index, array) => {
-        const prevReading = array[index - 1];
-        const currentData = reading.indications; // Убрали JSON.parse
-        const prevData = prevReading ? prevReading.indications : {}; // Убрали JSON.parse
-        const consumption = Object.keys(currentData).reduce((sum, key) => {
-          const currentValue = currentData[key] || 0;
-          const prevValue = prevData[key] || 0;
-          return sum + (currentValue - prevValue);
-        }, 0);
-
-        return {
-          ...reading,
-          consumption,
-          formattedDate: dayjs(reading.date).format('MMMM YYYY'),
-          displayDate: dayjs(reading.date).format('MMMM YYYY'),
-          formattedData: currentData,
-          formattedConsumption: consumption.toFixed(2),
-          userName: reading.user?.name ? formatName(reading.user.name) : 'Unknown',
-        };
-      });
-  }, []);
-
-  const tableData = useMemo(() => formatTableData(state.readings), [state.readings, formatTableData]);
-
-  const filteredData = useMemo(() => {
-    return state.columnFilters.reduce((result, filter) => {
-      if (filter.id === 'displayDate' && filter.value) {
-        const { start, end } = filter.value as DateFilterValue;
-        return result.filter(row => {
-          const rowDate = new Date(row.date);
-          if (start && end) return rowDate >= new Date(start) && rowDate <= new Date(end);
-          if (start) return rowDate >= new Date(start);
-          if (end) return rowDate <= new Date(end);
-          return true;
-        });
-      }
-      if (filter.id === 'userName' && filter.value) {
-        const users = filter.value as string[];
-        return users.length ? result.filter(row => users.includes(row.userName)) : result;
-      }
-      return result;
-    }, [...tableData]);
-  }, [tableData, state.columnFilters]);
-
-  const paginatedData = useMemo(() => {
-    const startIndex = (state.currentPage - 1) * state.pageSize;
-    return filteredData.slice(startIndex, startIndex + state.pageSize);
-  }, [filteredData, state.currentPage, state.pageSize]);
-
-  const userFilterOptions = useMemo(() => {
-    const uniqueNames = Array.from(new Set(state.readings.map(r => r.user?.name ? formatName(r.user.name) : 'Unknown')));
-    return uniqueNames.map(name => ({ value: name, label: name }));
-  }, [state.readings]);
-
-  const handleTableAction = useCallback((action: 'view' | 'edit' | 'delete', reading: MeterReading) => {
-    setState(prev => ({ ...prev, selectedReading: reading }));
-    if (action === 'edit') {
-      const readingData = reading.indications; // Убрали JSON.parse
-      setState(prev => ({
-        ...prev,
-        readingForm: {
-          date: dayjs(reading.date).format('YYYY-MM-DDTHH:mm'),
-          officeColdWater: readingData['Офис - Холодная вода'] || 0,
-          proDveriElectricity: readingData['ProДвери - Электричество'] || 0,
-          kakDomaElectricity: readingData['КакДома - Электричество'] || 0,
-          kakDomaColdWater: readingData['КакДома - Холодная вода'] || 0,
-          kakDomaHotWater: readingData['КакДома - Горячая вода'] || 0,
-        }
-      }));
-    }
-    modals[action][1].open();
-  }, [modals]);
-
-  const handleDeleteConfirm = useCallback(async () => {
-    if (!state.selectedReading) return;
-    try {
-      await fetch(`${API}/aho/meter-reading/${state.selectedReading.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      setState(prev => ({
-        ...prev,
-        readings: prev.readings.filter(item => item.id !== state.selectedReading!.id)
-      }));
-      modals.delete[1].close();
-      showNotification('success', 'Показание успешно удалено');
-    } catch (error) {
-      console.error('Failed to delete reading:', error);
-      showNotification('error', 'Ошибка при удалении показания');
-    }
-  }, [state.selectedReading, modals.delete, showNotification]);
-
-  const handleFormSubmit = useCallback(async (values: ReadingFormValues, mode: 'create' | 'edit') => {
-    if (!user) return;
-    const selectedMonth = dayjs(values.date).format('YYYY-MM');
-    if (mode === 'create' && state.readings.some(reading =>
-      dayjs(reading.date).format('YYYY-MM') === selectedMonth
-    )) {
-      showNotification('error', 'Запись для этого месяца уже существует');
-      return;
-    }
-    try {
-      const url = mode === 'create'
-        ? `${API}/aho/meter-reading`
-        : `${API}/aho/meter-reading/${state.selectedReading!.id}`;
-      const method = mode === 'create' ? 'POST' : 'PATCH';
-      const indications = { // Создаем объект напрямую
-        'Офис - Холодная вода': values.officeColdWater,
-        'ProДвери - Электричество': values.proDveriElectricity,
-        'КакДома - Электричество': values.kakDomaElectricity,
-        'КакДома - Холодная вода': values.kakDomaColdWater,
-        'КакДома - Горячая вода': values.kakDomaHotWater,
-      };
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          date: new Date(values.date).toISOString(),
-          indications, // Передаем объект напрямую
-          userId: user.id,
-        }),
-      });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const result = await response.json();
-      setState(prev => ({
-        ...prev,
-        readings: mode === 'create'
-          ? [result, ...prev.readings]
-          : prev.readings.map(item => item.id === state.selectedReading!.id ? result : item),
-        readingForm: DEFAULT_READING_FORM
-      }));
-      modals[mode][1].close();
-      showNotification('success', mode === 'create' ? 'Показание успешно добавлено' : 'Показание успешно обновлено');
-    } catch (error) {
-      console.error(`Failed to ${mode} reading:`, error);
-      showNotification('error', `Ошибка при ${mode === 'create' ? 'добавлении' : 'обновлении'} показания`);
-    }
-  }, [user, state.selectedReading, state.readings, modals, showNotification]);
-
-  const handleFilterChange = useCallback((columnId: string, value: any) => {
-    setState(prev => ({
-      ...prev,
-      columnFilters: [
-        ...prev.columnFilters.filter(f => f.id !== columnId),
-        ...(value !== undefined ? [{ id: columnId, value }] : [])
-      ]
-    }));
-  }, []);
-
-  useEffect(() => {
-    const fetchInitialData = async () => {
-      try {
-        const readingsData = await fetchData(`${API}/aho/meter-reading`);
-        const formattedReadings = readingsData.map((r: any) => ({
-          ...r,
-          date: new Date(r.date),
-          createdAt: new Date(r.createdAt),
-        }));
-        setState(prev => ({ ...prev, readings: formattedReadings, loading: false }));
-      } catch (error) {
-        console.error('Failed to load data:', error);
-        setState(prev => ({ ...prev, loading: false }));
-      }
-    };
-    fetchInitialData();
-  }, [fetchData]);
-
-  return {
-    loading: state.loading,
-    filteredData,
-    paginatedData,
-    userFilterOptions,
-    columnFilters: state.columnFilters,
-    readingForm: state.readingForm,
-    selectedReading: state.selectedReading,
-    modals,
-    currentPage: state.currentPage,
-    pageSize: state.pageSize,
-    setCurrentPage: (page: number) => setState(prev => ({ ...prev, currentPage: page })),
-    setPageSize: (size: number) => setState(prev => ({ ...prev, pageSize: size })),
-    handleTableAction,
-    handleDeleteConfirm,
-    handleFormSubmit,
-    handleFilterChange,
-    setReadingForm: (form: ReadingFormValues) => setState(prev => ({ ...prev, readingForm: form })),
-    setColumnFilters: (filters: ColumnFiltersState) => setState(prev => ({ ...prev, columnFilters: filters })),
-  };
-};
-
 const ReadingRow = React.memo(({
   reading,
   onEdit,
@@ -378,35 +195,21 @@ const ReadingRow = React.memo(({
   onEdit: () => void;
   onDelete: () => void;
 }) => {
-  const formattedData = useMemo(() => {
-    const data = reading.formattedData;
-    return {
-      ...data,
-      'КакДома - Электричество': (data['КакДома - Электричество'] || 0) - (data['ProДвери - Электричество'] || 0)
-    };
-  }, [reading.formattedData]);
+  const formattedData = useMemo(() => ({
+    ...reading.formattedData,
+    'КакДома - Электричество': (reading.formattedData['КакДома - Электричество'] || 0) -
+                              (reading.formattedData['ProДвери - Электричество'] || 0)
+  }), [reading.formattedData]);
 
   const hasKakDomaData = useMemo(() =>
-    formattedData['КакДома - Электричество'] !== undefined ||
-    formattedData['КакДома - Холодная вода'] !== undefined ||
-    formattedData['КакДома - Горячая вода'] !== undefined
-  , [formattedData]);
+    ['КакДома - Электричество', 'КакДома - Холодная вода', 'КакДома - Горячая вода'].some(
+      key => formattedData[key] !== undefined
+    ),
+    [formattedData]
+  );
 
   return (
-    <Paper
-      withBorder
-      p="md"
-      radius="md"
-      shadow="xs"
-      mb="sm"
-      style={{
-        backgroundColor: 'var(--layer)',
-        cursor: 'pointer',
-        '&:hover': {
-          backgroundColor: 'var(--layer)',
-        },
-      }}
-    >
+    <Paper withBorder p="md" radius="md" shadow="xs" mb="sm" style={{ backgroundColor: 'var(--layer)' }}>
       <Group align="flex-start" wrap="nowrap">
         <Box style={{ flex: 1 }}>
           <Text size="sm" c="dimmed" mb={4} ta="left">Офис</Text>
@@ -456,11 +259,11 @@ const ReadingRow = React.memo(({
             {!hasKakDomaData && <Text c="dimmed" ta="left">Нет данных</Text>}
           </Stack>
         </Box>
-        <Stack gap="xs" justify="center" style={{ width: 'auto', marginLeft: 'auto', height: '100%', padding: '4px 0' }}>
-          <ActionIcon color="blue" variant="light" onClick={(e) => { e.stopPropagation(); onEdit(); }} style={{ margin: '0 auto' }}>
+        <Stack gap="xs" justify="center" style={{ width: 'auto', marginLeft: 'auto', padding: '4px 0' }}>
+          <ActionIcon color="blue" variant="light" onClick={(e) => { e.stopPropagation(); onEdit(); }}>
             <IconPencil size={18} />
           </ActionIcon>
-          <ActionIcon color="red" variant="light" onClick={(e) => { e.stopPropagation(); onDelete(); }} style={{ margin: '0 auto' }}>
+          <ActionIcon color="red" variant="light" onClick={(e) => { e.stopPropagation(); onDelete(); }}>
             <IconTrash size={18} />
           </ActionIcon>
         </Stack>
@@ -471,22 +274,16 @@ const ReadingRow = React.memo(({
   );
 });
 
-const TotalsBlock = React.memo(({ totals }: { totals: {
-  officeColdWater: number;
-  proDveriElectricity: number;
-  kakDomaElectricity: number;
-  kakDomaColdWater: number;
-  kakDomaHotWater: number;
-} }) => {
+const TotalsBlock = React.memo(({ totals }: { totals: ReturnType<typeof calculateTotals> }) => {
   const adjustedKakDomaElectricity = totals.kakDomaElectricity - totals.proDveriElectricity;
+
   return (
     <Paper withBorder p="md" radius="md" shadow="sm" style={{ marginBottom: '20px', backgroundColor: 'var(--layer)' }}>
-      
       <Title order={4} mb="md" style={{ color: 'var(--font)' }}>Общие итоги</Title>
       <Group align="flex-start" wrap="nowrap">
         <Box style={{ flex: 1 }}>
           <Text size="sm" c="dimmed" mb={4} ta="left">Офис</Text>
-          <Text ta="left" style={{ color: '  var(--font)' }}>
+          <Text ta="left" style={{ color: 'var(--font)' }}>
             <Text span fw={500}>Холодная вода: </Text>
             <Text span>{formatValue('Холодная вода', totals.officeColdWater)}</Text>
           </Text>
@@ -523,6 +320,230 @@ const TotalsBlock = React.memo(({ totals }: { totals: {
   );
 });
 
+// Custom hook for meter readings logic
+const useMeterReadings = () => {
+  const { user } = useUserContext();
+  const [state, setState] = useState({
+    readings: [] as MeterReading[],
+    loading: true,
+    selectedReading: null as MeterReading | null,
+    readingForm: DEFAULT_READING_FORM,
+    columnFilters: [] as ColumnFiltersState,
+    currentPage: 1,
+    pageSize: DEFAULT_PAGE_SIZE
+  });
+
+  const modals = {
+    view: useDisclosure(false),
+    edit: useDisclosure(false),
+    create: useDisclosure(false),
+    delete: useDisclosure(false),
+  };
+
+  const showNotification = useCallback((type: 'success' | 'error', message: string) => {
+    notificationSystem.addNotification(
+      type === 'success' ? 'Успех' : 'Ошибка',
+      message,
+      type
+    );
+  }, []);
+
+  const fetchData = useCallback(async (url: string, options?: RequestInit) => {
+    try {
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        ...options,
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error(`Error fetching data from ${url}:`, error);
+      throw error;
+    }
+  }, []);
+
+  const tableData = useMemo(() => formatReadingData(state.readings), [state.readings]);
+
+  const filteredData = useMemo(() => {
+    return state.columnFilters.reduce((result, filter) => {
+      if (filter.id === 'displayDate' && filter.value) {
+        const { start, end } = filter.value as DateFilterValue;
+        return result.filter(row => {
+          const rowDate = new Date(row.date);
+          if (start && end) return rowDate >= new Date(start) && rowDate <= new Date(end);
+          if (start) return rowDate >= new Date(start);
+          if (end) return rowDate <= new Date(end);
+          return true;
+        });
+      }
+      if (filter.id === 'userName' && filter.value) {
+        const users = filter.value as string[];
+        return users.length ? result.filter(row => users.includes(row.userName)) : result;
+      }
+      return result;
+    }, [...tableData]);
+  }, [tableData, state.columnFilters]);
+
+  const paginatedData = useMemo(() => {
+    const startIndex = (state.currentPage - 1) * state.pageSize;
+    return filteredData.slice(startIndex, startIndex + state.pageSize);
+  }, [filteredData, state.currentPage, state.pageSize]);
+
+  const userFilterOptions = useMemo(() => {
+    const uniqueNames = Array.from(new Set(state.readings.map(r => r.user?.name ? formatName(r.user.name) : 'Unknown')));
+    return uniqueNames.map(name => ({ value: name, label: name }));
+  }, [state.readings]);
+
+// В функции handleTableAction замените формат даты:
+const handleTableAction = useCallback((action: 'view' | 'edit' | 'delete', reading: MeterReading) => {
+  setState(prev => ({ ...prev, selectedReading: reading }));
+  if (action === 'edit') {
+    const readingData = reading.indications;
+    setState(prev => ({
+      ...prev,
+      readingForm: {
+        date: dayjs(reading.date).format('YYYY-MM-DD'), // Изменено здесь
+        officeColdWater: readingData['Офис - Холодная вода'] || 0,
+        proDveriElectricity: readingData['ProДвери - Электричество'] || 0,
+        kakDomaElectricity: readingData['КакДома - Электричество'] || 0,
+        kakDomaColdWater: readingData['КакДома - Холодная вода'] || 0,
+        kakDomaHotWater: readingData['КакДома - Горячая вода'] || 0,
+      }
+    }));
+  }
+  modals[action][1].open();
+}, [modals]);
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!state.selectedReading) return;
+    try {
+      await fetch(`${API}/aho/meter-reading/${state.selectedReading.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      setState(prev => ({
+        ...prev,
+        readings: prev.readings.filter(item => item.id !== state.selectedReading!.id)
+      }));
+      modals.delete[1].close();
+      showNotification('success', 'Показание успешно удалено');
+    } catch (error) {
+      console.error('Failed to delete reading:', error);
+      showNotification('error', 'Ошибка при удалении показания');
+    }
+  }, [state.selectedReading, modals.delete, showNotification]);
+
+  const handleFormSubmit = useCallback(async (values: ReadingFormValues, mode: 'create' | 'edit') => {
+    if (!user) return;
+    const selectedMonth = dayjs(values.date).format('YYYY-MM');
+    if (mode === 'create' && state.readings.some(reading =>
+      dayjs(reading.date).format('YYYY-MM') === selectedMonth
+    )) {
+      showNotification('error', 'Запись для этого месяца уже существует');
+      return;
+    }
+    try {
+      const url = mode === 'create'
+        ? `${API}/aho/meter-reading`
+        : `${API}/aho/meter-reading/${state.selectedReading!.id}`;
+      const method = mode === 'create' ? 'POST' : 'PATCH';
+      const indications = {
+        'Офис - Холодная вода': Number(values.officeColdWater),
+        'ProДвери - Электричество': Number(values.proDveriElectricity),
+        'КакДома - Электричество': Number(values.kakDomaElectricity),
+        'КакДома - Холодная вода': Number(values.kakDomaColdWater),
+        'КакДома - Горячая вода': Number(values.kakDomaHotWater),
+      };
+      const formattedDate = dayjs(values.date).format('YYYY-MM-DD');
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          date: formattedDate,
+          indications,
+          userId: user.id,
+        }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+      const result = await response.json();
+      setState(prev => ({
+        ...prev,
+        readings: mode === 'create'
+          ? [result, ...prev.readings]
+          : prev.readings.map(item => item.id === state.selectedReading!.id ? result : item),
+        readingForm: DEFAULT_READING_FORM
+      }));
+      modals[mode][1].close();
+      showNotification('success', mode === 'create' ? 'Показание успешно добавлено' : 'Показание успешно обновлено');
+    } catch (error) {
+      console.error(`Failed to ${mode} reading:`, error);
+      showNotification(
+        'error',
+        `Ошибка при ${mode === 'create' ? 'добавлении' : 'обновлении'} показания: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`
+      );
+    }
+  }, [user, state.selectedReading, state.readings, modals, showNotification]);
+
+  const handleFilterChange = useCallback((columnId: string, value: any) => {
+    setState(prev => ({
+      ...prev,
+      columnFilters: [
+        ...prev.columnFilters.filter(f => f.id !== columnId),
+        ...(value !== undefined ? [{ id: columnId, value }] : [])
+      ],
+      currentPage: 1 // Reset to first page when filters change
+    }));
+  }, []);
+
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        const readingsData = await fetchData(`${API}/aho/meter-reading`);
+        const formattedReadings = readingsData.map((r: any) => ({
+          ...r,
+          date: new Date(r.date),
+          createdAt: new Date(r.createdAt),
+        }));
+        setState(prev => ({ ...prev, readings: formattedReadings, loading: false }));
+      } catch (error) {
+        console.error('Failed to load data:', error);
+        setState(prev => ({ ...prev, loading: false }));
+      }
+    };
+    fetchInitialData();
+  }, [fetchData]);
+
+  return {
+    loading: state.loading,
+    filteredData,
+    paginatedData,
+    userFilterOptions,
+    columnFilters: state.columnFilters,
+    readingForm: state.readingForm,
+    selectedReading: state.selectedReading,
+    modals,
+    currentPage: state.currentPage,
+    pageSize: state.pageSize,
+    setCurrentPage: (page: number) => setState(prev => ({ ...prev, currentPage: page })),
+    setPageSize: (size: number) => setState(prev => ({ ...prev, pageSize: size })),
+    handleTableAction,
+    handleDeleteConfirm,
+    handleFormSubmit,
+    handleFilterChange,
+    setReadingForm: (form: ReadingFormValues) => setState(prev => ({ ...prev, readingForm: form })),
+    setColumnFilters: (filters: ColumnFiltersState) => setState(prev => ({ ...prev, columnFilters: filters })),
+  };
+};
+
 const MeterReadingsList = () => {
   const {
     loading,
@@ -545,38 +566,17 @@ const MeterReadingsList = () => {
     setColumnFilters,
   } = useMeterReadings();
 
-  const totals = useMemo(() => {
-    if (filteredData.length === 0) return {
-      officeColdWater: 0,
-      proDveriElectricity: 0,
-      kakDomaElectricity: 0,
-      kakDomaColdWater: 0,
-      kakDomaHotWater: 0,
-    };
-    const lastReading = filteredData[filteredData.length - 1];
-    const data = lastReading.formattedData;
-    return {
-      officeColdWater: data['Офис - Холодная вода'] || 0,
-      proDveriElectricity: data['ProДвери - Электричество'] || 0,
-      kakDomaElectricity: data['КакДома - Электричество'] || 0,
-      kakDomaColdWater: data['КакДома - Холодная вода'] || 0,
-      kakDomaHotWater: data['КакДома - Горячая вода'] || 0,
-    };
-  }, [filteredData]);
+  const totals = useMemo(() => calculateTotals(filteredData), [filteredData]);
 
   const viewFieldsConfig = useMemo(() => [
     { label: 'Дата', value: (item: MeterReading) => item?.date ? dayjs(item.date).format('MMMM YYYY') : 'N/A' },
     {
       label: 'Показания',
       value: (item: MeterReading) => {
-        try {
-          const data = item.indications ? item.indications as MeterData : {};
-          return Object.entries(data)
-            .map(([key, value]) => `${key}: ${value} ${key.includes('Электричество') ? 'кВт·ч' : 'м³'}`)
-            .join(', ');
-        } catch {
-          return 'N/A';
-        }
+        const data = item.indications || {};
+        return Object.entries(data)
+          .map(([key, value]) => `${key}: ${value} ${key.includes('Электричество') ? 'кВт·ч' : 'м³'}`)
+          .join(', ');
       }
     },
     { label: 'Пользователь', value: (item: MeterReading) => item?.user?.name || 'Unknown' },
@@ -615,85 +615,78 @@ const MeterReadingsList = () => {
   if (loading) return <LoadingOverlay visible />;
 
   return (
-      <Box p="md">
-        <Box mb="md">
-          <FilterGroup
-            filters={filters}
-            columnFilters={columnFilters}
-            onColumnFiltersChange={handleFilterChange}
-          />
-          <Button
-            variant="outline"
-            onClick={() => setColumnFilters([])}
-            mt="sm"
-            style={{ marginRight: 'auto', display: 'block' }}
-          >
-            Сбросить все фильтры
-          </Button>
-        </Box>
-        
-        {/* Переносим заголовок и кнопку сюда */}
-        <Group justify="space-between" mb="md">
-          <Title order={2} style={{ color: 'var(--font)' }}>Показания счетчиков</Title>
-          <Button
-            size="md"
-            variant="light"
-            onClick={() => {
-              setReadingForm(DEFAULT_READING_FORM);
-              modals.create[1].open();
-            }}
-          >
-            Добавить показание
-          </Button>
-        </Group>
-          
-        <Box style={{ display: 'flex', alignItems: 'flex-start' }}>
-          <Box style={{ flex: 1, marginRight: '16px' }}>
-            <Stack style={{ height: '100%' }}>
-              <Stack gap="md" style={{ flex: 1, overflowY: 'auto' }}>
-                {paginatedData.length > 0 ? (
-                  paginatedData.map((reading) => (
-                    <ReadingRow
-                      key={reading.id}
-                      reading={reading}
-                      onEdit={() => handleTableAction('edit', reading)}
-                      onDelete={() => handleTableAction('delete', reading)}
-                    />
-                  ))
-                ) : (
-                  <Paper withBorder p="xl" radius="md" shadow="xs" style={{ backgroundColor: 'var(--layer)' }}>
-                    <Text c="dimmed" ta="center">Нет данных для отображения</Text>
-                  </Paper>
-                )}
-              </Stack>
-              <Group justify="space-between" mt="md">
-                <Select
-                  value={pageSize.toString()}
-                  onChange={(value) => {
-                    setPageSize(Number(value));
-                    setCurrentPage(1);
-                  }}
-                  data={[
-                    { value: '5', label: '5' },
-                    { value: '10', label: '10' },
-                    { value: '20', label: '20' },
-                  ]}
-                />
-                <Pagination
-                  value={currentPage}
-                  onChange={setCurrentPage}
-                  total={Math.ceil(filteredData.length / pageSize)}
-                />
-              </Group>
+    <Box p="md">
+      <Box mb="md">
+        <FilterGroup
+          filters={filters}
+          columnFilters={columnFilters}
+          onColumnFiltersChange={handleFilterChange}
+        />
+        <Button
+          variant="outline"
+          onClick={() => setColumnFilters([])}
+          mt="sm"
+          style={{ marginRight: 'auto', display: 'block' }}
+        >
+          Сбросить все фильтры
+        </Button>
+      </Box>
+      <Group justify="space-between" mb="md">
+        <Title order={2} style={{ color: 'var(--font)' }}>Показания счетчиков</Title>
+        <Button
+          size="md"
+          variant="light"
+          onClick={() => {
+            setReadingForm(DEFAULT_READING_FORM);
+            modals.create[1].open();
+          }}
+        >
+          Добавить показание
+        </Button>
+      </Group>
+      <Box style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+        <Box style={{ flex: 1 }}>
+          <Stack gap="md" style={{ height: '100%' }}>
+            <Stack gap="md" style={{ flex: 1 }}>
+              {paginatedData.length > 0 ? (
+                paginatedData.map((reading) => (
+                  <ReadingRow
+                    key={reading.id}
+                    reading={reading}
+                    onEdit={() => handleTableAction('edit', reading)}
+                    onDelete={() => handleTableAction('delete', reading)}
+                  />
+                ))
+              ) : (
+                <Paper withBorder p="xl" radius="md" shadow="xs" style={{ backgroundColor: 'var(--layer)' }}>
+                  <Text c="dimmed" ta="center">Нет данных для отображения</Text>
+                </Paper>
+              )}
             </Stack>
-          </Box>
-          <Box style={{ flex: 1 }}>
-            <Box style={{ height: '100%' }}>
-              <TotalsBlock totals={totals} />
-              <ReadingsChart data={paginatedData} />
-            </Box>
-          </Box>
+            <Group justify="space-between" mt="md">
+              <Select
+                value={pageSize.toString()}
+                onChange={(value) => {
+                  setPageSize(Number(value));
+                  setCurrentPage(1);
+                }}
+                data={PAGE_SIZE_OPTIONS}
+              />
+              <Pagination
+                value={currentPage}
+                onChange={setCurrentPage}
+                total={Math.ceil(filteredData.length / pageSize)}
+              />
+            </Group>
+          </Stack>
         </Box>
+        <Box style={{ flex: 1 }}>
+          <Stack gap="md">
+            <TotalsBlock totals={totals} />
+            <ReadingsChart data={paginatedData} />
+          </Stack>
+        </Box>
+      </Box>
       <DynamicFormModal
         opened={modals.view[0]}
         onClose={modals.view[1].close}
@@ -709,7 +702,7 @@ const MeterReadingsList = () => {
         mode="edit"
         fields={formConfig.fields}
         initialValues={readingForm}
-        onSubmit={(values) => handleFormSubmit(values as any, 'edit')}
+        onSubmit={(values) => handleFormSubmit(values as ReadingFormValues, 'edit')}
       />
       <DynamicFormModal
         opened={modals.create[0]}
@@ -718,7 +711,7 @@ const MeterReadingsList = () => {
         mode="create"
         fields={formConfig.fields}
         initialValues={DEFAULT_READING_FORM}
-        onSubmit={(values) => handleFormSubmit(values as any, 'create')}
+        onSubmit={(values) => handleFormSubmit(values as ReadingFormValues, 'create')}
       />
       <DynamicFormModal
         opened={modals.delete[0]}
