@@ -4,11 +4,11 @@ import { API } from '../../config/constants';
 import { notificationSystem } from '../../utils/Push';
 import {
   Avatar, Card, Text, Group, Badge, Skeleton, Stack, Box,
-  Modal, Button, PasswordInput, Image, FileButton, Paper, Flex, Loader, Switch, CopyButton, Tooltip, ActionIcon
+  Modal, Button, PasswordInput, Image, FileButton, Paper, Loader, CopyButton, Tooltip, ActionIcon
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import QRCode from 'react-qr-code';
-import { IconBrandTelegram, IconLink, IconUnlink, IconCopy, IconCheck } from '@tabler/icons-react';
+import { IconBrandTelegram, IconLink, IconUnlink, IconCopy, IconCheck, IconMail, IconNotification } from '@tabler/icons-react';
 
 interface UserData {
   fio: string;
@@ -118,14 +118,12 @@ const ProfileInfo = () => {
         setTelegramLoading(false);
       }
     };
-
     if (user?.id) {
       checkTelegramConnection();
     }
   }, [user?.id]);
 
   useEffect(() => {
-    // Polling mechanism to check for Telegram connection status updates
     const interval = setInterval(async () => {
       if (user?.id) {
         try {
@@ -146,8 +144,6 @@ const ProfileInfo = () => {
                 'Статус Telegram обновлен',
                 'success'
               );
-
-              // Close the modal if the status is updated to connected
               if (data.is_connected) {
                 closeTelegramModal();
               }
@@ -157,9 +153,9 @@ const ProfileInfo = () => {
           console.error('Error polling Telegram status:', error);
         }
       }
-    }, 10000); // Poll every 10 seconds
+    }, 10000);
 
-    return () => clearInterval(interval); // Clean up the interval on component unmount
+    return () => clearInterval(interval);
   }, [user?.id, isTelegramConnected]);
 
   const toggleEmailNotifications = async () => {
@@ -306,8 +302,8 @@ const ProfileInfo = () => {
   if (!userData) return <Text>Нет данных пользователя</Text>;
 
   return (
-    <Flex gap="md" direction={{ base: 'column', md: 'row' }}>
-      <Card shadow="sm" padding="lg" radius="md" withBorder style={{ flex: 1 }}>
+    <Stack gap="md">
+      <Card shadow="sm" padding="lg" radius="md" withBorder style={{ width: '100%' }}>
         <Group align="flex-start" wrap="nowrap">
           <Box style={{ position: 'relative' }}>
             <Avatar
@@ -364,62 +360,78 @@ const ProfileInfo = () => {
           </Box>
         </Group>
       </Card>
-      <div style={{ width: 300 }}>
-        <Paper shadow="sm" p="lg" radius="md" withBorder>
-          <Group mb="md" align="center">
-            <IconBrandTelegram size={24} />
-            <Text size="lg" fw={500}>Telegram Уведомления</Text>
-          </Group>
-          {telegramLoading ? (
-            <Group justify="center">
-              <Loader size="sm" />
-              <Text>Проверка статуса...</Text>
+      <Box style={{ width: '100%', display: 'flex', justifyContent: 'flex-end' }}>
+        <div style={{ width: 300 }}>
+          <Paper shadow="sm" p="lg" radius="md" withBorder>
+            <Group mb="md" align="center">
+              <IconNotification size={24} />
+              <Text size="lg" fw={500}>Уведомления</Text>
             </Group>
-          ) : isTelegramConnected ? (
-            <Stack gap="sm">
-              <Group>
-                <Badge color="green" variant="light" leftSection={<IconCheck size={12} />}>
-                  Подключен
-                </Badge>
-                {telegramUserName && (
-                  <Text size="sm" c="dimmed">@{telegramUserName}</Text>
-                )}
+            {telegramLoading ? (
+              <Group justify="center">
+                <Loader size="sm" />
+                <Text>Проверка статуса...</Text>
               </Group>
-              <Button
-                leftSection={<IconUnlink size={18} />}
-                variant="outline"
-                color="red"
-                onClick={disconnectTelegram}
-                fullWidth
-              >
-                Отключить
-              </Button>
-              <Text size="sm" c="dimmed" mt="sm">
-                Вы будете получать важные уведомления в Telegram
-              </Text>
-            </Stack>
-          ) : (
-            <Stack gap="sm">
-              <Badge color="gray" variant="light">Не подключен</Badge>
-              <Button
-                leftSection={<IconLink size={18} />}
-                onClick={generateTelegramLink}
-                loading={isGeneratingLink}
-                fullWidth
-              >
-                Подключить Telegram
-              </Button>
-            </Stack>
-          )}
-          <Group mt="md">
-            <Text size="sm">Рассылка по почте</Text>
-            <Switch
-              checked={emailNotificationsEnabled}
-              onChange={toggleEmailNotifications}
-            />
-          </Group>
-        </Paper>
-      </div>
+            ) : (
+              <>
+                <Stack gap="sm">
+                  <Group justify="space-between" align="center">
+                    <Group>
+                      <IconBrandTelegram size={18} />
+                      <Text size="sm" fw={500}>Telegram</Text>
+                    </Group>
+                    <Badge color={isTelegramConnected ? "green" : "gray"} variant="light">
+                      {isTelegramConnected ? "Подключен" : "Не подключен"}
+                    </Badge>
+                  </Group>
+                  {isTelegramConnected ? (
+                    <>
+                      {telegramUserName && <Text size="sm" c="dimmed">@{telegramUserName}</Text>}
+                      <Button
+                        leftSection={<IconUnlink size={18} />}
+                        variant="outline"
+                        color="red"
+                        onClick={disconnectTelegram}
+                        fullWidth
+                      >
+                        Отключить
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      leftSection={<IconLink size={18} />}
+                      onClick={generateTelegramLink}
+                      loading={isGeneratingLink}
+                      fullWidth
+                    >
+                      Подключить Telegram
+                    </Button>
+                  )}
+                </Stack>
+                <Stack gap="sm" mt="md">
+                  <Group justify="space-between" align="center">
+                    <Group>
+                      <IconMail size={18} />
+                      <Text size="sm" fw={500}>Почта</Text>
+                    </Group>
+                    <Badge color={emailNotificationsEnabled ? "green" : "gray"} variant="light">
+                      {emailNotificationsEnabled ? "Включена" : "Отключена"}
+                    </Badge>
+                  </Group>
+                  <Button
+                    onClick={toggleEmailNotifications}
+                    fullWidth
+                    variant={emailNotificationsEnabled ? "outline" : "filled"}
+                    color={emailNotificationsEnabled ? "red" : "green"}
+                  >
+                    {emailNotificationsEnabled ? "Отключить" : "Включить"}
+                  </Button>
+                </Stack>
+              </>
+            )}
+          </Paper>
+        </div>
+      </Box>
       <Modal
         opened={telegramModalOpened}
         onClose={closeTelegramModal}
@@ -530,7 +542,7 @@ const ProfileInfo = () => {
           </Button>
         </Group>
       </Modal>
-    </Flex>
+    </Stack>
   );
 };
 

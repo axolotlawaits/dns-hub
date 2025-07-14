@@ -35,7 +35,7 @@ import { TelegramController } from './controllers/app/telegram.js';
 const app = express()
 export const prisma = new PrismaClient()
 const __dirname = path.resolve()
-const telegramController = TelegramController.getInstance();
+TelegramController.getInstance();
 const server = createServer(app);
 
 // Инициализируем WebSocket сервер
@@ -85,20 +85,6 @@ app.use('/hub-api/retail/print-service', printServiceRouter);
 app.use('/hub-api/loaders/route', routeRouter)
 app.use('/hub-api/loaders/routeDay', routeDayRouter)
 app.use('/hub-api/loaders/filial', filialRouter)
-// WebSocket endpoint для проверки
-app.get('/ws-test', (req, res) => {
-  res.send('WebSocket server is running');
-  
-});
-/* */
-app.get('/hub-api/ws/connections', (req, res) => {
-  const wsService = WebSocketService.getInstance();
-  res.json({
-    connectedUsers: wsService.getConnectedUsers(),
-    totalConnections: wsService.getConnectionCount()
-  });
-});
-TelegramController.getInstance();
 
 app.post('/hub-api/refresh-token', refreshToken)
 
