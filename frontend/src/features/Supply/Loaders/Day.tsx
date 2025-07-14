@@ -27,7 +27,7 @@ export type DayType = {
 
 function Day({day}: {day: DayType}) {
   const [opened, { open, close }] = useDisclosure(false)
-  const contentRef = useRef(null)
+  const printRef = useRef(null)
 
   const calculateWorkHours = () => {
     let obj: Record<number, number> = {}
@@ -43,25 +43,22 @@ function Day({day}: {day: DayType}) {
     return calculateWorkHours().reduce((total, cur) => total + cur, 0)
   }
 
-  const downloadSummary = () => {
-    const input = contentRef.current;
-    if (!input) return;
+  const downloadSummary = async () => {
+    const element = printRef.current;
+    if (!element) return;
 
-    html2canvas(input, { scale: 2, useCORS: true }).then((canvas) => {
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
+    const canvas = await html2canvas(element, { scale: 2 });
 
-      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-      const imgX = (pdfWidth - imgWidth * ratio) / 2;
-      const imgY = 10; // верхний отступ
+    const imgData = canvas.toDataURL('image/png');
 
-      pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
-      pdf.save('downloaded-file.pdf');
-    });
+    const pdf = new jsPDF('p', 'mm', 'a4');
+
+    const imgProps = pdf.getImageProperties(imgData);
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+    pdf.save(`${day.route.name}-${dayjs(day.day).format('MMMM D, YYYY')}`);
   }
   
   return (
@@ -98,22 +95,26 @@ function Day({day}: {day: DayType}) {
       <Space h="md" />
       <>
         <Button onClick={open} variant="light" rightSection={<IconFileInfo size={18} />}>Общий отчет</Button>
-        <Modal opened={opened} onClose={close} ref={contentRef}>
+        <Modal opened={opened} onClose={close} size={"lg"}>
           <Stack gap="md">
-            <div ref={contentRef} className="day-summary">
+            <div ref={printRef} className="day-summary">
               <h1 className="day-title">Общий отчет по маршруту {day.route.name} за {dayjs(day.day).format('MMMM D, YYYY')}</h1>
               <p>Подрядчик: {day.route.contractor}</p>
               <p id="test">{`Общее время работы: часы: ${Math.floor(calculateTotalTime() / 60)} минуты: ${calculateTotalTime() % 60}`}</p>
-              <p>Детальная информация по грузчикам:</p>
-              <div className="day-summary-block">
-                {calculateWorkHours().length > 0 && calculateWorkHours().map((loader, index) => {
-                  return (
-                    <p key={index} className="day-loader">
-                      {`Общее время работы ${index + 1} грузчика - часы: ${Math.floor(loader / 60)} минуты: ${loader % 60}`}
-                    </p>
-                  )
-                })}
-              </div>
+              {calculateWorkHours().length > 0 &&
+              <>
+                <p>Детальная информация по грузчикам:</p>
+                <div className="day-summary-block">
+                  {calculateWorkHours().map((loader, index) => {
+                    return (
+                      <p key={index} className="day-loader">
+                        {`Общее время работы ${index + 1} грузчика - часы: ${Math.floor(loader / 60)} минуты: ${loader % 60}`}
+                      </p>
+                    )
+                  })}
+                </div>
+              </>
+              }
               {day.filials.some(fil => fil.feedback) && 
                 <div className="day-summary-block">
                   <p>Обратная связь по филиалам:</p>

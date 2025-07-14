@@ -1,15 +1,19 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { API } from "../../../config/constants"
 import dayjs from "dayjs"
 import { DayType } from "./Day"
 import DatePicker from "react-datepicker"
 import { useThemeContext } from "../../../hooks/useThemeContext"
-import { Table } from "@mantine/core"
+import { Button, Table } from "@mantine/core"
+import html2canvas from "html2canvas"
+import jsPDF from "jspdf"
+import { IconDownload } from "@tabler/icons-react"
 
 function LoadersSummary() {
   const [date, setDate] = useState<Date | null>(new Date())
-  const [dayData, setDayData] = useState([])
+  const [dayData, setDayData] = useState<DayType[]>([])
   const { isDark } = useThemeContext()
+  const printRef = useRef(null)
 
   const calculateTotalRouteTime = (day: DayType) => {
     let obj: Record<number, number> = {}
@@ -61,7 +65,25 @@ function LoadersSummary() {
       getDaySummary()
     }
   }, [date])
-  
+
+  const downloadPdf = async () => {
+    const element = printRef.current;
+    if (!element) return;
+
+    const canvas = await html2canvas(element, { scale: 2 });
+
+    const imgData = canvas.toDataURL('image/png');
+
+    const pdf = new jsPDF('p', 'mm', 'a4');
+
+    const imgProps = pdf.getImageProperties(imgData);
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+    pdf.save(dayjs(dayData[0].day).format('MMMM D, YYYY'));
+  }
+  console.log(dayData[0])
   return (
     <div className="loaders-summary-wrapper">
       <div className="loaders-summary-block">
@@ -81,46 +103,55 @@ function LoadersSummary() {
           calendarClassName={isDark ? "dark-calendar" : ""}
         />
       </div>
-      <div className="day-summary-card">
-        <h2>Отчет за день</h2>
-        <Table withTableBorder>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Поставщик</Table.Th>
-              <Table.Th>Часы</Table.Th>
-              <Table.Th>Минуты</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {calculateTotalHoursByContractor(dayData).map(({ contractor, hours, minutes }) => (
-              contractor &&
-              <Table.Tr key={contractor}>
-                <Table.Td>{contractor}</Table.Td>
-                <Table.Td>{hours}</Table.Td>
-                <Table.Td>{minutes}</Table.Td>
+      <div className="summary-and-download">
+        <div ref={printRef} className="day-summary-card">
+          <h2>Отчет за день</h2>
+          <Table withTableBorder>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Поставщик</Table.Th>
+                <Table.Th>Часы</Table.Th>
+                <Table.Th>Минуты</Table.Th>
               </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
-        <h3>Детально по маршрутам</h3>
-        <div className="summary-routes-wrapper">
-          {dayData.length > 0 && dayData.map((routeDay: DayType) => {
-            return (
-              <>
-                {calculateTotalRouteTime(routeDay) !== 0 &&
-                  <div className="summary-route-card">
-                    <p>Маршрут: {routeDay.route.name}</p>
-                    <p>Поставщик: {routeDay.route.contractor}</p>
-                    <p id="test">
-                      {`Общее время работы: часы: ${Math.floor(calculateTotalRouteTime(routeDay) / 60)} 
-                      минуты: ${calculateTotalRouteTime(routeDay) % 60}`}
-                    </p>
-                  </div>
-                }
-              </>
-            )
-          })}
+            </Table.Thead>
+            <Table.Tbody>
+              {calculateTotalHoursByContractor(dayData).map(({ contractor, hours, minutes }) => (
+                contractor &&
+                <Table.Tr key={contractor}>
+                  <Table.Td>{contractor}</Table.Td>
+                  <Table.Td>{hours}</Table.Td>
+                  <Table.Td>{minutes}</Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+          <h3>Детально по маршрутам</h3>
+          <div className="summary-routes-wrapper">
+            {dayData.length > 0 && dayData.map((routeDay: DayType) => {
+              return (
+                <>
+                  {calculateTotalRouteTime(routeDay) !== 0 &&
+                    <div className="summary-route-card">
+                      <p>Маршрут: {routeDay.route.name}</p>
+                      <p>Поставщик: {routeDay.route.contractor}</p>
+                      <p id="test">
+                        {`Общее время работы: часы: ${Math.floor(calculateTotalRouteTime(routeDay) / 60)} 
+                        минуты: ${calculateTotalRouteTime(routeDay) % 60}`}
+                      </p>
+                    </div>
+                  }
+                </>
+              )
+            })}
+          </div>
         </div>
+        <Button 
+          onClick={downloadPdf} 
+          variant="light" 
+          rightSection={<IconDownload size={18} />} 
+        >
+          Скачать PDF
+        </Button>
       </div>
     </div>
   )

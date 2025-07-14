@@ -31,10 +31,15 @@
   gap: 15px;
 }
 
+.summary-and-download {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
 .day-summary-card {
   background-color: var(--layer);
   padding: 15px;
-  border-radius: 10px;
   box-shadow: var(--soft-shadow);
   width: 800px;
   display: flex;
