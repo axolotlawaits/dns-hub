@@ -20,6 +20,33 @@
   border-radius: 5px;
 }
 
+.day-title {
+  font-size: 18px;
+}
+
+.day-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 15px;
+  background-color: #242424;
+}
+
+.day-summary-block {
+  display: flex;
+  flex-direction: column;
+}
+
+.day-loader {
+  font-size: 14px;
+  margin-left: 10px;
+}
+
+.day-feedback {
+  font-size: 14px;
+  margin-left: 10px;
+}
+
 /* card */
 
 .route-card{

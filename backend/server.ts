@@ -102,8 +102,8 @@ TelegramController.getInstance();
 
 app.post('/hub-api/refresh-token', refreshToken)
 
-  server.listen(2000, () => {
-    console.log('Server running on http://localhost:2000');
-    console.log('WebSocket server ready at ws://localhost:2000');
-    console.log('Telegram bot is running');
-  });
+app.listen(2000, function() { 
+  console.log('server running on port 2000')
+  //uncomment scheduler for production
+  //schedule.scheduleJob('0 0 * * *', () => scheduleRouteDay())
+}) 

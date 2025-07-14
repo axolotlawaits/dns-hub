@@ -2,7 +2,7 @@ import { ActionIcon, Button, Modal, Select, Stack, TextInput } from "@mantine/co
 import { useDisclosure } from "@mantine/hooks"
 import { IconEdit } from "@tabler/icons-react"
 import { useState } from "react"
-import { RouteType, rrsInitData } from "./LoadersHome"
+import { RouteType, rrsInitData } from "./LoadersRoutes"
 import { FilialType } from "./Day"
 import { API } from "../../../config/constants"
 
