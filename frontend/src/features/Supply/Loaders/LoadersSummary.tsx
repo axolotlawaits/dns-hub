@@ -4,6 +4,7 @@ import dayjs from "dayjs"
 import { DayType } from "./Day"
 import DatePicker from "react-datepicker"
 import { useThemeContext } from "../../../hooks/useThemeContext"
+import { Table } from "@mantine/core"
 
 function LoadersSummary() {
   const [date, setDate] = useState<Date | null>(new Date())
@@ -82,28 +83,44 @@ function LoadersSummary() {
       </div>
       <div className="day-summary-card">
         <h2>Отчет за день</h2>
-        {calculateTotalHoursByContractor(dayData).map(({ contractor, hours, minutes }) => (
-          <p key={contractor}>
-            {contractor ? contractor : 'Без имени'}: часы: {hours} минуты: {minutes}
-          </p>
-        ))}
+        <Table withTableBorder>
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>Поставщик</Table.Th>
+              <Table.Th>Часы</Table.Th>
+              <Table.Th>Минуты</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {calculateTotalHoursByContractor(dayData).map(({ contractor, hours, minutes }) => (
+              contractor &&
+              <Table.Tr key={contractor}>
+                <Table.Td>{contractor}</Table.Td>
+                <Table.Td>{hours}</Table.Td>
+                <Table.Td>{minutes}</Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
         <h3>Детально по маршрутам</h3>
-        {dayData.length > 0 && dayData.map((routeDay: DayType) => {
-          return (
-            <>
-              {calculateTotalRouteTime(routeDay) !== 0 &&
-                <>
-                  <p>Маршрут: {routeDay.route.name}</p>
-                  <p>Поставщик: {routeDay.route.contractor}</p>
-                  <p id="test">
-                    {`Общее время работы: часы: ${Math.floor(calculateTotalRouteTime(routeDay) / 60)} 
-                    минуты: ${calculateTotalRouteTime(routeDay) % 60}`}
-                  </p>
-                </>
-              }
-            </>
-          )
-        })}
+        <div className="summary-routes-wrapper">
+          {dayData.length > 0 && dayData.map((routeDay: DayType) => {
+            return (
+              <>
+                {calculateTotalRouteTime(routeDay) !== 0 &&
+                  <div className="summary-route-card">
+                    <p>Маршрут: {routeDay.route.name}</p>
+                    <p>Поставщик: {routeDay.route.contractor}</p>
+                    <p id="test">
+                      {`Общее время работы: часы: ${Math.floor(calculateTotalRouteTime(routeDay) / 60)} 
+                      минуты: ${calculateTotalRouteTime(routeDay) % 60}`}
+                    </p>
+                  </div>
+                }
+              </>
+            )
+          })}
+        </div>
       </div>
     </div>
   )

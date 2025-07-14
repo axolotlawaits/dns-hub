@@ -36,4 +36,22 @@
   padding: 15px;
   border-radius: 10px;
   box-shadow: var(--soft-shadow);
+  width: 800px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.summary-routes-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  justify-content: space-between;
+}
+
+.summary-route-card {
+  background-color: var(--bg);
+  padding: 10px 15px;
+  box-shadow: var(--soft-shadow);
+  border-radius: 10px;
 }
