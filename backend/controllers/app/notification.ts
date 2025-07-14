@@ -56,15 +56,22 @@ export class NotificationController {
         tool: { select: { id: true, name: true, icon: true } },
       },
     });
-
     await this.dispatchNotification(notification);
     return notification;
   }
 
   private async dispatchNotification(notification: Awaited<ReturnType<typeof this.create>>) {
-    // Если есть EMAIL - исключаем IN_APP
-    const shouldSendInApp = notification.channel.includes('IN_APP') && 
-                          !notification.channel.includes('EMAIL');
+    const userSettings = await prisma.userSettings.findUnique({
+      where: {
+        userId_parameter: {
+          userId: notification.receiverId,
+          parameter: 'notifications.email',
+        },
+      },
+    });
+
+    const shouldSendInApp = notification.channel.includes('IN_APP') && !notification.channel.includes('EMAIL');
+    const wantsEmail = userSettings ? userSettings.value === 'true' : true;
 
     if (shouldSendInApp) {
       this.wsService.sendToUser(notification.receiver.id, {
@@ -83,7 +90,7 @@ export class NotificationController {
       });
     }
 
-    if (notification.channel.includes('EMAIL')) {
+    if (notification.channel.includes('EMAIL') && wantsEmail) {
       await this.emailService.sendNotification(notification);
     }
 
@@ -94,21 +101,23 @@ export class NotificationController {
 
   async markAsRead(params: z.infer<typeof markAsReadSchema>) {
     return prisma.notifications.update({
-      where: { 
-        id: params.notificationId, 
-        receiverId: params.userId 
+      where: {
+        id: params.notificationId,
+        receiverId: params.userId
       },
-      data: { 
-        read: true, 
-        updatedAt: new Date() 
+      data: {
+        read: true,
+        updatedAt: new Date()
       },
     });
   }
 
   async getNotifications(params: z.infer<typeof getNotificationsSchema>) {
-    const where = { receiverId: params.userId };
-    if (params.read !== undefined) where.read = params.read;
-
+    const where: any = { receiverId: params.userId }; // Use a type annotation if needed
+    if (params.read !== undefined) {
+      where.read = params.read;
+    }
+  
     const [notifications, total] = await Promise.all([
       prisma.notifications.findMany({
         where,
@@ -119,7 +128,7 @@ export class NotificationController {
       }),
       prisma.notifications.count({ where }),
     ]);
-
+  
     return {
       data: notifications.map(n => ({
         ...n,
@@ -138,28 +147,28 @@ export class NotificationController {
 
   private buildIncludeOptions(include?: string[]) {
     return {
-      sender: include?.includes('sender') ? { 
-        select: { 
-          id: true, 
-          name: true, 
+      sender: include?.includes('sender') ? {
+        select: {
+          id: true,
+          name: true,
           email: true,
           telegramChatId: true
-        } 
+        }
       } : false,
-      receiver: include?.includes('receiver') ? { 
-        select: { 
-          id: true, 
-          name: true, 
+      receiver: include?.includes('receiver') ? {
+        select: {
+          id: true,
+          name: true,
           email: true,
           telegramChatId: true
-        } 
+        }
       } : false,
-      tool: include?.includes('tool') ? { 
-        select: { 
-          id: true, 
-          name: true, 
-          icon: true 
-        } 
+      tool: include?.includes('tool') ? {
+        select: {
+          id: true,
+          name: true,
+          icon: true
+        }
       } : false,
     };
   }

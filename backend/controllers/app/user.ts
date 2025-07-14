@@ -2,8 +2,67 @@ import { prisma, refreshPrivateKey } from "../../server.js";
 import { Request, Response } from "express";
 import jwt from 'jsonwebtoken';
 import { accessPrivateKey } from "../../server.js";
-import crypto from 'crypto';
 
+export const updateUserSettings = async (req: Request, res: Response) => {
+  const { userId, parameter, value } = req.body;
+
+  if (!userId || !parameter) {
+    return res.status(400).json({ error: 'User ID and parameter are required' });
+  }
+
+  try {
+    const setting = await prisma.userSettings.upsert({
+      where: {
+        userId_parameter: {
+          userId: userId,
+          parameter: parameter,
+        },
+      },
+      update: {
+        value: value,
+      },
+      create: {
+        userId: userId,
+        parameter: parameter,
+        value: value,
+        type: typeof value,
+      },
+    });
+
+    return res.status(200).json(setting);
+  } catch (error) {
+    console.error('Error updating user settings:', error);
+    return res.status(500).json({ error: 'Failed to update user settings' });
+  }
+};
+
+export const getUserSettings = async (req: Request, res: Response) => {
+  const { userId, parameter } = req.params;
+
+  if (!userId || !parameter) {
+    return res.status(400).json({ error: 'User ID and parameter are required' });
+  }
+
+  try {
+    const setting = await prisma.userSettings.findUnique({
+      where: {
+        userId_parameter: {
+          userId: userId,
+          parameter: parameter,
+        },
+      },
+    });
+
+    if (!setting) {
+      return res.status(404).json({ error: 'Setting not found' });
+    }
+
+    return res.status(200).json(setting);
+  } catch (error) {
+    console.error('Error fetching user settings:', error);
+    return res.status(500).json({ error: 'Failed to fetch user settings' });
+  }
+};
 export const login = async (req: Request, res: Response): Promise<any> => {
   const { login } = req.body;
   const loginLowerCase = login.toLowerCase();
@@ -73,29 +132,6 @@ export const login = async (req: Request, res: Response): Promise<any> => {
   } catch (error) {
     console.error('Login error:', error);
     return res.status(500).json({ error: 'Login failed' });
-  }
-};
-
-export const generateTelegramLink = async (req: Request, res: Response): Promise<any> => {
-  const { userId } = req.params;
-
-  if (!userId) {
-    return res.status(400).json({ error: 'User ID is required' });
-  }
-
-  try {
-    const token = crypto.randomBytes(32).toString('hex');
-    const user = await prisma.user.update({
-      where: { id: userId },
-      data: { telegramLinkToken: token }
-    });
-    
-    const telegramLink = `https://t.me/${process.env.TELEGRAM_BOT_NAME}?start=${token}`;
-    
-    return res.status(200).json({ telegramLink });
-  } catch (error) {
-    console.error('Error generating Telegram link:', error);
-    return res.status(500).json({ error: 'Failed to generate Telegram link' });
   }
 };
 

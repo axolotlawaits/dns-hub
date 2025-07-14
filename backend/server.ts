@@ -20,6 +20,7 @@ import routeRouter from './routes/supply/route.js'
 import filialRouter from './routes/supply/filial.js'
 import mediaRouter from './routes/add/media.js'
 import printServiceRouter from './routes/retail/printService.js'
+import telegramRouter  from './routes/app/telegram.js'
 import schedule from 'node-schedule'
 import { scheduleRouteDay } from './controllers/supply/routeDay.js';
 import fs from 'fs'
@@ -29,6 +30,7 @@ import { refreshToken } from './middleware/auth.js';
 import { createServer } from 'http';
 import { WebSocketService } from './websocket.js';
 import { TelegramController } from './controllers/app/telegram.js';
+
 
 const app = express()
 export const prisma = new PrismaClient()
@@ -67,6 +69,7 @@ app.use('/hub-api/user', userRouter)
 app.use('/hub-api/access', accessRouter)
 app.use('/hub-api/news', newsRouter)
 app.use('/hub-api/profile', profileRouter)
+app.use('/hub-api/telegram', telegramRouter);
 app.use('/hub-api/birthday', birthdayRouter)
 app.use('/hub-api/bookmarks', bookmarksRouter)
 app.use('/hub-api/notifications', notificationRouter)
