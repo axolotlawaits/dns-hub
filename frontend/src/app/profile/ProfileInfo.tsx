@@ -2,10 +2,7 @@ import { useState, useEffect } from 'react';
 import { useUserContext } from '../../hooks/useUserContext';
 import { API } from '../../config/constants';
 import { notificationSystem } from '../../utils/Push';
-import {
-  Avatar, Card, Text, Group, Badge, Skeleton, Stack, Box,
-  Modal, Button, PasswordInput, Image, FileButton, Paper, Loader, CopyButton, Tooltip, ActionIcon
-} from '@mantine/core';
+import { Avatar, Card, Text, Group, Badge, Skeleton, Stack, Box, Modal, Button, PasswordInput, Image, FileButton, Paper, Loader, CopyButton, Tooltip, ActionIcon } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import QRCode from 'react-qr-code';
 import { IconBrandTelegram, IconLink, IconUnlink, IconCopy, IconCheck, IconMail, IconNotification } from '@tabler/icons-react';
