@@ -67,24 +67,7 @@ const ProfileInfo = () => {
         setLoading(false);
       }
     };
-
-    const fetchEmailNotificationSetting = async () => {
-      try {
-        const response = await fetch(`${API}/user/settings/notifications.email`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        });
-        if (!response.ok) throw new Error('Failed to fetch email notification setting');
-        const data = await response.json();
-        setEmailNotificationsEnabled(data.value === 'true');
-      } catch (error) {
-        console.error('Error fetching email notification setting:', error);
-      }
-    };
-
     fetchUserData();
-    fetchEmailNotificationSetting();
   }, [user?.email]);
 
   useEffect(() => {
