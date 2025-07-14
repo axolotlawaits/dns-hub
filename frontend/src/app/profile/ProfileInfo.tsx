@@ -43,7 +43,6 @@ const ProfileInfo = () => {
   const [telegramUserName, setTelegramUserName] = useState('');
   const [telegramLoading, setTelegramLoading] = useState(true);
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(true);
-
   const [photoModalOpened, { open: openPhotoModal, close: closePhotoModal }] = useDisclosure(false);
   const [passwordModalOpened, { open: openPasswordModal, close: closePasswordModal }] = useDisclosure(false);
   const [telegramModalOpened, { open: openTelegramModal, close: closeTelegramModal }] = useDisclosure(false);
@@ -90,46 +89,82 @@ const ProfileInfo = () => {
     fetchUserData();
     fetchEmailNotificationSetting();
   }, [user?.email]);
-useEffect(() => {
-  const checkTelegramConnection = async () => {
-    setTelegramLoading(true);
-    try {
-      const response = await fetch(`${API}/telegram/status/${user?.id}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+
+  useEffect(() => {
+    const checkTelegramConnection = async () => {
+      setTelegramLoading(true);
+      try {
+        const response = await fetch(`${API}/telegram/status/${user?.id}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        if (!response.ok) {
+          throw new Error('Failed to check Telegram status');
         }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to check Telegram status');
+        const data = await response.json();
+        setIsTelegramConnected(data.is_connected);
+        if (data.user_name) {
+          setTelegramUserName(data.user_name);
+        }
+      } catch (error) {
+        console.error('Telegram status check error:', error);
+        notificationSystem.addNotification(
+          'Ошибка',
+          error instanceof Error ? error.message : 'Не удалось проверить статус Telegram',
+          'error'
+        );
+      } finally {
+        setTelegramLoading(false);
       }
+    };
 
-      const data = await response.json();
-      setIsTelegramConnected(data.is_connected);
-      if (data.user_name) {
-        setTelegramUserName(data.user_name);
-      }
-    } catch (error) {
-      console.error('Telegram status check error:', error);
-      notificationSystem.addNotification(
-        'Ошибка',
-        error instanceof Error ? error.message : 'Не удалось проверить статус Telegram',
-        'error'
-      );
-    } finally {
-      setTelegramLoading(false);
+    if (user?.id) {
+      checkTelegramConnection();
     }
-  };
+  }, [user?.id]);
 
-  if (user?.id) {
-    checkTelegramConnection();
-  }
-}, [user?.id]);
+  useEffect(() => {
+    // Polling mechanism to check for Telegram connection status updates
+    const interval = setInterval(async () => {
+      if (user?.id) {
+        try {
+          const response = await fetch(`${API}/telegram/status/${user.id}`, {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+          });
+          if (response.ok) {
+            const data = await response.json();
+            if (data.is_connected !== isTelegramConnected) {
+              setIsTelegramConnected(data.is_connected);
+              if (data.user_name) {
+                setTelegramUserName(data.user_name);
+              }
+              notificationSystem.addNotification(
+                'Успех',
+                'Статус Telegram обновлен',
+                'success'
+              );
+
+              // Close the modal if the status is updated to connected
+              if (data.is_connected) {
+                closeTelegramModal();
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error polling Telegram status:', error);
+        }
+      }
+    }, 10000); // Poll every 10 seconds
+
+    return () => clearInterval(interval); // Clean up the interval on component unmount
+  }, [user?.id, isTelegramConnected]);
 
   const toggleEmailNotifications = async () => {
     const newValue = !emailNotificationsEnabled;
     setEmailNotificationsEnabled(newValue);
-
     try {
       const response = await fetch(`${API}/user/settings`, {
         method: 'PUT',
@@ -143,9 +178,7 @@ useEffect(() => {
           value: newValue.toString(),
         }),
       });
-
       if (!response.ok) throw new Error('Failed to update email notification setting');
-
       notificationSystem.addNotification(
         'Успех',
         `Рассылка по почте ${newValue ? 'включена' : 'отключена'}`,
@@ -221,7 +254,6 @@ useEffect(() => {
 
   const updatePhoto = async () => {
     if (!file || !newPhoto || !password || !user?.login || isUpdating) return;
-
     setIsUpdating(true);
     try {
       const base64String = newPhoto.split(',')[1];
@@ -237,7 +269,6 @@ useEffect(() => {
           password: password
         })
       });
-
       if (!response.ok) {
         const errorData = await response.json();
         if (response.status === 401) throw new Error('Неверный пароль');
@@ -300,7 +331,6 @@ useEffect(() => {
               {user?.image ? 'Сменить фото' : 'Добавить фото'}
             </Text>
           </Box>
-
           <Box style={{ flex: 1 }}>
             <Group justify="space-between">
               <Text size="lg" fw={500}>{userData.fio}</Text>
@@ -334,7 +364,6 @@ useEffect(() => {
           </Box>
         </Group>
       </Card>
-
       <div style={{ width: 300 }}>
         <Paper shadow="sm" p="lg" radius="md" withBorder>
           <Group mb="md" align="center">
@@ -381,18 +410,16 @@ useEffect(() => {
                 Подключить Telegram
               </Button>
             </Stack>
-          )}        
+          )}
           <Group mt="md">
-          <Text size="sm">Рассылка по почте</Text>
-          <Switch
-            checked={emailNotificationsEnabled}
-            onChange={toggleEmailNotifications}
-          />
-        </Group>
+            <Text size="sm">Рассылка по почте</Text>
+            <Switch
+              checked={emailNotificationsEnabled}
+              onChange={toggleEmailNotifications}
+            />
+          </Group>
         </Paper>
-        
       </div>
-
       <Modal
         opened={telegramModalOpened}
         onClose={closeTelegramModal}
@@ -403,7 +430,6 @@ useEffect(() => {
         <Stack align="center">
           <QRCode value={telegramLink} size={200} />
           <Text size="sm" mt="md" fw={500}>Или используйте ссылку:</Text>
-
           <Group w="100%">
             <Text
               size="sm"
@@ -448,9 +474,7 @@ useEffect(() => {
           </Text>
         </Stack>
       </Modal>
-
-      <Modal opened={photoModalOpened} onClose={closePhotoModal}
-        title={user?.image ? 'Смена фото профиля' : 'Добавление фото профиля'} centered>
+      <Modal opened={photoModalOpened} onClose={closePhotoModal} title={user?.image ? 'Смена фото профиля' : 'Добавление фото профиля'} centered>
         <Group justify="center" mb="xl">
           {user?.image && (
             <Box>
@@ -463,7 +487,6 @@ useEffect(() => {
               />
             </Box>
           )}
-
           {newPhoto && (
             <Box>
               <Text size="sm" mb="xs">Новое фото:</Text>
@@ -476,7 +499,6 @@ useEffect(() => {
             </Box>
           )}
         </Group>
-
         <FileButton onChange={handleFileSelect} accept="image/*">
           {(props) => (
             <Button {...props} fullWidth>
@@ -484,16 +506,13 @@ useEffect(() => {
             </Button>
           )}
         </FileButton>
-
         {newPhoto && (
           <Button fullWidth mt="md" onClick={handleSavePhoto}>
             Сохранить фото
           </Button>
         )}
       </Modal>
-
-      <Modal opened={passwordModalOpened} onClose={closePasswordModal}
-        title="Подтвердите смену фото" centered>
+      <Modal opened={passwordModalOpened} onClose={closePasswordModal} title="Подтвердите смену фото" centered>
         <PasswordInput
           label="Введите ваш пароль"
           value={password}

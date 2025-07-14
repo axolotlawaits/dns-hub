@@ -3,7 +3,7 @@ import { Request, Response } from "express";
 import jwt from 'jsonwebtoken';
 import { accessPrivateKey } from "../../server.js";
 
-export const updateUserSettings = async (req: Request, res: Response) => {
+export const updateUserSettings = async (req: Request, res: Response):Promise<any> => {
   const { userId, parameter, value } = req.body;
 
   if (!userId || !parameter) {
@@ -36,7 +36,7 @@ export const updateUserSettings = async (req: Request, res: Response) => {
   }
 };
 
-export const getUserSettings = async (req: Request, res: Response) => {
+export const getUserSettings = async (req: Request, res: Response):Promise<any> => {
   const { userId, parameter } = req.params;
 
   if (!userId || !parameter) {
