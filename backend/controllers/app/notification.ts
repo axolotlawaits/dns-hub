@@ -5,25 +5,25 @@ import { EmailService } from '../../services/email.js';
 import { TelegramService } from '../../services/telegram.js';
 import { Notifications, NotificationType, NotificationChannel, NotificationPriority } from '@prisma/client';
 
-  export type NotificationWithRelations = Notifications & {
-    sender: {
-      id: string;
-      name: string;
-      email: string | null;
-      telegramChatId: string | null;
-    };
-    receiver: {
-      id: string;
-      name: string;
-      email: string | null;
-      telegramChatId: string | null;
-    };
-    tool: {
-      id: string;
-      name: string;
-      icon: string | null;
-    } | null;
+export type NotificationWithRelations = Notifications & {
+  sender: {
+    id: string;
+    name: string;
+    email: string | null;
+    telegramChatId: string | null;
   };
+  receiver: {
+    id: string;
+    name: string;
+    email: string | null;
+    telegramChatId: string | null;
+  };
+  tool: {
+    id: string;
+    name: string;
+    icon: string | null;
+  } | null;
+};
 
 const createNotificationSchema = z.object({
   type: z.nativeEnum(NotificationType),
@@ -51,160 +51,165 @@ const getNotificationsSchema = z.object({
   include: z.array(z.enum(['sender', 'receiver', 'tool'])).optional(),
 });
 
-export class NotificationController {
-  private wsService = WebSocketService.getInstance();
-  private emailService = EmailService.getInstance();
-  private telegramService = TelegramService.getInstance();
+// Initialize services
+const wsService = WebSocketService.getInstance();
+const emailService = EmailService.getInstance();
+const telegramService = TelegramService.getInstance();
 
-  async create(data: z.infer<typeof createNotificationSchema>) {
-    const notification = await prisma.notifications.create({
+const buildIncludeOptions = (include?: string[]) => {
+  return {
+    sender: include?.includes('sender') ? {
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        telegramChatId: true
+      }
+    } : false,
+    receiver: include?.includes('receiver') ? {
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        telegramChatId: true
+      }
+    } : false,
+    tool: include?.includes('tool') ? {
+      select: {
+        id: true,
+        name: true,
+        icon: true
+      }
+    } : false,
+  };
+};
+
+const dispatchNotification = async (notification: NotificationWithRelations) => {
+  const userSettings = await prisma.userSettings.findUnique({
+    where: {
+      userId_parameter: {
+        userId: notification.receiverId,
+        parameter: 'notifications.email',
+      },
+    },
+  });
+
+  const shouldSendInApp = notification.channel.includes('IN_APP') && !notification.channel.includes('EMAIL');
+  const wantsEmail = userSettings ? userSettings.value === 'true' : true;
+
+  if (shouldSendInApp) {
+    wsService.sendToUser(notification.receiver.id, {
+      event: 'notification',
       data: {
-        type: data.type,
-        channel: data.channels,
-        action: data.action,
-        title: data.title,
-        message: data.message,
-        senderId: data.senderId,
-        receiverId: data.receiverId,
-        toolId: data.toolId,
-        priority: data.priority,
-        expiresAt: data.expiresAt,
-      },
-      include: {
-        sender: { select: { id: true, name: true, email: true, telegramChatId: true } },
-        receiver: { select: { id: true, name: true, email: true, telegramChatId: true } },
-        tool: { select: { id: true, name: true, icon: true } },
-      },
-    });
-    await this.dispatchNotification(notification);
-    return notification;
-  }
-
-  private async dispatchNotification(notification: Awaited<ReturnType<typeof this.create>>) {
-    const userSettings = await prisma.userSettings.findUnique({
-      where: {
-        userId_parameter: {
-          userId: notification.receiverId,
-          parameter: 'notifications.email',
-        },
-      },
-    });
-
-    const shouldSendInApp = notification.channel.includes('IN_APP') && !notification.channel.includes('EMAIL');
-    const wantsEmail = userSettings ? userSettings.value === 'true' : true;
-
-    if (shouldSendInApp) {
-      this.wsService.sendToUser(notification.receiver.id, {
-        event: 'notification',
-        data: {
-          id: notification.id,
-          type: notification.type,
-          title: notification.title,
-          message: notification.message,
-          createdAt: notification.createdAt.toISOString(),
-          read: notification.read,
-          sender: notification.sender,
-          tool: notification.tool,
-          action: notification.action,
-        },
-      });
-    }
-
-    if (notification.channel.includes('EMAIL') && wantsEmail) {
-      await this.emailService.sendNotification(notification);
-    }
-
-    if (notification.channel.includes('TELEGRAM') && notification.receiver.telegramChatId) {
-      await this.telegramService.sendNotification(notification, notification.receiver.telegramChatId);
-    }
-  }
-
-  async markAsRead(params: z.infer<typeof markAsReadSchema>) {
-    return prisma.notifications.update({
-      where: {
-        id: params.notificationId,
-        receiverId: params.userId
-      },
-      data: {
-        read: true,
-        updatedAt: new Date()
+        id: notification.id,
+        type: notification.type,
+        title: notification.title,
+        message: notification.message,
+        createdAt: notification.createdAt.toISOString(),
+        read: notification.read,
+        sender: notification.sender,
+        tool: notification.tool,
+        action: notification.action,
       },
     });
   }
 
-  async getNotifications(params: z.infer<typeof getNotificationsSchema>) {
-    const where: any = { receiverId: params.userId }; // Use a type annotation if needed
-    if (params.read !== undefined) {
-      where.read = params.read;
-    }
-  
-    const [notifications, total] = await Promise.all([
-      prisma.notifications.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        take: params.limit,
-        skip: params.offset,
-        include: this.buildIncludeOptions(params.include),
-      }),
-      prisma.notifications.count({ where }),
-    ]);
-  
-    return {
-      data: notifications.map(n => ({
-        ...n,
-        createdAt: n.createdAt.toISOString(),
-        updatedAt: n.updatedAt.toISOString(),
-        expiresAt: n.expiresAt?.toISOString(),
-      })),
-      meta: {
-        total,
-        hasMore: params.offset + notifications.length < total,
-        limit: params.limit,
-        offset: params.offset,
-      },
-    };
+  if (notification.channel.includes('EMAIL') && wantsEmail) {
+    await emailService.sendNotification(notification);
   }
 
-  private buildIncludeOptions(include?: string[]) {
-    return {
-      sender: include?.includes('sender') ? {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          telegramChatId: true
-        }
-      } : false,
-      receiver: include?.includes('receiver') ? {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          telegramChatId: true
-        }
-      } : false,
-      tool: include?.includes('tool') ? {
-        select: {
-          id: true,
-          name: true,
-          icon: true
-        }
-      } : false,
-    };
+  if (notification.channel.includes('TELEGRAM') && notification.receiver.telegramChatId) {
+    await telegramService.sendNotification(notification, notification.receiver.telegramChatId);
+  }
+};
+
+const createNotification = async (data: z.infer<typeof createNotificationSchema>) => {
+  const notification = await prisma.notifications.create({
+    data: {
+      type: data.type,
+      channel: data.channels,
+      action: data.action,
+      title: data.title,
+      message: data.message,
+      senderId: data.senderId,
+      receiverId: data.receiverId,
+      toolId: data.toolId,
+      priority: data.priority,
+      expiresAt: data.expiresAt,
+    },
+    include: {
+      sender: { select: { id: true, name: true, email: true, telegramChatId: true } },
+      receiver: { select: { id: true, name: true, email: true, telegramChatId: true } },
+      tool: { select: { id: true, name: true, icon: true } },
+    },
+  });
+  await dispatchNotification(notification);
+  return notification;
+};
+
+const markAsRead = async (params: z.infer<typeof markAsReadSchema>) => {
+  return prisma.notifications.update({
+    where: {
+      id: params.notificationId,
+      receiverId: params.userId
+    },
+    data: {
+      read: true,
+      updatedAt: new Date()
+    },
+  });
+};
+
+const getNotifications = async (params: z.infer<typeof getNotificationsSchema>) => {
+  const where: any = { receiverId: params.userId };
+  if (params.read !== undefined) {
+    where.read = params.read;
   }
 
-  async getUnreadCount(userId: string) {
-    return prisma.notifications.count({
-      where: { receiverId: userId, read: false },
-    });
-  }
+  const [notifications, total] = await Promise.all([
+    prisma.notifications.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: params.limit,
+      skip: params.offset,
+      include: buildIncludeOptions(params.include),
+    }),
+    prisma.notifications.count({ where }),
+  ]);
 
-  async cleanupExpiredNotifications() {
-    const result = await prisma.notifications.deleteMany({
-      where: { expiresAt: { not: null, lte: new Date() } },
-    });
-    return { count: result.count };
-  }
-}
+  return {
+    data: notifications.map(n => ({
+      ...n,
+      createdAt: n.createdAt.toISOString(),
+      updatedAt: n.updatedAt.toISOString(),
+      expiresAt: n.expiresAt?.toISOString(),
+    })),
+    meta: {
+      total,
+      hasMore: params.offset + notifications.length < total,
+      limit: params.limit,
+      offset: params.offset,
+    },
+  };
+};
 
-export const notificationController = new NotificationController();
+const getUnreadCount = async (userId: string) => {
+  return prisma.notifications.count({
+    where: { receiverId: userId, read: false },
+  });
+};
+
+const cleanupExpiredNotifications = async () => {
+  const result = await prisma.notifications.deleteMany({
+    where: { expiresAt: { not: null, lte: new Date() } },
+  });
+  return { count: result.count };
+};
+
+export const NotificationController = {
+  create: createNotification,
+  markAsRead,
+  getNotifications,
+  getUnreadCount,
+  cleanupExpired: cleanupExpiredNotifications,
+};

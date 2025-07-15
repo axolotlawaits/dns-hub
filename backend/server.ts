@@ -29,13 +29,10 @@ import jwt from 'jsonwebtoken'
 import { refreshToken } from './middleware/auth.js';
 import { createServer } from 'http';
 import { WebSocketService } from './websocket.js';
-import { TelegramController } from './controllers/app/telegram.js';
-
 
 const app = express()
 export const prisma = new PrismaClient()
 const __dirname = path.resolve()
-TelegramController.getInstance();
 const server = createServer(app);
 
 // Инициализируем WebSocket сервер
