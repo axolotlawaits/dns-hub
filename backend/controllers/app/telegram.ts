@@ -66,7 +66,9 @@ export class TelegramController {
       }
     });
   }
-
+public async stopBot() {
+  await this.bot.stop();
+}
   private async sendConfirmationToFrontend(userId: string) {
     try {
       const frontendEndpoint = `${API}/telegram/status/${userId}`;
