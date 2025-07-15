@@ -98,8 +98,16 @@ export const login = async (req: Request, res: Response): Promise<any> => {
         where: {name: newUser.position},
         select: {group: {select: {name: true}}}
       })
+
+      const getUserUuid = await prisma.userData.findUnique({
+        where: { email: newUser.email },
+        select: { uuid: true }
+      })
+
       const groupName = getGroupName?.group?.name
-      const payload = { userId: newUser.id, positionName: newUser.position, groupName }
+      const userUuid = getUserUuid?.uuid
+
+      const payload = { userId: newUser.id, userUuid, positionName: newUser.position, groupName }
       const token = jwt.sign(payload, accessPrivateKey, { algorithm: 'RS256', expiresIn: '30d' })
       const refreshToken = jwt.sign(payload, refreshPrivateKey, { algorithm: 'RS256', expiresIn: '30d' })
 
@@ -117,8 +125,16 @@ export const login = async (req: Request, res: Response): Promise<any> => {
       where: {name: user.position},
       select: {group: {select: {name: true}}}
     })
+    const getUserUuid = await prisma.userData.findUnique({
+      where: { email: user.email },
+      select: { uuid: true }
+    })
+
     const groupName = getGroupName?.group?.name
-    const payload = { userId: user.id, positionName: user.position, groupName }
+    const userUuid = getUserUuid?.uuid
+
+    const payload = { userId: user.id, userUuid, positionName: user.position, groupName }
+
     const token = jwt.sign(payload, accessPrivateKey, { algorithm: 'RS256', expiresIn: '30d' })
     const refreshToken = jwt.sign(payload, refreshPrivateKey, { algorithm: 'RS256', expiresIn: '30d' })
 

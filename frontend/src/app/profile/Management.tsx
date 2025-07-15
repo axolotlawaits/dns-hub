@@ -79,7 +79,6 @@ function Management() {
   }, [curEntity])
 
   const updateGroupAccess = async (toolId: string, accessLevel: AccessLevel) => {
-    console.log(entityType, curEntity)
     const response = await fetch(`${API}/access/${entityType}/${curEntity}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
