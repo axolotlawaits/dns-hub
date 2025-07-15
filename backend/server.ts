@@ -88,17 +88,8 @@ app.use('/hub-api/loaders/filial', filialRouter)
 
 app.post('/hub-api/refresh-token', refreshToken)
 
-process.on('SIGINT', async () => {
-  await TelegramController.getInstance().stopBot();
-  process.exit();
-});
-
-process.on('SIGTERM', async () => {
-  await TelegramController.getInstance().stopBot();
-  process.exit();
-});
-
 app.listen(2000, function() { 
   console.log('server running on port 2000')
-  schedule.scheduleJob('0 0 * * *', () => scheduleRouteDay())
+  //uncomment scheduler for production
+  //schedule.scheduleJob('0 0 * * *', () => scheduleRouteDay())
 }) 

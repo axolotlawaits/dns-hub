@@ -30,6 +30,7 @@ export class TelegramController {
 private async launchBot() {
   if (this.isBotRunning) {
     console.log('Bot is already running');
+    this.bot.stop();
     return;
   }
 
