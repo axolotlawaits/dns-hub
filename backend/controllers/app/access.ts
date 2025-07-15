@@ -13,25 +13,25 @@ export const getFullAccessInfo = async (req: Request, res: Response): Promise<an
     select: {
       position: {
         select: {
-          name: true,
-          group: { select: { name: true } }
+          uuid: true,
+          group: { select: { uuid: true } }
         }
       }
     }
   })
   
   if (userPosAndGroup) {
-    const groupName = userPosAndGroup?.position?.group?.name
-    const positionName = userPosAndGroup?.position?.name
+    const groupId = userPosAndGroup?.position?.group?.uuid
+    const positionId = userPosAndGroup?.position?.uuid
 
     const [user, group, position] = await Promise.all([
       prisma.userToolAccess.findMany({where: {userId}, select: {
         tool: {select: {id: true, link: true}}, accessLevel: true
       }}),
-      prisma.groupToolAccess.findMany({where: {groupName}, select: {
+      prisma.groupToolAccess.findMany({where: {groupId}, select: {
         tool: {select: {id: true, link: true}}, accessLevel: true
       }}),
-      prisma.positionToolAccess.findMany({where: {positionName}, select: {
+      prisma.positionToolAccess.findMany({where: {positionId}, select: {
         tool: {select: {id: true, link: true}}, accessLevel: true
       }})
     ])
@@ -72,9 +72,9 @@ export const getFullAccessInfo = async (req: Request, res: Response): Promise<an
 /* group access  */
 
 export const getGroupAccessInfo = async (req: Request, res: Response): Promise<any>  => {
-  const groupName = req.params.id
+  const groupId = req.params.id
   
-  const access = await prisma.groupToolAccess.findMany({where: { groupName }})
+  const access = await prisma.groupToolAccess.findMany({where: { groupId }})
   if (access) {
     res.status(200).json(access)
   } else {
@@ -84,14 +84,14 @@ export const getGroupAccessInfo = async (req: Request, res: Response): Promise<a
 
 export const updateGroupAccessInfo = async (req: Request, res: Response): Promise<any>  => {
   const { toolId, accessLevel } = req.body
-  const groupName = req.params.id
+  const groupId = req.params.id
 
   const access = await prisma.groupToolAccess.upsert({
     where: {
-      groupName_toolId: { groupName, toolId,}
+      groupId_toolId: { groupId, toolId,}
     },
     update: { accessLevel },
-    create: { groupName, toolId, accessLevel }
+    create: { groupId, toolId, accessLevel }
   })
   if (access) {
     res.status(200).json(access)
@@ -102,10 +102,10 @@ export const updateGroupAccessInfo = async (req: Request, res: Response): Promis
 
 export const deleteGroupAccessInfo = async (req: Request, res: Response): Promise<any>  => {
   const { toolId } = req.body
-  const groupName = req.params.id
+  const groupId = req.params.id
 
   const access = await prisma.groupToolAccess.delete({
-    where: { groupName_toolId: { groupName, toolId }}
+    where: { groupId_toolId: { groupId, toolId }}
   })
   if (access) {
     res.status(200).json(access)
@@ -160,9 +160,9 @@ export const deleteUserAccessInfo = async (req: Request, res: Response): Promise
 /* position access */
 
 export const getPositionAccessInfo = async (req: Request, res: Response): Promise<any>  => {
-  const positionName = req.params.id
+  const positionId = req.params.id
   
-  const access = await prisma.positionToolAccess.findMany({where: { positionName }})
+  const access = await prisma.positionToolAccess.findMany({where: { positionId }})
   if (access) {
     res.status(200).json(access)
   } else {
@@ -172,14 +172,14 @@ export const getPositionAccessInfo = async (req: Request, res: Response): Promis
 
 export const updatePositionAccessInfo = async (req: Request, res: Response): Promise<any>  => {
   const { toolId, accessLevel } = req.body
-  const positionName = req.params.id
+  const positionId = req.params.id
 
   const access = await prisma.positionToolAccess.upsert({
     where: {
-      positionName_toolId: { positionName, toolId,}
+      positionId_toolId: { positionId, toolId,}
     },
     update: { accessLevel },
-    create: { positionName, toolId, accessLevel }
+    create: { positionId, toolId, accessLevel }
   })
   if (access) {
     res.status(200).json(access)
@@ -190,10 +190,10 @@ export const updatePositionAccessInfo = async (req: Request, res: Response): Pro
 
 export const deletePositionAccessInfo = async (req: Request, res: Response): Promise<any>  => {
   const { toolId } = req.body
-  const positionName = req.params.id
+  const positionId = req.params.id
 
   const access = await prisma.positionToolAccess.delete({
-    where: { positionName_toolId: { positionName, toolId }}
+    where: { positionId_toolId: { positionId, toolId }}
   })
   if (access) {
     res.status(200).json(access)
