@@ -5,6 +5,26 @@ import { EmailService } from '../../services/email.js';
 import { TelegramService } from '../../services/telegram.js';
 import { Notifications, NotificationType, NotificationChannel, NotificationPriority } from '@prisma/client';
 
+  export type NotificationWithRelations = Notifications & {
+    sender: {
+      id: string;
+      name: string;
+      email: string | null;
+      telegramChatId: string | null;
+    };
+    receiver: {
+      id: string;
+      name: string;
+      email: string | null;
+      telegramChatId: string | null;
+    };
+    tool: {
+      id: string;
+      name: string;
+      icon: string | null;
+    } | null;
+  };
+
 const createNotificationSchema = z.object({
   type: z.nativeEnum(NotificationType),
   channels: z.array(z.nativeEnum(NotificationChannel)).min(1),

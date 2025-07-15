@@ -4,9 +4,12 @@ import axios from 'axios';
 import { API } from '../../../frontend/src/config/constants.js';
 
 export class TelegramController {
+  static stopBot() {
+    throw new Error('Method not implemented.');
+  }
   private static instance: TelegramController;
   private bot: Telegraf;
-
+  private isBotRunning = false;
   private constructor() {
     if (!process.env.TELEGRAM_BOT_TOKEN) {
       throw new Error('TELEGRAM_BOT_TOKEN is not defined');
@@ -24,14 +27,22 @@ export class TelegramController {
     return TelegramController.instance;
   }
 
-  private launchBot() {
-    this.bot.launch()
-      .then(() => console.log('Telegram bot started'))
-      .catch((error) => {
-        console.error('Failed to start Telegram bot:', error);
-        process.exit(1);
-      });
+private async launchBot() {
+  if (this.isBotRunning) {
+    console.log('Bot is already running');
+    return;
   }
+
+  try {
+    await this.bot.launch();
+    this.isBotRunning = true;
+    console.log('Telegram bot started');
+  } catch (error) {
+    console.error('Failed to start Telegram bot:', error);
+    // Не завершаем процесс, а пытаемся перезапустить через некоторое время
+    setTimeout(() => this.launchBot(), 5000);
+  }
+}
 
   private setupCommands() {
     this.bot.command('start', async (ctx) => {
@@ -66,9 +77,17 @@ export class TelegramController {
       }
     });
   }
-public async stopBot() {
-  await this.bot.stop();
-}
+    public async stopBot() {
+      if (!this.isBotRunning) return;
+
+      try {
+        await this.bot.stop();
+        this.isBotRunning = false;
+        console.log('Telegram bot stopped');
+      } catch (error) {
+        console.error('Error stopping bot:', error);
+      }
+    }
   private async sendConfirmationToFrontend(userId: string) {
     try {
       const frontendEndpoint = `${API}/telegram/status/${userId}`;
