@@ -18,7 +18,7 @@ type AccessLevelName = {
 type GroupAccess = {
   id: string
   toolId: string
-  groupName: string
+  groupId: string
   accessLevel: AccessLevel
 }
 
@@ -144,7 +144,7 @@ function Management() {
             />
           :
             <Select 
-              data={entityType === 'group' ? groups.map((e: any) => e.name) : positions.map((e: any) => e.name)} 
+              data={entityType === 'group' ? groups.map((g: any) => ({value: g.uuid, label: g.name})) : positions.map((p: any) => ({value: p.uuid, label: p.name}))} 
               value={curEntity} 
               onChange={setCurEntity} 
               placeholder="Выбрать группу должностей" 

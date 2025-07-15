@@ -166,25 +166,25 @@ model User {
 }          
 
 model GroupToolAccess {
-  id          String      @id @default(uuid())
-  groupName   String
-  toolId      String
+  id          String        @id @default(uuid())
   accessLevel AccessLevel
-  group       Group       @relation(fields: [groupName], references: [name])
-  tool        Tool        @relation(fields: [toolId], references: [id])
+  group       Group         @relation(fields: [groupId], references: [uuid])
+  groupId     String
+  tool        Tool          @relation(fields: [toolId], references: [id])
+  toolId      String
 
-  @@unique([groupName, toolId], name: "groupName_toolId")
+  @@unique([groupId, toolId], name: "groupId_toolId")
 }
 
 model PositionToolAccess {
-  id           String      @id @default(uuid())
-  toolId       String
+  id           String       @id @default(uuid())
   accessLevel  AccessLevel
-  positionName String
-  position     Position    @relation(fields: [positionName], references: [name])
-  tool         Tool        @relation(fields: [toolId], references: [id])
+  position     Position     @relation(fields: [positionId], references: [uuid])
+  positionId   String
+  tool         Tool         @relation(fields: [toolId], references: [id])
+  toolId       String
 
-  @@unique([positionName, toolId], name: "positionName_toolId")
+  @@unique([positionId, toolId], name: "positionId_toolId")
 }
 
 model UserToolAccess {

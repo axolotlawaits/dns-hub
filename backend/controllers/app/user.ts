@@ -63,6 +63,7 @@ export const getUserSettings = async (req: Request, res: Response):Promise<any> 
     return res.status(500).json({ error: 'Failed to fetch user settings' });
   }
 };
+
 export const login = async (req: Request, res: Response): Promise<any> => {
   const { login } = req.body;
   const loginLowerCase = login.toLowerCase();
@@ -97,9 +98,17 @@ export const login = async (req: Request, res: Response): Promise<any> => {
         where: {name: newUser.position},
         select: {group: {select: {name: true}}}
       })
+
+      const getUserUuid = await prisma.userData.findUnique({
+        where: { email: newUser.email },
+        select: { uuid: true }
+      })
+
       const groupName = getGroupName?.group?.name
-      const payload = { userId: newUser.id, positionName: newUser.position, groupName }
-      const token = jwt.sign(payload, accessPrivateKey, { algorithm: 'RS256', expiresIn: '1m' })
+      const userUuid = getUserUuid?.uuid
+
+      const payload = { userId: newUser.id, userUuid, positionName: newUser.position, groupName }
+      const token = jwt.sign(payload, accessPrivateKey, { algorithm: 'RS256', expiresIn: '30d' })
       const refreshToken = jwt.sign(payload, refreshPrivateKey, { algorithm: 'RS256', expiresIn: '30d' })
 
       res.cookie('refreshToken', refreshToken, {
@@ -116,9 +125,17 @@ export const login = async (req: Request, res: Response): Promise<any> => {
       where: {name: user.position},
       select: {group: {select: {name: true}}}
     })
+    const getUserUuid = await prisma.userData.findUnique({
+      where: { email: user.email },
+      select: { uuid: true }
+    })
+
     const groupName = getGroupName?.group?.name
-    const payload = { userId: user.id, positionName: user.position, groupName }
-    const token = jwt.sign(payload, accessPrivateKey, { algorithm: 'RS256', expiresIn: '1m' })
+    const userUuid = getUserUuid?.uuid
+
+    const payload = { userId: user.id, userUuid, positionName: user.position, groupName }
+
+    const token = jwt.sign(payload, accessPrivateKey, { algorithm: 'RS256', expiresIn: '30d' })
     const refreshToken = jwt.sign(payload, refreshPrivateKey, { algorithm: 'RS256', expiresIn: '30d' })
 
     res.cookie('refreshToken', refreshToken, {
