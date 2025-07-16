@@ -18,7 +18,7 @@ function Home() {
       }}>
         {/* Блок News - 50% высоты левой колонки */}
         <div style={{ 
-          height: '30%',
+          height: '35%',
           overflow: 'hidden'
         }}>
           <News />

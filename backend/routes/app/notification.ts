@@ -12,10 +12,24 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.post(':id/read', async (req, res) => {
+// Mark single notification as read (change to PATCH)
+router.patch('/read/:id', async (req, res) => {
   try {
-    const result = await NotificationController.markAsRead(req.body);
+    const result = await NotificationController.markAsRead({
+      notificationId: req.params.id,
+      userId: req.body.userId
+    });
     res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Invalid data' });
+  }
+});
+
+// Add mark all as read endpoint
+router.patch('/read-all', async (req, res) => {
+  try {
+    const result = await NotificationController.markAllAsRead(req.body.userId);
+    res.json({ success: true, count: result.count });
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Invalid data' });
   }
