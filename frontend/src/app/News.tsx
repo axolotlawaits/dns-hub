@@ -172,14 +172,6 @@ export default function NewsList() {
         </Group>
         <Group>
           <Button 
-            variant="outline"
-            radius="md"
-            onClick={openAllNewsModal}
-            rightSection={<IconChevronRight size={18} />}
-          >
-            Все новости
-          </Button>
-          <Button 
             leftSection={<IconPlus size={18} />}
             variant="light"
             radius="md"
