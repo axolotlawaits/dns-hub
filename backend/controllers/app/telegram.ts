@@ -1,7 +1,7 @@
 import { Telegraf } from 'telegraf';
 import { prisma } from '../../server.js';
 import axios from 'axios';
-import { API } from '../../../frontend/src/config/constants.js';
+import { API } from '../../server.js';
 
 let botInstance: Telegraf | null = null;
 let isBotRunning = false;
