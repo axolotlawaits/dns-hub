@@ -5,6 +5,7 @@ import {
   useMantineTheme,
   Indicator
 } from '@mantine/core';
+import { useColorScheme } from '@mantine/hooks'; // Исправленный импорт
 import dayjs from 'dayjs';
 import {
   IconBell, IconAlertCircle, IconInfoCircle,
@@ -53,6 +54,8 @@ const NOTIFICATION_COLORS = {
 export function Notifications() {
   const { user } = useUserContext();
   const theme = useMantineTheme();
+  const colorScheme = useColorScheme(); // Используем правильный хук
+
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -169,7 +172,7 @@ export function Notifications() {
   if (error) return <Box p="md"><Text c="red">{error}</Text></Box>;
 
   return (
-    <Box className="notifications-container" p="md">
+    <Box className="notifications-container">
       <Group mb="md" justify="space-between">
         <Group gap="xs">
           <Indicator label={unreadCount} size={18} disabled={unreadCount === 0} color="red">
@@ -231,42 +234,40 @@ export function Notifications() {
               const color = NOTIFICATION_COLORS[notification.type];
               const isUnread = !notification.read;
 
+              const colorIndex = colorScheme === 'dark' ? 4 : 5;
+              const rgbColor = hexToRgb(theme.colors[color][colorIndex]);
+
               return (
                 <Paper
                   key={notification.id}
                   withBorder
                   p="sm"
                   radius="sm"
+                  className={`notification-paper ${isUnread ? 'unread' : ''}`}
                   style={{
-                    borderLeft: `3px solid ${theme.colors[color][5]}`,
-                    backgroundColor: 'transparent',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    ':hover': {
-                      backgroundColor: isUnread
-                        ? `rgba(${hexToRgb(theme.colors[color][0])}, 0.4)`
-                        : 'rgba(255, 255, 255, 0.2)'
-                    }
+                    borderLeftColor: theme.colors[color][colorIndex],
+                    '--notification-color': theme.colors[color][colorIndex],
+                    '--notification-color-rgb': rgbColor
                   }}
                   onClick={() => !isUnread && markAsRead(notification.id)}
                 >
                   <Group justify="space-between" align="flex-start" wrap="nowrap">
                     <Group align="flex-start" gap="sm" wrap="nowrap">
-                      <ThemeIcon color={color} variant="light" size={40} radius="xl">
+                      <ThemeIcon color={color} variant="light" size={40} radius="xl" className="notification-icon">
                         <Icon size={18} />
                       </ThemeIcon>
 
                       <Stack gap={4} style={{ flex: 1 }}>
                         <Group justify="space-between" wrap="nowrap">
-                          <Text fw={isUnread ? 600 : 500} lineClamp={1}>
+                          <Text fw={isUnread ? 600 : 500} lineClamp={1} className={`notification-title ${isUnread ? '' : 'read'}`}>
                             {notification.title}
                           </Text>
-                          <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+                          <Text size="xs" className="notification-time">
                             {dayjs(notification.createdAt).format('D MMM HH:mm')}
                           </Text>
                         </Group>
 
-                        <Text size="sm" c="dimmed" lineClamp={2}>
+                        <Text size="sm" c="dimmed" lineClamp={2} className="notification-message">
                           {notification.message}
                         </Text>
 
@@ -275,13 +276,13 @@ export function Notifications() {
                             <Badge
                               variant="light"
                               color="gray"
+                              className="notification-badge"
                               leftSection={notification.tool.icon && (
                                 <img
                                   src={notification.tool.icon}
                                   width={12}
                                   height={12}
                                   alt=""
-                                  style={{ marginRight: 4 }}
                                 />
                               )}
                             >
@@ -290,7 +291,7 @@ export function Notifications() {
                           )}
 
                           {notification.channel?.includes('EMAIL') && (
-                            <Badge variant="light" color="blue" leftSection={<IconMail size={12} />}>
+                            <Badge variant="light" color="blue" leftSection={<IconMail size={12} />} className="notification-badge">
                               Email
                             </Badge>
                           )}
@@ -326,7 +327,6 @@ export function Notifications() {
   );
 }
 
-// Вспомогательная функция для преобразования hex в rgb
 function hexToRgb(hex: string): string {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
