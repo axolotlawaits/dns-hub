@@ -199,6 +199,21 @@ const getUnreadCount = async (userId: string) => {
   });
 };
 
+const markAllAsRead = async (userId: string) => {
+  const result = await prisma.notifications.updateMany({
+    where: {
+      receiverId: userId,
+      read: false
+    },
+    data: {
+      read: true,
+      updatedAt: new Date()
+    },
+  });
+  
+  return { count: result.count }; // Explicitly return the count
+};
+
 const cleanupExpiredNotifications = async () => {
   const result = await prisma.notifications.deleteMany({
     where: { expiresAt: { not: null, lte: new Date() } },
@@ -209,6 +224,7 @@ const cleanupExpiredNotifications = async () => {
 export const NotificationController = {
   create: createNotification,
   markAsRead,
+  markAllAsRead,
   getNotifications,
   getUnreadCount,
   cleanupExpired: cleanupExpiredNotifications,

@@ -1,18 +1,21 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { 
-  Box, Title, Text, Group, LoadingOverlay, List, Badge, 
-  ThemeIcon, ScrollArea, ActionIcon, Button, Stack 
+import {
+  Box, Title, Text, Group, LoadingOverlay, Divider, Badge,
+  ThemeIcon, ScrollArea, ActionIcon, Button, Stack, Paper,
+  useMantineTheme,
+  Indicator
 } from '@mantine/core';
 import dayjs from 'dayjs';
-import { 
-  IconBell, IconAlertCircle, IconInfoCircle, 
-  IconCheck, IconMail, IconChecklist, IconX 
+import {
+  IconBell, IconAlertCircle, IconInfoCircle,
+  IconCheck, IconMail, IconX,
+  IconCircleCheck, IconCircleCheckFilled
 } from '@tabler/icons-react';
 import { useUserContext } from '../../hooks/useUserContext';
 import { showNotification } from '@mantine/notifications';
 import { useWebSocket } from '../../hooks/useWebSocket';
-import './Notifications.css';
 import { API } from '../../config/constants';
+import './Notifications.css';
 
 interface Notification {
   id: string;
@@ -40,7 +43,7 @@ const NOTIFICATION_ICONS = {
 const NOTIFICATION_COLORS = {
   WARNING: 'orange',
   ERROR: 'red',
-  SUCCESS: 'green',
+  SUCCESS: 'teal',
   INFO: 'blue',
   ALERT: 'yellow',
   SYSTEM: 'gray',
@@ -49,64 +52,64 @@ const NOTIFICATION_COLORS = {
 
 export function Notifications() {
   const { user } = useUserContext();
+  const theme = useMantineTheme();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  const { lastMessage, isConnected } = useWebSocket();
+  const [activeTab, setActiveTab] = useState<'all' | 'unread'>('unread');
+
+  const { lastMessage } = useWebSocket();
 
   const fetchNotifications = useCallback(async () => {
     if (!user?.id) return;
-    
+
     setIsLoading(true);
     try {
       const params = new URLSearchParams({
-        unreadOnly: 'true',
-        limit: '10',
-        userId: user.id
+        limit: '20',
+        userId: user.id,
+        ...(activeTab === 'unread' && { unreadOnly: 'true' })
       });
-      
+
       const response = await fetch(`${API}/notifications?${params}`, {
         credentials: 'include'
       });
-      
-      if (!response.ok) throw new Error('Failed to fetch notifications');
-      
+
+      if (!response.ok) throw new Error('Не удалось загрузить уведомления');
+
       const { data } = await response.json();
       setNotifications(data);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      const errorMessage = err instanceof Error ? err.message : 'Неизвестная ошибка';
       setError(errorMessage);
       showNotification({
-        title: 'Error',
-        message: 'Failed to load notifications',
+        title: 'Ошибка',
+        message: 'Не удалось загрузить уведомления',
         color: 'red',
       });
     } finally {
       setIsLoading(false);
     }
-  }, [user?.id]);
+  }, [user?.id, activeTab]);
 
   const markAsRead = useCallback(async (id: string) => {
     try {
-      const response = await fetch(`${API}/notifications/${id}/read`, {
+      const response = await fetch(`${API}/notifications/read/${id}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user?.id }),
         credentials: 'include'
       });
-      
-      if (!response.ok) throw new Error('Failed to mark as read');
-      
-      setNotifications(prev => 
+
+      if (!response.ok) throw new Error('Не удалось отметить как прочитанное');
+
+      setNotifications(prev =>
         prev.map(n => n.id === id ? { ...n, read: true } : n)
       );
     } catch (err) {
       showNotification({
-        title: 'Error',
-        message: 'Failed to mark notification as read',
+        title: 'Ошибка',
+        message: 'Не удалось отметить уведомление как прочитанное',
         color: 'red',
       });
     }
@@ -116,20 +119,24 @@ export function Notifications() {
     try {
       const response = await fetch(`${API}/notifications/read-all`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user?.id }),
         credentials: 'include'
       });
-      
-      if (!response.ok) throw new Error('Failed to mark all as read');
-      
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+
+      const data = await response.json();
+      if (data.success) {
+        showNotification({
+          title: 'Успех',
+          message: `Отмечено ${data.count} уведомлений как прочитанных`,
+          color: 'green',
+        });
+        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      }
     } catch (err) {
       showNotification({
-        title: 'Error',
-        message: 'Failed to mark all notifications as read',
+        title: 'Ошибка',
+        message: 'Не удалось отметить все уведомления как прочитанные',
         color: 'red',
       });
     }
@@ -139,112 +146,192 @@ export function Notifications() {
     fetchNotifications();
   }, [fetchNotifications]);
 
-useEffect(() => {
-  if (!lastMessage || lastMessage.event !== 'notification') return;
+  useEffect(() => {
+    if (!lastMessage || lastMessage.event !== 'notification') return;
+    setNotifications(prev => {
+      const newNotification = lastMessage.data;
+      const exists = prev.some(n => n.id === newNotification.id);
 
-  setNotifications(prev => {
-    const newNotification = lastMessage.data;
-    const exists = prev.some(n => n.id === newNotification.id);
-    
-    return exists 
-      ? prev.map(n => n.id === newNotification.id ? newNotification : n)
-      : [newNotification, ...prev].slice(0, 10); // Лимит 10 уведомлений
-  });
-
-}, [lastMessage]);
+      return exists
+        ? prev.map(n => n.id === newNotification.id ? newNotification : n)
+        : [newNotification, ...prev].slice(0, 20);
+    });
+  }, [lastMessage]);
 
   const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
+  const filteredNotifications = useMemo(() =>
+    activeTab === 'unread'
+      ? notifications.filter(n => !n.read)
+      : notifications
+  , [notifications, activeTab]);
 
   if (isLoading) return <LoadingOverlay visible />;
   if (error) return <Box p="md"><Text c="red">{error}</Text></Box>;
 
   return (
-    <Box className="notifications-container">
+    <Box className="notifications-container" p="md">
       <Group mb="md" justify="space-between">
         <Group gap="xs">
-          <ThemeIcon variant="light" color="gray" size="lg" radius="xl">
-            <IconBell size={18} />
-          </ThemeIcon>
-          <Title order={2}>Уведомления</Title>
-          {unreadCount > 0 && <Badge variant="filled" color="red" circle>{unreadCount}</Badge>}
+          <Indicator label={unreadCount} size={18} disabled={unreadCount === 0} color="red">
+            <ThemeIcon variant="light" color="blue" size="lg" radius="xl">
+              <IconBell size={18} />
+            </ThemeIcon>
+          </Indicator>
+          <Title order={3}>Уведомления</Title>
         </Group>
-        
-        {unreadCount > 0 && (
-          <Button 
-            variant="subtle" 
-            size="sm" 
-            leftSection={<IconChecklist size={16} />}
-            onClick={markAllAsRead}
-          >
-            Отметить все как прочитанные
-          </Button>
-        )}
+
+        <Group>
+          <Button.Group>
+            <Button
+              variant={activeTab === 'unread' ? 'light' : 'subtle'}
+              size="sm"
+              onClick={() => setActiveTab('unread')}
+            >
+              Непрочитанные
+            </Button>
+            <Button
+              variant={activeTab === 'all' ? 'light' : 'subtle'}
+              size="sm"
+              onClick={() => setActiveTab('all')}
+            >
+              Все
+            </Button>
+          </Button.Group>
+
+          {unreadCount > 0 && (
+            <Button
+              variant="subtle"
+              size="sm"
+              leftSection={<IconCircleCheckFilled size={16} />}
+              onClick={markAllAsRead}
+            >
+              Прочитать все
+            </Button>
+          )}
+        </Group>
       </Group>
-      
-      <ScrollArea.Autosize mah={400}>
-        {notifications.length === 0 ? (
-          <Text c="dimmed" ta="center" py="md">Нет уведомлений</Text>
+
+      <Divider mb="md" />
+
+      <ScrollArea.Autosize mah={500}>
+        {filteredNotifications.length === 0 ? (
+          <Box py="xl" ta="center">
+            <ThemeIcon variant="light" color="gray" size={50} radius="xl" mb="sm">
+              <IconCheck size={30} />
+            </ThemeIcon>
+            <Text c="dimmed" fw={500}>Нет уведомлений</Text>
+            {activeTab === 'unread' && (
+              <Text size="sm" c="dimmed" mt="xs">Все уведомления прочитаны</Text>
+            )}
+          </Box>
         ) : (
-          <List spacing="md" size="sm">
-            {notifications.map((notification) => {
+          <Stack gap="sm">
+            {filteredNotifications.map((notification) => {
               const Icon = NOTIFICATION_ICONS[notification.type];
               const color = NOTIFICATION_COLORS[notification.type];
               const isUnread = !notification.read;
-              
+
               return (
-                <List.Item 
+                <Paper
                   key={notification.id}
-                  className={isUnread ? "notification-item unread" : "notification-item"}
-                  icon={
-                    <ThemeIcon color={color} variant="light" size={40} radius="xl">
-                      <Icon size={16} />
-                    </ThemeIcon>
-                  }
+                  withBorder
+                  p="sm"
+                  radius="sm"
+                  style={{
+                    borderLeft: `3px solid ${theme.colors[color][5]}`,
+                    backgroundColor: 'transparent',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    ':hover': {
+                      backgroundColor: isUnread
+                        ? `rgba(${hexToRgb(theme.colors[color][0])}, 0.4)`
+                        : 'rgba(255, 255, 255, 0.2)'
+                    }
+                  }}
+                  onClick={() => !isUnread && markAsRead(notification.id)}
                 >
-                  <Stack gap={4}>
-                    <Group justify="space-between">
-                      <Text fw={isUnread ? 700 : 500}>{notification.title}</Text>
-                      <Text size="xs" c="dimmed">
-                        {dayjs(notification.createdAt).format('D MMM HH:mm')}
-                      </Text>
+                  <Group justify="space-between" align="flex-start" wrap="nowrap">
+                    <Group align="flex-start" gap="sm" wrap="nowrap">
+                      <ThemeIcon color={color} variant="light" size={40} radius="xl">
+                        <Icon size={18} />
+                      </ThemeIcon>
+
+                      <Stack gap={4} style={{ flex: 1 }}>
+                        <Group justify="space-between" wrap="nowrap">
+                          <Text fw={isUnread ? 600 : 500} lineClamp={1}>
+                            {notification.title}
+                          </Text>
+                          <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+                            {dayjs(notification.createdAt).format('D MMM HH:mm')}
+                          </Text>
+                        </Group>
+
+                        <Text size="sm" c="dimmed" lineClamp={2}>
+                          {notification.message}
+                        </Text>
+
+                        <Group gap="xs" mt={4}>
+                          {notification.tool && (
+                            <Badge
+                              variant="light"
+                              color="gray"
+                              leftSection={notification.tool.icon && (
+                                <img
+                                  src={notification.tool.icon}
+                                  width={12}
+                                  height={12}
+                                  alt=""
+                                  style={{ marginRight: 4 }}
+                                />
+                              )}
+                            >
+                              {notification.tool.name}
+                            </Badge>
+                          )}
+
+                          {notification.channel?.includes('EMAIL') && (
+                            <Badge variant="light" color="blue" leftSection={<IconMail size={12} />}>
+                              Email
+                            </Badge>
+                          )}
+                        </Group>
+                      </Stack>
                     </Group>
-                    <Text size="sm" c="dimmed">{notification.message}</Text>
-                    <Group gap="xs" justify="space-between">
-                      {notification.tool && (
-                        <Badge variant="outline" leftSection={
-                          notification.tool.icon && (
-                            <img src={notification.tool.icon} width={14} height={14} alt="" style={{ marginRight: 4 }} />
-                          )
-                        }>
-                          {notification.tool.name}
-                        </Badge>
-                      )}
-                      <Group gap={4}>
-                        {notification.channel?.includes('EMAIL') && ( // Добавьте optional chaining
-                          <ThemeIcon variant="subtle" size="sm">
-                            <IconMail size={14} />
-                          </ThemeIcon>
-                        )}
-                        {isUnread && (
-                          <ActionIcon 
-                            variant="subtle" 
-                            onClick={() => markAsRead(notification.id)}
-                            aria-label="Отметить как прочитанное"
-                          >
-                            <IconCheck size={16} />
-                          </ActionIcon>
-                        )}
-                      </Group>
-                    </Group>
-                  </Stack>
-                </List.Item>
+
+                    {isUnread ? (
+                      <ActionIcon
+                        variant="subtle"
+                        color="gray"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          markAsRead(notification.id);
+                        }}
+                        aria-label="Отметить как прочитанное"
+                      >
+                        <IconCircleCheck size={18} />
+                      </ActionIcon>
+                    ) : (
+                      <ThemeIcon variant="transparent" color="green" size="sm">
+                        <IconCircleCheckFilled size={16} />
+                      </ThemeIcon>
+                    )}
+                  </Group>
+                </Paper>
               );
             })}
-          </List>
+          </Stack>
         )}
       </ScrollArea.Autosize>
     </Box>
   );
+}
+
+// Вспомогательная функция для преобразования hex в rgb
+function hexToRgb(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `${r}, ${g}, ${b}`;
 }
 
 export default Notifications;

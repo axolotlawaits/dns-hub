@@ -64,7 +64,7 @@ export default function NewsList() {
       const count = Math.floor((containerWidth - allNewsCardWidth) / cardWidth);
       
       // Минимум 1 карточка должна быть видна
-      setVisibleCount(Math.max(count, 1));
+      setVisibleCount(Math.max(count, 0));
     };
 
     calculateVisibleCount();
