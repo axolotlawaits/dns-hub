@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { prisma } from '../../server.js';
 import { WebSocketService } from '../../websocket.js';
-import { EmailService } from '../../services/email.js';
+import { emailService } from '../../services/email.js';
 import { TelegramService } from '../../services/telegram.js';
 import { Notifications, NotificationType, NotificationChannel, NotificationPriority } from '@prisma/client';
 
@@ -53,7 +53,6 @@ const getNotificationsSchema = z.object({
 
 // Initialize services
 const wsService = WebSocketService.getInstance();
-const emailService = EmailService.getInstance();
 const telegramService = TelegramService.getInstance();
 
 const buildIncludeOptions = (include?: string[]) => {
@@ -115,7 +114,7 @@ const dispatchNotification = async (notification: NotificationWithRelations) => 
   }
 
   if (notification.channel.includes('EMAIL') && wantsEmail) {
-    await emailService.sendNotification(notification);
+    await emailService.send(notification);
   }
 
   if (notification.channel.includes('TELEGRAM') && notification.receiver.telegramChatId) {
@@ -143,6 +142,7 @@ const createNotification = async (data: z.infer<typeof createNotificationSchema>
       tool: { select: { id: true, name: true, icon: true } },
     },
   });
+
   await dispatchNotification(notification);
   return notification;
 };

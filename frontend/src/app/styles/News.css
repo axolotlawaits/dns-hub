@@ -33,20 +33,31 @@
   display: flex;
   flex-wrap: nowrap;
   gap: 16px;
-  overflow: hidden; /* Скрываем скролл */
+  overflow-x: auto; /* Позволяет прокрутку по горизонтали */
+  padding-bottom: 10px; /* Добавляет немного пространства снизу */
+  padding-top: 10px; /* Добавляет немного пространства снизу */
   position: relative;
 }
 
-/* Карточка новости */
 .news-item {
   min-width: 280px;
   width: 280px;
-  height: 240px;
+  min-height: 240px; /* Используйте min-height вместо height */
   flex-shrink: 0;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   cursor: pointer;
   background-color: var(--layer);
+  overflow-y: auto; /* Добавляет прокрутку внутри карточки, если содержимое превышает высоту */
 }
+
+/* Дополнительные стили для меньших экранов */
+@media (max-width: 768px) {
+  .news-item {
+    min-width: 240px;
+    width: 240px;
+  }
+}
+
 
 .news-item:hover {
   transform: translateY(-2px);
