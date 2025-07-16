@@ -47,6 +47,7 @@ export const refreshPublicKey = fs.readFileSync(path.join(__dirname, 'keys/refre
 
 const allowedOrigin = process.env.NODE_ENV === 'production' ? 'https://dns-zs.partner.ru/' : 'http://localhost:5173'
 export const API = process.env.NODE_ENV === 'production' ? `https://${window.location.host}/hub-api` : 'http://localhost:2000/hub-api';
+export const APIWebSocket = process.env.NODE_ENV === 'production' ? `https://${window.location.host}` : 'http://localhost:2000';
 
 const corsOptions = {
   origin: allowedOrigin,
@@ -86,8 +87,7 @@ app.use('/hub-api/loaders/filial', filialRouter)
 
 app.post('/hub-api/refresh-token', refreshToken)
 
-app.listen(2000, function() { 
-  console.log('server running on port 2000')
-
-  schedule.scheduleJob('0 0 * * *', () => scheduleRouteDay())
-}) 
+server.listen(2000, function() {
+  console.log('Server running on port 2000');
+  schedule.scheduleJob('0 0 * * *', () => scheduleRouteDay());
+});

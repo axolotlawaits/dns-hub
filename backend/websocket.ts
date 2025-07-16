@@ -1,4 +1,5 @@
 import { WebSocketServer, WebSocket } from 'ws';
+import { APIWebSocket } from './server';
 
 type ConnectionInfo = {
   userId: string;
@@ -22,7 +23,7 @@ export class WebSocketService {
     this.wss = new WebSocketServer({ noServer: true });
 
     this.wss.on('connection', (ws: WebSocket, req: any) => {
-      const params = new URL(req.url || '', `http://${req.headers.host}`).searchParams;
+      const params = new URL(req.url || '', `${APIWebSocket}`).searchParams;
       const userId = params.get('userId') || 'unknown';
       const cid = params.get('cid') || `gen_${Date.now()}`;
 
@@ -56,7 +57,7 @@ export class WebSocketService {
     });
 
     server.on('upgrade', (req: any, socket: any, head: any) => {
-      const params = new URL(req.url || '', `http://${req.headers.host}`).searchParams;
+      const params = new URL(req.url || '', `${APIWebSocket}`).searchParams;
       if (!params.get('userId')) {
         socket.destroy();
         return;

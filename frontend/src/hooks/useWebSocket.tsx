@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useUserContext } from '../hooks/useUserContext';
+import { APIWebSocket } from '../config/constants';
 
 export const useWebSocket = () => {
   const { user } = useUserContext();
@@ -21,7 +22,7 @@ export const useWebSocket = () => {
     connectionId.current = `cid_${Date.now()}`;
     const currentConnectionId = connectionId.current;
 
-    const wsUrl = `ws://localhost:2000?userId=${user.id}&cid=${currentConnectionId}`;
+    const wsUrl = `${APIWebSocket}?userId=${user.id}&cid=${currentConnectionId}`;
     console.log(`[WS] Connecting (${currentConnectionId})...`);
     
     wsRef.current = new WebSocket(wsUrl);
