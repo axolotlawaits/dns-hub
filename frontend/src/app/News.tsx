@@ -7,7 +7,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { useUserContext } from '../hooks/useUserContext';
 import dayjs from 'dayjs';
 import TiptapEditor from '../utils/editor';
-import { IconNews, IconPencil, IconPlus, IconTrash, IconClock, IconChevronRight } from '@tabler/icons-react';
+import { IconNews, IconPencil, IconPlus, IconTrash, IconClock } from '@tabler/icons-react';
 import './styles/News.css';
 
 type News = {
