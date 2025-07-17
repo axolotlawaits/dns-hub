@@ -19,6 +19,7 @@ import routeDayRouter from './routes/supply/routeDay.js'
 import routeRouter from './routes/supply/route.js'
 import filialRouter from './routes/supply/filial.js'
 import mediaRouter from './routes/add/media.js'
+import sliderRouter from './routes/add/slider.js'
 import printServiceRouter from './routes/retail/printService.js'
 import telegramRouter  from './routes/app/telegram.js'
 import schedule from 'node-schedule'
@@ -76,6 +77,7 @@ app.use('/hub-api/aho/meter-reading', meterReadingRouter)
 app.use('/hub-api/aho/correspondence', correspondenceRouter)
 app.use('/hub-api/accounting/supply-docs', supplydocsRouter)
 app.use('/hub-api/add/media', mediaRouter)
+app.use('/hub-api/add/sliders', sliderRouter)
 app.use('/hub-api/search', searchRouter)
 app.use('/hub-api/navigation', navigationRouter);
 app.use('/hub-api/type', typeRouter);

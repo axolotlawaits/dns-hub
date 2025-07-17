@@ -119,7 +119,7 @@ model Tool {
   icon                 String
   link                 String
   description          String?
-  order                Int
+  order                Int                  @default(1)
   included             Boolean?             @default(true)
   groupToolAccesses    GroupToolAccess[]
   positionToolAccesses PositionToolAccess[]
@@ -163,6 +163,8 @@ model User {
   Notifications_Receiver          Notifications[]                   @relation(name: "receiver")
   Notifications_Sender            Notifications[]                   @relation(name: "sender")
   UserSettings                    UserSettings[]
+  Slider_Add                      Slider[]                          @relation(name: "added")
+  Slider_Updated                  Slider[]                          @relation(name: "updated")
 }          
 
 model GroupToolAccess {
@@ -367,6 +369,27 @@ model PrintService {
   tovarId   String
   format    Int
   branch    Branch   @relation("BranchPrint", fields: [branchId], references: [uuid])
+}
+
+model Slider {
+  id                String            @id @default(uuid())
+  addedBy           User              @relation("added", fields: [addedById], references: [id])
+  addedById         String
+  updatedBy         User?             @relation("updated", fields: [updatedById], references: [id])
+  updatedById       String?
+  name              String          
+  category          String          
+  visible           Boolean           @default(false)
+  timeVisible       Float             @default(0)    
+  attachment        String          
+  startDate         DateTime?          
+  endDate           DateTime?          
+  url               String            @default("https://dns-shop.ru/")
+  add               Boolean           @default(false)
+  sale              Boolean           @default(false)
+  order             Int               @default(1)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime         @updatedAt
 }
 
 enum Role {

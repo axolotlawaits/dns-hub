@@ -11,6 +11,7 @@ import Home from './Home';
 import Finance from '../features/Finance/Finance';
 import Login from './Login';
 import Navigation from '../components/Navigation';
+import { SlideAdmin } from '../components/SlideAdmin';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import Accounting from '../features/Accounting/Accounting';
@@ -89,6 +90,7 @@ function App() {
                 <Route path='/birthday' element={<Birthday />} />
                 <Route path='/bookmarks' element={<Bookmarks />} />
                 <Route path='/notification' element={<Notification />} />
+                <Route path='/slider-admin' element={<SlideAdmin/>} />
                 <Route path='/finance' element={<Finance />} />
                 <Route path='/accounting' element={<Accounting />} />
                 <Route path='/ad' element={<Ad />} />
