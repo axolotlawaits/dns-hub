@@ -5,10 +5,18 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: true
+    host: true,
+    allowedHosts: [
+      '.dns-zs.partner.ru',
+      '.dns-zs.ru'
+    ],
   },
-   preview: {
-    port: 4174
+  preview: {
+    port: 4174,
+    allowedHosts: [
+      '.dns-zs.partner.ru',
+      '.dns-zs.ru'
+    ],
   },
   resolve: {
     alias: {

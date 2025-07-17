@@ -1,5 +1,5 @@
 import { WebSocketServer, WebSocket } from 'ws';
-import { APIWebSocket } from './server';
+import { APIWebSocket } from './server.js';
 
 type ConnectionInfo = {
   userId: string;
