@@ -35,17 +35,15 @@ export const prisma = new PrismaClient()
 const __dirname = path.resolve()
 const server = createServer(app);
 
-// Инициализируем WebSocket сервер
 const webSocketService = WebSocketService.getInstance();
 webSocketService.initialize(server);
-
 
 export const accessPrivateKey = fs.readFileSync(path.join(__dirname, 'keys/access_private.pem'), 'utf8');
 export const accessPublicKey = fs.readFileSync(path.join(__dirname, 'keys/access_public.pem'), 'utf8');
 export const refreshPrivateKey = fs.readFileSync(path.join(__dirname, 'keys/refresh_private.pem'), 'utf8');
 export const refreshPublicKey = fs.readFileSync(path.join(__dirname, 'keys/refresh_public.pem'), 'utf8');
 
-const allowedOrigin = process.env.NODE_ENV === 'production' ? 'https://dns-zs.partner.ru/' : 'http://localhost:5173'
+export const allowedOrigin = process.env.NODE_ENV === 'production' ? `https://${window.location.host}` : 'http://localhost:5173'
 export const API = process.env.NODE_ENV === 'production' ? `https://${window.location.host}/hub-api` : 'http://localhost:2000/hub-api';
 export const APIWebSocket = process.env.NODE_ENV === 'production' ? `https://${window.location.host}` : 'http://localhost:2000';
 

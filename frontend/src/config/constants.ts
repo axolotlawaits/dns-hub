@@ -1,2 +1,2 @@
 export const API = process.env.NODE_ENV === 'production' ? `https://${window.location.host}/hub-api` : 'http://localhost:2000/hub-api';
-export const APIWebSocket = process.env.NODE_ENV === 'production' ? `wss://${window.location.host}` : 'ws://localhost:2000';
+export const APIWebSocket = process.env.NODE_ENV === 'production' ? `wss://${window.location.host}/hub-api` : 'ws://localhost:2000';
