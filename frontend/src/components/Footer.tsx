@@ -1,5 +1,5 @@
 import { AppShell, Loader, Group, Popover, Stack, Text, Divider, Box } from "@mantine/core";
-import { IconAppWindow, IconBasket, IconBrandRumble, IconBriefcase, IconNews } from "@tabler/icons-react";
+import { IconAppWindow, IconBasket, IconBrandRumble, IconBrandUnity, IconBriefcase, IconNews } from "@tabler/icons-react";
 import { useWeather, WeatherCondition } from "../app/Weather";
 import { useState, useEffect, useCallback, useContext, useMemo } from "react";
 import DatePicker from "react-datepicker";
@@ -52,9 +52,15 @@ const navLinks = [
     icon: IconAppWindow,
     name: "Web - База",
     description: "Портал продаж"
+  },
+  {
+    href: window.location.host.includes('localhost') ? `https://dns-zs.partner.ru/uweb` : `https://${window.location.host}/uweb`,
+    icon: IconBrandUnity,
+    name: "Uweb",
+    description: "Планограммы"
   }
 ];
-
+console.log(window.location.host.includes('localhost'))
 const getWeatherIcon = (condition: WeatherCondition) => {
   const icons = {
     clear: "☀️",

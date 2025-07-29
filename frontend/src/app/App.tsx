@@ -17,7 +17,6 @@ import Footer from '../components/Footer';
 import Accounting from '../features/Accounting/Accounting';
 import Ad from '../features/Ad/Ad';
 import Aho from '../features/AHO/Aho';
-import Visualization from '../features/Visualization/Visualization';
 import Jurists from '../features/Jurists/Jurists';
 import ProblemBooks from '../features/ProblemBooks/ProblemBooks';
 import Service from '../features/Service/Service';
@@ -97,7 +96,6 @@ function App() {
                 <Route path='/aho' element={<Aho />} />
                 <Route path='/automation' element={<Automation />} />
                 <Route path='/jurists' element={<Jurists />} />
-                <Route path='/visualization' element={<Visualization />} />
                 <Route path='/problem-books' element={<ProblemBooks />} />
                 <Route path='/service' element={<Service />} />
                 <Route path='/settlements' element={<Settlements />} />
