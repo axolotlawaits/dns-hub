@@ -46,13 +46,24 @@ export const accessPublicKey = fs.readFileSync(path.join(__dirname, 'keys/access
 export const refreshPrivateKey = fs.readFileSync(path.join(__dirname, 'keys/refresh_private.pem'), 'utf8');
 export const refreshPublicKey = fs.readFileSync(path.join(__dirname, 'keys/refresh_public.pem'), 'utf8');
 
-const allowedOrigin = process.env.NODE_ENV === 'production' ? 'https://dns-zs.partner.ru/' : 'http://localhost:5173'
+const allowedOrigins = process.env.NODE_ENV === 'production' 
+  ? ['https://dns-zs.partner.ru', 'http://10.11.145.196'] 
+  : ['http://localhost:5173', 'http://10.11.145.196'];
 export const API = process.env.NODE_ENV === 'production' ? `https://${window.location.host}/hub-api` : 'http://localhost:2000/hub-api';
 export const APIWebSocket = process.env.NODE_ENV === 'production' ? `https://${window.location.host}` : 'http://localhost:2000';
 
-const corsOptions = {
-  origin: allowedOrigin,
-  credentials: true,                
+const corsOptions: cors.CorsOptions = {
+  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
 }
 
 app.use(express.json({ limit: '5mb' }));
