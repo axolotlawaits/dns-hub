@@ -40,7 +40,7 @@ function Retail() {
 
   return (
     <div>
-      <h1>АХО</h1>
+      <h1>Розница</h1>
       <Tools tools={tools} />
     </div>
   );

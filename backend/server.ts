@@ -19,6 +19,7 @@ import routeDayRouter from './routes/supply/routeDay.js'
 import routeRouter from './routes/supply/route.js'
 import filialRouter from './routes/supply/filial.js'
 import mediaRouter from './routes/add/media.js'
+import rkRouter from './routes/add/rk.js'
 import sliderRouter from './routes/add/slider.js'
 import printServiceRouter from './routes/retail/printService.js'
 import telegramRouter  from './routes/app/telegram.js'
@@ -44,9 +45,7 @@ export const accessPublicKey = fs.readFileSync(path.join(__dirname, 'keys/access
 export const refreshPrivateKey = fs.readFileSync(path.join(__dirname, 'keys/refresh_private.pem'), 'utf8');
 export const refreshPublicKey = fs.readFileSync(path.join(__dirname, 'keys/refresh_public.pem'), 'utf8');
 
-const allowedOrigins = process.env.NODE_ENV === 'production' 
-  ? ['https://dns-zs.partner.ru', 'http://10.11.145.196'] 
-  : ['http://localhost:5173', 'http://10.11.145.196'];
+const allowedOrigins = process.env.NODE_ENV === 'production'  ? ['https://dns-zs.partner.ru', 'http://10.11.145.196']  : ['http://localhost:5173', 'http://10.11.145.196'];
 export const API = process.env.NODE_ENV === 'production' ? `https://${window.location.host}/hub-api` : 'http://localhost:2000/hub-api';
 export const APIWebSocket = process.env.NODE_ENV === 'production' ? `https://${window.location.host}` : 'http://localhost:2000';
 
@@ -86,6 +85,7 @@ app.use('/hub-api/aho/meter-reading', meterReadingRouter)
 app.use('/hub-api/aho/correspondence', correspondenceRouter)
 app.use('/hub-api/accounting/supply-docs', supplydocsRouter)
 app.use('/hub-api/add/media', mediaRouter)
+app.use('/hub-api/add/rk', rkRouter)
 app.use('/hub-api/add/sliders', sliderRouter)
 app.use('/hub-api/search', searchRouter)
 app.use('/hub-api/navigation', navigationRouter);

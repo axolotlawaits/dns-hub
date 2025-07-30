@@ -98,6 +98,7 @@ model Branch {
   printService  PrintService[] @relation("BranchPrint")
   supplyDocs    SupplyDocs[]   @relation("SupplyDocs_Branch")
   userData      UserData[]
+  rk            RK[]
 }
 
 model Type {
@@ -110,6 +111,8 @@ model Type {
   SupplyDocsPTiU         SupplyDocs[] @relation("SupplyDocs_PTiU")
   SupplyDocsRequirements SupplyDocs[] @relation("SupplyDocs_Requirements")
   Tool                   Tool         @relation(fields: [model_uuid], references: [id])
+  rk_typeStructure       RK[]         @relation("RK_typeStructure")
+  rk_approvalStatus      RK[]         @relation("RK_approvalStatus")
 }
 
 model Tool {
@@ -165,6 +168,9 @@ model User {
   UserSettings                    UserSettings[]
   Slider_Add                      Slider[]                          @relation(name: "added")
   Slider_Updated                  Slider[]                          @relation(name: "updated")
+  RKAdded                         RK[]                              @relation("RK_UserAdd")
+  RKUpdated                       RK[]                              @relation("RK_UserUpdated")
+  RKAttachment                    RKAttachment[]
 }          
 
 model GroupToolAccess {
@@ -354,6 +360,38 @@ model MediaAttachment {
   type      String
   recordId  String
   media     Media    @relation(fields: [recordId], references: [id])
+  userAdd   User     @relation(fields: [userAddId], references: [id])
+}
+
+
+model RK {
+  id                        String                @id @default(uuid())
+  createdAt                 DateTime              @default(now())
+  updatedAt                 DateTime?             @updatedAt
+  userAdd                   User                  @relation("RK_UserAdd", fields: [userAddId], references: [id])
+  userAddId                 String    
+  userUpdated               User?                 @relation("RK_UserUpdated", fields: [userUpdatedId], references: [id])
+  userUpdatedId             String    
+  branch                    Branch                @relation(fields: [branchId], references: [uuid])  
+  branchId                  String              
+  agreedTo                  DateTime    
+  sizeXY                    String    
+  сlarification             String                
+  typeStructure             Type                  @relation("RK_typeStructure", fields: [typeStructureId], references: [id])
+  typeStructureId           String    
+  approvalStatus            Type                  @relation("RK_approvalStatus", fields: [approvalStatusId], references: [id])
+  approvalStatusId          String    
+  rkAttachment              RKAttachment[]    
+}   
+
+model RKAttachment {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  userAddId String
+  source    String
+  type      String
+  recordId  String
+  rk        RK       @relation(fields: [recordId], references: [id])
   userAdd   User     @relation(fields: [userAddId], references: [id])
 }
 
