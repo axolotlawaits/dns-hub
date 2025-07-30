@@ -37,6 +37,20 @@ export default function NewsList() {
   const [deleteModalOpened, { open: openDeleteModal, close: closeDeleteModal }] = useDisclosure(false);
   const [allNewsModalOpened, { open: openAllNewsModal, close: closeAllNewsModal }] = useDisclosure(false);
 
+  const calculateVisibleCount = () => {
+    if (!containerRef.current) return;
+
+    const containerWidth = containerRef.current.offsetWidth;
+    const cardWidth = 280 + 16; // Ширина карточки + отступ
+    const allNewsCardWidth = 280 + 16; // Ширина карточки "Все новости" + отступ
+
+    // Вычисляем сколько карточек помещается (минус место для карточки "Все новости")
+    const count = Math.floor((containerWidth - allNewsCardWidth) / cardWidth);
+
+    // Минимум 1 карточка должна быть видна
+    setVisibleCount(Math.max(count, 0));
+  };
+
   useEffect(() => {
     const fetchNews = async () => {
       try {
@@ -53,28 +67,18 @@ export default function NewsList() {
   }, []);
 
   useEffect(() => {
-    const calculateVisibleCount = () => {
-      if (!containerRef.current) return;
-      
-      const containerWidth = containerRef.current.offsetWidth;
-      const cardWidth = 280 + 16; // Ширина карточки + отступ
-      const allNewsCardWidth = 280 + 16; // Ширина карточки "Все новости" + отступ
-      
-      // Вычисляем сколько карточек помещается (минус место для карточки "Все новости")
-      const count = Math.floor((containerWidth - allNewsCardWidth) / cardWidth);
-      
-      // Минимум 1 карточка должна быть видна
-      setVisibleCount(Math.max(count, 0));
-    };
-
     calculateVisibleCount();
     window.addEventListener('resize', calculateVisibleCount);
     return () => window.removeEventListener('resize', calculateVisibleCount);
   }, []);
 
+  useEffect(() => {
+    calculateVisibleCount();
+  }, [news]);
+
   const groupNewsByMonth = () => {
     const grouped: Record<string, News[]> = {};
-    
+
     news.forEach(item => {
       const monthYear = dayjs(item.createdAt).format('MMMM YYYY');
       if (!grouped[monthYear]) {
@@ -82,7 +86,6 @@ export default function NewsList() {
       }
       grouped[monthYear].push(item);
     });
-
     return grouped;
   };
 
@@ -124,8 +127,8 @@ export default function NewsList() {
       const response = await fetch(`${API}/news`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          ...newsForm, 
+        body: JSON.stringify({
+          ...newsForm,
           userId: user.id
         }),
       });
@@ -148,7 +151,7 @@ export default function NewsList() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newsForm),
       });
-      setNews(news.map(item => 
+      setNews(news.map(item =>
         item.id === selectedNews.id ? { ...item, ...newsForm } : item
       ));
       closeEditModal();
@@ -171,7 +174,7 @@ export default function NewsList() {
           <Title order={2} fw={600}>Новости</Title>
         </Group>
         <Group>
-          <Button 
+          <Button
             leftSection={<IconPlus size={18} />}
             variant="light"
             radius="md"
@@ -184,7 +187,6 @@ export default function NewsList() {
           </Button>
         </Group>
       </Flex>
-
       {news.length === 0 ? (
         <Paper withBorder p="xl" radius="md" shadow="none" className="empty-state">
           <Text size="lg" c="dimmed" ta="center">Пока нет новостей</Text>
@@ -199,24 +201,42 @@ export default function NewsList() {
               p="md"
               className="news-item"
               onClick={() => handleViewNews(newsItem)}
+              style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}
             >
-              <div className="news-item-content">
+              {user?.id === newsItem.userId && (
+                <Flex gap="xs" style={{ position: 'absolute', top: '10px', right: '10px' }}>
+                  <ActionIcon
+                    variant="subtle"
+                    color="blue"
+                    radius="md"
+                    onClick={(e) => handleEditNews(newsItem, e)}
+                  >
+                    <IconPencil size={16} />
+                  </ActionIcon>
+                  <ActionIcon
+                    variant="subtle"
+                    color="red"
+                    radius="md"
+                    onClick={(e) => handleDeleteNews(newsItem, e)}
+                  >
+                    <IconTrash size={16} />
+                  </ActionIcon>
+                </Flex>
+              )}
+              <div style={{ flex: 1 }}>
                 <Text fw={600} size="lg" mb="sm" lineClamp={2}>
                   {newsItem.name}
                 </Text>
-                
                 <Text size="sm" c="dimmed" mb="md" lineClamp={3}>
                   {truncateText(newsItem.description, 200)}
                 </Text>
               </div>
-
-              <div className="news-item-footer">
+              <div className="news-item-footer" style={{ marginTop: 'auto' }}>
                 <Flex justify="space-between" align="center">
                   <Group gap="xs">
                     <Avatar src={`data:image/png;base64,${newsItem.user.image}`} size="sm" color="blue" radius="xl" />
                     <Text size="xs">{formatName(newsItem.user.name)}</Text>
                   </Group>
-                  
                   <Group gap="xs">
                     <IconClock size={14} />
                     <Text size="xs">
@@ -224,31 +244,9 @@ export default function NewsList() {
                     </Text>
                   </Group>
                 </Flex>
-
-                {user?.id === newsItem.userId && (
-                  <Flex gap="xs" justify="flex-end" mt="sm">
-                    <ActionIcon 
-                      variant="subtle"
-                      color="blue"
-                      radius="md"
-                      onClick={(e) => handleEditNews(newsItem, e)}
-                    >
-                      <IconPencil size={16} />
-                    </ActionIcon>
-                    <ActionIcon 
-                      variant="subtle"
-                      color="red"
-                      radius="md"
-                      onClick={(e) => handleDeleteNews(newsItem, e)}
-                    >
-                      <IconTrash size={16} />
-                    </ActionIcon>
-                  </Flex>
-                )}
               </div>
             </Paper>
           ))}
-          
           {news.length > visibleCount && (
             <Paper
               withBorder
@@ -270,7 +268,6 @@ export default function NewsList() {
           )}
         </div>
       )}
-
       <Modal
         opened={allNewsModalOpened}
         onClose={closeAllNewsModal}
@@ -281,16 +278,15 @@ export default function NewsList() {
         <div className="all-news-container">
           {Object.entries(groupedNews).map(([monthYear, newsItems]) => (
             <div key={monthYear} className="news-month-group">
-              <Divider 
-                my="md" 
+              <Divider
+                my="md"
                 label={
                   <Text fw={600} size="lg">
                     {monthYear}
                   </Text>
-                } 
+                }
                 labelPosition="left"
               />
-              
               {newsItems.map(item => (
                 <Paper
                   key={item.id}
@@ -329,7 +325,6 @@ export default function NewsList() {
           ))}
         </div>
       </Modal>
-
       <Modal
         opened={viewModalOpened}
         onClose={closeViewModal}
@@ -343,9 +338,9 @@ export default function NewsList() {
       >
         {selectedNews && (
           <>
-            <div 
-              className="safe-html-content" 
-              dangerouslySetInnerHTML={{ __html: selectedNews.description }} 
+            <div
+              className="safe-html-content"
+              dangerouslySetInnerHTML={{ __html: selectedNews.description }}
             />
             <Flex justify="space-between" mt="xl" c="dimmed">
               <Group gap="xs">
@@ -362,7 +357,6 @@ export default function NewsList() {
           </>
         )}
       </Modal>
-
       <Modal
         opened={editModalOpened}
         onClose={closeEditModal}
@@ -388,7 +382,6 @@ export default function NewsList() {
           </Button>
         </form>
       </Modal>
-
       <Modal
         opened={createModalOpened}
         onClose={closeCreateModal}
@@ -414,7 +407,6 @@ export default function NewsList() {
           </Button>
         </form>
       </Modal>
-
       <Modal
         opened={deleteModalOpened}
         onClose={closeDeleteModal}

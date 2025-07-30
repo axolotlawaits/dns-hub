@@ -1,8 +1,9 @@
+// Обновленный компонент React (client side)
 import { useState, useEffect } from 'react';
 import { API } from '../config/constants';
-import { Box, Title, Text, Group, LoadingOverlay, List, Badge, ThemeIcon, Avatar, ScrollArea } from '@mantine/core';
+import { Box, Title, Text, Group, LoadingOverlay, List, Badge, ThemeIcon, Avatar, ScrollArea, Alert } from '@mantine/core';
 import dayjs from 'dayjs';
-import { IconCalendar, IconGift } from '@tabler/icons-react';
+import { IconCalendar, IconGift, IconAlertCircle } from '@tabler/icons-react';
 import { useUserContext } from '../hooks/useUserContext';
 
 type UserData = {
@@ -12,6 +13,9 @@ type UserData = {
   email: string;
   image?: string;
   daysUntil: number;
+  isWeekendBirthday?: boolean;
+  weekendDayName?: string;
+  daysSince?: number;
   branch: {
     uuid: string;
     type: string;
@@ -57,16 +61,24 @@ export default function BirthdayList() {
     return dayjs(dateString).format('D MMMM');
   };
 
-  const renderDaysText = (days: number) => {
-    if (days === 0) {
+  const renderDaysText = (user: UserData) => {
+    if (user.isWeekendBirthday) {
+      return (
+        <Alert icon={<IconAlertCircle size="1rem" />} color="yellow" variant="light" p="xs">
+          Было в {user.weekendDayName}, не забудьте поздравить!
+        </Alert>
+      );
+    }
+    
+    if (user.daysUntil === 0) {
       return <Badge variant="light" size="sm" color="green">сегодня</Badge>;
     }
-    if (days === 1) {
+    if (user.daysUntil === 1) {
       return <Badge variant="light" size="sm" color="orange">завтра</Badge>;
     }
     return (
       <Text c="dimmed" size="sm">
-        {`через ${days} ${days === 1 ? 'день' : days < 5 ? 'дня' : 'дней'}`}
+        {`через ${user.daysUntil} ${user.daysUntil === 1 ? 'день' : user.daysUntil < 5 ? 'дня' : 'дней'}`}
       </Text>
     );
   };
@@ -92,7 +104,11 @@ export default function BirthdayList() {
         <Title order={2}>Ближайшие дни рождения</Title>
       </Group>
 
-      <Text c="dimmed" mb="lg">В следующие 7 дней</Text>
+      <Text c="dimmed" mb="lg">
+        {usersData.some(u => u.isWeekendBirthday) 
+          ? "В следующие 7 дней и недавние дни рождения в выходные" 
+          : "В следующие 7 дней"}
+      </Text>
 
       {usersData.length === 0 ? (
         <Text c="dimmed">Нет предстоящих дней рождения</Text>
@@ -126,17 +142,16 @@ export default function BirthdayList() {
                   </Avatar>
                 }
               >
-                <Group justify="space-between">
-                  <Box>
-                    <Text fw={500}>{user.fio}</Text>
-                    <Group gap="xs">
-                      <Badge variant="light" size="sm">
-                        {formatBirthday(user.birthday)}
-                      </Badge>
-                      {renderDaysText(user.daysUntil)}
-                    </Group>
-                  </Box>
-                </Group>
+                <Box>
+                  <Text fw={500}>{user.fio}</Text>
+                  <Group gap="xs" mb={user.isWeekendBirthday ? 'xs' : 0}>
+                    <Badge variant="light" size="sm">
+                      {formatBirthday(user.birthday)}
+                    </Badge>
+                    {!user.isWeekendBirthday && renderDaysText(user)}
+                  </Group>
+                  {user.isWeekendBirthday && renderDaysText(user)}
+                </Box>
               </List.Item>
             ))}
           </List>

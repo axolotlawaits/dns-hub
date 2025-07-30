@@ -7,15 +7,15 @@ import { FileDropZone } from './dnd';
 import { IconFile, IconFileTypePdf, IconFileTypeDoc, IconFileTypeXls, IconFileTypePpt, IconFileTypeZip, IconPhoto, IconFileTypeJs, IconFileTypeHtml, IconFileTypeCss, IconFileTypeTxt, IconFileTypeCsv } from '@tabler/icons-react';
 import { FilePreviewModal } from './FilePreviewModal';
 
-// Типы и интерфейсы
-export type FieldType = 'text' | 'number' | 'select' | 'selectSearch' | 'date' | 'datetime' | 'textarea' | 'file';
+// Types and interfaces
+export type FieldType = 'text' | 'number' | 'select' | 'selectSearch' | 'date' | 'datetime' | 'textarea' | 'file' | 'boolean';
 
 export interface FormField {
   name: string;
   label: string;
   type: FieldType;
   required?: boolean;
-  options?: Array<{ value: string; label: string }>;
+  options?: Array<{ value: string; label: string; icon?: JSX.Element }>;
   step?: string;
   min?: number;
   max?: number;
@@ -24,7 +24,7 @@ export interface FormField {
 
 export interface ViewFieldConfig {
   label: string;
-  value: (item: any) => string | number | null;
+  value: (item: any) => string | number | null | JSX.Element;
 }
 
 export interface FormConfig {
@@ -58,8 +58,8 @@ interface DynamicFormModalProps {
   error?: string | null;
 }
 
-// Вспомогательные функции
-const getFileIcon = (fileName: string) => {
+// Helper functions
+const getFileIcon = (fileName: string): JSX.Element => {
   const extension = fileName.split('.').pop()?.toLowerCase();
   const iconSize = 20;
   const iconMap: Record<string, JSX.Element> = {
@@ -87,18 +87,12 @@ const getFileIcon = (fileName: string) => {
   return iconMap[extension as string] || <IconFile size={iconSize} />;
 };
 
-const FileUploadComponent = ({
-  onFilesDrop,
-  attachments,
-  onRemoveAttachment,
-  withDnd = false
-}: FileUploadProps) => {
+const FileUploadComponent = ({ onFilesDrop, attachments, onRemoveAttachment, withDnd = false }: FileUploadProps) => {
   const renderAttachment = (attachment: FileAttachment) => {
     const fileName = typeof attachment.source === 'string'
       ? attachment.source.split('\\').pop() || 'Файл'
       : attachment.source.name;
     const isImage = fileName.match(/\.(jpg|jpeg|png|gif)$/i);
-
     return (
       <Card key={attachment.id || `temp-${Math.random().toString(36).slice(2, 11)}`} p="sm" withBorder>
         <Group justify="space-between">
@@ -167,7 +161,6 @@ export const DynamicFormModal = ({
   const form = useForm({ initialValues });
   const [attachments, setAttachments] = useState<FileAttachment[]>(initialValues.attachments || []);
 
-  // Сбрасываем форму при открытии/закрытии модального окна
   useEffect(() => {
     if (opened) {
       form.setValues(initialValues);
@@ -227,6 +220,8 @@ export const DynamicFormModal = ({
             />
           </div>
         );
+      case 'boolean':
+        return null; // Handle boolean fields if necessary
       default:
         return null;
     }
@@ -245,7 +240,6 @@ export const DynamicFormModal = ({
       : attachment.source.name;
     const fileUrl = `${API}/${attachment.source}`;
     const fileId = attachment.id || `temp-${fileName}-${Math.random().toString(36).slice(2, 11)}`;
-
     return (
       <Card key={fileId} p="sm" withBorder>
         <Group justify="space-between">
@@ -327,7 +321,7 @@ export const DynamicFormModal = ({
   }, [mode, viewFieldsConfig, initialValues, renderViewField, renderAttachmentCard, onClose, onConfirm, form, onSubmit, fields, renderField, error, attachments]);
 
   return (
-    <Modal opened={opened} onClose={onClose} title={title} size="sm" radius="md">
+    <Modal opened={opened} onClose={onClose} title={title} size="xl" radius="md">
       {modalContent}
     </Modal>
   );

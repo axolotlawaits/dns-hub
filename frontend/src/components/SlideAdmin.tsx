@@ -1,35 +1,6 @@
 import { useState, useEffect } from 'react';
-import {
-  Title,
-  Tabs,
-  Card,
-  Image,
-  Group,
-  Button,
-  Modal,
-  Text,
-  TextInput,
-  Select,
-  FileInput,
-  Alert,
-  useMantineTheme,
-  Switch,
-  NumberInput,
-  LoadingOverlay,
-  ActionIcon,
-  rem,
-} from '@mantine/core';
-import {
-  IconPhoto,
-  IconSettings,
-  IconArchive,
-  IconPlus,
-  IconArrowsSort,
-  IconAlertCircle,
-  IconTrash,
-  IconEdit,
-  IconSortAscending,
-} from '@tabler/icons-react';
+import { Title, Tabs, Card, Image, Group, Button, Modal, Text, TextInput, Select, FileInput, Alert, LoadingOverlay, ActionIcon, rem, NumberInput, Switch } from '@mantine/core';
+import { IconArchive, IconPlus, IconArrowsSort, IconAlertCircle, IconTrash, IconEdit, IconSortAscending, IconDeviceLaptop, IconDeviceMobile, IconDeviceTv, IconBlender, IconFridge, IconDeviceIpad, IconCashRegister, IconClockHour7, IconClearAll, IconViewportTall, IconLink } from '@tabler/icons-react';
 import { useDisclosure } from '@mantine/hooks';
 import { useForm } from '@mantine/form';
 import axios from 'axios';
@@ -37,6 +8,7 @@ import { notifications } from '@mantine/notifications';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { API } from '../config/constants';
+import { useUserContext } from '../hooks/useUserContext';
 
 interface Slider {
   id: string;
@@ -56,10 +28,10 @@ interface Slider {
 }
 
 export function SlideAdmin() {
-  const theme = useMantineTheme();
   const [activeTab, setActiveTab] = useState<string | null>('notebooks');
   const [sortMode, setSortMode] = useState(false);
   const [loading, setLoading] = useState(true);
+  const { user } = useUserContext(); 
   const [slides, setSlides] = useState<Slider[]>([]);
   const [openedAddSlide, { open: openAddSlide, close: closeAddSlide }] = useDisclosure(false);
   const [openedEditSlide, { open: openEditSlide, close: closeEditSlide }] = useDisclosure(false);
@@ -76,10 +48,8 @@ export function SlideAdmin() {
       startDate: new Date(),
       endDate: new Date(),
       url: 'https://dns-shop.ru/',
-      add: false,
       sale: false,
-      order: 1,
-      addedById: '1'
+      addedById: user?.id || ''
     },
     validate: {
       name: (value) => (value ? null : 'Название обязательно'),
@@ -89,17 +59,17 @@ export function SlideAdmin() {
   });
 
   const categories = [
-    { value: 'notebooks', label: 'Ноутбуки' },
-    { value: 'tv', label: 'ТВ' },
-    { value: 'smartphones', label: 'Смартфоны' },
-    { value: 'mbt', label: 'МБТ' },
-    { value: 'kbt', label: 'КБТ' },
-    { value: 'tablets', label: 'Часы' },
-    { value: 'kassa', label: 'Касса' },
-    { value: 'season', label: 'Сезонные акции' },
-    { value: 'allvertical', label: 'Вертикальная реклама' },
-    { value: 'other', label: 'Общая реклама' },
-    { value: 'archive', label: 'Архив' },
+    { value: 'notebooks', label: 'Ноутбуки', icon: <IconDeviceLaptop size={34} /> },
+    { value: 'tv', label: 'ТВ', icon: <IconDeviceTv size={34}  /> },
+    { value: 'smartphones', label: 'Смартфоны', icon: <IconDeviceMobile size={34} /> },
+    { value: 'mbt', label: 'МБТ', icon: <IconBlender size={34} /> },
+    { value: 'kbt', label: 'КБТ', icon: <IconFridge size={34} /> },
+    { value: 'tablets', label: 'Часы', icon: <IconDeviceIpad size={34} /> },
+    { value: 'kassa', label: 'Касса', icon: <IconCashRegister size={34} /> },
+    { value: 'season', label: 'Сезонные акции', icon: <IconClockHour7 size={34} /> },
+    { value: 'allvertical', label: 'Вертикальная реклама', icon: <IconViewportTall size={34}  /> },
+    { value: 'other', label: 'Общая реклама', icon: <IconClearAll size={34} /> },
+    { value: 'archive', label: 'Архив', icon: <IconArchive size={34} /> },
   ];
 
   const fetchSlides = async () => {
@@ -124,6 +94,15 @@ export function SlideAdmin() {
 
   const handleAddSlide = async () => {
     try {
+      if (!user?.id) {
+        notifications.show({
+          title: 'Ошибка',
+          message: 'Пользователь не авторизован',
+          color: 'red',
+        });
+        return;
+      }
+
       const formData = new FormData();
       formData.append('name', form.values.name);
       formData.append('category', form.values.category);
@@ -132,18 +111,13 @@ export function SlideAdmin() {
       formData.append('startDate', form.values.startDate.toISOString());
       formData.append('endDate', form.values.endDate.toISOString());
       formData.append('url', form.values.url);
-      formData.append('add', String(form.values.add));
       formData.append('sale', String(form.values.sale));
-      formData.append('order', String(form.values.order));
-      formData.append('addedById', form.values.addedById);
+      formData.append('addedById', user.id);
+      
       if (selectedFile) {
         formData.append('attachment', selectedFile);
       }
-      await axios.post(`${API}/add/sliders/`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+
       notifications.show({
         title: 'Успех',
         message: 'Слайд успешно добавлен',
@@ -154,16 +128,26 @@ export function SlideAdmin() {
       setSelectedFile(null);
       fetchSlides();
     } catch (error) {
-      notifications.show({
-        title: 'Ошибка',
-        message: 'Не удалось добавить слайд',
-        color: 'red',
-      });
+      if (axios.isAxiosError(error)) {
+        console.error('Error response:', error.response?.data);
+        notifications.show({
+          title: 'Ошибка',
+          message: error.response?.data?.message || 'Не удалось добавить слайд',
+          color: 'red',
+        });
+      } else {
+        console.error('Error:', error);
+        notifications.show({
+          title: 'Ошибка',
+          message: 'Не удалось добавить слайд',
+          color: 'red',
+        });
+      }
     }
   };
 
   const handleEditSlide = async () => {
-    if (!currentSlide) return;
+    if (!currentSlide || !user?.id) return;
     try {
       const formData = new FormData();
       formData.append('name', form.values.name);
@@ -173,10 +157,8 @@ export function SlideAdmin() {
       formData.append('startDate', form.values.startDate.toISOString());
       formData.append('endDate', form.values.endDate.toISOString());
       formData.append('url', form.values.url);
-      formData.append('add', String(form.values.add));
       formData.append('sale', String(form.values.sale));
-      formData.append('order', String(form.values.order));
-      formData.append('updatedById', form.values.addedById);
+      formData.append('updatedById', user.id);
       if (selectedFile) {
         formData.append('attachment', selectedFile);
       }
@@ -245,9 +227,7 @@ export function SlideAdmin() {
       startDate: new Date(slide.startDate),
       endDate: new Date(slide.endDate),
       url: slide.url,
-      add: slide.add,
       sale: slide.sale,
-      order: slide.order,
       addedById: slide.addedById,
     });
     openEditSlide();
@@ -261,17 +241,14 @@ export function SlideAdmin() {
   };
 
   return (
-    <div style={{ padding: '20px', backgroundColor: theme.colors.dark[8], minHeight: '100vh' }}>
+    <div style={{ padding: '20px', minHeight: '100vh' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <Title order={3} style={{ color: 'white' }}>Digital Poster System v1.3.5</Title>
-        <img
-          src="http://siberia.partner.ru/site/sos/img/DNS_LOGO_WHITE.png"
-          alt="DNS Logo"
-          style={{ height: '40px' }}
-        />
+         <Title order={2} mt="md" mb="lg">
+           Слайдер: Админ панель
+         </Title>
       </div>
       <div style={{ display: 'flex', marginBottom: '20px', gap: '20px' }}>
-        <div style={{ width: '300px', padding: '20px', backgroundColor: theme.colors.dark[7], borderRadius: '8px' }}>
+        <div style={{ width: '300px', padding: '20px', borderRadius: '8px' }}>
           <Button
             fullWidth
             leftSection={<IconPlus size={18} />}
@@ -303,11 +280,8 @@ export function SlideAdmin() {
           >
             Перейти к слайдеру
           </Button>
-          <Button fullWidth color="red" variant="outline">
-            Выйти
-          </Button>
         </div>
-        <div style={{ flex: 1, backgroundColor: theme.colors.dark[7], padding: '20px', borderRadius: '8px', position: 'relative' }}>
+        <div style={{ flex: 1, padding: '20px', borderRadius: '8px', position: 'relative' }}>
           <LoadingOverlay visible={loading} overlayProps={{ blur: 2 }} />
           <Tabs value={activeTab} onChange={setActiveTab} style={{ display: 'flex', flexDirection: 'column' }}>
             <Tabs.List style={{ flexWrap: 'nowrap', overflowX: 'auto' }}>
@@ -316,12 +290,7 @@ export function SlideAdmin() {
                   key={category.value}
                   value={category.value}
                   style={{ whiteSpace: 'nowrap', padding: '8px 12px' }}
-                  leftSection={
-                    category.value === 'archive' ? <IconArchive size={rem(14)} /> :
-                    category.value === 'settings' ? <IconSettings size={rem(14)} /> :
-                    <IconPhoto size={rem(14)} />
-                  }
-                >
+                  leftSection={category.icon}>
                   {category.label}
                 </Tabs.Tab>
               ))}
@@ -347,7 +316,7 @@ export function SlideAdmin() {
                       >
                         <Card.Section>
                           <Image
-                            src={`/uploads/sliders/${slide.attachment}`}
+                            src={`${API}/public/add/slider/${slide.attachment}`}
                             height={160}
                             alt={slide.name}
                             fallbackSrc="https://placehold.co/600x400?text=No+Image"
@@ -356,6 +325,15 @@ export function SlideAdmin() {
                         <Group justify="space-between" mt="md" mb="xs">
                           <Text fw={500}>{slide.name}</Text>
                           <Group gap={4}>
+                            <ActionIcon 
+                              variant="subtle" 
+                              color="blue" 
+                              component="a" 
+                              href={slide.url} 
+                              target="_blank"
+                            >
+                              <IconLink size={16} />
+                            </ActionIcon>
                             <ActionIcon variant="subtle" color="blue" onClick={() => openEditModal(slide)}>
                               <IconEdit size={16} />
                             </ActionIcon>
@@ -367,18 +345,6 @@ export function SlideAdmin() {
                         <Text size="sm" c="dimmed">
                           {new Date(slide.startDate).toLocaleDateString()} - {new Date(slide.endDate).toLocaleDateString()}
                         </Text>
-                        <Group mt="xs">
-                          <Switch
-                            label="Видимый"
-                            checked={slide.visible}
-                            readOnly
-                          />
-                          <Switch
-                            label="Акция"
-                            checked={slide.sale}
-                            readOnly
-                          />
-                        </Group>
                         {sortMode && (
                           <Button
                             variant="light"
@@ -445,7 +411,11 @@ export function SlideAdmin() {
             <label>Дата начала</label>
             <DatePicker
               selected={form.values.startDate}
-              onChange={(date: Date) => date && form.setFieldValue('startDate', date)}
+              onChange={(date: Date | null) => {
+                if (date) {
+                  form.setFieldValue('startDate', date);
+                }
+              }}
               dateFormat="yyyy/MM/dd"
               className="form-control"
               placeholderText="Выберите дату начала"
@@ -456,7 +426,11 @@ export function SlideAdmin() {
             <label>Дата окончания</label>
             <DatePicker
               selected={form.values.endDate}
-              onChange={(date: Date) => date && form.setFieldValue('endDate', date)}
+              onChange={(date: Date | null) => {
+                if (date) {
+                  form.setFieldValue('endDate', date);
+                }
+              }}
               dateFormat="yyyy/MM/dd"
               className="form-control"
               placeholderText="Выберите дату окончания"
@@ -470,25 +444,9 @@ export function SlideAdmin() {
             {...form.getInputProps('url')}
           />
           <Switch
-            label="Видимый"
-            mb="sm"
-            {...form.getInputProps('visible', { type: 'checkbox' })}
-          />
-          <Switch
-            label="Акция"
+            label="Платная реклама"
             mb="sm"
             {...form.getInputProps('sale', { type: 'checkbox' })}
-          />
-          <Switch
-            label="Добавить в архив"
-            mb="sm"
-            {...form.getInputProps('add', { type: 'checkbox' })}
-          />
-          <NumberInput
-            label="Порядок"
-            min={1}
-            mb="sm"
-            {...form.getInputProps('order')}
           />
           <Group justify="right" mt="md">
             <Button variant="default" onClick={() => {
@@ -542,7 +500,7 @@ export function SlideAdmin() {
           />
           {currentSlide?.attachment && !selectedFile && (
             <Image
-              src={`/uploads/sliders/${currentSlide.attachment}`}
+              src={`${API}/public/add/slider/${currentSlide.attachment}`}
               height={120}
               width="auto"
               fit="contain"
@@ -559,7 +517,11 @@ export function SlideAdmin() {
             <label>Дата начала</label>
             <DatePicker
               selected={form.values.startDate}
-              onChange={(date: Date) => date && form.setFieldValue('startDate', date)}
+              onChange={(date: Date | null) => {
+                if (date) {
+                  form.setFieldValue('startDate', date);
+                }
+              }}
               dateFormat="yyyy/MM/dd"
               className="form-control"
               placeholderText="Выберите дату начала"
@@ -570,7 +532,11 @@ export function SlideAdmin() {
             <label>Дата окончания</label>
             <DatePicker
               selected={form.values.endDate}
-              onChange={(date: Date) => date && form.setFieldValue('endDate', date)}
+              onChange={(date: Date | null) => {
+                if (date) {
+                  form.setFieldValue('endDate', date);
+                }
+              }}
               dateFormat="yyyy/MM/dd"
               className="form-control"
               placeholderText="Выберите дату окончания"
@@ -584,25 +550,9 @@ export function SlideAdmin() {
             {...form.getInputProps('url')}
           />
           <Switch
-            label="Видимый"
-            mb="sm"
-            {...form.getInputProps('visible', { type: 'checkbox' })}
-          />
-          <Switch
             label="Акция"
             mb="sm"
             {...form.getInputProps('sale', { type: 'checkbox' })}
-          />
-          <Switch
-            label="Добавить в архив"
-            mb="sm"
-            {...form.getInputProps('add', { type: 'checkbox' })}
-          />
-          <NumberInput
-            label="Порядок"
-            min={1}
-            mb="sm"
-            {...form.getInputProps('order')}
           />
           <Group justify="right" mt="md">
             <Button variant="default" onClick={() => {
