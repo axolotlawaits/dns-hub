@@ -45,7 +45,6 @@ function Loaders({index, handleLoadersData, handleLoadersAmount}: LoadersProps) 
   }
 
   const updateLoadersAmount = (amount: number | string) => {
-    console.log(typeof amount)
     setAmount(amount)
     handleLoadersAmount(index, Number(amount))
   }

@@ -67,7 +67,7 @@ function RouteComponent() {
       <div id="route-days-wrapper">
         {days.length > 0 && days.map(day => {
           return (
-            <Day key={day.id} day={day}></Day>
+            <Day key={day.id} day={day} getDays={getDays}></Day>
           )
         })}
       </div>

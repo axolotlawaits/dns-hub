@@ -11,7 +11,7 @@ type LoadersDataType = {
   amount: number
 }
 
-function AddLoadersModal({filial}: {filial: FilialType}) {
+function AddLoadersModal({filial, getDays}: {filial: FilialType, getDays: () => void}) {
   const [opened, { open, close }] = useDisclosure(false)
   const [loadersNumber, setLoadersNumber] = useState(1)
   const [feedback, setFeedback] = useState('')
@@ -30,6 +30,7 @@ function AddLoadersModal({filial}: {filial: FilialType}) {
 
     if (response.ok) {
       close()
+      getDays()
     }
   }
 
