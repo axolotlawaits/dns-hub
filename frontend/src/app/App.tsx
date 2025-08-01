@@ -34,6 +34,7 @@ import RouteComponent from '../features/Supply/Loaders/RouteComponent';
 import LoadersHome from '../features/Supply/Loaders/LoadersHome';
 import SupplyDocs from '../features/Accounting/SupplyDocs/SupplyDocs';
 import Media from '../features/Ad/Media/Media';
+import RK from '../features/Ad/RK/RK';
 import Retail from '../features/Retail/Retail';
 import PrintService from '../features/Retail/PrintService/PrintService';
 import Birthday from './Birthday';
@@ -106,10 +107,12 @@ function App() {
                 <Route path='/branch/:id' element={<Branch />} />
                 <Route path='/employee/:id' element={<Employee />} />
                 <Route path='/no-access' element={<NoAccess />} />
+                <Route path="/add/rk" element={<RK />} />
                 <Route element={<ProtectedRoute />}>
                   <Route path="/aho/meter-reading" element={<MeterReading />} />
                   <Route path="/aho/correspondence" element={<Correspondence />} />
                   <Route path="/add/media" element={<Media />} />
+                  
                   <Route path="/accounting/supply-docs" element={<SupplyDocs />} />
                 </Route>
                 <Route path='/supply/loaders' element={<LoadersHome />} />

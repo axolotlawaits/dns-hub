@@ -12,10 +12,13 @@ const RKAttachmentSchema = z.object({
   userAddId: z.string(),
   source: z.string(),
   type: z.string(),
+  sizeXY: z.string().optional(),
+  сlarification: z.string().optional(),
 });
 
 const RKSchema = z.object({
   userAddId: z.string(),
+  userUpdatedId: z.string().optional(), // Добавлено
   branchId: z.string(),
   agreedTo: z.string().datetime(),
   sizeXY: z.string(),
@@ -113,15 +116,20 @@ export const getRKById = async (
 const processRKAttachments = async (
   files: MulterFiles,
   rkId: string,
-  userAddId: string
+  userAddId: string,
+  attachmentData?: Partial<z.infer<typeof RKAttachmentSchema>>
 ): Promise<any> => {
-  if (!files || !Array.isArray(files) || files.length === 0) return;
+  if (!files || !Array.isArray(files)) return;
+  
   const attachmentsData = files.map(file => ({
     userAddId,
     source: file.path,
     type: file.mimetype,
     recordId: rkId,
+    sizeXY: attachmentData?.sizeXY || '',
+    сlarification: attachmentData?.сlarification || '',
   }));
+
   await prisma.rKAttachment.createMany({ data: attachmentsData });
 };
 
@@ -158,6 +166,7 @@ export const createRK = async (
 
     const createData = {
       userAddId: validatedData.userAddId,
+      userUpdatedId: validatedData.userUpdatedId || validatedData.userAddId, // Используем userAddId если userUpdatedId не указан
       branchId: validatedData.branchId,
       agreedTo: new Date(validatedData.agreedTo),
       sizeXY: validatedData.sizeXY,
@@ -171,7 +180,10 @@ export const createRK = async (
     });
 
     if (Array.isArray(files) && files.length > 0) {
-      await processRKAttachments(files, newRK.id, validatedData.userAddId);
+      await processRKAttachments(files, newRK.id, validatedData.userAddId, {
+        sizeXY: validatedData.sizeXY,
+        сlarification: validatedData.сlarification
+      });
     }
 
     const result = await prisma.rK.findUnique({
@@ -239,7 +251,10 @@ export const updateRK = async (
     // Process new attachments
     if (Array.isArray(files) && files.length > 0) {
       const userAddId = body.userAddId || body.userUpdatedId || 'unknown';
-      await processRKAttachments(files, rkId, userAddId);
+      await processRKAttachments(files, rkId, userAddId, {
+        sizeXY: body.sizeXY,
+        сlarification: body.сlarification
+      });
     }
 
     // Prepare update data

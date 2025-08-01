@@ -374,9 +374,7 @@ model RK {
   userUpdatedId             String    
   branch                    Branch                @relation(fields: [branchId], references: [uuid])  
   branchId                  String              
-  agreedTo                  DateTime    
-  sizeXY                    String    
-  сlarification             String                
+  agreedTo                  DateTime                  
   typeStructure             Type                  @relation("RK_typeStructure", fields: [typeStructureId], references: [id])
   typeStructureId           String    
   approvalStatus            Type                  @relation("RK_approvalStatus", fields: [approvalStatusId], references: [id])
@@ -389,6 +387,8 @@ model RKAttachment {
   createdAt DateTime @default(now())
   userAddId String
   source    String
+  sizeXY                    String    
+  сlarification             String  
   type      String
   recordId  String
   rk        RK       @relation(fields: [recordId], references: [id])
