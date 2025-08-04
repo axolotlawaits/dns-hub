@@ -20,7 +20,7 @@ export type RouteType = {
   createdAt: string
 }
 
-type valErrors = {
+type ValErrors = {
   name: string
   contractor: string
   filials: string
@@ -35,7 +35,7 @@ function LoadersRoutes() {
   const [filials, setFilials] = useState<string[]>([])
   const [routes, setRoutes] = useState<RouteType[]>([])
   const [opened, { open, close }] = useDisclosure(false)
-  const [valErrors, setValErrors] = useState<valErrors | null>(null)
+  const [valErrors, setValErrors] = useState<ValErrors | null>(null)
 
   useEffect(() => {
     const getRoutes = async () => {

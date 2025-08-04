@@ -11,26 +11,34 @@ type LoadersDataType = {
   amount: number
 }
 
+export type ValErrorsFilialUpdate = {
+  loaders: string
+}
+
 function AddLoadersModal({filial, getDays}: {filial: FilialType, getDays: () => void}) {
   const [opened, { open, close }] = useDisclosure(false)
   const [loadersNumber, setLoadersNumber] = useState(1)
   const [feedback, setFeedback] = useState('')
   const [loadersData, setLoadersData] = useState<LoadersDataType[]>([])
+  const [valErrors, setValErrors] = useState<ValErrorsFilialUpdate | null>(null)
 
   const addLoaders = async (filialId: string) => {
     const flatLoaders = loadersData.flatMap(({ amount, ...rest }) =>
       Array(amount).fill(null).map(() => ({ ...rest }))
     )
-
+    console.log(flatLoaders)
     const response = await fetch(`${API}/loaders/filial/${filialId}`, {
-      method: 'POST',
+      method: 'PATCH',
       body: JSON.stringify({loaders: flatLoaders, feedback}),
       headers: { 'Content-type': 'application/json' }
     })
+    const json = await response.json()
 
     if (response.ok) {
       close()
       getDays()
+    } else {
+      setValErrors(json.errors)
     }
   }
 
@@ -66,11 +74,11 @@ function AddLoadersModal({filial, getDays}: {filial: FilialType, getDays: () => 
     const newDate = new Date(newDateString)
     return newDate
   }
-  console.log(loadersData)
+
   return (
     <>
       <Button size="xs" variant="outline" onClick={open}>добавить</Button>
-      <Modal opened={opened} onClose={close}>
+      <Modal opened={opened} onClose={() => {close(), setValErrors(null)}}>
         <Stack>
           {[...Array(loadersNumber)].map((_e, i) => {
             return (
@@ -79,6 +87,7 @@ function AddLoadersModal({filial, getDays}: {filial: FilialType, getDays: () => 
                 index={i} 
                 handleLoadersData={handleLoadersData}
                 handleLoadersAmount={handleLoadersAmount}
+                valErrors={valErrors}
               >
               </Loaders>
             )

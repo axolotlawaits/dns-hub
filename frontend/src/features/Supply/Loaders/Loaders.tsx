@@ -2,6 +2,7 @@ import { ActionIcon, NumberInput, Stack } from "@mantine/core"
 import { TimeInput } from "@mantine/dates"
 import { IconClock } from "@tabler/icons-react";
 import { useRef, useState } from "react";
+import { ValErrorsFilialUpdate } from "./AddLoadersModal";
 
 export type LoaderType = {
   id: string
@@ -13,9 +14,10 @@ type LoadersProps = {
   index: number
   handleLoadersData: (time: string, index: number, isStart: boolean) => void
   handleLoadersAmount: (index: number, amount: number) => void
+  valErrors: ValErrorsFilialUpdate | null
 }
 
-function Loaders({index, handleLoadersData, handleLoadersAmount}: LoadersProps) {
+function Loaders({index, handleLoadersData, handleLoadersAmount, valErrors}: LoadersProps) {
   const startTimeRef = useRef<HTMLInputElement>(null)
   const [startTime, setStartTime] = useState('')
   const endTimeRef = useRef<HTMLInputElement>(null)
@@ -57,6 +59,7 @@ function Loaders({index, handleLoadersData, handleLoadersAmount}: LoadersProps) 
         onChange={(e) => updateLoadersData(e.currentTarget.value, true)}
         ref={startTimeRef} 
         rightSection={pickerControl}
+        error={index === 0 && valErrors?.loaders}
       />
       <p>Время конца</p>
       <TimeInput 
@@ -64,6 +67,7 @@ function Loaders({index, handleLoadersData, handleLoadersAmount}: LoadersProps) 
         onChange={(e) => updateLoadersData(e.currentTarget.value, false)}
         ref={endTimeRef} 
         rightSection={pickerControl2}
+        error={index === 0 && valErrors?.loaders}
       />
       <p>Кол-во грузчиков с данным временем</p>
       <NumberInput value={amount} onChange={updateLoadersAmount}></NumberInput>

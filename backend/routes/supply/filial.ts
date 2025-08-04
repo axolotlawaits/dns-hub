@@ -1,9 +1,15 @@
 import express from 'express'
-import { addFilialData, getFilials } from '../../controllers/supply/filial.js'
+import { updateFilialData, getFilials } from '../../controllers/supply/filial.js'
+import z from 'zod';
+import { validateData } from '../../middleware/validation.js';
 
 const router = express.Router()
 
-router.post('/:id', addFilialData)
+const updateFilialSchema = z.object({
+  loaders: z.array(z.any()).nonempty("укажите время"),
+});
+
+router.patch('/:id', validateData(updateFilialSchema), updateFilialData)
 
 router.get('/:id', getFilials)
 
