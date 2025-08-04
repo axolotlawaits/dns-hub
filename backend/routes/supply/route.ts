@@ -1,11 +1,19 @@
 import express from 'express'
 import { addRoute, getRoutes, updateRoute } from '../../controllers/supply/route.js'
+import z from 'zod';
+import { validateData } from '../../middleware/validation.js';
 
 const router = express.Router()
 
+const addRouteSchema = z.object({
+  name: z.string().min(1, 'введите логин'),
+  contractor: z.string().min(1, 'введите подрядчика'),
+  filials: z.array(z.string()).min(2, 'не менее 2 филиалов')
+});
+
 router.get('/', getRoutes)
 
-router.post('/', addRoute)
+router.post('/', validateData(addRouteSchema), addRoute)
 
 router.patch('/:id', updateRoute)
 

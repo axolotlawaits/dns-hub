@@ -10,6 +10,18 @@
   gap: 30px;
 }
 
+.route-header {
+  display: flex;
+  align-items: center;
+  gap: 100px;
+}
+
+.route-filter-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .day-table{
   display: flex;
   flex-direction: column;

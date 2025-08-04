@@ -20,6 +20,12 @@ export type RouteType = {
   createdAt: string
 }
 
+type ValErrors = {
+  name: string
+  contractor: string
+  filials: string
+}
+
 function LoadersRoutes() {
   const [name, setName] = useState('')
   const [contractor, setContractor] = useState('')
@@ -29,6 +35,7 @@ function LoadersRoutes() {
   const [filials, setFilials] = useState<string[]>([])
   const [routes, setRoutes] = useState<RouteType[]>([])
   const [opened, { open, close }] = useDisclosure(false)
+  const [valErrors, setValErrors] = useState<ValErrors | null>(null)
 
   useEffect(() => {
     const getRoutes = async () => {
@@ -59,12 +66,15 @@ function LoadersRoutes() {
       headers: { 'Content-type': 'application/json' }
     })
     const json = await response.json()
+
     if (response.ok) {
       setRoutes([...routes, json])
       close()
+    } else {
+      setValErrors(json.errors)
     }
   }
-
+  console.log(valErrors)
   return (
     <div id='routes-page-wrapper'>
       <Button 
@@ -74,17 +84,19 @@ function LoadersRoutes() {
       >
         создать новый маршрут
       </Button>
-      <Modal opened={opened} onClose={close} closeOnClickOutside={false}>
+      <Modal opened={opened} onClose={() => {close(), setValErrors(null)}} closeOnClickOutside={false}>
         <Stack gap="md">
           <TextInput
             placeholder='Наименование'
             value={name}
             onChange={(e) => setName(e.currentTarget.value)}
+            error={valErrors?.name}
           />
           <TextInput
             placeholder='Подрядчик'
             value={contractor}
             onChange={(e) => setContractor(e.currentTarget.value)}
+            error={valErrors?.contractor}
           />
           <Select data={rrsInitData} value={rrs} onChange={setRrs} placeholder='Выбрать РРС'/>
           <MultiSelect 
@@ -95,6 +107,7 @@ function LoadersRoutes() {
             value={filials}
             onChange={setFilials}
             searchable 
+            error={valErrors?.filials}
           />
           <Button onClick={createRoute}>создать</Button>
         </Stack>

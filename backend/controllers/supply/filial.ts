@@ -1,7 +1,7 @@
 import { prisma } from "../../server.js"
 import { Request, Response } from "express"
 
-export const addFilialData = async (req: Request, res: Response): Promise<any> => {
+export const updateFilialData = async (req: Request, res: Response): Promise<any> => {
   let filialId = req.params.id
   let { loaders, feedback } = req.body
 

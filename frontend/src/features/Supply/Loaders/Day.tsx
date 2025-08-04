@@ -25,7 +25,7 @@ export type DayType = {
   route: RouteType
 }
 
-function Day({day}: {day: DayType}) {
+function Day({day, getDays}: {day: DayType, getDays: () => void}) {
   const [opened, { open, close }] = useDisclosure(false)
   const printRef = useRef(null)
 
@@ -81,7 +81,7 @@ function Day({day}: {day: DayType}) {
                 {filial.loaders.length > 0 ? 
                   filial.loaders.length
                 :
-                  <AddLoadersModal filial={filial}/>
+                  <AddLoadersModal filial={filial} getDays={getDays}/>
                 }
               </Table.Td>
               <Table.Td>

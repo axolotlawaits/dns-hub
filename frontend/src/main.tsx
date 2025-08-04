@@ -12,9 +12,12 @@ import '@mantine/carousel/styles.css'
 import { AccessContextProvider } from './contexts/AccessContext.tsx'
 import { registerLocale } from 'react-datepicker'
 import { ru } from 'date-fns/locale/ru'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 registerLocale('ru', ru);
 dayjs.locale('ru');
+
+const queryClient = new QueryClient()
 
 function Root() {
   const { isDark } = useThemeContext()
@@ -36,12 +39,14 @@ function Root() {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <UserContextProvider>
-      <AccessContextProvider>
-        <ThemeContextProvider>
-          <Root />
-        </ThemeContextProvider>
-      </AccessContextProvider>
-    </UserContextProvider>
+    <QueryClientProvider client={queryClient}>
+      <UserContextProvider>
+        <AccessContextProvider>
+          <ThemeContextProvider>
+            <Root />
+          </ThemeContextProvider>
+        </AccessContextProvider>
+      </UserContextProvider>
+    </QueryClientProvider>
   </StrictMode>,
 )
