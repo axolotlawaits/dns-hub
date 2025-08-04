@@ -1,14 +1,22 @@
-import { Modal, TextInput, Select, Button, Alert, Stack, Textarea, Text, Group, Image, Card } from '@mantine/core';
+import { Modal, TextInput, Select, Button, Alert, Stack, Textarea, Text, Group, Card, Paper, ActionIcon, NumberInput } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useState, useEffect, useCallback, useMemo, JSX } from 'react';
 import dayjs from 'dayjs';
 import { API } from '../config/constants';
 import { FileDropZone } from './dnd';
-import { IconFile, IconFileTypePdf, IconFileTypeDoc, IconFileTypeXls, IconFileTypePpt, IconFileTypeZip, IconPhoto, IconFileTypeJs, IconFileTypeHtml, IconFileTypeCss, IconFileTypeTxt, IconFileTypeCsv } from '@tabler/icons-react';
+import { IconFile, IconFileTypePdf, IconFileTypeDoc, IconFileTypeXls, IconFileTypePpt, IconFileTypeZip, IconPhoto, IconFileTypeJs, IconFileTypeHtml, IconFileTypeCss, IconFileTypeTxt, IconFileTypeCsv, IconX } from '@tabler/icons-react';
 import { FilePreviewModal } from './FilePreviewModal';
 
 // Types and interfaces
 export type FieldType = 'text' | 'number' | 'select' | 'selectSearch' | 'date' | 'datetime' | 'textarea' | 'file' | 'boolean';
+
+interface FileFieldConfig {
+  name: string;
+  label: string;
+  type: 'text' | 'number' | 'select';
+  required?: boolean;
+  options?: Array<{ value: string; label: string }>;
+}
 
 export interface FormField {
   name: string;
@@ -20,6 +28,7 @@ export interface FormField {
   min?: number;
   max?: number;
   withDnd?: boolean;
+  fileFields?: FileFieldConfig[]; // Конфигурация дополнительных полей для файлов
 }
 
 export interface ViewFieldConfig {
@@ -36,6 +45,7 @@ interface FileAttachment {
   id?: string;
   userAdd: string;
   source: File | string;
+  meta?: Record<string, any>; // Для хранения дополнительных полей
 }
 
 interface FileUploadProps {
@@ -43,6 +53,8 @@ interface FileUploadProps {
   attachments: FileAttachment[];
   onRemoveAttachment: (id: string | undefined) => void;
   withDnd?: boolean;
+  fileFields?: FileFieldConfig[];
+  onMetaChange: (id: string | undefined, meta: Record<string, any>) => void;
 }
 
 interface DynamicFormModalProps {
@@ -87,32 +99,77 @@ const getFileIcon = (fileName: string): JSX.Element => {
   return iconMap[extension as string] || <IconFile size={iconSize} />;
 };
 
-const FileUploadComponent = ({ onFilesDrop, attachments, onRemoveAttachment, withDnd = false }: FileUploadProps) => {
+const FileUploadComponent = ({ 
+  onFilesDrop, 
+  attachments, 
+  onRemoveAttachment, 
+  withDnd = false,
+  fileFields = [],
+  onMetaChange
+}: FileUploadProps) => {
+  const renderField = (field: FileFieldConfig, attachment: FileAttachment) => {
+    const value = attachment.meta?.[field.name] || '';
+    
+    const commonProps = {
+      value,
+      onChange: (e: any) => {
+        const newMeta = {
+          ...attachment.meta,
+          [field.name]: e.target?.value ?? e
+        };
+        onMetaChange(attachment.id, newMeta);
+      },
+      required: field.required,
+      style: { width: '150px' },
+    };
+
+    switch (field.type) {
+      case 'text':
+        return <TextInput {...commonProps} label={field.label} />;
+      case 'number':
+        return <NumberInput {...commonProps} label={field.label} />;
+      case 'select':
+        return (
+          <Select
+            {...commonProps}
+            label={field.label}
+            data={field.options || []}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
   const renderAttachment = (attachment: FileAttachment) => {
     const fileName = typeof attachment.source === 'string'
       ? attachment.source.split('\\').pop() || 'Файл'
       : attachment.source.name;
-    const isImage = fileName.match(/\.(jpg|jpeg|png|gif)$/i);
+
     return (
-      <Card key={attachment.id || `temp-${Math.random().toString(36).slice(2, 11)}`} p="sm" withBorder>
-        <Group justify="space-between">
+      <Paper key={attachment.id || fileName} p="sm" withBorder>
+        <Group justify="space-between" align="flex-start">
           <Group gap="xs">
-            {getFileIcon(fileName)}
+            <IconFile size={16} />
             <Text size="sm">{fileName}</Text>
-            {isImage && typeof attachment.source === 'string' && (
-              <Image src={`${API}/${attachment.source}`} width={100} mt="sm" alt="Preview" />
-            )}
           </Group>
-          <Button
-            variant="subtle"
-            color="red"
-            size="sm"
-            onClick={() => onRemoveAttachment(attachment.id)}
-          >
-            Удалить
-          </Button>
+
+          <Group gap="sm" align="flex-end">
+            {fileFields.map(field => (
+              <div key={`${attachment.id}-${field.name}`}>
+                {renderField(field, attachment)}
+              </div>
+            ))}
+            
+            <ActionIcon
+              color="red"
+              onClick={() => onRemoveAttachment(attachment.id)}
+            >
+              <IconX size={16} />
+            </ActionIcon>
+          </Group>
         </Group>
-      </Card>
+      </Paper>
     );
   };
 
@@ -168,11 +225,26 @@ export const DynamicFormModal = ({
     }
   }, [opened, initialValues]);
 
+  const handleMetaChange = useCallback(
+    (id: string | undefined, meta: Record<string, any>) => {
+      setAttachments(prev => {
+        const updated = prev.map(att => 
+          att.id === id ? { ...att, meta } : att
+        );
+        form.setFieldValue('attachments', updated);
+        return updated;
+      });
+    },
+    [form]
+  );
+
   const handleFileDrop = useCallback((files: File[]) => {
-    const newAttachments = files.map((file) => ({
+    const newAttachments = files.map(file => ({
       userAdd: initialValues.userAdd || '',
       source: file,
+      meta: {}, // Инициализируем пустые дополнительные поля
     }));
+    
     setAttachments(prev => [...prev, ...newAttachments]);
     form.setFieldValue('attachments', [...attachments, ...newAttachments]);
   }, [initialValues.userAdd, attachments, form]);
@@ -217,15 +289,17 @@ export const DynamicFormModal = ({
               attachments={attachments}
               onRemoveAttachment={handleRemoveAttachment}
               withDnd={field.withDnd}
+              fileFields={field.fileFields || []}
+              onMetaChange={handleMetaChange}
             />
           </div>
         );
       case 'boolean':
-        return null; // Handle boolean fields if necessary
+        return null;
       default:
         return null;
     }
-  }, [form, handleFileDrop, handleRemoveAttachment, attachments]);
+  }, [form, handleFileDrop, handleRemoveAttachment, attachments, handleMetaChange]);
 
   const renderViewField = useCallback((config: ViewFieldConfig, item: any) => (
     <div key={config.label} style={{ marginBottom: '16px' }}>

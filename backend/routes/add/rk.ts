@@ -1,50 +1,53 @@
 import { Router } from 'express';
-import { getRKList, createRK, getRKById, updateRK, deleteRK } from '../../controllers/add/rk.js';
-import uploadRK from '../../middleware/uploaderRK.js'; // Предполагается, что у вас есть middleware для загрузки файлов
+import { 
+  getRKList, 
+  getRKById, 
+  createRK, 
+  updateRK, 
+  deleteRK,
+  getRKTypes,
+  getRKStatuses,
+  getBranchesList
+} from '../../controllers/add/rk.js';
+import uploadRK from '../../middleware/uploaderRK.js';
 
 const router = Router();
 
-// Получить все записи RK
-router.get('/', getRKList);
+// Основные маршруты RK
+router.get('/', getRKList); // Получить все записи RK
+router.get('/:id', getRKById); // Получить конкретную запись RK по ID
 
-// Получить конкретную запись RK по ID
-router.get('/:id', getRKById);
-
-// Создать новую запись RK с загрузкой файлов
+// Создание и обновление с обработкой файлов
 router.post('/', uploadRK.any(), (req, res, next) => {
-  // Логирование запроса
-  console.log('Request Body:', req.body);
-  console.log('Request Files:', req.files);
-
-  // Проверка наличия файлов
-  if (!req.files || req.files.length === 0) {
-    console.log('No files uploaded for RK');
-  } else {
-    console.log('RK files uploaded:', req.files);
-  }
-
-  // Вызов контроллера создания RK
+  console.log('RK Creation Request:', {
+    body: req.body,
+    files: req.files?.map(f => ({
+      originalname: f.originalname,
+      size: f.size,
+      mimetype: f.mimetype
+    }))
+  });
   createRK(req, res, next);
 });
 
-// Обновить существующую запись RK с загрузкой новых файлов
 router.put('/:id', uploadRK.any(), (req, res, next) => {
-  // Логирование запроса
-  console.log('Request Body:', req.body);
-  console.log('Request Files:', req.files);
-
-  // Проверка наличия файлов
-  if (!req.files || req.files.length === 0) {
-    console.log('No files uploaded for RK update');
-  } else {
-    console.log('RK update files uploaded:', req.files);
-  }
-
-  // Вызов контроллера обновления RK
+  console.log('RK Update Request:', {
+    id: req.params.id,
+    body: req.body,
+    files: req.files?.map(f => ({
+      originalname: f.originalname,
+      size: f.size,
+      mimetype: f.mimetype
+    }))
+  });
   updateRK(req, res, next);
 });
 
-// Удалить запись RK
-router.delete('/:id', deleteRK);
+router.delete('/:id', deleteRK); // Удалить запись RK
+
+// Справочные данные
+router.get('/types/list', getRKTypes); // Получить список типов конструкций
+router.get('/statuses/list', getRKStatuses); // Получить список статусов
+router.get('/branches/list', getBranchesList); // Получить список филиалов
 
 export default router;

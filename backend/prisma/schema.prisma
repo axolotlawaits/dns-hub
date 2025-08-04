@@ -383,17 +383,17 @@ model RK {
 }   
 
 model RKAttachment {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
-  userAddId String
-  source    String
-  sizeXY                    String    
-  сlarification             String  
-  type      String
-  recordId  String
-  rk        RK       @relation(fields: [recordId], references: [id])
-  userAdd   User     @relation(fields: [userAddId], references: [id])
-}
+  id                        String                @id @default(uuid())
+  createdAt                 DateTime              @default(now())
+  userAddId                 String              
+  source                    String              
+  sizeXY                    String                 
+  clarification             String                
+  type                      String              
+  recordId                  String              
+  rk                        RK                    @relation(fields: [recordId], references: [id])
+  userAdd                   User                  @relation(fields: [userAddId], references: [id])
+}   
 
 model PrintService {
   id        String   @id @default(uuid())
