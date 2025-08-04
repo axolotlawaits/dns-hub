@@ -1,5 +1,5 @@
 import { ActionIcon, AppShell, Tooltip } from "@mantine/core"
-import { IconChevronLeftPipe, IconChevronRightPipe} from "@tabler/icons-react"
+import { IconLayoutSidebarLeftExpand, IconLayoutSidebarRightExpand } from "@tabler/icons-react"
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import * as TablerIcons from "@tabler/icons-react";
@@ -94,7 +94,7 @@ function Navigation({navOpened, toggleNav}: NavProps) {
         onClick={toggleNav}
         aria-label={navOpened ? 'Close menu' : 'Open menu'}
       >
-        {navOpened ? <IconChevronLeftPipe size={24} /> : <IconChevronRightPipe size={24} />}
+        {navOpened ? <IconLayoutSidebarLeftExpand size={24} /> : <IconLayoutSidebarRightExpand size={24} />}
       </ActionIcon>
       {navOpened ?
         <div id="nav-options">

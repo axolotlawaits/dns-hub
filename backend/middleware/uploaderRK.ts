@@ -2,7 +2,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 
-const uploadDir = './public/add/media'
+const uploadDir = './public/add/RK'
 
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
@@ -17,6 +17,6 @@ const storage = multer.diskStorage({
   },
 });
 
-const uploadMedia = multer({ storage: storage });
+const uploadRK = multer({ storage: storage });
 
-export default uploadMedia;
+export default uploadRK;

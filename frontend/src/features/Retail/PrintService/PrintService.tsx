@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { API } from '../../../config/constants';
 import { Button, Title, Box, LoadingOverlay, Group, Select, Modal, TextInput, PasswordInput, Text, ActionIcon, Divider, Badge, Flex, Card, Stack, MultiSelect, Alert } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
@@ -60,7 +60,7 @@ const PriceTagPrinting = () => {
   const [modalOpened, { open: openModal, close: closeModal }] = useDisclosure(false);
   const [brand, setBrand] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [arePopupsBlocked, setArePopupsBlocked] = useState(false);
+
 
   const showNotification = useCallback((type: 'success' | 'error', message: string) => {
     notificationSystem.addNotification(
@@ -74,21 +74,6 @@ const PriceTagPrinting = () => {
     const uniqueValues = [...new Set(items.map(item => item[key]))];
     return uniqueValues.map(value => ({ value: String(value), label: String(value) }));
   }, []);
-
-  const checkPopupBlocked = useCallback(() => {
-    const testPopup = window.open('', '_blank');
-    if (!testPopup) {
-      setArePopupsBlocked(true);
-      return true;
-    }
-    testPopup.close();
-    setArePopupsBlocked(false);
-    return false;
-  }, []);
-
-  useEffect(() => {
-    checkPopupBlocked();
-  }, [checkPopupBlocked]);
 
   const handleAuth = useCallback(async () => {
     try {
@@ -166,12 +151,6 @@ const PriceTagPrinting = () => {
   }, [dateFrom, authTokens, showNotification]);
 
   const handlePrint = useCallback(async () => {
-    if (checkPopupBlocked()) {
-      setErrorMessage('Разрешите всплывающие окна для печати!');
-      showNotification('error', 'Всплывающие окна заблокированы');
-      return;
-    }
-
     if (!dateFrom || !authTokens || !previewData) {
       showNotification('error', 'Дата, токены или данные для печати отсутствуют');
       return;
@@ -222,7 +201,7 @@ const PriceTagPrinting = () => {
     } finally {
       setLoading(false);
     }
-  }, [dateFrom, authTokens, previewData, brand, checkPopupBlocked, showNotification]);
+  }, [dateFrom, authTokens, previewData, brand, showNotification]);
 
   const handleRemoveItem = useCallback((id: string) => {
     if (!previewData) return;
@@ -289,12 +268,10 @@ const PriceTagPrinting = () => {
 
   return (
     <Box p="md">
-      {arePopupsBlocked && (
         <Alert variant="light" color="red" title="Предупреждение" icon='❌'>
-          В вашем браузере заблокированы всплывающие окна. Разрешите их для этого сайта и перезагрузите страницу, чтобы печать работала корректно.
+          Если печать не выводиться вся или частично, проверьте включены ли всплывающие окна!
+          (Кнопка в адресной строке)
         </Alert>
-      )}
-
       <Title order={2} mb="xl">Печать ценников</Title>
       <Group align="flex-end" mb="xl">
         <TextInput

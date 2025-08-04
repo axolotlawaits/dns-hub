@@ -248,7 +248,7 @@ export const deleteSlider = async (
 
     // Delete attachment file if exists
     if (slider.attachment) {
-      await deleteFileSafely(path.join('public/uploads/sliders/', slider.attachment));
+      await deleteFileSafely(path.join('/public/add/slider', slider.attachment));
     }
 
     // Delete slider record
