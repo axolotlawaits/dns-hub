@@ -83,7 +83,7 @@ const fetchUserInfo = async (login: string): Promise<UserInfo> => {
   }
 };
 
-const ThemeToggleButton = ({ isDark, toggleTheme }: { isDark: boolean; toggleTheme: () => void }) => (
+const ThemeToggleButton = ({ isDark, toggleTheme }: { isDark: Boolean | null; toggleTheme: () => void }) => (
   <ActionIcon 
     onClick={toggleTheme} 
     size={36} 
