@@ -2,10 +2,10 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { API } from '../../../config/constants';
 import { useUserContext } from '../../../hooks/useUserContext';
 import { notificationSystem } from '../../../utils/Push';
-import { Button, Title, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Paper, TextInput } from '@mantine/core';
+import { Button, Title, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Paper, TextInput, Modal, Select } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
-import { IconPencil, IconTrash, IconUpload, IconFile, IconX } from '@tabler/icons-react';
+import { IconPencil, IconTrash, IconUpload, IconFile, IconX, IconFilter } from '@tabler/icons-react';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { DndProviderWrapper } from '../../../utils/dnd';
 
@@ -20,7 +20,6 @@ interface RKAttachment {
   type: string;
   sizeXY: string;
   clarification: string;
-  name?: string;
   createdAt: Date;
 }
 
@@ -37,7 +36,7 @@ interface RKData {
   attachments: RKAttachment[];
   userAdd?: User;
   userUpdated?: User;
-  branch?: { uuid: string; name: string };
+  branch?: { uuid: string; rrs: string; name: string };
   typeStructure?: { id: string; name: string; colorHex?: string };
   approvalStatus?: { id: string; name: string; colorHex?: string };
 }
@@ -45,6 +44,7 @@ interface RKData {
 interface RKFormValues {
   userAddId: string;
   userUpdatedId?: string;
+  rrs: string;
   branchId: string;
   agreedTo: string;
   typeStructureId: string;
@@ -52,7 +52,6 @@ interface RKFormValues {
   attachments: Array<{
     id?: string;
     source: File | string;
-    name?: string;
     sizeXY: string;
     clarification: string;
   }>;
@@ -63,12 +62,13 @@ interface SelectOption {
   value: string;
   label: string;
   color?: string;
+  rrs?: string;
 }
 
 const DEFAULT_PAGE_SIZE = 10;
-
 const DEFAULT_RK_FORM: RKFormValues = {
   userAddId: '',
+  rrs: '',
   branchId: '',
   agreedTo: dayjs().format('YYYY-MM-DDTHH:mm'),
   typeStructureId: '',
@@ -87,8 +87,10 @@ const RKList: React.FC = () => {
   const [typeOptions, setTypeOptions] = useState<SelectOption[]>([]);
   const [approvalOptions, setApprovalOptions] = useState<SelectOption[]>([]);
   const [branchOptions, setBranchOptions] = useState<SelectOption[]>([]);
+  const [filteredBranchOptions, setFilteredBranchOptions] = useState<SelectOption[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [fileUploading, setFileUploading] = useState(false);
+  const [selectedRrs, setSelectedRrs] = useState<string | null>(null);
 
   const modals = {
     view: useDisclosure(false),
@@ -96,6 +98,16 @@ const RKList: React.FC = () => {
     create: useDisclosure(false),
     delete: useDisclosure(false),
   };
+
+  useEffect(() => {
+    if (selectedRrs) {
+      setFilteredBranchOptions(
+        branchOptions.filter(branch => branch.rrs === selectedRrs)
+      );
+    } else {
+      setFilteredBranchOptions([]);
+    }
+  }, [selectedRrs, branchOptions]);
 
   const showNotification = useCallback((type: 'success' | 'error', message: string) => {
     notificationSystem.addNotification(
@@ -129,15 +141,13 @@ const RKList: React.FC = () => {
     try {
       setLoading(true);
       setLoadingOptions(true);
-
       const [rkList, types, statuses, branches] = await Promise.all([
         fetchData(`${API}/add/rk`),
         fetchData(`${API}/add/rk/types/list`),
         fetchData(`${API}/add/rk/statuses/list`),
         fetchData(`${API}/add/rk/branches/list`)
       ]);
-
-      setRkData(rkList);
+      setRkData(Array.isArray(rkList) ? rkList : []);
       setTypeOptions(types.map((t: any) => ({
         value: t.id,
         label: t.name,
@@ -148,11 +158,13 @@ const RKList: React.FC = () => {
         label: s.name,
         color: s.colorHex
       })));
-      setBranchOptions(branches.map((b: any) => ({
+      const formattedBranches = branches.map((b: any) => ({
         value: b.uuid,
-        label: b.name
-      })));
-
+        label: b.name,
+        rrs: b.rrs || ''
+      }));
+      setBranchOptions(formattedBranches);
+      setFilteredBranchOptions([]);
     } catch (error) {
       console.error('Failed to load initial data:', error);
       showNotification('error', 'Не удалось загрузить данные');
@@ -172,6 +184,7 @@ const RKList: React.FC = () => {
       setRkForm({
         userAddId: rk.userAddId,
         userUpdatedId: rk.userUpdatedId,
+        rrs: rk.branch?.rrs || '',
         branchId: rk.branchId,
         agreedTo: dayjs(rk.agreedTo).format('YYYY-MM-DDTHH:mm'),
         typeStructureId: rk.typeStructureId,
@@ -179,12 +192,12 @@ const RKList: React.FC = () => {
         attachments: rk.attachments.map(a => ({
           id: a.id,
           source: a.source,
-          name: a.name || a.source.split('/').pop() || 'Файл',
           sizeXY: a.sizeXY,
           clarification: a.clarification
         })),
         removedAttachments: []
       });
+      setSelectedRrs(rk.branch?.rrs || '');
     }
     modals[action][1].open();
   }, [modals]);
@@ -204,110 +217,110 @@ const RKList: React.FC = () => {
     }
   }, [selectedRK, modals.delete, showNotification, fetchData]);
 
-const handleFormSubmit = useCallback(async (values: RKFormValues, mode: 'create' | 'edit') => {
-  if (!user) {
-    showNotification('error', 'Пользователь не авторизован');
-    return;
-  }
-  
-  setFileUploading(true);
-  try {
-    const formData = new FormData();
+  const handleFormSubmit = useCallback(async (values: RKFormValues, mode: 'create' | 'edit') => {
+    if (!user) {
+      showNotification('error', 'Пользователь не авторизован');
+      return;
+    }
+    setFileUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('userAddId', user.id);
+      formData.append('branchId', values.branchId);
+      formData.append('agreedTo', values.agreedTo);
+      formData.append('typeStructureId', values.typeStructureId);
+      formData.append('approvalStatusId', values.approvalStatusId);
+      const attachmentsMeta = values.attachments
+        .filter(att => att.source instanceof File)
+        .map(att => ({
+          sizeXY: att.sizeXY,
+          clarification: att.clarification
+        }));
+      formData.append('attachmentsMeta', JSON.stringify(attachmentsMeta));
+      values.attachments.forEach(attachment => {
+        if (attachment.source instanceof File) {
+          formData.append('files', attachment.source);
+        }
+      });
+      if (mode === 'edit' && values.removedAttachments?.length) {
+        formData.append('removedAttachments', JSON.stringify(values.removedAttachments));
+      }
+      const url = mode === 'create' ? `${API}/add/rk` : `${API}/add/rk/${selectedRK!.id}`;
+      const method = mode === 'create' ? 'POST' : 'PUT';
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: formData,
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+      const result = await response.json();
+      if (mode === 'create') {
+        setRkData(prev => [result, ...prev]);
+      } else {
+        setRkData(prev => prev.map(item => item.id === selectedRK!.id ? result : item));
+      }
+      setRkForm(DEFAULT_RK_FORM);
+      setSelectedRrs(null);
+      modals[mode][1].close();
+      showNotification('success', mode === 'create' ? 'Запись успешно добавлена' : 'Запись успешно обновлена');
+    } catch (error) {
+      console.error(`Failed to ${mode} RK:`, error);
+      const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка';
+      showNotification('error', `Ошибка: ${errorMessage}`);
+    } finally {
+      setFileUploading(false);
+    }
+  }, [user, selectedRK, modals, showNotification]);
 
-    // 1. Add all required fields
-    formData.append('userAddId', user.id);
-    formData.append('branchId', values.branchId);
-    formData.append('agreedTo', values.agreedTo);
-    formData.append('typeStructureId', values.typeStructureId);
-    formData.append('approvalStatusId', values.approvalStatusId);
-
-    // 2. Prepare and add attachments metadata
-    const newFilesMeta = values.attachments
-      .filter(att => att.source instanceof File)
-      .map(att => ({
-        sizeXY: att.sizeXY,
-        clarification: att.clarification
-      }));
-    
-    formData.append('attachmentsMeta', JSON.stringify(newFilesMeta));
-
-    // 3. Add files to FormData
-    values.attachments.forEach((file, index) => {
-      if (file.source instanceof File) {
-        formData.append('files', file.source, file.name || `file-${index}`);
+  const rrsOptions = useMemo(() => {
+    const uniqueRrs = new Set<string>();
+    branchOptions.forEach(branch => {
+      if (branch.rrs) {
+        uniqueRrs.add(branch.rrs);
       }
     });
-
-    // 4. For edit mode, add removed attachments
-    if (mode === 'edit' && values.removedAttachments?.length) {
-      formData.append('removedAttachments', JSON.stringify(values.removedAttachments));
-    }
-
-    // 5. Debugging: Log FormData contents
-    for (let [key, value] of formData.entries()) {
-      console.log(key, value instanceof File ? value.name : value);
-    }
-
-    const url = mode === 'create' ? `${API}/add/rk` : `${API}/add/rk/${selectedRK!.id}`;
-    const method = mode === 'create' ? 'POST' : 'PUT';
-
-    // 6. Make the request (don't set Content-Type header manually)
-    const response = await fetch(url, {
-      method,
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      // 7. Try to get error details from response
-      let errorData = {};
-      try {
-        errorData = await response.json();
-      } catch (e) {
-        console.error('Failed to parse error response:', e);
-      }
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
-    console.log('Success response:', result);
-
-    // Update state
-    if (mode === 'create') {
-      setRkData(prev => [result, ...prev]);
-    } else {
-      setRkData(prev => prev.map(item => item.id === selectedRK!.id ? result : item));
-    }
-
-    setRkForm(DEFAULT_RK_FORM);
-    modals[mode][1].close();
-    showNotification('success', mode === 'create' ? 'Запись успешно добавлена' : 'Запись успешно обновлена');
-  } catch (error) {
-    console.error(`Failed to ${mode} RK:`, error);
-    const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка';
-    showNotification('error', `Ошибка: ${errorMessage}`);
-  } finally {
-    setFileUploading(false);
-  }
-}, [user, selectedRK, modals, showNotification]);
+    return Array.from(uniqueRrs).map(rrs => ({
+      value: rrs,
+      label: rrs
+    }));
+  }, [branchOptions]);
 
   const formConfig = useMemo(() => ({
     fields: [
       {
+        name: 'rrs',
+        label: 'РРС',
+        type: 'select',
+        options: rrsOptions,
+        required: true,
+        loading: loadingOptions,
+        onChange: (value: string) => {
+          setSelectedRrs(value);
+          setRkForm(prev => ({ ...prev, branchId: '', rrs: value }));
+        },
+        value: rkForm.rrs
+      },
+      {
         name: 'branchId',
         label: 'Филиал',
         type: 'select',
-        options: branchOptions,
+        options: filteredBranchOptions,
         required: true,
-        loading: loadingOptions
+        loading: loadingOptions || (selectedRrs && filteredBranchOptions.length === 0),
+        hidden: !selectedRrs,
+        value: rkForm.branchId
       },
       {
         name: 'agreedTo',
         label: 'Дата согласования',
         type: 'datetime',
-        required: true
+        required: true,
+        value: rkForm.agreedTo
       },
       {
         name: 'typeStructureId',
@@ -315,7 +328,8 @@ const handleFormSubmit = useCallback(async (values: RKFormValues, mode: 'create'
         type: 'select',
         options: typeOptions,
         required: true,
-        loading: loadingOptions
+        loading: loadingOptions,
+        value: rkForm.typeStructureId
       },
       {
         name: 'approvalStatusId',
@@ -323,139 +337,160 @@ const handleFormSubmit = useCallback(async (values: RKFormValues, mode: 'create'
         type: 'select',
         options: approvalOptions,
         required: true,
-        loading: loadingOptions
+        loading: loadingOptions,
+        value: rkForm.approvalStatusId
       },
-    {
-      name: 'attachments',
-      label: 'Прикрепленные файлы',
-      type: 'file',
-      multiple: true,
-      withDnd: true,
-      accept: 'image/*,.pdf,.doc,.docx,.xls,.xlsx',
-      leftSection: <IconUpload size={18} />,
-      fileFields: [ // Добавляем конфигурацию дополнительных полей
-        {
-          name: 'sizeXY',
-          label: 'Размер',
-          type: 'text',
-          required: true,
-          placeholder: '100x200'
+      {
+        name: 'attachments',
+        label: 'Прикрепленные файлы',
+        type: 'file',
+        multiple: true,
+        withDnd: true,
+        accept: 'image/*,.pdf,.doc,.docx,.xls,.xlsx',
+        leftSection: <IconUpload size={18} />,
+        fileFields: [
+          {
+            name: 'sizeXY',
+            label: 'Размер',
+            type: 'text',
+            required: true,
+            placeholder: '100x200'
+          },
+          {
+            name: 'clarification',
+            label: 'Пояснение',
+            type: 'text',
+            required: true,
+            placeholder: 'Описание файла'
+          }
+        ],
+        onAdd: (files: File[], values: any, setFieldValue: any) => {
+          const newAttachments = files.map(file => ({
+            source: file,
+            sizeXY: '',
+            clarification: '',
+            isNew: true
+          }));
+          setFieldValue('attachments', [...values.attachments, ...newAttachments]);
         },
-        {
-          name: 'clarification',
-          label: 'Пояснение',
-          type: 'text',
-          required: true,
-          placeholder: 'Описание файла'
-        }
-      ],
-      onAdd: (files: File[], values: any, setFieldValue: any) => {
-        const newAttachments = files.map(file => ({
-          source: file,
-          name: file.name,
-          sizeXY: '', // Инициализируем пустое поле размера
-          clarification: '', // Инициализируем пустое поле пояснения
-          isNew: true // Маркер нового файла
-        }));
-        setFieldValue('attachments', [...values.attachments, ...newAttachments]);
+        renderFileList: (values: any, setFieldValue: any) => (
+          <Stack mt="md" gap="sm">
+            {values.attachments.map((file: any, index: number) => (
+              <Paper key={file.id || index} p="sm" withBorder>
+                <Group justify="space-between" align="flex-start" wrap="nowrap">
+                  <Group gap="xs" align="center" style={{ flex: 1, minWidth: 0 }}>
+                    <IconFile size={16} />
+                    <Text size="sm" truncate>
+                      {typeof file.source === 'string'
+                        ? file.source.split('/').pop()
+                        : file.source.name || 'Файл'}
+                    </Text>
+                  </Group>
+                  <Group gap="sm" align="flex-end" wrap="nowrap">
+                    <TextInput
+                      label="Размер"
+                      placeholder="100x200"
+                      value={file.sizeXY || ''}
+                      onChange={(e) => {
+                        const newAttachments = [...values.attachments];
+                        newAttachments[index].sizeXY = e.target.value;
+                        setFieldValue('attachments', newAttachments);
+                      }}
+                      required
+                      style={{ width: '120px' }}
+                    />
+                    <TextInput
+                      label="Пояснение"
+                      placeholder="Описание файла"
+                      value={file.clarification || ''}
+                      onChange={(e) => {
+                        const newAttachments = [...values.attachments];
+                        newAttachments[index].clarification = e.target.value;
+                        setFieldValue('attachments', newAttachments);
+                      }}
+                      required
+                      style={{ width: '200px' }}
+                    />
+                    <ActionIcon
+                      color="red"
+                      size="sm"
+                      onClick={() => {
+                        const attachment = values.attachments[index];
+                        const newAttachments = [...values.attachments];
+                        newAttachments.splice(index, 1);
+                        if (attachment.id) {
+                          const newRemoved = [...(values.removedAttachments || []), attachment.id];
+                          setFieldValue('removedAttachments', newRemoved);
+                        }
+                        setFieldValue('attachments', newAttachments);
+                      }}
+                      style={{ marginBottom: '4px' }}
+                    >
+                      <IconX size={16} />
+                    </ActionIcon>
+                  </Group>
+                </Group>
+              </Paper>
+            ))}
+          </Stack>
+        ),
+        value: rkForm.attachments
       },
-      renderFileList: (values: any, setFieldValue: any) => (
-        <Stack mt="md" gap="sm">
-          {values.attachments.map((file: any, index: number) => (
-            <Paper key={file.id || index} p="sm" withBorder>
-              <Group justify="space-between" align="flex-start" wrap="nowrap">
-                <Group gap="xs" align="center" style={{ flex: 1, minWidth: 0 }}>
-                  <IconFile size={16} />
-                  <Text size="sm" truncate>
-                    {file.name || (typeof file.source === 'string'
-                      ? file.source.split('/').pop()
-                      : file.source.name) || 'Файл'}
-                  </Text>
-                </Group>
-
-                <Group gap="sm" align="flex-end" wrap="nowrap">
-                  <TextInput
-                    label="Размер"
-                    placeholder="100x200"
-                    value={file.sizeXY || ''}
-                    onChange={(e) => {
-                      const newAttachments = [...values.attachments];
-                      newAttachments[index].sizeXY = e.target.value;
-                      setFieldValue('attachments', newAttachments);
-                    }}
-                    required
-                    style={{ width: '120px' }}
-                  />
-                  <TextInput
-                    label="Пояснение"
-                    placeholder="Описание файла"
-                    value={file.clarification || ''}
-                    onChange={(e) => {
-                      const newAttachments = [...values.attachments];
-                      newAttachments[index].clarification = e.target.value;
-                      setFieldValue('attachments', newAttachments);
-                    }}
-                    required
-                    style={{ width: '200px' }}
-                  />
-                  <ActionIcon
-                    color="red"
-                    size="sm"
-                    onClick={() => {
-                      const attachment = values.attachments[index];
-                      const newAttachments = [...values.attachments];
-                      newAttachments.splice(index, 1);
-
-                      if (attachment.id) {
-                        const newRemoved = [...(values.removedAttachments || []), attachment.id];
-                        setFieldValue('removedAttachments', newRemoved);
-                      }
-                      setFieldValue('attachments', newAttachments);
-                    }}
-                    style={{ marginBottom: '4px' }}
-                  >
-                    <IconX size={16} />
-                  </ActionIcon>
-                </Group>
-              </Group>
-            </Paper>
-          ))}
-        </Stack>
-      ),
-    },
-  ],
-  initialValues: DEFAULT_RK_FORM,
-}), [branchOptions, typeOptions, approvalOptions, loadingOptions]);
+    ],
+    initialValues: rkForm,
+  }), [rrsOptions, filteredBranchOptions, typeOptions, approvalOptions, loadingOptions, selectedRrs, rkForm]);
 
   const filteredData = useMemo(() => {
+    let result = Array.isArray(rkData) ? rkData : [];
+    if (selectedRrs) {
+      result = result.filter(rk => 
+        rk.branch && rk.branch.rrs === selectedRrs
+      );
+    }
     const startIdx = (currentPage - 1) * DEFAULT_PAGE_SIZE;
-    return rkData.slice(startIdx, startIdx + DEFAULT_PAGE_SIZE);
-  }, [rkData, currentPage]);
+    return result.slice(startIdx, startIdx + DEFAULT_PAGE_SIZE);
+  }, [rkData, currentPage, selectedRrs]);
 
-  const PaginationControls = useCallback(() => (
-    <Group justify="center" mt="md">
-      <Button
-        variant="outline"
-        disabled={currentPage === 1}
-        onClick={() => setCurrentPage(p => p - 1)}
-      >
-        Назад
-      </Button>
-      <Text>{currentPage} из {Math.ceil(rkData.length / DEFAULT_PAGE_SIZE)}</Text>
-      <Button
-        variant="outline"
-        disabled={currentPage * DEFAULT_PAGE_SIZE >= rkData.length}
-        onClick={() => setCurrentPage(p => p + 1)}
-      >
-        Вперед
-      </Button>
-    </Group>
-  ), [currentPage, rkData.length]);
+  const PaginationControls = useCallback(() => {
+    const totalPages = Math.ceil(
+      (selectedRrs 
+        ? rkData.filter(rk => rk.branch && rk.branch.rrs === selectedRrs).length 
+        : rkData.length) / DEFAULT_PAGE_SIZE
+    );
+    return (
+      <Group justify="center" mt="md">
+        <Button
+          variant="outline"
+          disabled={currentPage === 1}
+          onClick={() => setCurrentPage(p => p - 1)}
+        >
+          Назад
+        </Button>
+        <Text>
+          {currentPage} из {totalPages}
+        </Text>
+        <Button
+          variant="outline"
+          disabled={currentPage * DEFAULT_PAGE_SIZE >= 
+            (selectedRrs 
+              ? rkData.filter(rk => rk.branch && rk.branch.rrs === selectedRrs).length 
+              : rkData.length)}
+          onClick={() => setCurrentPage(p => p + 1)}
+        >
+          Вперед
+        </Button>
+      </Group>
+    );
+  }, [currentPage, rkData.length, selectedRrs]);
 
   const EmptyState = useCallback(() => (
     <Paper withBorder p="xl" radius="md" shadow="xs" style={{ textAlign: 'center' }}>
       <Text c="dimmed" mb="md">Нет данных для отображения</Text>
-      <Button onClick={() => modals.create[1].open()}>
+      <Button onClick={() => {
+        setRkForm(DEFAULT_RK_FORM);
+        setSelectedRrs(null);
+        modals.create[1].open();
+      }}>
         Создать первую запись
       </Button>
     </Paper>
@@ -474,23 +509,33 @@ const handleFormSubmit = useCallback(async (values: RKFormValues, mode: 'create'
       <Box p="md">
         <Group justify="space-between" mb="md">
           <Title order={2}>Реестр конструкций</Title>
-          <Button
-            size="md"
-            onClick={() => {
-              setRkForm({
-                ...DEFAULT_RK_FORM,
-                userAddId: user?.id || '',
-                userUpdatedId: user?.id || ''
-              });
-              modals.create[1].open();
-            }}
-            loading={fileUploading}
-          >
-            Добавить конструкцию
-          </Button>
+          <Group>
+            <Select
+              placeholder="Фильтр по РРС"
+              data={rrsOptions}
+              value={selectedRrs}
+              onChange={(value) => {
+                setSelectedRrs(value);
+                setCurrentPage(1);
+              }}
+              clearable
+              style={{ width: 200 }}
+            />
+            <Button
+              size="md"
+              onClick={() => {
+                setRkForm(DEFAULT_RK_FORM);
+                setSelectedRrs(null);
+                modals.create[1].open();
+              }}
+              loading={fileUploading}
+            >
+              Добавить конструкцию
+            </Button>
+          </Group>
         </Group>
         <Stack gap="md">
-          {rkData.length > 0 ? (
+          {Array.isArray(rkData) && rkData.length > 0 ? (
             <>
               {filteredData.map((rk) => (
                 <Paper key={rk.id} withBorder p="md" radius="md" shadow="xs">
@@ -499,9 +544,10 @@ const handleFormSubmit = useCallback(async (values: RKFormValues, mode: 'create'
                       <Text fw={500} mb="xs">
                         {rk.typeStructure?.name || 'Конструкция'} | {rk.approvalStatus?.name || 'Статус неизвестен'}
                       </Text>
+                      <Text size="sm"><strong>РРС:</strong> {rk.branch?.rrs || 'Не указан'}</Text>
                       <Text size="sm"><strong>Филиал:</strong> {rk.branch?.name || 'Не указан'}</Text>
                       <Text size="sm"><strong>Дата:</strong> {dayjs(rk.agreedTo).format('DD.MM.YYYY HH:mm')}</Text>
-                      {rk.attachments.length > 0 && (
+                      {Array.isArray(rk.attachments) && rk.attachments.length > 0 && (
                         <Box mt="sm">
                           <Text size="sm" fw={500} mb="xs">Прикрепленные файлы:</Text>
                           <Stack gap="xs">
@@ -509,7 +555,7 @@ const handleFormSubmit = useCallback(async (values: RKFormValues, mode: 'create'
                               <Group key={att.id} gap="xs">
                                 <IconFile size={16} />
                                 <Text size="sm">
-                                  {att.name || att.source.split('/').pop() || 'Файл'}
+                                  {att.source.split('/').pop() || 'Файл'}
                                 </Text>
                                 <Text size="sm" c="dimmed">
                                   (Размер: {att.sizeXY || 'не указан'})
@@ -560,7 +606,6 @@ const handleFormSubmit = useCallback(async (values: RKFormValues, mode: 'create'
           fields={formConfig.fields}
           initialValues={rkForm}
           onSubmit={(values) => handleFormSubmit(values as RKFormValues, 'create')}
-          loading={fileUploading}
         />
         <DynamicFormModal
           opened={modals.edit[0]}
@@ -570,19 +615,23 @@ const handleFormSubmit = useCallback(async (values: RKFormValues, mode: 'create'
           fields={formConfig.fields}
           initialValues={rkForm}
           onSubmit={(values) => handleFormSubmit(values as RKFormValues, 'edit')}
-          loading={fileUploading}
         />
-        <DynamicFormModal
+        <Modal
           opened={modals.delete[0]}
           onClose={() => modals.delete[1].close()}
           title="Подтверждение удаления"
-          mode="delete"
-          initialValues={selectedRK || {}}
-          onConfirm={handleDeleteConfirm}
-          confirmText="Вы уверены, что хотите удалить эту конструкцию?"
-          confirmLabel="Удалить"
-          cancelLabel="Отмена"
-        />
+          centered
+        >
+          <Text mb="md">Вы уверены, что хотите удалить эту конструкцию?</Text>
+          <Group justify="flex-end">
+            <Button variant="outline" onClick={() => modals.delete[1].close()}>
+              Отмена
+            </Button>
+            <Button color="red" onClick={handleDeleteConfirm} loading={fileUploading}>
+              Удалить
+            </Button>
+          </Group>
+        </Modal>
       </Box>
     </DndProviderWrapper>
   );

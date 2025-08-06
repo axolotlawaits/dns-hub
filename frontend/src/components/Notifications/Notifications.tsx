@@ -1,20 +1,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import {
-  Box, Title, Text, Group, LoadingOverlay, Divider, Badge,
-  ThemeIcon, ScrollArea, ActionIcon, Button, Stack, Paper,
-  useMantineTheme,
-  Indicator
-} from '@mantine/core';
-import { useColorScheme } from '@mantine/hooks'; // Исправленный импорт
+import { Box, Title, Text, Group, LoadingOverlay, Divider, Badge,  ThemeIcon, ScrollArea, ActionIcon, Button, Stack, Paper,  useMantineTheme,  Indicator } from '@mantine/core';
+import { useColorScheme } from '@mantine/hooks';
 import dayjs from 'dayjs';
-import {
-  IconBell, IconAlertCircle, IconInfoCircle,
-  IconCheck, IconMail, IconX,
-  IconCircleCheck, IconCircleCheckFilled
-} from '@tabler/icons-react';
+import { IconBell, IconAlertCircle, IconInfoCircle, IconCheck, IconMail, IconX, IconCircleCheck, IconCircleCheckFilled } from '@tabler/icons-react';
 import { useUserContext } from '../../hooks/useUserContext';
 import { showNotification } from '@mantine/notifications';
-import { useWebSocket } from '../../hooks/useWebSocket';
+import { useSocketIO } from '../../hooks/useSocketIO'; // Измененный импорт
 import { API } from '../../config/constants';
 import './Notifications.css';
 
@@ -54,14 +45,14 @@ const NOTIFICATION_COLORS = {
 export function Notifications() {
   const { user } = useUserContext();
   const theme = useMantineTheme();
-  const colorScheme = useColorScheme(); // Используем правильный хук
+  const colorScheme = useColorScheme();
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'unread'>('unread');
 
-  const { lastMessage } = useWebSocket();
+  const { lastNotification } = useSocketIO(); // Изменено на useSocketIO
 
   const fetchNotifications = useCallback(async () => {
     if (!user?.id) return;
@@ -150,16 +141,17 @@ export function Notifications() {
   }, [fetchNotifications]);
 
   useEffect(() => {
-    if (!lastMessage || lastMessage.event !== 'notification') return;
+    if (!lastNotification) return;
+    
     setNotifications(prev => {
-      const newNotification = lastMessage.data;
+      const newNotification = lastNotification;
       const exists = prev.some(n => n.id === newNotification.id);
 
       return exists
         ? prev.map(n => n.id === newNotification.id ? newNotification : n)
         : [newNotification, ...prev].slice(0, 20);
     });
-  }, [lastMessage]);
+  }, [lastNotification]); // Изменено на lastNotification
 
   const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
   const filteredNotifications = useMemo(() =>
@@ -170,6 +162,7 @@ export function Notifications() {
 
   if (isLoading) return <LoadingOverlay visible />;
   if (error) return <Box p="md"><Text c="red">{error}</Text></Box>;
+
 
   return (
     <Box className="notifications-container">

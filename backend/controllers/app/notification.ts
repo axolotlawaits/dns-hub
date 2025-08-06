@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { prisma } from '../../server.js';
-import { WebSocketService } from '../../websocket.js';
+import { SocketIOService } from '../../socketio.js'; // Измененный импорт
 import { emailService } from '../../services/email.js';
 import { TelegramService } from '../../services/telegram.js';
 import { Notifications, NotificationType, NotificationChannel, NotificationPriority } from '@prisma/client';
@@ -52,7 +52,7 @@ const getNotificationsSchema = z.object({
 });
 
 // Initialize services
-const wsService = WebSocketService.getInstance();
+const socketService = SocketIOService.getInstance(); // Изменено на SocketIOService
 const telegramService = TelegramService.getInstance();
 
 const buildIncludeOptions = (include?: string[]) => {
@@ -97,19 +97,16 @@ const dispatchNotification = async (notification: NotificationWithRelations) => 
   const wantsEmail = userSettings ? userSettings.value === 'true' : true;
 
   if (shouldSendInApp) {
-    wsService.sendToUser(notification.receiver.id, {
-      event: 'notification',
-      data: {
-        id: notification.id,
-        type: notification.type,
-        title: notification.title,
-        message: notification.message,
-        createdAt: notification.createdAt.toISOString(),
-        read: notification.read,
-        sender: notification.sender,
-        tool: notification.tool,
-        action: notification.action,
-      },
+    socketService.sendToUser(notification.receiver.id, { // Изменено на socketService
+      id: notification.id,
+      type: notification.type,
+      title: notification.title,
+      message: notification.message,
+      createdAt: notification.createdAt.toISOString(),
+      read: notification.read,
+      sender: notification.sender,
+      tool: notification.tool,
+      action: notification.action,
     });
   }
 
@@ -211,7 +208,7 @@ const markAllAsRead = async (userId: string) => {
     },
   });
   
-  return { count: result.count }; // Explicitly return the count
+  return { count: result.count };
 };
 
 const cleanupExpiredNotifications = async () => {

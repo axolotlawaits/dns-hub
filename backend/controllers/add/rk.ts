@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { prisma } from '../../server';
+import { prisma } from '../../server.js';
 import { z } from 'zod';
 import fs from 'fs/promises';
 import path from 'path';
@@ -22,26 +22,6 @@ const RKAttachmentSchema = z.object({
   sizeXY: z.string(),
   clarification: z.string(),
 });
-
-const RKSchema = z.object({
-  userAddId: z.string(),
-  userUpdatedId: z.string().optional(),
-  branchId: z.string(),
-  agreedTo: z.string().datetime(),
-  typeStructureId: z.string(),
-  approvalStatusId: z.string(),
-  attachmentsMeta: z.string().optional(),
-});
-
-// Вспомогательные функции
-const logRequest = (req: Request) => {
-  console.log('Request Body:', req.body);
-  console.log('Request Files:', req.files);
-};
-
-const validateUserExists = async (userId: string) => {
-  return prisma.user.findUnique({ where: { id: userId } });
-};
 
 const validateBranchExists = async (branchId: string) => {
   return prisma.branch.findUnique({ where: { uuid: branchId } });
@@ -98,7 +78,7 @@ const processRKAttachments = async (
       source: file.path,
       type: file.mimetype,
       sizeXY: attachmentsMeta[index]?.sizeXY || '',
-      сlarification: attachmentsMeta[index]?.clarification || '',
+      clarification: attachmentsMeta[index]?.clarification || '',
       recordId: rkId,
     };
     RKAttachmentSchema.parse(attachment);
@@ -155,7 +135,7 @@ export const getRKList = async (req: Request, res: Response, next: NextFunction)
   }
 };
 
-export const getRKById = async (req: Request, res: Response, next: NextFunction) => {
+export const getRKById = async (req: Request, res: Response, next: NextFunction): Promise <any> => {
   try {
     const rk = await prisma.rK.findUnique({
       where: { id: req.params.id },
@@ -217,6 +197,8 @@ export const createRK = async (req: Request, res: Response, next: NextFunction) 
         ? JSON.parse(req.body.attachmentsMeta)
         : [];
       
+      console.log('Parsed attachments meta:', attachmentsMeta);
+      
       if (req.files && req.files.length !== attachmentsMeta.length) {
         return res.status(400).json({
           error: 'Mismatch between files and metadata count',
@@ -224,11 +206,11 @@ export const createRK = async (req: Request, res: Response, next: NextFunction) 
           metaCount: attachmentsMeta.length
         });
       }
-    } catch (e) {
+    } catch (e: unknown) {
       console.error('Error parsing attachmentsMeta:', e);
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Invalid attachmentsMeta format',
-        details: e.message
+        details: e instanceof Error ? e.message : String(e)
       });
     }
 
@@ -259,15 +241,16 @@ export const createRK = async (req: Request, res: Response, next: NextFunction) 
 
     // Обработка вложений
     if (req.files && req.files.length > 0) {
+      console.log('Creating attachments with meta:', attachmentsMeta);
+      
       await prisma.rKAttachment.createMany({
         data: (req.files as Express.Multer.File[]).map((file, index) => ({
           userAddId: req.body.userAddId,
           source: file.path,
           type: file.mimetype,
           sizeXY: attachmentsMeta[index]?.sizeXY || '',
-          clarification: attachmentsMeta[index]?.clarification || '', // Английская 'c'
-          recordId: newRK.id,
-          name: file.originalname
+          clarification: attachmentsMeta[index]?.clarification || '',
+          recordId: newRK.id
         }))
       });
     }
@@ -405,7 +388,7 @@ export const updateRK = async (req: Request, res: Response, next: NextFunction) 
   }
 };
 
-export const deleteRK = async (req: Request, res: Response, next: NextFunction) => {
+export const deleteRK = async (req: Request, res: Response, next: NextFunction): Promise <any> => {
   try {
     const rkId = req.params.id;
     const rk = await prisma.rK.findUnique({

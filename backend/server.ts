@@ -30,15 +30,15 @@ import cookieParser from 'cookie-parser'
 import jwt from 'jsonwebtoken'
 import { refreshToken } from './middleware/auth.js';
 import { createServer } from 'http';
-import { WebSocketService } from './websocket.js';
+import { SocketIOService } from './socketio.js';
 
 const app = express()
 export const prisma = new PrismaClient()
 const __dirname = path.resolve()
 const server = createServer(app);
 
-const webSocketService = WebSocketService.getInstance();
-webSocketService.initialize(server);
+const socketService = SocketIOService.getInstance();
+socketService.initialize(server);
 
 export const accessPrivateKey = fs.readFileSync(path.join(__dirname, 'keys/access_private.pem'), 'utf8');
 export const accessPublicKey = fs.readFileSync(path.join(__dirname, 'keys/access_public.pem'), 'utf8');
@@ -47,7 +47,7 @@ export const refreshPublicKey = fs.readFileSync(path.join(__dirname, 'keys/refre
 
 const allowedOrigins = process.env.NODE_ENV === 'production'  ? ['https://dns-zs.partner.ru', 'http://10.11.145.196']  : ['http://localhost:5173', 'http://10.11.145.196'];
 export const API = process.env.NODE_ENV === 'production' ? `https://${window.location.host}/hub-api` : 'http://localhost:2000/hub-api';
-export const APIWebSocket = process.env.NODE_ENV === 'production' ? `https://${window.location.host}` : 'http://localhost:2000';
+export const APIWebSocket = process.env.NODE_ENV === 'production' ? `https://${window.location.host}/ws` : 'http://localhost:4000/ws';
 
 const corsOptions: cors.CorsOptions = {
   origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {

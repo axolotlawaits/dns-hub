@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { notifications } from '@mantine/notifications';
-import { useWebSocket } from './useWebSocket';
+import { useWebSocket } from './useSocketIO';
 import { IconCheck, IconX, IconInfoCircle } from '@tabler/icons-react';
 
 type NotificationType = 'INFO' | 'WARNING' | 'ERROR' | 'SUCCESS' | 'ALERT' | 'SYSTEM' | 'EVENT';

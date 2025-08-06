@@ -1,7 +1,8 @@
 // components/Tools.tsx
 import { Link } from "react-router-dom";
 import * as TablerIcons from "@tabler/icons-react";
-import '../components/styles/Tools.css';
+import { Card, SimpleGrid, Text, useMantineTheme } from '@mantine/core';
+import classes from './styles/Tools.module.css';
 
 export interface Tool {
   id: string;
@@ -18,26 +19,37 @@ interface ToolsProps {
   tools: Tool[];
 }
 
-function Tools({ tools }: ToolsProps) {
-  const getIconComponent = (iconName: string) => {
-    const IconComponent = TablerIcons[iconName as keyof typeof TablerIcons] as 
-      React.ComponentType<{ size?: number; className?: string }> | undefined;
-    return IconComponent ? <IconComponent size={64} /> : null;
-  };
+export default function Tools({ tools }: ToolsProps) {
+  const theme = useMantineTheme();
 
   return (
-    <div className="tools-container">
-      {tools.map((tool) => (
-        <Link to={`/${tool.link}`} key={tool.id} className="tool-card">
-          {getIconComponent(tool.icon)}
-          <div className="tool-text">
-            <span className="tool-name">{tool.name}</span>
-            <span className="tool-description">{tool.description}</span>
-          </div>
-        </Link>
-      ))}
-    </div>
+    <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing="lg">
+      {tools.map((tool) => {
+        const IconComponent = TablerIcons[tool.icon as keyof typeof TablerIcons] as 
+          React.ComponentType<{ size?: number; stroke?: number; color?: string }> | undefined;
+
+        return (
+          <Card
+            component={Link}
+            to={`/${tool.link}`}
+            key={tool.id}
+            shadow="sm"
+            radius="md"
+            className={classes.card}
+            padding="lg"
+          >
+            <div className={classes.cardContent}>
+              {IconComponent && <IconComponent size={40} stroke={1.5} color={theme.colors.blue[6]} />}
+              <Text fz="md" fw={600} mt="sm">
+                {tool.name}
+              </Text>
+              <Text fz="sm" c="dimmed" mt={4} lineClamp={2}>
+                {tool.description}
+              </Text>
+            </div>
+          </Card>
+        );
+      })}
+    </SimpleGrid>
   );
 }
-
-export default Tools;
