@@ -356,7 +356,7 @@ export default function BookmarksList() {
                             <div className={styles.actions}>
                               <Group justify="space-between">
                                 <Anchor href={bookmark.url} target="_blank" size="sm" c="gray.3">
-                                  <IconExternalLink size={14} style={{ marginRight: 5 }} />
+                                  <IconExternalLink size={25} style={{ marginRight: 5 }} />
                                   Перейти
                                 </Anchor>
                                 <Group gap={4}>
@@ -368,7 +368,7 @@ export default function BookmarksList() {
                                       openEditModalWithBookmark(bookmark);
                                     }}
                                   >
-                                    <IconEdit size={16} />
+                                    <IconEdit size={25} />
                                   </ActionIcon>
                                   <ActionIcon
                                     variant="subtle"
@@ -378,7 +378,7 @@ export default function BookmarksList() {
                                       openDeleteModalWithBookmark(bookmark);
                                     }}
                                   >
-                                    <IconTrash size={16} />
+                                    <IconTrash size={25} />
                                   </ActionIcon>
                                 </Group>
                               </Group>
@@ -514,7 +514,7 @@ export default function BookmarksList() {
                             <div className={styles.actions}>
                               <Group justify="space-between">
                                 <Anchor href={bookmark.url} target="_blank" size="sm" c="gray.3">
-                                  <IconExternalLink size={14} style={{ marginRight: 5 }} />
+                                  <IconExternalLink size={25} style={{ marginRight: 5 }} />
                                   Перейти
                                 </Anchor>
                                 <Group gap={4}>
@@ -526,7 +526,7 @@ export default function BookmarksList() {
                                       openEditModalWithBookmark(bookmark);
                                     }}
                                   >
-                                    <IconEdit size={16} />
+                                    <IconEdit size={25} />
                                   </ActionIcon>
                                   <ActionIcon
                                     variant="subtle"

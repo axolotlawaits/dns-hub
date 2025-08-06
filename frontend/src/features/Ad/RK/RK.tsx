@@ -5,7 +5,7 @@ import { notificationSystem } from '../../../utils/Push';
 import { Button, Title, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Paper, TextInput, Modal, Select } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
-import { IconPencil, IconTrash, IconUpload, IconFile, IconX, IconFilter } from '@tabler/icons-react';
+import { IconPencil, IconTrash, IconUpload, IconFile, IconX } from '@tabler/icons-react';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { DndProviderWrapper } from '../../../utils/dnd';
 

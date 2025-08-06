@@ -7,7 +7,7 @@ import { FilterGroup } from '../../../utils/filter';
 import { Button, Title, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Divider, Paper, Pagination, Select } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
-import { IconPencil, IconTrash } from '@tabler/icons-react';
+import { IconPencil, IconTrash, IconArrowUp, IconArrowDown } from '@tabler/icons-react';
 import { ColumnFiltersState } from '@tanstack/react-table';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
@@ -75,7 +75,7 @@ interface ReadingFormValues {
 }
 
 const DEFAULT_READING_FORM: ReadingFormValues = {
-  date: dayjs().format('YYYY-MM-DD'), // Изменено здесь
+  date: dayjs().format('YYYY-MM-DD'),
   officeColdWater: 0,
   proDveriElectricity: 0,
   kakDomaElectricity: 0,
@@ -85,29 +85,27 @@ const DEFAULT_READING_FORM: ReadingFormValues = {
 
 // Utility functions
 const formatReadingData = (data: MeterReading[]): MeterReadingWithFormattedData[] => {
-  return [...data]
-    .sort((a, b) => dayjs(a.date).diff(dayjs(b.date)))
-    .map((reading, index, array) => {
-      const prevReading = array[index - 1];
-      const currentData = reading.indications;
-      const prevData = prevReading?.indications || {};
+  return [...data].map((reading, index, array) => {
+    const prevReading = array[index - 1];
+    const currentData = reading.indications;
+    const prevData = prevReading?.indications || {};
 
-      const consumption = Object.keys(currentData).reduce((sum, key) => {
-        const currentValue = currentData[key] || 0;
-        const prevValue = prevData[key] || 0;
-        return sum + (currentValue - prevValue);
-      }, 0);
+    const consumption = Object.keys(currentData).reduce((sum, key) => {
+      const currentValue = currentData[key as keyof MeterData] || 0;
+      const prevValue = prevData[key as keyof MeterData] || 0;
+      return sum + (currentValue - prevValue);
+    }, 0);
 
-      return {
-        ...reading,
-        consumption,
-        formattedDate: dayjs(reading.date).format('MMMM YYYY'),
-        displayDate: dayjs(reading.date).format('MMMM YYYY'),
-        formattedData: currentData,
-        formattedConsumption: consumption.toFixed(2),
-        userName: reading.user?.name ? formatName(reading.user.name) : 'Unknown',
-      };
-    });
+    return {
+      ...reading,
+      consumption,
+      formattedDate: dayjs(reading.date).format('MMMM YYYY'),
+      displayDate: dayjs(reading.date).format('MMMM YYYY'),
+      formattedData: currentData,
+      formattedConsumption: consumption.toFixed(2),
+      userName: reading.user?.name ? formatName(reading.user.name) : 'Unknown',
+    };
+  });
 };
 
 const calculateTotals = (readings: MeterReadingWithFormattedData[]) => {
@@ -120,10 +118,8 @@ const calculateTotals = (readings: MeterReadingWithFormattedData[]) => {
       kakDomaHotWater: 0,
     };
   }
-
   const lastReading = readings[readings.length - 1];
   const indications = lastReading.formattedData;
-
   return {
     officeColdWater: indications['Офис - Холодная вода'] ?? 0,
     proDveriElectricity: indications['ProДвери - Электричество'] ?? 0,
@@ -276,7 +272,6 @@ const ReadingRow = React.memo(({
 
 const TotalsBlock = React.memo(({ totals }: { totals: ReturnType<typeof calculateTotals> }) => {
   const adjustedKakDomaElectricity = totals.kakDomaElectricity - totals.proDveriElectricity;
-
   return (
     <Paper withBorder p="md" radius="md" shadow="sm" style={{ marginBottom: '20px', backgroundColor: 'var(--layer)' }}>
       <Title order={4} mb="md" style={{ color: 'var(--font)' }}>Общие итоги</Title>
@@ -333,6 +328,8 @@ const useMeterReadings = () => {
     pageSize: DEFAULT_PAGE_SIZE
   });
 
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
   const modals = {
     view: useDisclosure(false),
     edit: useDisclosure(false),
@@ -384,35 +381,47 @@ const useMeterReadings = () => {
     }, [...tableData]);
   }, [tableData, state.columnFilters]);
 
+  const sortedData = useMemo(() => {
+    return [...filteredData].sort((a, b) => {
+      const dateA = new Date(a.date).getTime();
+      const dateB = new Date(b.date).getTime();
+      return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+    });
+  }, [filteredData, sortOrder]);
+
   const paginatedData = useMemo(() => {
     const startIndex = (state.currentPage - 1) * state.pageSize;
-    return filteredData.slice(startIndex, startIndex + state.pageSize);
-  }, [filteredData, state.currentPage, state.pageSize]);
+    return sortedData.slice(startIndex, startIndex + state.pageSize);
+  }, [sortedData, state.currentPage, state.pageSize]);
 
   const userFilterOptions = useMemo(() => {
     const uniqueNames = Array.from(new Set(state.readings.map(r => r.user?.name ? formatName(r.user.name) : 'Unknown')));
     return uniqueNames.map(name => ({ value: name, label: name }));
   }, [state.readings]);
 
-// В функции handleTableAction замените формат даты:
-const handleTableAction = useCallback((action: 'view' | 'edit' | 'delete', reading: MeterReading) => {
-  setState(prev => ({ ...prev, selectedReading: reading }));
-  if (action === 'edit') {
-    const readingData = reading.indications;
-    setState(prev => ({
-      ...prev,
-      readingForm: {
-        date: dayjs(reading.date).format('YYYY-MM-DD'), // Изменено здесь
-        officeColdWater: readingData['Офис - Холодная вода'] || 0,
-        proDveriElectricity: readingData['ProДвери - Электричество'] || 0,
-        kakDomaElectricity: readingData['КакДома - Электричество'] || 0,
-        kakDomaColdWater: readingData['КакДома - Холодная вода'] || 0,
-        kakDomaHotWater: readingData['КакДома - Горячая вода'] || 0,
-      }
-    }));
-  }
-  modals[action][1].open();
-}, [modals]);
+  const toggleSortOrder = () => {
+    const newSortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+    setSortOrder(newSortOrder);
+  };
+
+  const handleTableAction = useCallback((action: 'view' | 'edit' | 'delete', reading: MeterReading) => {
+    setState(prev => ({ ...prev, selectedReading: reading }));
+    if (action === 'edit') {
+      const readingData = reading.indications;
+      setState(prev => ({
+        ...prev,
+        readingForm: {
+          date: dayjs(reading.date).format('YYYY-MM-DD'),
+          officeColdWater: readingData['Офис - Холодная вода'] || 0,
+          proDveriElectricity: readingData['ProДвери - Электричество'] || 0,
+          kakDomaElectricity: readingData['КакДома - Электричество'] || 0,
+          kakDomaColdWater: readingData['КакДома - Холодная вода'] || 0,
+          kakDomaHotWater: readingData['КакДома - Горячая вода'] || 0,
+        }
+      }));
+    }
+    modals[action][1].open();
+  }, [modals]);
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!state.selectedReading) return;
@@ -525,6 +534,7 @@ const handleTableAction = useCallback((action: 'view' | 'edit' | 'delete', readi
   return {
     loading: state.loading,
     filteredData,
+    sortedData,
     paginatedData,
     userFilterOptions,
     columnFilters: state.columnFilters,
@@ -533,6 +543,8 @@ const handleTableAction = useCallback((action: 'view' | 'edit' | 'delete', readi
     modals,
     currentPage: state.currentPage,
     pageSize: state.pageSize,
+    sortOrder,
+    toggleSortOrder,
     setCurrentPage: (page: number) => setState(prev => ({ ...prev, currentPage: page })),
     setPageSize: (size: number) => setState(prev => ({ ...prev, pageSize: size })),
     handleTableAction,
@@ -548,6 +560,7 @@ const MeterReadingsList = () => {
   const {
     loading,
     filteredData,
+    sortedData,
     paginatedData,
     userFilterOptions,
     columnFilters,
@@ -556,6 +569,8 @@ const MeterReadingsList = () => {
     modals,
     currentPage,
     pageSize,
+    sortOrder,
+    toggleSortOrder,
     setCurrentPage,
     setPageSize,
     handleTableAction,
@@ -632,7 +647,14 @@ const MeterReadingsList = () => {
         </Button>
       </Box>
       <Group justify="space-between" mb="md">
-        <Title order={2} style={{ color: 'var(--font)' }}>Показания счетчиков</Title>
+        <Group gap="xs">
+          <Title order={2} style={{ color: 'var(--font)' }}>Показания счётчиков</Title>
+          {sortOrder === 'asc' ? (
+            <IconArrowUp size={18} style={{ color: 'var(--font)', cursor: 'pointer' }} onClick={toggleSortOrder} />
+          ) : (
+            <IconArrowDown size={18} style={{ color: 'var(--font)', cursor: 'pointer' }} onClick={toggleSortOrder} />
+          )}
+        </Group>
         <Button
           size="md"
           variant="light"
@@ -675,7 +697,7 @@ const MeterReadingsList = () => {
               <Pagination
                 value={currentPage}
                 onChange={setCurrentPage}
-                total={Math.ceil(filteredData.length / pageSize)}
+                total={Math.ceil(sortedData.length / pageSize)}
               />
             </Group>
           </Stack>
@@ -683,7 +705,7 @@ const MeterReadingsList = () => {
         <Box style={{ flex: 1 }}>
           <Stack gap="md">
             <TotalsBlock totals={totals} />
-            <ReadingsChart data={paginatedData} />
+            <ReadingsChart data={filteredData} />
           </Stack>
         </Box>
       </Box>
