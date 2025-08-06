@@ -53,7 +53,7 @@ const corsOptions: cors.CorsOptions = {
   origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    
+
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -62,6 +62,11 @@ const corsOptions: cors.CorsOptions = {
   },
   credentials: true,
 }
+
+// const corsOptions = {
+//   origin: allowedOrigins,
+//   credentials: true,                
+// }
 
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true, limit: '5mb' }));
