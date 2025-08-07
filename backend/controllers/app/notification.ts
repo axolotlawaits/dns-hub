@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { prisma } from '../../server.js';
 import { SocketIOService } from '../../socketio.js'; // Измененный импорт
 import { emailService } from '../../services/email.js';
-import { TelegramService } from '../../services/telegram.js';
+import { telegramBotService } from '../../controllers/app/telegram.js';
 import { Notifications, NotificationType, NotificationChannel, NotificationPriority } from '@prisma/client';
 
 export type NotificationWithRelations = Notifications & {
@@ -53,7 +53,7 @@ const getNotificationsSchema = z.object({
 
 // Initialize services
 const socketService = SocketIOService.getInstance(); // Изменено на SocketIOService
-const telegramService = TelegramService.getInstance();
+
 
 const buildIncludeOptions = (include?: string[]) => {
   return {
@@ -115,7 +115,7 @@ const dispatchNotification = async (notification: NotificationWithRelations) => 
   }
 
   if (notification.channel.includes('TELEGRAM') && notification.receiver.telegramChatId) {
-    await telegramService.sendNotification(notification, notification.receiver.telegramChatId);
+    await telegramBotService.sendNotification(notification, notification.receiver.telegramChatId);
   }
 };
 
