@@ -188,7 +188,7 @@ export default function NewsList() {
         </Group>
       </Flex>
       {news.length === 0 ? (
-        <Paper withBorder p="xl" radius="md" shadow="none" className="empty-state">
+        <Paper radius="md" shadow="none" bg="none" className="empty-state">
           <Text size="lg" c="dimmed" ta="center">Пока нет новостей</Text>
         </Paper>
       ) : (
