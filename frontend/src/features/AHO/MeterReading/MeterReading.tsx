@@ -328,7 +328,7 @@ const useMeterReadings = () => {
     pageSize: DEFAULT_PAGE_SIZE
   });
 
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   const modals = {
     view: useDisclosure(false),
