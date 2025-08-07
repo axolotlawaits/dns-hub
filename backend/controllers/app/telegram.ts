@@ -7,9 +7,11 @@ class TelegramService {
   private static instance: TelegramService;
   private bot: Telegraf;
   private isProduction: boolean;
+  private isBotRunning: boolean;
 
   private constructor() {
     this.isProduction = process.env.NODE_ENV === 'production';
+    this.isBotRunning = false;
     
     if (!process.env.TELEGRAM_BOT_TOKEN) {
       throw new Error('TELEGRAM_BOT_TOKEN is not defined in .env');
@@ -27,17 +29,47 @@ class TelegramService {
   }
 
   public async launch(): Promise<void> {
+    if (this.isBotRunning) {
+      console.log('Bot is already running');
+      return;
+    }
+
     try {
       await this.bot.launch();
+      this.isBotRunning = true;
       console.log(`Telegram bot started in ${this.isProduction ? 'PRODUCTION' : 'DEVELOPMENT'} mode`);
       console.log(`Bot username: @${process.env.TELEGRAM_BOT_NAME}`);
+      
+      // Handle graceful shutdown
+      process.once('SIGINT', () => this.stop('SIGINT'));
+      process.once('SIGTERM', () => this.stop('SIGTERM'));
     } catch (error) {
       console.error('Failed to start bot:', error);
       throw error;
     }
   }
 
+  public async stop(signal?: string): Promise<void> {
+    if (!this.isBotRunning) return;
+    
+    try {
+      if (signal) {
+        console.log(`Received ${signal}, stopping bot...`);
+      }
+      await this.bot.stop();
+      this.isBotRunning = false;
+      console.log('Bot stopped successfully');
+    } catch (error) {
+      console.error('Error stopping bot:', error);
+    }
+  }
+
   public async sendNotification(notification: Notifications, chatId: string): Promise<boolean> {
+    if (!this.isBotRunning) {
+      console.error('Bot is not running, cannot send notification');
+      return false;
+    }
+
     try {
       await this.bot.telegram.sendMessage(
         chatId,

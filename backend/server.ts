@@ -106,6 +106,7 @@ app.post('/hub-api/refresh-token', refreshToken)
 
 server.listen(2000, async function() {
   console.log('Server running on port 2000');
+  await telegramService.stop();
   await telegramService.launch(); // Запуск бота
   schedule.scheduleJob('0 0 * * *', () => scheduleRouteDay());
 });
