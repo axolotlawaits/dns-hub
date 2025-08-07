@@ -1,11 +1,11 @@
 import { Server } from 'socket.io';
 import { createServer } from 'http';
-import { APIWebSocket } from './server.js';
 
 type ConnectionInfo = {
   userId: string;
   socketId: string;
   connectedAt: Date;
+  lastActivity: Date;
 };
 
 export class SocketIOService {
@@ -35,13 +35,20 @@ export class SocketIOService {
         credentials: true
       },
       path: '/socket.io',
-      transports: ['websocket'],
-      pingTimeout: 30000,
-      pingInterval: 25000,
-      cookie: false
+      transports: ['websocket', 'polling'], // Добавляем polling как fallback
+      pingTimeout: 60000, // Увеличиваем таймаут
+      pingInterval: 20000, // Уменьшаем интервал
+      cookie: false,
+      allowEIO3: true, // Для совместимости
+      serveClient: false,
+      connectionStateRecovery: {
+        maxDisconnectionDuration: 2 * 60 * 1000, // 2 минуты
+        skipMiddlewares: true
+      }
     });
 
     this.setupConnectionHandlers();
+    this.setupCleanupInterval();
   }
 
   private setupConnectionHandlers(): void {
@@ -56,18 +63,19 @@ export class SocketIOService {
         return;
       }
 
-      this.cleanupOldConnections(userId, socket.id);
+      // Более мягкая обработка старых соединений
+      this.gracefullyHandleOldConnections(userId, socket.id);
 
       const connectionInfo: ConnectionInfo = {
         userId,
         socketId: socket.id,
-        connectedAt: new Date()
+        connectedAt: new Date(),
+        lastActivity: new Date()
       };
 
       this.connections.set(socket.id, connectionInfo);
       console.log(`[Socket.IO] ${userId} connected (socketId:${socket.id})`);
 
-      // Отправляем подтверждение подключения
       socket.emit('connection_ack', {
         status: 'connected',
         userId,
@@ -75,7 +83,6 @@ export class SocketIOService {
         timestamp: Date.now()
       });
 
-      // Обработчики событий
       socket.on('disconnect', (reason) => {
         this.connections.delete(socket.id);
         console.log(`[Socket.IO] ${userId} disconnected (${reason})`);
@@ -85,25 +92,49 @@ export class SocketIOService {
         console.error(`[Socket.IO] ${userId} error:`, err);
         this.connections.delete(socket.id);
       });
+
+      // Обновляем активность при любом сообщении
+      socket.onAny(() => {
+        const conn = this.connections.get(socket.id);
+        if (conn) {
+          conn.lastActivity = new Date();
+        }
+      });
     });
   }
 
-  private cleanupOldConnections(userId: string, newSocketId: string): void {
-    this.getUserConnections(userId).forEach(conn => {
-      if (conn.socketId !== newSocketId) {
+  private gracefullyHandleOldConnections(userId: string, newSocketId: string): void {
+    const activeConnections = this.getUserConnections(userId);
+    
+    // Закрываем только действительно старые соединения
+    activeConnections.forEach(conn => {
+      const inactiveDuration = Date.now() - conn.lastActivity.getTime();
+      if (inactiveDuration > 30000) { // 30 секунд неактивности
         this.io?.sockets.sockets.get(conn.socketId)?.disconnect(true);
         this.connections.delete(conn.socketId);
-        console.log(`[Socket.IO] Closed old connection for ${userId} (${conn.socketId})`);
+        console.log(`[Socket.IO] Closed inactive connection for ${userId} (${conn.socketId})`);
       }
     });
   }
 
+  private setupCleanupInterval(): void {
+    // Регулярная очистка неактивных соединений
+    setInterval(() => {
+      const now = Date.now();
+      this.connections.forEach((conn, socketId) => {
+        const inactiveDuration = now - conn.lastActivity.getTime();
+        if (inactiveDuration > 120000) { // 2 минуты неактивности
+          this.io?.sockets.sockets.get(socketId)?.disconnect(true);
+          this.connections.delete(socketId);
+          console.log(`[Socket.IO] Cleaned up inactive connection ${socketId}`);
+        }
+      });
+    }, 60000); // Каждую минуту
+  }
+
   public sendToUser(userId: string, message: any): boolean {
     const connections = this.getUserConnections(userId);
-    if (connections.length === 0) {
-      console.warn(`[Socket.IO] No active connections for user ${userId}`);
-      return false;
-    }
+    if (connections.length === 0) return false;
 
     let success = true;
     connections.forEach(conn => {
@@ -112,7 +143,7 @@ export class SocketIOService {
           ...message,
           sentAt: new Date().toISOString()
         });
-        console.log(`[Socket.IO] Sent to ${userId} (${conn.socketId})`);
+        conn.lastActivity = new Date(); // Обновляем активность
       } catch (err) {
         console.error(`[Socket.IO] Error sending to ${userId}:`, err);
         this.connections.delete(conn.socketId);

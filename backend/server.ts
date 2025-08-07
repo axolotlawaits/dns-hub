@@ -31,7 +31,7 @@ import jwt from 'jsonwebtoken'
 import { refreshToken } from './middleware/auth.js';
 import { createServer } from 'http';
 import { SocketIOService } from './socketio.js';
-import { telegramBotService } from './controllers/app/telegram.js';
+import { telegramService } from './controllers/app/telegram.js';
 
 const app = express()
 export const prisma = new PrismaClient()
@@ -106,6 +106,7 @@ app.post('/hub-api/refresh-token', refreshToken)
 
 server.listen(2000, async function() {
   console.log('Server running on port 2000');
-  await telegramBotService.launch(); // Запуск бота
+  await telegramService.stop();
+  await telegramService.launch(); // Запуск бота
   schedule.scheduleJob('0 0 * * *', () => scheduleRouteDay());
 });

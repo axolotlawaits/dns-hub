@@ -3,95 +3,107 @@ import { Notifications } from '@prisma/client';
 import axios from 'axios';
 import { prisma, API } from '../../server.js';
 
-class TelegramBotService {
-  private static instance: TelegramBotService;
+class TelegramService {
+  private static instance: TelegramService;
   private bot: Telegraf;
-  private isRunning = false;
-  private restartAttempts = 0;
-  private readonly MAX_RESTART_ATTEMPTS = 5;
+  private isBotRunning: boolean;
 
   private constructor() {
-    if (!process.env.TELEGRAM_BOT_TOKEN) {
-      throw new Error('TELEGRAM_BOT_TOKEN is not defined');
-    }
-    
-    this.bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
+    this.isBotRunning = false;
+    this.bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN!);
     this.setupCommands();
   }
 
-  public static getInstance(): TelegramBotService {
-    if (!TelegramBotService.instance) {
-      TelegramBotService.instance = new TelegramBotService();
+  public static getInstance(): TelegramService {
+    if (!TelegramService.instance) {
+      TelegramService.instance = new TelegramService();
     }
-    return TelegramBotService.instance;
+    return TelegramService.instance;
   }
 
   public async launch(): Promise<void> {
-    if (this.isRunning) {
+    if (this.isBotRunning) {
       console.log('Bot is already running');
       return;
     }
 
     try {
       await this.bot.launch();
-      this.isRunning = true;
-      this.restartAttempts = 0;
-      console.log('Telegram bot started successfully');
-    } catch (error) {
-      console.error('Failed to start Telegram bot:', error);
+      this.isBotRunning = true;
+      console.log('Telegram bot started');
+      console.log(`Bot username: @${process.env.TELEGRAM_BOT_NAME}`);
       
-      if (this.restartAttempts < this.MAX_RESTART_ATTEMPTS) {
-        this.restartAttempts++;
-        const delay = Math.min(5000 * this.restartAttempts, 30000);
-        console.log(`Retrying in ${delay}ms (attempt ${this.restartAttempts}/${this.MAX_RESTART_ATTEMPTS})`);
-        setTimeout(() => this.launch(), delay);
-      } else {
-        console.error('Max restart attempts reached, giving up');
-      }
+      // Handle graceful shutdown
+      process.once('SIGINT', () => this.stop('SIGINT'));
+      process.once('SIGTERM', () => this.stop('SIGTERM'));
+    } catch (error) {
+      console.error('Failed to start bot:', error);
+      throw error;
     }
   }
 
-  public async stop(): Promise<void> {
-    if (!this.isRunning) return;
-
+  public async stop(signal?: string): Promise<void> {
+    if (!this.isBotRunning) return;
+    
     try {
+      if (signal) {
+        console.log(`Received ${signal}, stopping bot...`);
+      }
       await this.bot.stop();
-      this.isRunning = false;
-      console.log('Telegram bot stopped successfully');
+      this.isBotRunning = false;
+      console.log('Bot stopped successfully');
     } catch (error) {
       console.error('Error stopping bot:', error);
     }
   }
 
-  public getBot(): Telegraf {
-    return this.bot;
+  public async sendNotification(notification: Notifications, chatId: string): Promise<boolean> {
+    if (!this.isBotRunning) {
+      console.error('Bot is not running, cannot send notification');
+      return false;
+    }
+
+    try {
+      await this.bot.telegram.sendMessage(
+        chatId,
+        `🔔 ${notification.title}\n\n${notification.message}`,
+        { parse_mode: 'Markdown' }
+      );
+      return true;
+    } catch (error) {
+      console.error('Send error:', error);
+      if (error instanceof Error && error.message.includes('chat not found')) {
+        await this.handleInvalidChat(chatId);
+      }
+      return false;
+    }
+  }
+
+  private async handleInvalidChat(chatId: string): Promise<void> {
+    await prisma.user.updateMany({
+      where: { telegramChatId: chatId },
+      data: { telegramChatId: null }
+    });
   }
 
   private setupCommands(): void {
     this.bot.command('start', async (ctx) => {
       const token = ctx.message.text.split(' ')[1]?.trim();
-      if (!token) {
-        return ctx.reply('Для привязки аккаунта используйте ссылку из приложения');
-      }
+      if (!token) return ctx.reply('Для привязки аккаунта используйте ссылку из приложения');
 
       try {
-        const user = await prisma.user.findFirst({
-          where: { telegramLinkToken: token }
-        });
-
-        if (!user) {
-          return ctx.reply('❌ Ссылка недействительна или истекла');
-        }
+        const user = await prisma.user.findFirst({ where: { telegramLinkToken: token } });
+        if (!user) return ctx.reply('❌ Ссылка недействительна или истекла');
 
         await prisma.user.update({
           where: { id: user.id },
-          data: {
+          data: { 
             telegramChatId: ctx.chat.id.toString(),
-            telegramLinkToken: null,
+            telegramLinkToken: null 
           }
         });
 
-        await this.sendConfirmationToFrontend(user.id);
+        await this.notifyFrontend(user.id);
         ctx.reply(`✅ Аккаунт привязан!\nДобро пожаловать, ${user.name}!`);
       } catch (error) {
         console.error('Link error:', error);
@@ -100,34 +112,13 @@ class TelegramBotService {
     });
   }
 
-  public async sendNotification(notification: Notifications, chatId: string): Promise<boolean> {
+  private async notifyFrontend(userId: string): Promise<void> {
     try {
-      const message = `🔔 ${notification.title}\n\n${notification.message}`;
-      await this.bot.telegram.sendMessage(chatId, message, {
-        parse_mode: 'Markdown',
-      });
-      return true;
+      await axios.post(`${API}/telegram/status/${userId}`, { userId });
     } catch (error) {
-      console.error('Telegram send error:', error);
-      if (error instanceof Error && error.message.includes('chat not found')) {
-        await prisma.user.updateMany({
-          where: { telegramChatId: chatId },
-          data: { telegramChatId: null }
-        });
-      }
-      return false;
-    }
-  }
-
-  private async sendConfirmationToFrontend(userId: string): Promise<void> {
-    try {
-      const frontendEndpoint = `${API}/telegram/status/${userId}`;
-      await axios.post(frontendEndpoint, { userId });
-      console.log(`Confirmation sent to frontend for user ${userId}`);
-    } catch (error) {
-      console.error('Failed to send confirmation to frontend:', error);
+      console.error('Frontend notify error:', error);
     }
   }
 }
 
-export const telegramBotService = TelegramBotService.getInstance();
+export const telegramService = TelegramService.getInstance();
