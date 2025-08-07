@@ -240,7 +240,7 @@ export const createRK = async (req: Request, res: Response, next: NextFunction) 
     });
 
     // Обработка вложений
-    if (req.files && req.files.length > 0) {
+    if (Array.isArray(req.files) && req.files.length > 0) {
       console.log('Creating attachments with meta:', attachmentsMeta);
       
       await prisma.rKAttachment.createMany({

@@ -203,7 +203,7 @@ export default function NewsList() {
               onClick={() => handleViewNews(newsItem)}
               style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}
             >
-              {user?.id === newsItem.userId && (
+              {(user?.id === newsItem.userId || user?.role !== 'EMPLOYEE') && (
                 <Flex gap="xs" style={{ position: 'absolute', top: '10px', right: '10px' }}>
                   <ActionIcon
                     variant="subtle"
