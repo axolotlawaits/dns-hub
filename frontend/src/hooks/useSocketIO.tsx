@@ -12,51 +12,74 @@ export const useSocketIO = () => {
   useEffect(() => {
     if (!user?.id) return;
 
-    // Закрываем предыдущее соединение
-    if (socketRef.current) {
-      console.log(`[Socket.IO] Closing previous connection`);
-      socketRef.current.disconnect();
-    }
+    const connectSocket = () => {
+      // Закрываем предыдущее соединение
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
 
-    const socketUrl = APIWebSocket;
-    console.log(`[Socket.IO] Connecting...`);
-    
-    socketRef.current = io(socketUrl, {
-      query: { userId: user.id },
-      path: '/socket.io',
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-    });
+      console.log(`[Socket.IO] Connecting to ${APIWebSocket}`);
+      
+      socketRef.current = io(APIWebSocket, {
+        query: { userId: user.id },
+        path: '/socket.io',
+        transports: ['websocket'], // Используем только WebSocket
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        timeout: 20000,
+        autoConnect: true,
+        forceNew: true
+      });
 
-    socketRef.current.on('connect', () => {
-      console.log(`[Socket.IO] Connected`);
-      setIsConnected(true);
-    });
+      // Обработчики событий
+      const socket = socketRef.current;
 
-    socketRef.current.on('connection_ack', (data) => {
-      console.log('[Socket.IO] Connection acknowledged:', data);
-    });
+      socket.on('connect', () => {
+        console.log(`[Socket.IO] Connected with ID: ${socket.id}`);
+        setIsConnected(true);
+      });
 
-    socketRef.current.on('notification', (message) => {
-      console.log('Socket.IO notification:', message);
-      setLastNotification(message);
-    });
+      socket.on('connection_ack', (data) => {
+        console.log('[Socket.IO] Connection acknowledged:', data);
+      });
 
-    socketRef.current.on('disconnect', (reason) => {
-      console.log(`[Socket.IO] Disconnected:`, reason);
-      setIsConnected(false);
-    });
+      socket.on('notification', (message) => {
+        console.log('[Socket.IO] New notification:', message);
+        setLastNotification(message);
+      });
 
-    socketRef.current.on('connect_error', (err) => {
-      console.error(`[Socket.IO] Connection error:`, err);
-    });
+      socket.on('disconnect', (reason) => {
+        console.log(`[Socket.IO] Disconnected: ${reason}`);
+        setIsConnected(false);
+        
+        if (reason === 'io server disconnect') {
+          // Переподключение при принудительном отключении сервером
+          setTimeout(() => socket.connect(), 1000);
+        }
+      });
+
+      socket.on('connect_error', (err) => {
+        console.error(`[Socket.IO] Connection error:`, err.message);
+        setIsConnected(false);
+      });
+
+      socket.on('error', (err) => {
+        console.error(`[Socket.IO] Error:`, err);
+      });
+    };
+
+    connectSocket();
 
     return () => {
       if (socketRef.current) {
-        console.log(`[Socket.IO] Cleanup`);
+        console.log(`[Socket.IO] Cleaning up connection`);
+        socketRef.current.off(); // Удаляем все обработчики
         socketRef.current.disconnect();
         socketRef.current = null;
+        setIsConnected(false);
       }
     };
   }, [user?.id]);

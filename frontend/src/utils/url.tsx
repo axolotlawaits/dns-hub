@@ -28,8 +28,6 @@ export const isSecureUrl = (url: string) => {
   return { icon: null, message: '' };
 };
 
-
-
 export const getPreviewUrl = (url: string): string => {
   return `https://api.screenshotmachine.com?key=72a64b&url=${encodeURIComponent(url)}&dimension=1024x576`;
 };
