@@ -6,18 +6,11 @@ import { prisma, API } from '../../server.js';
 class TelegramService {
   private static instance: TelegramService;
   private bot: Telegraf;
-  private isProduction: boolean;
   private isBotRunning: boolean;
 
   private constructor() {
-    this.isProduction = process.env.NODE_ENV === 'production';
     this.isBotRunning = false;
-    
-    if (!process.env.TELEGRAM_BOT_TOKEN) {
-      throw new Error('TELEGRAM_BOT_TOKEN is not defined in .env');
-    }
-
-    this.bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
+    this.bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN!);
     this.setupCommands();
   }
 
@@ -37,7 +30,7 @@ class TelegramService {
     try {
       await this.bot.launch();
       this.isBotRunning = true;
-      console.log(`Telegram bot started in ${this.isProduction ? 'PRODUCTION' : 'DEVELOPMENT'} mode`);
+      console.log('Telegram bot started');
       console.log(`Bot username: @${process.env.TELEGRAM_BOT_NAME}`);
       
       // Handle graceful shutdown
