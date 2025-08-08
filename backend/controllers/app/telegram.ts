@@ -1,155 +1,195 @@
-import { Telegraf } from 'telegraf';
+import { Bot, Context, session, SessionFlavor } from 'grammy';
 import { Notifications } from '@prisma/client';
 import axios from 'axios';
 import { prisma, API } from '../../server.js';
 
-let bot: Telegraf | null = null;
-let isRunning = false;
-let retryCount = 0;
-const MAX_RETRIES = 3;
+// 1. Типизация сессии (если нужно хранить состояние)
+interface SessionData {
+  userData?: {
+    id: string;
+    name: string;
+  };
+  // ... другие поля сессии
+}
 
-const createBotInstance = () => {
-  if (bot) return bot;
-  
-  bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN!, {
-    handlerTimeout: 60000,
-    telegram: { webhookReply: false }
-  });
-  
-  setupCommands();
-  return bot;
-};
+type MyContext = Context & SessionFlavor<SessionData>;
 
-const setupCommands = () => {
-  if (!bot) return;
+// 2. Конфигурация бота
+class TelegramService {
+  private static instance: TelegramService;
+  private bot: Bot<MyContext> | null = null;
+  private isRunning = false;
+  private readonly MAX_RETRIES = 3;
+  private retryCount = 0;
 
-  bot.command('start', async (ctx) => {
-    const token = ctx.message.text.split(' ')[1]?.trim();
-    if (!token) {
-      return ctx.reply('Для привязки аккаунта используйте ссылку из приложения');
+  private constructor() {
+    this.initializeBot();
+  }
+
+  public static getInstance(): TelegramService {
+    if (!TelegramService.instance) {
+      TelegramService.instance = new TelegramService();
+    }
+    return TelegramService.instance;
+  }
+
+  // 3. Инициализация бота
+  private initializeBot(): void {
+    this.bot = new Bot<MyContext>(process.env.TELEGRAM_BOT_TOKEN!);
+
+    // Настройка middleware
+    this.bot.use(
+      session({
+        initial: (): SessionData => ({}),
+      })
+    );
+
+    // 4. Обработка команды /start
+    this.bot.command('start', async (ctx) => {
+      const token = ctx.match.trim();
+      if (!token) {
+        return ctx.reply('Для привязки аккаунта используйте ссылку из приложения');
+      }
+
+      try {
+        const user = await prisma.user.findFirst({
+          where: { telegramLinkToken: token },
+        });
+
+        if (!user) {
+          return ctx.reply('❌ Ссылка недействительна или истекла');
+        }
+
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            telegramChatId: ctx.chat.id.toString(),
+            telegramLinkToken: null,
+          },
+        });
+
+        await this.notifyFrontend(user.id);
+        await ctx.reply(`✅ Аккаунт привязан!\nДобро пожаловать, ${user.name}!`);
+
+        // Сохраняем данные в сессию (пример)
+        ctx.session.userData = {
+          id: user.id,
+          name: user.name,
+        };
+      } catch (error) {
+        console.error('Link error:', error);
+        await ctx.reply('❌ Ошибка привязки. Пожалуйста, попробуйте снова');
+      }
+    });
+
+    // 5. Обработка ошибок
+    this.bot.catch((err) => {
+      console.error('Bot error:', err);
+    });
+  }
+
+  // 6. Запуск бота
+  public async launch(): Promise<boolean> {
+    if (this.isRunning || !this.bot) {
+      console.log('Bot is already running');
+      return false;
     }
 
     try {
-      const user = await prisma.user.findFirst({ where: { telegramLinkToken: token } });
-      if (!user) return ctx.reply('❌ Ссылка недействительна или истекла');
-
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { 
-          telegramChatId: ctx.chat.id.toString(),
-          telegramLinkToken: null 
-        }
+      await this.bot.start({
+        drop_pending_updates: true,
+        allowed_updates: ['message', 'callback_query'],
+        onStart: (info) => {
+          console.log(`Bot @${info.username} started`);
+        },
       });
 
-      await notifyFrontend(user.id);
-      ctx.reply(`✅ Аккаунт привязан!\nДобро пожаловать, ${user.name}!`);
+      this.isRunning = true;
+      this.retryCount = 0;
+      return true;
     } catch (error) {
-      console.error('Link error:', error);
-      ctx.reply('❌ Ошибка привязки. Пожалуйста, попробуйте снова');
+      console.error('Failed to start bot:', error);
+
+      if (this.retryCount < this.MAX_RETRIES) {
+        this.retryCount++;
+        const delay = Math.min(2000 * this.retryCount, 10000);
+        console.log(`Retrying in ${delay}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return this.launch();
+      }
+
+      console.error('Max retries reached');
+      return false;
     }
-  });
-};
-
-const notifyFrontend = async (userId: string) => {
-  try {
-    await axios.post(`${API}/telegram/status/${userId}`, { userId });
-  } catch (error) {
-    console.error('Frontend notify error:', error);
-  }
-};
-
-const launch = async (): Promise<boolean> => {
-  if (isRunning) {
-    console.log('Bot is already running');
-    return true;
   }
 
-  try {
-    const botInstance = createBotInstance();
-    
-    // Удаляем вебхук и сбрасываем обновления
-    await botInstance.telegram.deleteWebhook({ drop_pending_updates: true });
-    
-    await botInstance.launch({
-      dropPendingUpdates: true,
-      allowedUpdates: []
-    });
-    
-    isRunning = true;
-    retryCount = 0;
-    console.log('Telegram bot started successfully');
-    console.log(`Bot username: @${process.env.TELEGRAM_BOT_NAME}`);
-    
-    process.once('SIGINT', () => stop('SIGINT'));
-    process.once('SIGTERM', () => stop('SIGTERM'));
-    
-    return true;
-  } catch (error) {
-    console.error('Failed to start bot:', error);
-    
-    if (retryCount < MAX_RETRIES) {
-      retryCount++;
-      console.log(`Retrying to start bot (attempt ${retryCount}/${MAX_RETRIES})...`);
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      return launch();
+  // 7. Остановка бота
+  public async stop(): Promise<void> {
+    if (!this.isRunning || !this.bot) return;
+
+    try {
+      await this.bot.stop();
+      this.isRunning = false;
+      console.log('Bot stopped successfully');
+    } catch (error) {
+      console.error('Error stopping bot:', error);
     }
-    
-    console.error('Max retries reached, giving up');
-    return false;
   }
-};
 
-const stop = async (signal?: string): Promise<void> => {
-  if (!isRunning || !bot) return;
-  
-  try {
-    if (signal) {
-      console.log(`Received ${signal}, stopping bot...`);
+  // 8. Отправка уведомлений
+  public async sendNotification(
+    notification: Notifications,
+    chatId: string
+  ): Promise<boolean> {
+    if (!this.isRunning || !this.bot) {
+      console.error('Bot is not running');
+      return false;
     }
-    
-    await bot.stop();
-    isRunning = false;
-    console.log('Bot stopped successfully');
-  } catch (error) {
-    console.error('Error stopping bot:', error);
-  }
-};
 
-const sendNotification = async (notification: Notifications, chatId: string): Promise<boolean> => {
-  if (!isRunning || !bot) {
-    console.error('Bot is not running, cannot send notification');
-    return false;
-  }
-
-  try {
-    await bot.telegram.sendMessage(
-      chatId,
-      `🔔 ${notification.title}\n\n${notification.message}`,
-      { parse_mode: 'Markdown' }
-    );
-    return true;
-  } catch (error) {
-    console.error('Send error:', error);
-    if (error instanceof Error && error.message.includes('chat not found')) {
-      await handleInvalidChat(chatId);
+    try {
+      await this.bot.api.sendMessage(
+        chatId,
+        `🔔 ${notification.title}\n\n${notification.message}`,
+        { parse_mode: 'Markdown' }
+      );
+      return true;
+    } catch (error) {
+      console.error('Send error:', error);
+      if (error instanceof Error && error.message.includes('chat not found')) {
+        await this.handleInvalidChat(chatId);
+      }
+      return false;
     }
-    return false;
   }
-};
 
-const handleInvalidChat = async (chatId: string) => {
-  await prisma.user.updateMany({
-    where: { telegramChatId: chatId },
-    data: { telegramChatId: null }
-  });
-};
+  // 9. Вспомогательные методы
+  private async notifyFrontend(userId: string): Promise<void> {
+    try {
+      await axios.post(`${API}/telegram/status/${userId}`, { userId });
+    } catch (error) {
+      console.error('Frontend notify error:', error);
+    }
+  }
 
-export const telegramService = {
-  launch,
-  stop,
-  sendNotification,
-  get isRunning() { return isRunning; }
-};
+  private async handleInvalidChat(chatId: string): Promise<void> {
+    try {
+      await prisma.user.updateMany({
+        where: { telegramChatId: chatId },
+        data: { telegramChatId: null },
+      });
+    } catch (error) {
+      console.error('Database error in handleInvalidChat:', error);
+    }
+  }
 
-// Инициализация при импорте
-createBotInstance();
+  // 10. Статус бота
+  public get status() {
+    return {
+      isRunning: this.isRunning,
+      retryCount: this.retryCount,
+    };
+  }
+}
+
+// Экспорт синглтона
+export const telegramService = TelegramService.getInstance();
