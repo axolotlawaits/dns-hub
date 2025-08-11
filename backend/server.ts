@@ -25,6 +25,7 @@ import printServiceRouter from './routes/retail/printService.js'
 import telegramRouter  from './routes/app/telegram.js'
 import schedule from 'node-schedule'
 import { scheduleRouteDay } from './controllers/supply/routeDay.js';
+import { dailyRKJob } from './controllers/add/rk.js';
 import fs from 'fs'
 import cookieParser from 'cookie-parser'
 import jwt from 'jsonwebtoken'
@@ -109,5 +110,13 @@ server.listen(2000, async function() {
   await telegramService.stop();
   await new Promise(resolve => setTimeout(resolve, 1000));
   await telegramService.launch(); // Запуск бота
-  schedule.scheduleJob('0 0 * * *', () => scheduleRouteDay());
+  // Ежедневные задачи в 00:00
+  schedule.scheduleJob('0 0 * * *', async () => {
+    try {
+      await scheduleRouteDay();
+      await dailyRKJob();
+    } catch (e) {
+      console.error('Daily cron error', e);
+    }
+  });
 });

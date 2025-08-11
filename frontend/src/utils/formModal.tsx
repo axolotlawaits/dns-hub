@@ -29,6 +29,16 @@ export interface FormField {
   max?: number;
   withDnd?: boolean;
   fileFields?: FileFieldConfig[]; // Конфигурация дополнительных полей для файлов
+  // Дополнительные свойства для расширенного управления
+  onChange?: (value: any) => void;
+  searchable?: boolean;
+  disabled?: boolean;
+  loading?: boolean;
+  leftSection?: JSX.Element;
+  multiple?: boolean;
+  accept?: string;
+  value?: any;
+  renderFileList?: (values: any, setFieldValue: (path: string, val: any) => void) => JSX.Element;
 }
 
 export interface ViewFieldConfig {
@@ -220,8 +230,36 @@ export const DynamicFormModal = ({
 
   useEffect(() => {
     if (opened) {
-      form.setValues(initialValues);
-      setAttachments(initialValues.attachments || []);
+      // Determine incoming attachments from initial values in a generic way
+      const incoming: any[] = (initialValues as any).attachments
+        || (initialValues as any).rkAttachment
+        || [];
+
+      // Normalize: ensure each attachment has a meta object populated from any extra fields
+      const normalized = incoming.map((att: any) => {
+        const knownKeys = new Set([
+          'id', 'userAdd', 'userAddId', 'source', 'type', 'recordId', 'createdAt', 'updatedAt',
+        ]);
+        const derivedMeta: Record<string, any> = att?.meta ? { ...att.meta } : {};
+        Object.keys(att || {}).forEach((key) => {
+          if (!knownKeys.has(key) && !(key in derivedMeta)) {
+            derivedMeta[key] = att[key];
+          }
+        });
+        return {
+          ...att,
+          meta: derivedMeta,
+        } as FileAttachment;
+      });
+
+      const preparedValues = {
+        removedAttachments: [],
+        ...initialValues,
+        attachments: normalized,
+      } as Record<string, any>;
+
+      form.setValues(preparedValues);
+      setAttachments(normalized);
     }
   }, [opened, initialValues]);
 
@@ -253,6 +291,10 @@ export const DynamicFormModal = ({
     setAttachments(prev => {
       const newAttachments = prev.filter(a => a.id?.toString() !== id?.toString());
       form.setFieldValue('attachments', newAttachments);
+      if (id) {
+        const prevRemoved = (form.values as any).removedAttachments || [];
+        form.setFieldValue('removedAttachments', [...prevRemoved, id]);
+      }
       return newAttachments;
     });
   }, [form]);
@@ -271,9 +313,37 @@ export const DynamicFormModal = ({
       case 'textarea':
         return <Textarea key={field.name} {...commonProps} />;
       case 'select':
-        return <Select key={field.name} {...commonProps} data={field.options || []} />;
+        return (
+          <Select
+            key={field.name}
+            {...commonProps}
+            data={field.options || []}
+            searchable={field.searchable}
+            disabled={field.disabled}
+            value={(form.values as any)[field.name] ?? ''}
+            onChange={(val) => {
+              form.setFieldValue(field.name, val);
+              field.onChange?.(val ?? '');
+            }}
+          />
+        );
       case 'selectSearch':
-        return <Select key={field.name} {...commonProps} data={field.options || []} searchable nothingFoundMessage="Ничего не найдено" clearable />;
+        return (
+          <Select
+            key={field.name}
+            {...commonProps}
+            data={field.options || []}
+            searchable
+            nothingFoundMessage="Ничего не найдено"
+            clearable
+            disabled={field.disabled}
+            value={(form.values as any)[field.name] ?? ''}
+            onChange={(val) => {
+              form.setFieldValue(field.name, val);
+              field.onChange?.(val ?? '');
+            }}
+          />
+        );
       case 'date':
         return <TextInput key={field.name} {...commonProps} type="date" />;
       case 'datetime':
