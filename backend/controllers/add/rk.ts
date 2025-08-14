@@ -388,6 +388,117 @@ export const updateRK = async (req: Request, res: Response, next: NextFunction) 
   }
 };
 
+// --- Notifications ---
+export const notifyRK = async (req: Request, res: Response, next: NextFunction): Promise<any> => {
+  try {
+    const { id } = req.params as { id: string };
+    const {
+      channels: rawChannels = ['IN_APP'],
+      type: rawType = 'WARNING',
+      title,
+      message,
+      receiverId,
+    } = req.body || {};
+
+    const rk = await prisma.rK.findUnique({
+      where: { id },
+      include: {
+        userAdd: { select: { id: true, name: true } },
+        branch: true,
+        typeStructure: true,
+        approvalStatus: true,
+      },
+    });
+
+    if (!rk) {
+      return res.status(404).json({ error: 'RK not found' });
+    }
+
+    const systemSenderId = process.env.SYSTEM_SENDER_ID || null;
+    const hubUrl = process.env.HUB_API_URL || 'http://localhost:2000/hub-api/notifications';
+
+    const computedTitle =
+      title || `Напоминание по конструкции: ${rk.branch?.rrs || ''} ${rk.branch?.name || ''}`.trim();
+
+    // Fallback message if not provided
+    const daysSince = Math.max(
+      0,
+      Math.floor((Date.now() - new Date(rk.agreedTo).getTime()) / (1000 * 60 * 60 * 24))
+    );
+    const defaultMessage =
+      message ||
+      `РРС: ${rk.branch?.rrs || '-'}; Филиал: ${rk.branch?.name || '-'}${rk.branch?.code ? ` (${rk.branch.code})` : ''}${rk.branch?.city ? ` - ${rk.branch.city}` : ''}.\n` +
+        `Тип: ${rk.typeStructure?.name || '-'}; Статус: ${rk.approvalStatus?.name || '-'}.\n` +
+        `Дней с согласования: ${daysSince}.`;
+
+    const toArray = (value: unknown): string[] => {
+      if (Array.isArray(value)) return value as string[];
+      if (typeof value === 'string') return value.split(',').map(s => s.trim());
+      return [];
+    };
+
+    const normalizeChannel = (c: string) => {
+      const v = c.replace(/\s+/g, '').toUpperCase();
+      if (v === 'IN_APP' || v === 'INAPP' || v === 'IN-APP') return 'IN_APP';
+      if (v === 'TELEGRAM') return 'TELEGRAM';
+      if (v === 'EMAIL') return 'EMAIL';
+      return 'IN_APP';
+    };
+
+    const channels = toArray(rawChannels).map(normalizeChannel).filter(Boolean);
+    const type = String(rawType || 'WARNING').toUpperCase();
+
+    const payload = {
+      type,
+      channels: channels.length ? channels : ['IN_APP'],
+      title: computedTitle,
+      message: defaultMessage,
+      senderId: systemSenderId,
+      receiverId: receiverId || rk.userAddId,
+    };
+
+    const response = await fetch(hubUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      return res.status(response.status).json({ error: 'Failed to dispatch notification', details: text });
+    }
+
+    const result = await response.json().catch(() => ({}));
+    res.status(200).json({ ok: true, result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const dailyRKJob = async () => {
+  const hubUrl = process.env.HUB_API_URL || 'http://localhost:2000/hub-api/notifications';
+  const systemSenderId = process.env.SYSTEM_SENDER_ID || null;
+  const rks = await prisma.rK.findMany({
+    include: { userAdd: true, branch: true, typeStructure: true, approvalStatus: true },
+  });
+  for (const rk of rks) {
+    const title = `Автонапоминание: ${rk.branch?.rrs || ''} ${rk.branch?.name || ''}`.trim();
+    const message = `Дата согласования: ${new Date(rk.agreedTo).toLocaleString('ru-RU')}`;
+    await fetch(hubUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'WARNING',
+        channels: ['IN_APP', 'TELEGRAM', 'EMAIL'],
+        title,
+        message,
+        senderId: systemSenderId,
+        receiverId: rk.userAddId,
+      }),
+    });
+  }
+};
+
 export const deleteRK = async (req: Request, res: Response, next: NextFunction): Promise <any> => {
   try {
     const rkId = req.params.id;
@@ -468,7 +579,7 @@ export const getBranchesList = async (req: Request, res: Response, next: NextFun
         name: true,
         code: true,
         city: true,
-        address: true
+        rrs: true
       },
       orderBy: { name: 'asc' }
     });

@@ -30,8 +30,8 @@ model Notifications {
   action                          Json?        
   title                           String       
   message                         String       
-  senderId                        String       
-  sender                          User                            @relation(name: "sender", fields: [senderId], references: [id])
+  senderId                        String      
+  sender                          User?                           @relation(name: "sender", fields: [senderId], references: [id])
   receiverId                      String       
   receiver                        User                            @relation(name: "receiver",fields: [receiverId], references: [id])
   read                            Boolean                         @default(false)
@@ -102,17 +102,17 @@ model Branch {
 }
 
 model Type {
-  id                     String       @id @default(uuid())
+  id                     String                 @id @default(uuid())
   model_uuid             String
   chapter                String
   name                   String
   colorHex               String?
-  Media                  Media[]      @relation("TypeMedia")
-  SupplyDocsPTiU         SupplyDocs[] @relation("SupplyDocs_PTiU")
-  SupplyDocsRequirements SupplyDocs[] @relation("SupplyDocs_Requirements")
-  Tool                   Tool         @relation(fields: [model_uuid], references: [id])
-  rk_typeStructure       RK[]         @relation("RK_typeStructure")
-  rk_approvalStatus      RK[]         @relation("RK_approvalStatus")
+  Media                  Media[]                @relation("TypeMedia")
+  SupplyDocsPTiU         SupplyDocs[]           @relation("SupplyDocs_PTiU")
+  SupplyDocsRequirements SupplyDocs[]           @relation("SupplyDocs_Requirements")
+  Tool                   Tool                   @relation(fields: [model_uuid], references: [id])
+  rk_typeStructure       RKAttachment[]         @relation("RK_typeStructure")
+  rk_approvalStatus      RKAttachment[]         @relation("RK_approvalStatus")
 }
 
 model Tool {
@@ -374,11 +374,6 @@ model RK {
   userUpdatedId             String    
   branch                    Branch                @relation(fields: [branchId], references: [uuid])  
   branchId                  String              
-  agreedTo                  DateTime                  
-  typeStructure             Type                  @relation("RK_typeStructure", fields: [typeStructureId], references: [id])
-  typeStructureId           String    
-  approvalStatus            Type                  @relation("RK_approvalStatus", fields: [approvalStatusId], references: [id])
-  approvalStatusId          String    
   rkAttachment              RKAttachment[]    
 }   
 
@@ -388,7 +383,12 @@ model RKAttachment {
   userAddId                 String              
   source                    String              
   sizeXY                    String                 
-  clarification             String                
+  clarification             String
+  agreedTo                  DateTime?                  
+  typeStructure             Type?                  @relation("RK_typeStructure", fields: [typeStructureId], references: [id])
+  typeStructureId           String    
+  approvalStatus            Type?                  @relation("RK_approvalStatus", fields: [approvalStatusId], references: [id])
+  approvalStatusId          String                    
   type                      String              
   recordId                  String              
   rk                        RK                    @relation(fields: [recordId], references: [id])

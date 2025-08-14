@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { getRKList, getRKById, createRK, updateRK, deleteRK, getRKTypes, getRKStatuses, getBranchesList } from '../../controllers/add/rk.js';
+import { getRKList, getRKById, createRK, updateRK, deleteRK, getRKTypes, getRKStatuses, getBranchesList, notifyRK } from '../../controllers/add/rk.js';
 import uploadRK from '../../middleware/uploaderRK.js';
 
 const router = Router();
@@ -40,5 +40,8 @@ router.delete('/:id', deleteRK); // Удалить запись RK
 router.get('/types/list', getRKTypes); // Получить список типов конструкций
 router.get('/statuses/list', getRKStatuses); // Получить список статусов
 router.get('/branches/list', getBranchesList); // Получить список филиалов
+
+// Уведомления по RK
+router.post('/:id/notify', notifyRK);
 
 export default router;
