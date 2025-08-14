@@ -35,8 +35,8 @@ function generatePlainText(notification: NotificationWithRelations): string {
   return `
     ${notification.message}
     
-    Отправитель: ${notification.sender.name}
-    ${notification.sender.email ? `Email: ${notification.sender.email}` : ''}
+    Отправитель: ${notification.sender?.name}
+    ${notification.sender?.email ? `Email: ${notification.sender.email}` : ''}
     ${notification.tool ? `Сервис: ${notification.tool.name}` : ''}
   `.trim();
 }
@@ -162,7 +162,7 @@ function generateHtml(notification: NotificationWithRelations): string {
                                                                             <tbody>
                                                                                 <tr>
                                                                                     <td align="right" class="esd-block-text" bgcolor="#25292b">
-                                                                                        <p style="font-size: 17px; color: #ffffff;"><strong>Автор:</strong> ${notification.sender.name}</p>
+                                                                                        <p style="font-size: 17px; color: #ffffff;"><strong>Автор:</strong> ${notification.sender?.name}</p>
                                                                                         <p style="font-size: 17px; color: #ffffff;"><strong></strong></p>
                                                                                     </td>
                                                                                 </tr>
@@ -295,7 +295,7 @@ async function send(notification: NotificationWithRelations): Promise<boolean> {
   }
   try {
     await transporter.sendMail({
-      from: `"${notification.sender.name}" <${process.env.EMAIL_USER}>`,
+      from: `"${notification.sender?.name}" <${process.env.EMAIL_USER}>`,
       to: notification.receiver.email,
       subject: notification.title,
       text: generatePlainText(notification),
