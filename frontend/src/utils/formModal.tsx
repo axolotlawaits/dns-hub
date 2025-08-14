@@ -364,6 +364,7 @@ export const DynamicFormModal = ({
             searchable={field.searchable}
             disabled={field.disabled}
             placeholder={field.placeholder}
+            comboboxProps={{ withinPortal: true, zIndex: 9999 }}
             value={(form.values as any)[field.name] ?? ''}
             onChange={(val) => {
               form.setFieldValue(field.name, val);
@@ -382,6 +383,7 @@ export const DynamicFormModal = ({
             clearable
             disabled={field.disabled}
             placeholder={field.placeholder}
+            comboboxProps={{ withinPortal: true, zIndex: 9999 }}
             value={(form.values as any)[field.name] ?? ''}
             onChange={(val) => {
               form.setFieldValue(field.name, val);

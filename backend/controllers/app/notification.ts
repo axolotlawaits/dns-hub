@@ -11,13 +11,13 @@ export type NotificationWithRelations = Notifications & {
     name: string;
     email: string | null;
     telegramChatId: string | null;
-  };
+  } | null;
   receiver: {
     id: string;
     name: string;
     email: string | null;
     telegramChatId: string | null;
-  };
+  } | null;
   tool: {
     id: string;
     name: string;
@@ -97,14 +97,15 @@ const dispatchNotification = async (notification: NotificationWithRelations) => 
   const wantsEmail = userSettings ? userSettings.value === 'true' : true;
 
   if (shouldSendInApp) {
-    socketService.sendToUser(notification.receiver.id, { // Изменено на socketService
+    const receiverId = notification.receiver?.id || notification.receiverId;
+    socketService.sendToUser(receiverId, {
       id: notification.id,
       type: notification.type,
       title: notification.title,
       message: notification.message,
       createdAt: notification.createdAt.toISOString(),
       read: notification.read,
-      sender: notification.sender,
+      sender: notification.sender || undefined,
       tool: notification.tool,
       action: notification.action,
     });
@@ -114,8 +115,8 @@ const dispatchNotification = async (notification: NotificationWithRelations) => 
     await emailService.send(notification);
   }
 
-  if (notification.channel.includes('TELEGRAM') && notification.receiver.telegramChatId) {
-    await telegramService.sendNotification(notification, notification.receiver.telegramChatId);
+  if (notification.channel.includes('TELEGRAM') && notification.receiver?.telegramChatId) {
+    await telegramService.sendNotification(notification as any, notification.receiver.telegramChatId);
   }
 };
 

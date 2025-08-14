@@ -46,6 +46,7 @@ interface FilterProps {
   label?: string;
   placeholder?: string;
   width?: number | string;
+  onDropdownOpenChange?: (open: boolean) => void;
 }
 
 export const Filter = ({
@@ -56,6 +57,7 @@ export const Filter = ({
   label,
   placeholder,
   width = 200,
+  onDropdownOpenChange,
 }: FilterProps) => {
   const handleDateChange = (date: string | null, isStart: boolean) => {
     const current = (currentFilter || {}) as DateFilter;
@@ -69,6 +71,8 @@ export const Filter = ({
   const handleMultiSelectChange = (values: string[]) => {
     onFilterChange(values);
   };
+
+  const selectedValues = Array.isArray(currentFilter) ? (currentFilter as string[]) : [];
 
   switch (filterType) {
     case 'date':
@@ -98,11 +102,21 @@ export const Filter = ({
           label={label}
           placeholder={placeholder}
           data={filterOptions || []}
-          value={(currentFilter as string[]) || []}
+          value={selectedValues}
           onChange={handleMultiSelectChange}
           searchable
           clearable
           style={{ width }}
+          comboboxProps={{ withinPortal: true, zIndex: 9999 }}
+          onDropdownOpen={() => onDropdownOpenChange?.(true)}
+          onDropdownClose={() => onDropdownOpenChange?.(false)}
+          onOptionSubmit={(val) => {
+            const exists = selectedValues.includes(val);
+            const next = exists
+              ? selectedValues.filter((v) => v !== val)
+              : [...selectedValues, val];
+            onFilterChange(next);
+          }}
         />
       );     
     default:

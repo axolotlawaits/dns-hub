@@ -9,6 +9,8 @@ import dayjs from 'dayjs';
 import { IconPencil, IconTrash, IconUpload, IconFile, IconDownload } from '@tabler/icons-react';
 import { DynamicFormModal, type FormConfig } from '../../../utils/formModal';
 import { DndProviderWrapper } from '../../../utils/dnd';
+import { FilterGroup } from '../../../utils/filter';
+import type { ColumnFiltersState } from '@tanstack/react-table';
 
 interface User {
   id: string;
@@ -183,6 +185,7 @@ const RKList: React.FC = () => {
   const [fileUploading, setFileUploading] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
   const [calendarOpened, calendarHandlers] = useDisclosure(false);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
   const modals = {
     view: useDisclosure(false),
@@ -271,8 +274,6 @@ const RKList: React.FC = () => {
         fetchData(`${API}/add/rk/branches/list`)
       ]);
 
-      console.log('Получены филиалы:', branches);
-
       setRkData(Array.isArray(rkList) ? rkList : []);
 
       setTypeOptions(types.map((t: any) => ({
@@ -294,8 +295,6 @@ const RKList: React.FC = () => {
         city: b.city,
         code: b.code
       }));
-
-      console.log('Форматированные филиалы:', formattedBranches);
 
       setBranchOptions(formattedBranches);
     } catch (error) {
@@ -675,38 +674,75 @@ const RKList: React.FC = () => {
 
   const baseList = useMemo(() => {
     // Активные по умолчанию, Архив при включенном флаге
-    return (rkData || []).filter(rk => showArchive ? isArchivedBranch(rk) : !isArchivedBranch(rk));
-  }, [rkData, showArchive]);
+    let list = (rkData || []).filter(rk => showArchive ? isArchivedBranch(rk) : !isArchivedBranch(rk));
+
+    // Применяем дополнительные фильтры: rrs, branch, city, dates, statuses, types
+    const getFilter = (id: string) => columnFilters.find(f => f.id === id)?.value as any;
+    const rrsFilter = getFilter('rrs') as string[] | undefined;
+    const branchFilter = getFilter('branch') as string[] | undefined;
+    const cityFilter = getFilter('city') as string[] | undefined;
+    const dateFilter = getFilter('agreedDate') as { start?: string; end?: string } | undefined;
+    const statusFilter = getFilter('statusId') as string[] | undefined;
+    const typeFilter = getFilter('typeId') as string[] | undefined;
+
+    if (rrsFilter && rrsFilter.length) {
+      list = list.filter(rk => rk.branch?.rrs && rrsFilter.includes(rk.branch.rrs));
+    }
+    if (branchFilter && branchFilter.length) {
+      list = list.filter(rk => rk.branch?.name && branchFilter.includes(rk.branch.name));
+    }
+    if (cityFilter && cityFilter.length) {
+      list = list.filter(rk => rk.branch?.city && cityFilter.includes(rk.branch.city));
+    }
+    if (dateFilter && (dateFilter.start || dateFilter.end)) {
+      const start = dateFilter.start ? dayjs(dateFilter.start).startOf('day') : null;
+      const end = dateFilter.end ? dayjs(dateFilter.end).endOf('day') : null;
+      list = list.filter(rk => {
+        const dates = (rk.rkAttachment || []).map((a: any) => a.agreedTo && dayjs(a.agreedTo));
+        return dates.some(d => d && d.isValid() && (
+          (start && end && d.isBetween(start, end, 'day', '[]')) ||
+          (!start && end && d.isBefore(end)) ||
+          (start && !end && d.isAfter(start))
+        ));
+      });
+    }
+    if (statusFilter && statusFilter.length) {
+      list = list.filter(rk => (rk.rkAttachment || []).some((a: any) => a.approvalStatusId && statusFilter.includes(a.approvalStatusId)));
+    }
+    if (typeFilter && typeFilter.length) {
+      list = list.filter(rk => (rk.rkAttachment || []).some((a: any) => a.typeStructureId && typeFilter.includes(a.typeStructureId)));
+    }
+
+    return list;
+  }, [rkData, showArchive, columnFilters]);
 
   const filteredData = useMemo(() => {
     const startIdx = (currentPage - 1) * DEFAULT_PAGE_SIZE;
     return baseList.slice(startIdx, startIdx + DEFAULT_PAGE_SIZE);
   }, [baseList, currentPage]);
 
-  const PaginationControls = useCallback(() => {
-    const totalPages = Math.ceil(baseList.length / DEFAULT_PAGE_SIZE);
-    return (
-      <Group justify="center" mt="md">
-        <Button
-          variant="outline"
-          disabled={currentPage === 1}
-          onClick={() => setCurrentPage(p => p - 1)}
-        >
-          Назад
-        </Button>
-        <Text>
-          {currentPage} из {totalPages}
-        </Text>
-        <Button
-          variant="outline"
-          disabled={currentPage * DEFAULT_PAGE_SIZE >= baseList.length}
-          onClick={() => setCurrentPage(p => p + 1)}
-        >
-          Вперед
-        </Button>
-      </Group>
-    );
-  }, [currentPage, baseList.length]);
+  const totalPages = useMemo(() => Math.ceil(baseList.length / DEFAULT_PAGE_SIZE), [baseList.length]);
+  const PaginationControls = useCallback(() => (
+    <Group justify="center" mt="md">
+      <Button
+        variant="outline"
+        disabled={currentPage === 1}
+        onClick={() => setCurrentPage(p => p - 1)}
+      >
+        Назад
+      </Button>
+      <Text>
+        {currentPage} из {totalPages}
+      </Text>
+      <Button
+        variant="outline"
+        disabled={currentPage * DEFAULT_PAGE_SIZE >= baseList.length}
+        onClick={() => setCurrentPage(p => p + 1)}
+      >
+        Вперед
+      </Button>
+    </Group>
+  ), [currentPage, baseList.length, totalPages]);
 
 
   const EmptyState = useCallback(() => (
@@ -751,6 +787,36 @@ const RKList: React.FC = () => {
       style: { backgroundColor: '#fff' },
     };
   };
+
+  // Dependent filter helpers (RRS -> Branch) MUST be declared before any early returns
+  const getFilterValue = useCallback((id: string) => {
+    return columnFilters.find((f) => f.id === id)?.value as any;
+  }, [columnFilters]);
+
+  const rrsFilter = getFilterValue('rrs') as string[] | undefined;
+
+  const branchOptionsFilteredByRrs = useMemo(() => {
+    const data = rkData || [];
+    const filtered = rrsFilter && rrsFilter.length
+      ? data.filter((r) => r.branch?.rrs && rrsFilter.includes(String(r.branch.rrs)))
+      : data;
+    const names = Array.from(new Set(filtered.map((r) => r.branch?.name).filter(Boolean))).map((v: any) => ({ value: String(v), label: String(v) }));
+    return names;
+  }, [rkData, rrsFilter]);
+
+  // Prune selected branches if they are not allowed by current RRS selection
+  useEffect(() => {
+    const currentBranch = getFilterValue('branch') as string[] | undefined;
+    if (!currentBranch || currentBranch.length === 0) return;
+    const allowed = new Set(branchOptionsFilteredByRrs.map((o) => o.value));
+    const nextBranch = currentBranch.filter((b) => allowed.has(String(b)));
+    if (nextBranch.length === currentBranch.length) return;
+    setColumnFilters((prev) => {
+      const next = prev.filter((f) => f.id !== 'branch');
+      if (nextBranch.length > 0) return [...next, { id: 'branch', value: nextBranch }];
+      return next;
+    });
+  }, [branchOptionsFilteredByRrs, getFilterValue]);
 
   if (loading) {
     return (
@@ -808,6 +874,71 @@ return (
           </Button>
         </Group>
       </Group>
+      {/* Фильтры */}
+      {rkData.length > 0 && (
+        <FilterGroup
+          filters={[
+            {
+              type: 'date',
+              columnId: 'agreedDate',
+              label: 'Дата согласования',
+              placeholder: 'Выберите дату',
+            },
+            {
+              type: 'select',
+              columnId: 'rrs',
+              label: 'РРС',
+              placeholder: 'Выберите РРС',
+              options: Array.from(new Set(rkData.map(r => r.branch?.rrs).filter(Boolean))).map((v: any) => ({ value: String(v), label: String(v) })),
+            },
+            {
+              type: 'select',
+              columnId: 'branch',
+              label: 'Филиал',
+              placeholder: 'Выберите филиал',
+              options: branchOptionsFilteredByRrs,
+            },
+            {
+              type: 'select',
+              columnId: 'city',
+              label: 'Город',
+              placeholder: 'Выберите город',
+              options: Array.from(new Set(rkData.map(r => r.branch?.city).filter(Boolean))).map((v: any) => ({ value: String(v), label: String(v) })),
+            },
+            {
+              type: 'select',
+              columnId: 'statusId',
+              label: 'Статусы',
+              placeholder: 'Выберите статус',
+              options: approvalOptions.map(o => ({ value: String(o.value), label: o.label })),
+            },
+            {
+              type: 'select',
+              columnId: 'typeId',
+              label: 'Типы',
+              placeholder: 'Выберите тип',
+              options: typeOptions.map(o => ({ value: String(o.value), label: o.label })),
+            },
+          ]}
+          columnFilters={columnFilters}
+          onColumnFiltersChange={(id, value) => setColumnFilters(prev => {
+            const next = prev.filter(f => f.id !== id);
+            const isArray = Array.isArray(value);
+            const isObject = value !== null && typeof value === 'object';
+            const isDateRange = isObject && !isArray && ('start' in (value as any) || 'end' in (value as any));
+
+            // remove when undefined
+            if (value === undefined) return next;
+            // remove when empty array
+            if (isArray && (value as any[]).length === 0) return next;
+            // remove when date range object has neither start nor end
+            if (isDateRange && !(value as any).start && !(value as any).end) return next;
+
+            return [...next, { id, value }];
+          })}
+          
+        />
+      )}
       <Stack gap="md">
         {Array.isArray(rkData) && rkData.length > 0 ? (
           <>
@@ -836,20 +967,14 @@ return (
                     
                     {/* Статус филиала и кнопки действий */}
                     <Stack gap="xs" align="flex-end">
-                      {rk.branch?.status !== undefined && (
-                        (() => {
-                          const { label, color, variant, style } = getBranchStatusBadge(rk.branch?.status);
-                          return (
-                            <Badge
-                              color={color}
-                              variant={variant}
-                              style={{ textTransform: 'none', ...style }}
-                            >
-                              {label}
-                            </Badge>
-                          );
-                        })()
-                      )}
+                      {rk.branch?.status !== undefined && (() => {
+                        const { label, color, variant, style } = getBranchStatusBadge(rk.branch?.status);
+                        return (
+                          <Badge color={color} variant={variant} style={{ textTransform: 'none', ...style }}>
+                            {label}
+                          </Badge>
+                        );
+                      })()}
                       <Group>
                         <ActionIcon
                           color="blue"
@@ -882,25 +1007,82 @@ return (
                     </Stack>
                   </Group>
 
-                  {/* Список конструкций */}
-                  {Array.isArray(rk.rkAttachment) && rk.rkAttachment.length > 0 && (
-                    <Box mt="sm">
-                      <Text size="sm" fw={500} mb="xs">Конструкции:</Text>
-                      <Stack gap="sm">
-                        {rk.rkAttachment.map((att) => (
-                          <AttachmentCard
-                            key={att.id}
-                            att={att as any}
-                            apiBase={API}
-                            onOpenImage={(url) => {
-                              setImagePreviewSrc(url);
-                              imagePreviewHandlers.open();
-                            }}
-                          />
-                        ))}
-                      </Stack>
-                    </Box>
-                  )}
+                  {/* Список вложений */}
+                  {Array.isArray(rk.rkAttachment) && rk.rkAttachment.length > 0 && (() => {
+                    const constructions = rk.rkAttachment.filter((a: any) => a.typeAttachment !== 'DOCUMENT');
+                    const documents = rk.rkAttachment.filter((a: any) => a.typeAttachment === 'DOCUMENT');
+                    return (
+                      <>
+                        {constructions.length > 0 && (
+                          <Box mt="sm">
+                            <Text size="sm" fw={500} mb="xs">Конструкции:</Text>
+                            <Box
+                              style={{
+                                maxHeight: constructions.length > 3 ? 360 : 'none',
+                                overflowY: constructions.length > 3 ? 'auto' as const : 'visible' as const,
+                                paddingRight: 4,
+                              }}
+                            >
+                              <Stack gap="sm">
+                                {constructions.map((att: any) => (
+                                  <AttachmentCard
+                                    key={att.id}
+                                    att={att as any}
+                                    apiBase={API}
+                                    onOpenImage={(url) => {
+                                      setImagePreviewSrc(url);
+                                      imagePreviewHandlers.open();
+                                    }}
+                                  />
+                                ))}
+                              </Stack>
+                            </Box>
+                          </Box>
+                        )}
+                        {documents.length > 0 && (
+                          <Paper withBorder p="sm" radius="md" shadow="xs" mt="sm">
+                            <Text size="sm" fw={500} mb="xs">Документы:</Text>
+                            <Box style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 4 }}>
+                              {documents.map((att: any) => {
+                                const normalizedPath = String(att.source || '').replace(/\\\\/g, '/');
+                                const fileUrl = `${API}/${normalizedPath}`;
+                                const fileName = (att.source || '').split('/').pop() || 'Файл';
+                                return (
+                                  <Paper key={att.id} withBorder radius="sm" p={6} shadow="xs" style={{ position: 'relative', minWidth: 140 }}>
+                                    <ActionIcon
+                                      component="a"
+                                      href={fileUrl}
+                                      download
+                                      variant="light"
+                                      color="blue"
+                                      onClick={(e) => e.stopPropagation()}
+                                      style={{ position: 'absolute', top: 6, right: 6 }}
+                                      aria-label="Скачать"
+                                    >
+                                      <IconDownload size={16} />
+                                    </ActionIcon>
+                                    <Image
+                                      src={fileUrl}
+                                      h={70}
+                                      w={120}
+                                      fit="contain"
+                                      radius="sm"
+                                      alt={fileName}
+                                      onClick={() => {
+                                        setImagePreviewSrc(fileUrl);
+                                        imagePreviewHandlers.open();
+                                      }}
+                                      style={{ cursor: 'pointer' }}
+                                    />
+                                  </Paper>
+                                );
+                              })}
+                            </Box>
+                          </Paper>
+                        )}
+                      </>
+                    );
+                  })()}
 
                   {/* Футер карточки */}
                   <Group justify="space-between" mt="sm" pt="sm" style={{ borderTop: '1px solid #eee' }}>
@@ -990,11 +1172,11 @@ return (
           imagePreviewHandlers.close();
         }}
         title="Просмотр изображения"
-        size="xl"
+        size="90vw"
         centered
       >
         {imagePreviewSrc ? (
-          <Image src={imagePreviewSrc} radius="sm" h={500} fit="contain" alt="attachment" />
+          <Image src={imagePreviewSrc} radius="sm" h={window.innerHeight ? Math.floor(window.innerHeight * 0.75) : 700} fit="contain" alt="attachment" />
         ) : (
           <Text size="sm" c="dimmed">Нет изображения</Text>
         )}
