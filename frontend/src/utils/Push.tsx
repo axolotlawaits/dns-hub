@@ -58,13 +58,19 @@ class NotificationSystem implements INotificationSystem {
       icon: <IconBell size="1.1rem" />,
     });
     
-    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      navigator.serviceWorker.ready.then((registration) => {
-        registration.showNotification(title, {
-          body: message,
-          icon: '/notification-icon.png',
-        });
-      });
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator && 'Notification' in window) {
+      try {
+        if (Notification.permission === 'granted') {
+          navigator.serviceWorker.ready.then((registration) => {
+            registration.showNotification(title, {
+              body: message,
+              icon: '/notification-icon.png',
+            });
+          });
+        }
+      } catch (e) {
+        console.error('Browser notification error:', e);
+      }
     }
     
     return id;

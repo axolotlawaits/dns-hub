@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../../server.js';
 import { z } from 'zod';
+import { emailService } from '../../services/email.js';
 import fs from 'fs/promises';
 import path from 'path';
 import multer from 'multer';
@@ -13,6 +14,19 @@ const TYPE_MODEL_UUID = "944287fa-7599-4ff6-aa48-1dd81406f38c";
 const TYPE_CHAPTER = "Тип вывески";
 const STATUS_MODEL_UUID = "944287fa-7599-4ff6-aa48-1dd81406f38c";
 const STATUS_CHAPTER = "Статус согласования";
+
+// Целевые должности для уведомлений и отображения ФИО
+const RK_MANAGER_POSITIONS = [
+  'Управляющий магазином 4 категории',
+  'Управляющий магазином 3 категории',
+  'Управляющий магазином 2 категории',
+  'Управляющий магазином 1 категории',
+  'Управляющий маг. средней категории',
+  'Управляющий маг. высшей категории',
+  'Старший продавец',
+  'Заместитель управляющего магазином 2 категории',
+  'Заместитель управляющего магазином 1 категории',
+];
 
 // Схемы валидации
 const RKAttachmentSchema = z.object({
@@ -113,7 +127,20 @@ export const getRKList = async (req: Request, res: Response, next: NextFunction)
       include: {
         userAdd: { select: { id: true, name: true, email: true } },
         userUpdated: { select: { id: true, name: true, email: true } },
-        branch: true,
+        branch: {
+          include: {
+            userData: {
+              where: {
+                position: { is: { name: { in: RK_MANAGER_POSITIONS } } },
+              },
+              select: {
+                fio: true,
+                email: true,
+                position: { select: { name: true } },
+              },
+            },
+          },
+        },
         rkAttachment: {
           include: {
             typeStructure: { select: { id: true, name: true, colorHex: true } },
@@ -136,7 +163,20 @@ export const getRKById = async (req: Request, res: Response, next: NextFunction)
       include: {
         userAdd: { select: { id: true, name: true, email: true } },
         userUpdated: { select: { id: true, name: true, email: true } },
-        branch: true,
+        branch: {
+          include: {
+            userData: {
+              where: {
+                position: { is: { name: { in: RK_MANAGER_POSITIONS } } },
+              },
+              select: {
+                fio: true,
+                email: true,
+                position: { select: { name: true } },
+              },
+            },
+          },
+        },
         rkAttachment: {
           include: {
             typeStructure: { select: { id: true, name: true, colorHex: true } },
@@ -493,6 +533,24 @@ export const dailyRKJob = async () => {
           receiverId: rk.userAddId,
         }),
       }).catch(() => {});
+
+      // Дополнительно отправляем e-mail сотрудникам с целевыми должностями в филиале
+      try {
+        const managers = await prisma.userData.findMany({
+          where: {
+            branch_uuid: rk.branchId,
+            position: { name: { in: RK_MANAGER_POSITIONS } },
+          },
+          select: { fio: true, email: true },
+        });
+        await Promise.all(
+          managers
+            .filter((m) => !!m.email)
+            .map((m) => emailService.sendRaw(m.email as string, title, `${message}\n\n${m.fio}`))
+        );
+      } catch (e) {
+        console.error('Failed to send emails to managers:', e);
+      }
     }
   }
 };

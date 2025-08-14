@@ -113,6 +113,7 @@ interface Branch {
   rrs: string | null;
   status: number;
   address: string;
+  userData?: Array<{ fio: string; email?: string; position?: { name: string } }>;
 }
 
 interface RKData {
@@ -252,10 +253,21 @@ const RKList: React.FC = () => {
         ...options,
       });
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+        let errMsg = `HTTP error! status: ${response.status}`;
+        try {
+          const text = await response.text();
+          if (text) {
+            const json = JSON.parse(text);
+            errMsg = json.message || errMsg;
+          }
+        } catch {
+          // тело пустое или не JSON — оставляем errMsg
+        }
+        throw new Error(errMsg);
       }
-      return await response.json();
+      const text = await response.text();
+      if (!text) return null; // поддержка 204/пустых ответов
+      return JSON.parse(text);
     } catch (error) {
       console.error(`Error fetching data from ${url}:`, error);
       throw error;
@@ -963,6 +975,11 @@ return (
                         <Text span fw={500}>Адрес:</Text> {rk.branch?.address|| 'не указан'} 
                         {rk.branch?.code}
                       </Text>
+                      {rk.branch?.userData && rk.branch.userData.length > 0 && (
+                        <Text size="sm" mt={6}>
+                          <Text span fw={500}>Контакты:</Text> {rk.branch.userData.map(u => u.fio).join(', ')}
+                        </Text>
+                      )}
                     </Box>
                     
                     {/* Статус филиала и кнопки действий */}
