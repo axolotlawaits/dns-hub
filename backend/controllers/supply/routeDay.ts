@@ -100,7 +100,7 @@ export const getAllRoutesDay = async (req: Request, res: Response): Promise<any>
     include: { filials: { include: { loaders: { include: { filial: true }}}, orderBy: {place: 'asc'}}, route: true},
     orderBy: {day: 'desc'}
   })
-  console.log(dayData)
+
   if (dayData) {
     res.status(200).json(dayData)
   } else {

@@ -8,6 +8,7 @@ import { FilialType } from './Day';
 import dayjs from 'dayjs';
 import RouteEdit from './RouteEdit';
 import { IconPlus } from '@tabler/icons-react';
+import useAuthFetch from '../../../hooks/useAuthFetch';
 
 export const rrsInitData = ['Алтай', 'Барнаул', 'Кемерово', 'Новокузнецк', 'Новосибирск', 'Новосибирская область', 'Омск', 'Томск']
 
@@ -27,6 +28,7 @@ type ValErrors = {
 }
 
 function LoadersRoutes() {
+  const authFetch = useAuthFetch()
   const [name, setName] = useState('')
   const [contractor, setContractor] = useState('')
   const [rrs, setRrs] = useState<string | null>('Новосибирск')
@@ -39,10 +41,11 @@ function LoadersRoutes() {
 
   useEffect(() => {
     const getRoutes = async () => {
-      const response = await fetch(`${API}/loaders/route`)
-      const routes = await response.json()
-      if (response.ok) {
-        setRoutes(routes)
+      const response = await authFetch(`${API}/loaders/route`)
+      
+      if (response && response.ok) {
+        const json = await response.json()
+        setRoutes(json)
       }
     }
     getRoutes()
