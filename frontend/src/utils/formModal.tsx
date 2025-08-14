@@ -1,6 +1,6 @@
 import { Modal, TextInput, Select, Button, Alert, Stack, Textarea, Text, Group, Card, Paper, ActionIcon, NumberInput } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { useState, useEffect, useCallback, useMemo, JSX } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, JSX } from 'react';
 import dayjs from 'dayjs';
 import { API } from '../config/constants';
 import { FileDropZone } from './dnd';
@@ -13,9 +13,12 @@ export type FieldType = 'text' | 'number' | 'select' | 'selectSearch' | 'date' |
 interface FileFieldConfig {
   name: string;
   label: string;
-  type: 'text' | 'number' | 'select';
-  required?: boolean;
+  type: 'text' | 'number' | 'select' | 'date' | 'datetime';
+  required?: boolean | ((meta: Record<string, any>) => boolean);
   options?: Array<{ value: string; label: string }>;
+  mask?: (value: string) => string;
+  visible?: (meta: Record<string, any>) => boolean;
+  placeholder?: string;
 }
 
 export interface FormField {
@@ -39,6 +42,8 @@ export interface FormField {
   accept?: string;
   value?: any;
   renderFileList?: (values: any, setFieldValue: (path: string, val: any) => void) => JSX.Element;
+  mask?: (value: string) => string;
+  placeholder?: string;
 }
 
 export interface ViewFieldConfig {
@@ -119,19 +124,24 @@ const FileUploadComponent = ({
 }: FileUploadProps) => {
   const renderField = (field: FileFieldConfig, attachment: FileAttachment) => {
     const value = attachment.meta?.[field.name] || '';
-    
+
     const commonProps = {
       value,
       onChange: (e: any) => {
+        let nextValue = e.target?.value ?? e;
+        if (typeof nextValue === 'string' && typeof field.mask === 'function') {
+          nextValue = field.mask(nextValue);
+        }
         const newMeta = {
           ...attachment.meta,
-          [field.name]: e.target?.value ?? e
+          [field.name]: nextValue
         };
         onMetaChange(attachment.id, newMeta);
       },
-      required: field.required,
+      required: typeof field.required === 'function' ? field.required(attachment.meta || {}) : !!field.required,
       style: { width: '150px' },
-    };
+      placeholder: field.placeholder,
+    } as any;
 
     switch (field.type) {
       case 'text':
@@ -144,28 +154,45 @@ const FileUploadComponent = ({
             {...commonProps}
             label={field.label}
             data={field.options || []}
+            placeholder={field.placeholder}
           />
         );
+      case 'date':
+        return <TextInput {...commonProps} label={field.label} type="date" />;
+      case 'datetime':
+        return <TextInput {...commonProps} label={field.label} type="datetime-local" />;
       default:
         return null;
     }
   };
 
   const renderAttachment = (attachment: FileAttachment) => {
-    const fileName = typeof attachment.source === 'string'
+    const originalName = typeof attachment.source === 'string'
       ? attachment.source.split('\\').pop() || 'Файл'
-      : attachment.source.name;
+      : (attachment.source as File).name;
+    const normalizedPath = typeof attachment.source === 'string'
+      ? String(attachment.source).replace(/\\/g, '/')
+      : '';
+    const previewUrl = typeof attachment.source === 'string' ? `${API}/${normalizedPath}` : '';
+
+    const visibleFields = (fileFields || []).filter((f) =>
+      typeof f.visible === 'function' ? f.visible(attachment.meta || {}) : true
+    );
 
     return (
-      <Paper key={attachment.id || fileName} p="sm" withBorder>
-        <Group justify="space-between" align="flex-start">
-          <Group gap="xs">
-            <IconFile size={16} />
-            <Text size="sm">{fileName}</Text>
+      <Paper key={attachment.id || originalName} p="sm" withBorder>
+        <Group justify="space-between" align="center" wrap="wrap">
+          <Group gap="sm" align="center">
+            {typeof attachment.source === 'string' ? (
+              <img src={previewUrl} alt={originalName} style={{ height: 60, width: 100, objectFit: 'contain', borderRadius: 6 }} />
+            ) : (
+              <img src={URL.createObjectURL(attachment.source as File)} alt={originalName} style={{ height: 60, width: 100, objectFit: 'contain', borderRadius: 6 }} />
+            )}
+            <Text size="sm" c="dimmed">Предпросмотр</Text>
           </Group>
 
           <Group gap="sm" align="flex-end">
-            {fileFields.map(field => (
+            {visibleFields.map(field => (
               <div key={`${attachment.id}-${field.name}`}>
                 {renderField(field, attachment)}
               </div>
@@ -227,15 +254,15 @@ export const DynamicFormModal = ({
   const [previewId, setPreviewId] = useState<string | null>(null);
   const form = useForm({ initialValues });
   const [attachments, setAttachments] = useState<FileAttachment[]>(initialValues.attachments || []);
+  const initializedRef = useRef(false);
 
   useEffect(() => {
-    if (opened) {
-      // Determine incoming attachments from initial values in a generic way
+    if (opened && !initializedRef.current) {
+      // Initialize once per open session
       const incoming: any[] = (initialValues as any).attachments
         || (initialValues as any).rkAttachment
         || [];
 
-      // Normalize: ensure each attachment has a meta object populated from any extra fields
       const normalized = incoming.map((att: any) => {
         const knownKeys = new Set([
           'id', 'userAdd', 'userAddId', 'source', 'type', 'recordId', 'createdAt', 'updatedAt',
@@ -246,10 +273,7 @@ export const DynamicFormModal = ({
             derivedMeta[key] = att[key];
           }
         });
-        return {
-          ...att,
-          meta: derivedMeta,
-        } as FileAttachment;
+        return { ...att, meta: derivedMeta } as FileAttachment;
       });
 
       const preparedValues = {
@@ -260,8 +284,12 @@ export const DynamicFormModal = ({
 
       form.setValues(preparedValues);
       setAttachments(normalized);
+      initializedRef.current = true;
     }
-  }, [opened, initialValues]);
+    if (!opened) {
+      initializedRef.current = false;
+    }
+  }, [opened]);
 
   const handleMetaChange = useCallback(
     (id: string | undefined, meta: Record<string, any>) => {
@@ -277,15 +305,18 @@ export const DynamicFormModal = ({
   );
 
   const handleFileDrop = useCallback((files: File[]) => {
-    const newAttachments = files.map(file => ({
+    const newAttachments = files.map((file, idx) => ({
+      id: `temp-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 8)}`,
       userAdd: initialValues.userAdd || '',
       source: file,
-      meta: {}, // Инициализируем пустые дополнительные поля
+      meta: {},
     }));
-    
-    setAttachments(prev => [...prev, ...newAttachments]);
-    form.setFieldValue('attachments', [...attachments, ...newAttachments]);
-  }, [initialValues.userAdd, attachments, form]);
+    setAttachments(prev => {
+      const next = [...prev, ...newAttachments];
+      form.setFieldValue('attachments', next);
+      return next;
+    });
+  }, [initialValues.userAdd, form]);
 
   const handleRemoveAttachment = useCallback((id: string | undefined) => {
     setAttachments(prev => {
@@ -305,11 +336,23 @@ export const DynamicFormModal = ({
       required: field.required,
       ...form.getInputProps(field.name),
       mb: "md" as const,
+      placeholder: field.placeholder,
     };
 
     switch (field.type) {
       case 'text':
-        return <TextInput key={field.name} {...commonProps} />;
+        return (
+          <TextInput
+            key={field.name}
+            {...commonProps}
+            onChange={(e) => {
+              const raw = e.target.value;
+              const masked = typeof field.mask === 'function' ? field.mask(raw) : raw;
+              form.setFieldValue(field.name, masked);
+              field.onChange?.(masked);
+            }}
+          />
+        );
       case 'textarea':
         return <Textarea key={field.name} {...commonProps} />;
       case 'select':
@@ -320,6 +363,7 @@ export const DynamicFormModal = ({
             data={field.options || []}
             searchable={field.searchable}
             disabled={field.disabled}
+            placeholder={field.placeholder}
             value={(form.values as any)[field.name] ?? ''}
             onChange={(val) => {
               form.setFieldValue(field.name, val);
@@ -337,6 +381,7 @@ export const DynamicFormModal = ({
             nothingFoundMessage="Ничего не найдено"
             clearable
             disabled={field.disabled}
+            placeholder={field.placeholder}
             value={(form.values as any)[field.name] ?? ''}
             onChange={(val) => {
               form.setFieldValue(field.name, val);
@@ -369,7 +414,7 @@ export const DynamicFormModal = ({
       default:
         return null;
     }
-  }, [form, handleFileDrop, handleRemoveAttachment, attachments, handleMetaChange]);
+  }, [form, handleFileDrop, handleRemoveAttachment, attachments, handleMetaChange, mode]);
 
   const renderViewField = useCallback((config: ViewFieldConfig, item: any) => (
     <div key={config.label} style={{ marginBottom: '16px' }}>

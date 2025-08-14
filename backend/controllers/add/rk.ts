@@ -19,32 +19,18 @@ const RKAttachmentSchema = z.object({
   userAddId: z.string(),
   source: z.string(),
   type: z.string(),
-  sizeXY: z.string(),
-  clarification: z.string(),
+  // Новый признак типа вложения: CONSTRUCTION | DOCUMENT
+  typeAttachment: z.enum(['CONSTRUCTION', 'DOCUMENT']),
+  // Остальные поля теперь опциональны: используются только для CONSTRUCTION
+  sizeXY: z.string().optional(),
+  clarification: z.string().optional(),
+  typeStructureId: z.string().optional(),
+  approvalStatusId: z.string().optional(),
+  agreedTo: z.date().optional(),
 });
 
 const validateBranchExists = async (branchId: string) => {
   return prisma.branch.findUnique({ where: { uuid: branchId } });
-};
-
-const validateTypeStructureExists = async (typeStructureId: string) => {
-  return prisma.type.findFirst({
-    where: {
-      id: typeStructureId,
-      model_uuid: TYPE_MODEL_UUID,
-      chapter: TYPE_CHAPTER,
-    },
-  });
-};
-
-const validateApprovalStatusExists = async (approvalStatusId: string) => {
-  return prisma.type.findFirst({
-    where: {
-      id: approvalStatusId,
-      model_uuid: STATUS_MODEL_UUID,
-      chapter: STATUS_CHAPTER,
-    },
-  });
 };
 
 const deleteFileSafely = async (filePath: string) => {
@@ -68,18 +54,35 @@ const processRKAttachments = async (
   files: Express.Multer.File[],
   rkId: string,
   userAddId: string,
-  attachmentsMeta: Array<{ sizeXY: string; clarification: string }>
+  attachmentsMeta: Array<{ typeAttachment?: 'CONSTRUCTION' | 'DOCUMENT'; sizeXY?: string; clarification?: string; typeStructureId?: string; approvalStatusId?: string; agreedTo?: string }>,
+  defaults: { typeStructureId?: string; approvalStatusId?: string } = {}
 ) => {
   if (!files || !Array.isArray(files)) return;
   
   const attachmentsData = files.map((file, index) => {
+    const agreedToStr = attachmentsMeta[index]?.agreedTo;
+    const agreedToDate = agreedToStr ? new Date(agreedToStr.split('T')[0]) : undefined;
+    const incomingType = attachmentsMeta[index]?.typeAttachment;
+    const typeAttachment = incomingType
+      ? incomingType
+      : agreedToDate
+        ? 'CONSTRUCTION'
+        : 'DOCUMENT';
     const attachment = {
       userAddId,
       source: file.path,
       type: file.mimetype,
-      sizeXY: attachmentsMeta[index]?.sizeXY || '',
-      clarification: attachmentsMeta[index]?.clarification || '',
+      typeAttachment,
+      sizeXY: typeAttachment === 'CONSTRUCTION' ? (attachmentsMeta[index]?.sizeXY || '') : '',
+      clarification: typeAttachment === 'CONSTRUCTION' ? (attachmentsMeta[index]?.clarification || '') : '',
       recordId: rkId,
+      typeStructureId: typeAttachment === 'CONSTRUCTION'
+        ? (attachmentsMeta[index]?.typeStructureId || defaults.typeStructureId || undefined)
+        : undefined,
+      approvalStatusId: typeAttachment === 'CONSTRUCTION'
+        ? (attachmentsMeta[index]?.approvalStatusId || defaults.approvalStatusId || undefined)
+        : undefined,
+      agreedTo: agreedToDate,
     };
     RKAttachmentSchema.parse(attachment);
     return attachment;
@@ -111,21 +114,12 @@ export const getRKList = async (req: Request, res: Response, next: NextFunction)
         userAdd: { select: { id: true, name: true, email: true } },
         userUpdated: { select: { id: true, name: true, email: true } },
         branch: true,
-        typeStructure: {
-          select: {
-            id: true,
-            name: true,
-            colorHex: true
-          }
+        rkAttachment: {
+          include: {
+            typeStructure: { select: { id: true, name: true, colorHex: true } },
+            approvalStatus: { select: { id: true, name: true, colorHex: true } },
+          },
         },
-        approvalStatus: {
-          select: {
-            id: true,
-            name: true,
-            colorHex: true
-          }
-        },
-        rkAttachment: true,
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -143,21 +137,12 @@ export const getRKById = async (req: Request, res: Response, next: NextFunction)
         userAdd: { select: { id: true, name: true, email: true } },
         userUpdated: { select: { id: true, name: true, email: true } },
         branch: true,
-        typeStructure: {
-          select: {
-            id: true,
-            name: true,
-            colorHex: true
-          }
+        rkAttachment: {
+          include: {
+            typeStructure: { select: { id: true, name: true, colorHex: true } },
+            approvalStatus: { select: { id: true, name: true, colorHex: true } },
+          },
         },
-        approvalStatus: {
-          select: {
-            id: true,
-            name: true,
-            colorHex: true
-          }
-        },
-        rkAttachment: true,
       },
     });
     if (!rk) {
@@ -182,16 +167,15 @@ export const createRK = async (req: Request, res: Response, next: NextFunction) 
     });
 
     // Проверка обязательных полей
-    if (!req.body.userAddId || !req.body.branchId || !req.body.agreedTo || 
-        !req.body.typeStructureId || !req.body.approvalStatusId) {
+    if (!req.body.userAddId || !req.body.branchId) {
       return res.status(400).json({ 
         error: 'Missing required fields',
-        required: ['userAddId', 'branchId', 'agreedTo', 'typeStructureId', 'approvalStatusId']
+        required: ['userAddId', 'branchId']
       });
     }
 
-    // Парсинг метаданных вложений
-    let attachmentsMeta: Array<{sizeXY: string, clarification: string}> = [];
+    // Парсинг метаданных вложений (включая поля, перенесенные в RKAttachment)
+    let attachmentsMeta: Array<{ sizeXY: string; clarification: string; typeStructureId?: string; approvalStatusId?: string; agreedTo?: string } > = [];
     try {
       attachmentsMeta = req.body.attachmentsMeta 
         ? JSON.parse(req.body.attachmentsMeta)
@@ -214,18 +198,15 @@ export const createRK = async (req: Request, res: Response, next: NextFunction) 
       });
     }
 
-    // Проверка существования связанных сущностей
-    const [userExists, branchExists, typeExists, statusExists] = await Promise.all([
+    // Проверка существования связанных сущностей (тип/статус теперь в attachments meta, поэтому не валидируем их тут)
+    const [userExists, branchExists] = await Promise.all([
       prisma.user.findUnique({ where: { id: req.body.userAddId } }),
       prisma.branch.findUnique({ where: { uuid: req.body.branchId } }),
-      prisma.type.findUnique({ where: { id: req.body.typeStructureId } }),
-      prisma.type.findUnique({ where: { id: req.body.approvalStatusId } })
     ]);
 
     if (!userExists) return res.status(400).json({ error: 'User not found' });
     if (!branchExists) return res.status(400).json({ error: 'Branch not found' });
-    if (!typeExists) return res.status(400).json({ error: 'Type structure not found' });
-    if (!statusExists) return res.status(400).json({ error: 'Approval status not found' });
+    // Валидация typeStructureId/approvalStatusId перенесена на уровень добавления вложений при необходимости
 
     // Создание основной записи
     const newRK = await prisma.rK.create({
@@ -233,37 +214,35 @@ export const createRK = async (req: Request, res: Response, next: NextFunction) 
         userAddId: req.body.userAddId,
         userUpdatedId: req.body.userUpdatedId || req.body.userAddId,
         branchId: req.body.branchId,
-        agreedTo: new Date(req.body.agreedTo),
-        typeStructureId: req.body.typeStructureId,
-        approvalStatusId: req.body.approvalStatusId,
       }
     });
 
     // Обработка вложений
     if (Array.isArray(req.files) && req.files.length > 0) {
       console.log('Creating attachments with meta:', attachmentsMeta);
-      
-      await prisma.rKAttachment.createMany({
-        data: (req.files as Express.Multer.File[]).map((file, index) => ({
-          userAddId: req.body.userAddId,
-          source: file.path,
-          type: file.mimetype,
-          sizeXY: attachmentsMeta[index]?.sizeXY || '',
-          clarification: attachmentsMeta[index]?.clarification || '',
-          recordId: newRK.id
-        }))
-      });
+      await processRKAttachments(
+        req.files as Express.Multer.File[],
+        newRK.id,
+        req.body.userAddId,
+        attachmentsMeta,
+        {}
+      );
     }
+    // Если файлов нет, но есть метаданные с agreedTo — ничего не пишем, т.к. дата хранится на уровне файла
 
     // Получение полной записи для ответа
     const result = await prisma.rK.findUnique({
       where: { id: newRK.id },
       include: {
-        userAdd: { select: { id: true, name: true } },
-        branch: { select: { uuid: true, name: true } },
-        typeStructure: { select: { id: true, name: true } },
-        approvalStatus: { select: { id: true, name: true } },
-        rkAttachment: true
+        userAdd: { select: { id: true, name: true, email: true } },
+        userUpdated: { select: { id: true, name: true, email: true } },
+        branch: true,
+        rkAttachment: {
+          include: {
+            typeStructure: { select: { id: true, name: true, colorHex: true } },
+            approvalStatus: { select: { id: true, name: true, colorHex: true } },
+          },
+        },
       }
     });
 
@@ -279,7 +258,6 @@ export const createRK = async (req: Request, res: Response, next: NextFunction) 
         where: {
           userAddId: req.body.userAddId,
           branchId: req.body.branchId,
-          agreedTo: new Date(req.body.agreedTo)
         }
       }).catch(e => console.error('Error cleaning up:', e));
     }
@@ -305,7 +283,7 @@ export const updateRK = async (req: Request, res: Response, next: NextFunction) 
       console.error('Error parsing removedAttachments:', e);
     }
 
-    let newAttachmentsMeta: Array<{ sizeXY: string; clarification: string }> = [];
+    let newAttachmentsMeta: Array<{ typeAttachment?: 'CONSTRUCTION' | 'DOCUMENT'; sizeXY?: string; clarification?: string; typeStructureId?: string; approvalStatusId?: string; agreedTo?: string }> = [];
     try {
       newAttachmentsMeta = body.newAttachmentsMeta
         ? JSON.parse(body.newAttachmentsMeta)
@@ -326,35 +304,44 @@ export const updateRK = async (req: Request, res: Response, next: NextFunction) 
       );
     }
 
-    const updateData: {
-      userUpdatedId?: string;
-      branchId?: string;
-      agreedTo?: Date;
-      typeStructureId?: string;
-      approvalStatusId?: string;
-      updatedAt: Date;
-    } = { updatedAt: new Date() };
+    // Обновление метаданных существующих вложений (без новых файлов)
+    if (body.existingAttachmentsMeta) {
+      try {
+        const updates: Array<{ id: string; typeAttachment?: 'CONSTRUCTION' | 'DOCUMENT'; sizeXY?: string; clarification?: string; typeStructureId?: string; approvalStatusId?: string; agreedTo?: string }> = JSON.parse(body.existingAttachmentsMeta);
+        for (const u of updates) {
+          const typeAttachment = u.typeAttachment || (u.agreedTo ? 'CONSTRUCTION' : 'DOCUMENT');
+          await prisma.rKAttachment.update({
+            where: { id: u.id },
+            data: {
+              typeAttachment,
+              sizeXY: typeAttachment === 'CONSTRUCTION' ? (u.sizeXY ?? undefined) : '',
+              clarification: typeAttachment === 'CONSTRUCTION' ? (u.clarification ?? undefined) : '',
+              typeStructureId: typeAttachment === 'CONSTRUCTION' ? (u.typeStructureId ?? undefined) : '',
+              approvalStatusId: typeAttachment === 'CONSTRUCTION' ? (u.approvalStatusId ?? undefined) : '',
+              agreedTo: u.agreedTo ? new Date(u.agreedTo.split('T')[0]) : undefined,
+            },
+          });
+        }
+      } catch (e) {
+        console.error('Error parsing existingAttachmentsMeta', e);
+      }
+    }
 
-    if (body.userUpdatedId) updateData.userUpdatedId = body.userUpdatedId;
-    if (body.branchId) updateData.branchId = body.branchId;
-    if (body.agreedTo) updateData.agreedTo = new Date(body.agreedTo);
-    if (body.typeStructureId) updateData.typeStructureId = body.typeStructureId;
-    if (body.approvalStatusId) updateData.approvalStatusId = body.approvalStatusId;
+    const updateData: any = { updatedAt: new Date() };
+
+    if (body.userUpdatedId) {
+      updateData.userUpdated = { connect: { id: body.userUpdatedId } };
+    }
+    if (body.branchId) {
+      updateData.branch = { connect: { uuid: body.branchId } };
+    }
 
     if (body.branchId) {
       const branchExists = await validateBranchExists(body.branchId);
       if (!branchExists) return res.status(400).json({ error: 'Branch does not exist' });
     }
 
-    if (body.typeStructureId) {
-      const typeStructureExists = await validateTypeStructureExists(body.typeStructureId);
-      if (!typeStructureExists) return res.status(400).json({ error: 'Type Structure does not exist' });
-    }
-
-    if (body.approvalStatusId) {
-      const approvalStatusExists = await validateApprovalStatusExists(body.approvalStatusId);
-      if (!approvalStatusExists) return res.status(400).json({ error: 'Approval Status does not exist' });
-    }
+    // Тип/статус теперь живут в RKAttachment; их не валидируем на уровне RK
 
     const updatedRK = await prisma.rK.update({
       where: { id: rkId },
@@ -363,21 +350,12 @@ export const updateRK = async (req: Request, res: Response, next: NextFunction) 
         userAdd: { select: { id: true, name: true, email: true } },
         userUpdated: { select: { id: true, name: true, email: true } },
         branch: true,
-        typeStructure: {
-          select: {
-            id: true,
-            name: true,
-            colorHex: true
-          }
+        rkAttachment: {
+          include: {
+            typeStructure: { select: { id: true, name: true, colorHex: true } },
+            approvalStatus: { select: { id: true, name: true, colorHex: true } },
+          },
         },
-        approvalStatus: {
-          select: {
-            id: true,
-            name: true,
-            colorHex: true
-          }
-        },
-        rkAttachment: true,
       },
     });
 
@@ -405,8 +383,7 @@ export const notifyRK = async (req: Request, res: Response, next: NextFunction):
       include: {
         userAdd: { select: { id: true, name: true } },
         branch: true,
-        typeStructure: true,
-        approvalStatus: true,
+        rkAttachment: true,
       },
     });
 
@@ -417,19 +394,14 @@ export const notifyRK = async (req: Request, res: Response, next: NextFunction):
     const systemSenderId = process.env.SYSTEM_SENDER_ID || null;
     const hubUrl = process.env.HUB_API_URL || 'http://localhost:2000/hub-api/notifications';
 
-    const computedTitle =
-      title || `Напоминание по конструкции: ${rk.branch?.rrs || ''} ${rk.branch?.name || ''}`.trim();
+    const computedTitle = title || `Напоминание по конструкции: ${rk.id}`;
 
     // Fallback message if not provided
-    const daysSince = Math.max(
-      0,
-      Math.floor((Date.now() - new Date(rk.agreedTo).getTime()) / (1000 * 60 * 60 * 24))
-    );
+    const daysSince = 0;
     const defaultMessage =
       message ||
-      `РРС: ${rk.branch?.rrs || '-'}; Филиал: ${rk.branch?.name || '-'}${rk.branch?.code ? ` (${rk.branch.code})` : ''}${rk.branch?.city ? ` - ${rk.branch.city}` : ''}.\n` +
-        `Тип: ${rk.typeStructure?.name || '-'}; Статус: ${rk.approvalStatus?.name || '-'}.\n` +
-        `Дней с согласования: ${daysSince}.`;
+      `Филиал: ${rk.branch?.name || '-'}\n` +
+      `Вложений: ${rk.rkAttachment?.length || 0}`;
 
     const toArray = (value: unknown): string[] => {
       if (Array.isArray(value)) return value as string[];
@@ -478,24 +450,50 @@ export const notifyRK = async (req: Request, res: Response, next: NextFunction):
 export const dailyRKJob = async () => {
   const hubUrl = process.env.HUB_API_URL || 'http://localhost:2000/hub-api/notifications';
   const systemSenderId = process.env.SYSTEM_SENDER_ID || null;
+  const thresholds = new Set([180, 90, 30]);
+
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const daysDiff = (future: Date, base: Date) => Math.floor((startOfDay(future).getTime() - startOfDay(base).getTime()) / (24 * 3600 * 1000));
+
   const rks = await prisma.rK.findMany({
-    include: { userAdd: true, branch: true, typeStructure: true, approvalStatus: true },
+    include: {
+      userAdd: { select: { id: true, name: true, email: true } },
+      branch: true,
+      rkAttachment: true,
+    },
   });
+
+  const today = new Date();
+
   for (const rk of rks) {
-    const title = `Автонапоминание: ${rk.branch?.rrs || ''} ${rk.branch?.name || ''}`.trim();
-    const message = `Дата согласования: ${new Date(rk.agreedTo).toLocaleString('ru-RU')}`;
-    await fetch(hubUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        type: 'WARNING',
-        channels: ['IN_APP', 'TELEGRAM', 'EMAIL'],
-        title,
-        message,
-        senderId: systemSenderId,
-        receiverId: rk.userAddId,
-      }),
-    });
+    for (const att of rk.rkAttachment) {
+      if (!att.agreedTo) continue; // нет даты — не уведомляем
+
+      const remaining = daysDiff(new Date(att.agreedTo), today);
+      if (!thresholds.has(remaining)) continue; // уведомляем только на 180/90/30
+
+      const title = `Срок действия скоро истекает: ${remaining} дней`;
+      const message = [
+        `Филиал: ${rk.branch?.name || '-'}`,
+        `ID записи: ${rk.id}`,
+        `Вложение: ${att.source.split('/').pop()}`,
+        `До даты: ${startOfDay(new Date(att.agreedTo)).toLocaleDateString('ru-RU')}`,
+        `Осталось дней: ${remaining}`,
+      ].join('\n');
+
+      await fetch(hubUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'WARNING',
+          channels: ['IN_APP', 'TELEGRAM', 'EMAIL'],
+          title,
+          message,
+          senderId: systemSenderId,
+          receiverId: rk.userAddId,
+        }),
+      }).catch(() => {});
+    }
   }
 };
 

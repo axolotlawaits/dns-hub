@@ -33,14 +33,13 @@ interface User {
   organization?: string;
 }
 
-interface MeterData {
+type MeterData = Record<string, number | undefined> & {
   'Офис - Холодная вода'?: number;
   'ProДвери - Электричество'?: number;
   'КакДома - Электричество'?: number;
   'КакДома - Холодная вода'?: number;
   'КакДома - Горячая вода'?: number;
-  [key: string]: number | undefined;
-}
+};
 
 interface MeterReading {
   id: string;
@@ -56,6 +55,7 @@ interface MeterReadingWithFormattedData extends MeterReading {
   formattedDate: string;
   displayDate: string;
   formattedData: MeterData;
+  diffs: MeterData; // разница по каждому показателю с предыдущим месяцем
   formattedConsumption: string;
   userName: string;
 }
@@ -90,10 +90,15 @@ const formatReadingData = (data: MeterReading[]): MeterReadingWithFormattedData[
     const currentData = reading.indications;
     const prevData = prevReading?.indications || {};
 
-    const consumption = Object.keys(currentData).reduce((sum, key) => {
-      const currentValue = currentData[key as keyof MeterData] || 0;
-      const prevValue = prevData[key as keyof MeterData] || 0;
-      return sum + (currentValue - prevValue);
+    const allKeys = Array.from(new Set([...Object.keys(currentData), ...Object.keys(prevData)]));
+
+    const diffs: MeterData = {};
+    const consumption = allKeys.reduce((sum, key) => {
+      const currentValue = (currentData as any)[key] ?? 0;
+      const prevValue = (prevData as any)[key] ?? 0;
+      const delta = Number(currentValue) - Number(prevValue);
+      (diffs as any)[key] = delta;
+      return sum + delta;
     }, 0);
 
     return {
@@ -102,6 +107,7 @@ const formatReadingData = (data: MeterReading[]): MeterReadingWithFormattedData[
       formattedDate: dayjs(reading.date).format('MMMM YYYY'),
       displayDate: dayjs(reading.date).format('MMMM YYYY'),
       formattedData: currentData,
+      diffs,
       formattedConsumption: consumption.toFixed(2),
       userName: reading.user?.name ? formatName(reading.user.name) : 'Unknown',
     };
@@ -197,6 +203,18 @@ const ReadingRow = React.memo(({
                               (reading.formattedData['ProДвери - Электричество'] || 0)
   }), [reading.formattedData]);
 
+  const unitSuffix = useCallback((key: string) => (
+    key.includes('Электричество') ? 'кВт·ч/м' : 'м³/м'
+  ), []);
+
+  const formatDelta = useCallback((key: string) => {
+    const diffsAny = reading.diffs as Record<string, number | undefined>;
+    const raw = diffsAny[key] ?? 0;
+    const value = Number(raw) || 0;
+    const sign = value > 0 ? '' : '';
+    return `${sign}${value.toFixed(2)} ${unitSuffix(key)}`;
+  }, [reading.diffs, unitSuffix]);
+
   const hasKakDomaData = useMemo(() =>
     ['КакДома - Электричество', 'КакДома - Холодная вода', 'КакДома - Горячая вода'].some(
       key => formattedData[key] !== undefined
@@ -213,6 +231,7 @@ const ReadingRow = React.memo(({
             <Text ta="left" style={{ color: 'var(--font)' }}>
               <Text span fw={500}>Холодная вода: </Text>
               <Text span>{formatValue('Холодная вода', formattedData['Офис - Холодная вода'])}</Text>
+              <Text span c="dimmed"> ({formatDelta('Офис - Холодная вода')})</Text>
             </Text>
           ) : (
             <Text c="dimmed" ta="left">Нет данных</Text>
@@ -225,6 +244,7 @@ const ReadingRow = React.memo(({
             <Text ta="left" style={{ color: 'var(--font)' }}>
               <Text span fw={500}>Электричество: </Text>
               <Text span>{formatValue('Электричество', formattedData['ProДвери - Электричество'])}</Text>
+              <Text span c="dimmed"> ({formatDelta('ProДвери - Электричество')})</Text>
             </Text>
           ) : (
             <Text c="dimmed" ta="left">Нет данных</Text>
@@ -238,18 +258,21 @@ const ReadingRow = React.memo(({
               <Text ta="left" style={{ color: 'var(--font)' }}>
                 <Text span fw={500}>Электричество: </Text>
                 <Text span>{formatValue('Электричество', formattedData['КакДома - Электричество'])}</Text>
+                <Text span c="dimmed"> ({formatDelta('КакДома - Электричество')})</Text>
               </Text>
             )}
             {formattedData['КакДома - Холодная вода'] !== undefined && (
               <Text ta="left" style={{ color: 'var(--font)' }}>
                 <Text span fw={500}>Холодная вода: </Text>
                 <Text span>{formatValue('Холодная вода', formattedData['КакДома - Холодная вода'])}</Text>
+                <Text span c="dimmed"> ({formatDelta('КакДома - Холодная вода')})</Text>
               </Text>
             )}
             {formattedData['КакДома - Горячая вода'] !== undefined && (
               <Text ta="left" style={{ color: 'var(--font)' }}>
                 <Text span fw={500}>Горячая вода: </Text>
                 <Text span>{formatValue('Горячая вода', formattedData['КакДома - Горячая вода'])}</Text>
+                <Text span c="dimmed"> ({formatDelta('КакДома - Горячая вода')})</Text>
               </Text>
             )}
             {!hasKakDomaData && <Text c="dimmed" ta="left">Нет данных</Text>}
@@ -359,7 +382,13 @@ const useMeterReadings = () => {
     }
   }, []);
 
-  const tableData = useMemo(() => formatReadingData(state.readings), [state.readings]);
+  // ВАЖНО: считаем помесячные разницы на базе хронологически возрастающего списка,
+  // чтобы дельта относится к текущему месяцу (current - previous)
+  const tableBaseAsc = useMemo(() => {
+    return [...state.readings].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [state.readings]);
+
+  const tableData = useMemo(() => formatReadingData(tableBaseAsc), [tableBaseAsc]);
 
   const filteredData = useMemo(() => {
     return state.columnFilters.reduce((result, filter) => {

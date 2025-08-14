@@ -373,7 +373,7 @@ model RK {
   userUpdated               User?                 @relation("RK_UserUpdated", fields: [userUpdatedId], references: [id])
   userUpdatedId             String    
   branch                    Branch                @relation(fields: [branchId], references: [uuid])  
-  branchId                  String              
+  branchId                  String             
   rkAttachment              RKAttachment[]    
 }   
 
@@ -386,13 +386,14 @@ model RKAttachment {
   clarification             String
   agreedTo                  DateTime?                  
   typeStructure             Type?                  @relation("RK_typeStructure", fields: [typeStructureId], references: [id])
-  typeStructureId           String    
+  typeStructureId           String?   
   approvalStatus            Type?                  @relation("RK_approvalStatus", fields: [approvalStatusId], references: [id])
-  approvalStatusId          String                    
+  approvalStatusId          String?                   
   type                      String              
   recordId                  String              
   rk                        RK                    @relation(fields: [recordId], references: [id])
   userAdd                   User                  @relation(fields: [userAddId], references: [id])
+  typeAttachment            String
 }   
 
 model PrintService {

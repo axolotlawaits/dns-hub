@@ -11,6 +11,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fullcalendar/core": "^6.1.15",
+    "@fullcalendar/daygrid": "^6.1.15",
+    "@fullcalendar/list": "^6.1.15",
+    "@fullcalendar/react": "^6.1.15",
     "@hello-pangea/dnd": "^18.0.1",
     "@mantine/carousel": "^8.1.2",
     "@mantine/core": "^8.1.2",

@@ -2,10 +2,11 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { API } from '../../../config/constants';
 import { useUserContext } from '../../../hooks/useUserContext';
 import { notificationSystem } from '../../../utils/Push';
-import { Button, Title, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Paper, Modal } from '@mantine/core';
+import { Button, Title, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Paper, Modal, Badge, Image } from '@mantine/core';
+import RKCalendarModal from './RKCalendar';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
-import { IconPencil, IconTrash, IconUpload, IconFile } from '@tabler/icons-react';
+import { IconPencil, IconTrash, IconUpload, IconFile, IconDownload } from '@tabler/icons-react';
 import { DynamicFormModal, type FormConfig } from '../../../utils/formModal';
 import { DndProviderWrapper } from '../../../utils/dnd';
 
@@ -21,7 +22,86 @@ interface RKAttachment {
   sizeXY: string;
   clarification: string;
   createdAt: Date;
+  agreedTo?: string | Date;
+  typeStructure?: { id: string; name: string; colorHex?: string };
+  approvalStatus?: { id: string; name: string; colorHex?: string };
+  typeAttachment?: string;
 }
+
+const AttachmentCard = React.memo(function AttachmentCard({
+  att,
+  apiBase,
+  onOpenImage,
+}: {
+  att: RKAttachment;
+  apiBase: string;
+  onOpenImage: (url: string) => void;
+}) {
+  const fileName = (att.source || '').split('/').pop() || 'Файл';
+  const agreed = att.agreedTo ? dayjs(att.agreedTo).startOf('day') : null;
+  const today = dayjs().startOf('day');
+  const diff = agreed ? agreed.diff(today, 'day') : null;
+  const normalizedPath = String(att.source || '').replace(/\\/g, '/');
+  const fileUrl = `${apiBase}/${normalizedPath}`;
+  const isDocument = att.typeAttachment === 'DOCUMENT';
+
+  return (
+    <Paper
+      withBorder
+      radius="md"
+      p="sm"
+      shadow="xs"
+      onClick={() => onOpenImage(fileUrl)}
+      style={{ cursor: 'pointer', position: 'relative' }}
+    >
+      <ActionIcon
+        component="a"
+        href={fileUrl}
+        download
+        variant="light"
+        color="blue"
+        onClick={(e) => e.stopPropagation()}
+        style={{ position: 'absolute', top: 8, right: 8 }}
+        aria-label="Скачать"
+      >
+        <IconDownload size={16} />
+      </ActionIcon>
+      <Group justify="flex-start" align="center">
+        <Group gap={12} align="center">
+          <Image src={fileUrl} h={70} w={100} fit="contain" radius="sm" alt={fileName} />
+        </Group>
+      </Group>
+      <Group gap="sm" mt={6} wrap="wrap" align="center">
+        {att.sizeXY && <Text size="xs" c="dimmed">Размер: {att.sizeXY}</Text>}
+        {att.clarification && <Text size="xs" c="dimmed">{att.clarification}</Text>}
+        {isDocument && (
+          <Badge color="gray" variant="light" style={{ textTransform: 'none' }}>
+            Документ
+          </Badge>
+        )}
+        {!isDocument && att.typeStructure?.name && (
+          <Badge color={att.typeStructure?.colorHex || 'blue'} variant="outline" style={{ textTransform: 'none' }}>
+            {att.typeStructure.name}
+          </Badge>
+        )}
+        {!isDocument && att.approvalStatus?.name && (
+          <Badge color={att.approvalStatus?.colorHex || 'gray'} variant="light" style={{ textTransform: 'none' }}>
+            {att.approvalStatus.name}
+          </Badge>
+        )}
+        {!isDocument && diff === null && (
+          <Text size="xs" c="dimmed">Срок: не указан</Text>
+        )}
+        {!isDocument && typeof diff === 'number' && diff >= 0 && (
+          <Text size="xs" c="dimmed">Осталось: {diff} дн.</Text>
+        )}
+        {!isDocument && typeof diff === 'number' && diff < 0 && (
+          <Text size="xs" c="red">Просрочено: {Math.abs(diff)} дн.</Text>
+        )}
+      </Group>
+    </Paper>
+  );
+});
 
 interface Branch {
   uuid: string;
@@ -29,6 +109,8 @@ interface Branch {
   code: string;
   city: string;
   rrs: string | null;
+  status: number;
+  address: string;
 }
 
 interface RKData {
@@ -41,7 +123,8 @@ interface RKData {
   approvalStatusId: string;
   createdAt: Date;
   updatedAt?: Date;
-  attachments: RKAttachment[];
+  attachments?: RKAttachment[];
+  rkAttachment?: RKAttachment[];
   userAdd?: User;
   userUpdated?: User;
   branch?: Branch;
@@ -55,8 +138,6 @@ interface RKFormValues {
   rrs: string;
   branchId: string;
   agreedTo: string;
-  typeStructureId: string;
-  approvalStatusId: string;
   attachments: Array<{
     id?: string;
     source: File | string;
@@ -84,8 +165,6 @@ const DEFAULT_RK_FORM: RKFormValues = {
   rrs: '',
   branchId: '',
   agreedTo: dayjs().format('YYYY-MM-DDTHH:mm'),
-  typeStructureId: '',
-  approvalStatusId: '',
   attachments: [],
   removedAttachments: [],
 };
@@ -102,6 +181,8 @@ const RKList: React.FC = () => {
   const [branchOptions, setBranchOptions] = useState<SelectOption[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [fileUploading, setFileUploading] = useState(false);
+  const [showArchive, setShowArchive] = useState(false);
+  const [calendarOpened, calendarHandlers] = useDisclosure(false);
 
   const modals = {
     view: useDisclosure(false),
@@ -109,6 +190,46 @@ const RKList: React.FC = () => {
     create: useDisclosure(false),
     delete: useDisclosure(false),
   };
+
+  const [imagePreviewSrc, setImagePreviewSrc] = useState<string | null>(null);
+  const [imagePreviewOpened, imagePreviewHandlers] = useDisclosure(false);
+
+  const maskSizeXY = useCallback((raw: string) => {
+    const input = String(raw || '').toLowerCase();
+    let output = '';
+    let separators = 0; // количество 'x' уже вставлено
+
+    const pushX = () => {
+      if (output.length === 0) return; // не начинаем со 'x'
+      if (!/\d$/.test(output)) return; // перед 'x' должна быть цифра
+      if (separators >= 2) return; // максимум 2 разделителя (3 секции)
+      if (output.endsWith('x')) return; // не дублировать подряд
+      output += 'x';
+      separators += 1;
+    };
+
+    for (let i = 0; i < input.length; i += 1) {
+      const ch = input[i];
+      if (/[0-9]/.test(ch)) {
+        output += ch;
+        continue;
+      }
+      if (ch === ' ' || ch === 'x' || ch === 'х' || ch === '×' || ch === '*') {
+        // пробел или любой вариант x → единая логика вставки 'x'
+        pushX();
+        continue;
+      }
+      // игнорируем прочие символы
+    }
+
+    // если получилось больше 3 секций из-за ручного ввода, обрежем по секциям
+    const parts = output.split('x');
+    if (parts.length > 3) {
+      output = parts.slice(0, 3).join('x');
+    }
+
+    return output;
+  }, []);
 
   const showNotification = useCallback((type: 'success' | 'error', message: string) => {
     notificationSystem.addNotification(
@@ -219,7 +340,97 @@ const RKList: React.FC = () => {
     return branchOptions.filter(branch => branch.rrs === rkForm.rrs);
   }, [rkForm.rrs, branchOptions]);
 
-  const formConfig: FormConfig = useMemo(() => ({
+  const formConfigCreate: FormConfig = useMemo(() => ({
+    fields: [
+      {
+        name: 'rrs',
+        label: 'РРС',
+        type: 'select',
+        options: rrsOptions,
+        required: true,
+        onChange: handleRrsChange,
+        searchable: true,
+        placeholder: 'Выберите РРС'
+      },
+      {
+        name: 'branchId',
+        label: 'Филиал',
+        type: 'select',
+        options: filteredBranchOptions,
+        required: true,
+        disabled: !rkForm.rrs,
+        searchable: true,
+        placeholder: 'Выберите филиал'
+      },
+      {
+        name: 'attachments',
+        label: 'Конструкции',
+        type: 'file',
+        multiple: true,
+        withDnd: true,
+        accept: 'image/*,.pdf,.doc,.docx,.xls,.xlsx',
+        leftSection: <IconUpload size={18} />,
+            fileFields: [
+              {
+                name: 'typeAttachment',
+                label: 'Тип вложения',
+                type: 'select',
+            required: true,
+                options: [
+                  { value: 'CONSTRUCTION', label: 'Конструкция' },
+                  { value: 'DOCUMENT', label: 'Документ' },
+                ],
+                placeholder: 'Выберите тип'
+              },
+          {
+            name: 'sizeXY',
+            label: 'Размер',
+            type: 'text',
+            required: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION',
+            placeholder: '35 | 35x35 | 35x35x35',
+            mask: maskSizeXY,
+            visible: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION'
+          },
+          {
+            name: 'clarification',
+            label: 'Пояснение',
+            type: 'text',
+            required: false,
+            placeholder: 'Описание файла',
+            visible: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION'
+          },
+          {
+            name: 'typeStructureId',
+                label: 'Тип конструкции (для файла)',
+            type: 'select',
+            required: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION',
+            options: typeOptions,
+            visible: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION',
+            placeholder: 'Выберите тип конструкции'
+          },
+          {
+            name: 'approvalStatusId',
+            label: 'Статус утверждения (для файла)',
+            type: 'select',
+            required: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION',
+            options: approvalOptions,
+            visible: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION',
+            placeholder: 'Выберите статус'
+          },
+          {
+            name: 'agreedTo',
+            label: 'Дата согласования (для файла)',
+            type: 'date',
+            required: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION',
+            visible: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION'
+          }
+        ],
+      },
+    ],
+    initialValues: rkForm,
+  }), [rrsOptions, filteredBranchOptions, rkForm, handleRrsChange]);
+
+  const formConfigEdit: FormConfig = useMemo(() => ({
     fields: [
       {
         name: 'rrs',
@@ -240,47 +451,73 @@ const RKList: React.FC = () => {
         searchable: true
       },
       {
-        name: 'agreedTo',
-        label: 'Дата согласования',
-        type: 'datetime',
-        required: true,
-      },
-      {
-        name: 'typeStructureId',
-        label: 'Тип конструкции',
-        type: 'select',
-        options: typeOptions,
-        required: true,
-      },
-      {
-        name: 'approvalStatusId',
-        label: 'Статус утверждения',
-        type: 'select',
-        options: approvalOptions,
-        required: true,
-      },
-      {
         name: 'attachments',
-        label: 'Прикрепленные файлы',
+        label: 'Конструкции',
         type: 'file',
         multiple: true,
         withDnd: true,
         accept: 'image/*,.pdf,.doc,.docx,.xls,.xlsx',
         leftSection: <IconUpload size={18} />,
-        fileFields: [
+         fileFields: [
+          {
+            name: 'typeAttachment',
+            label: 'Тип вложения',
+            type: 'select',
+            required: true,
+            options: [
+              { value: 'CONSTRUCTION', label: 'Конструкция' },
+              { value: 'DOCUMENT', label: 'Документ' },
+            ]
+          },
           {
             name: 'sizeXY',
             label: 'Размер',
             type: 'text',
-            required: true,
-            placeholder: '100x200'
+            required: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION',
+            placeholder: '35 | 35x35 | 35x35x35',
+            mask: (raw: string) => {
+              let next = String(raw || '')
+                .toLowerCase()
+                .replace(/[\s,_:+\-]+/g, 'x')
+                .replace(/[х×*]/g, 'x')
+                .replace(/[^0-9x]/g, '');
+              next = next.replace(/x{2,}/g, 'x');
+              next = next.replace(/^x+|x+$/g, '');
+              const parts = next.split('x').filter(Boolean);
+              return parts.slice(0, 3).join('x');
+            },
+            visible: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION'
           },
           {
             name: 'clarification',
             label: 'Пояснение',
             type: 'text',
-            required: true,
-            placeholder: 'Описание файла'
+            required: false,
+            placeholder: 'Описание файла',
+            visible: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION'
+          },
+          {
+            name: 'typeStructureId',
+            label: 'Тип конструкции (для файла)',
+            type: 'select',
+            required: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION',
+            options: typeOptions,
+            visible: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION'
+          },
+          {
+            name: 'approvalStatusId',
+            label: 'Статус утверждения (для файла)',
+            type: 'select',
+            required: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION',
+            options: approvalOptions,
+            visible: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION'
+          },
+          {
+            name: 'agreedTo',
+            label: 'Дата согласования (для файла)',
+            type: 'date',
+            required: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION',
+            visible: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION'
           }
         ],
       },
@@ -301,16 +538,16 @@ const RKList: React.FC = () => {
       rrs: rk.branch?.rrs || '',
       branchId: rk.branchId,
       agreedTo: dayjs(rk.agreedTo).format('YYYY-MM-DDTHH:mm'),
-      typeStructureId: rk.typeStructureId,
-      approvalStatusId: rk.approvalStatusId,
       attachments: ((rk as any).attachments || (rk as any).rkAttachment || []).map((a: any) => ({
         id: a.id,
         source: a.source,
-        sizeXY: a.sizeXY,
-        clarification: a.clarification,
         meta: {
-          sizeXY: a.sizeXY,
+        typeAttachment: a.typeAttachment,
+        sizeXY: a.sizeXY,
           clarification: a.clarification,
+          typeStructureId: a.typeStructureId,
+          approvalStatusId: a.approvalStatusId,
+          agreedTo: a.agreedTo ? dayjs(a.agreedTo).format('YYYY-MM-DD') : '',
         },
       })),
       removedAttachments: []
@@ -344,15 +581,17 @@ const RKList: React.FC = () => {
       formData.append('userAddId', user.id);
       formData.append('branchId', values.branchId);
       formData.append('agreedTo', values.agreedTo);
-      formData.append('typeStructureId', values.typeStructureId);
-      formData.append('approvalStatusId', values.approvalStatusId);
 
       // Prepare metadata for newly added files (source is File)
       const attachmentsMeta = values.attachments
         .filter(att => att.source instanceof File)
         .map(att => ({
-          sizeXY: att.meta?.sizeXY ?? att.sizeXY ?? '',
-          clarification: att.meta?.clarification ?? att.clarification ?? '',
+          typeAttachment: att.meta?.typeAttachment || 'DOCUMENT',
+          sizeXY: att.meta?.typeAttachment === 'CONSTRUCTION' ? (att.meta?.sizeXY ?? '') : '',
+          clarification: att.meta?.clarification ?? '',
+          typeStructureId: att.meta?.typeAttachment === 'CONSTRUCTION' ? (att.meta?.typeStructureId || '') : '',
+          approvalStatusId: att.meta?.typeAttachment === 'CONSTRUCTION' ? (att.meta?.approvalStatusId || '') : '',
+          agreedTo: att.meta?.agreedTo || '',
         }));
 
       // For create vs edit, backend expects different field names
@@ -361,6 +600,22 @@ const RKList: React.FC = () => {
       } else {
         formData.append('newAttachmentsMeta', JSON.stringify(attachmentsMeta));
         formData.append('userUpdatedId', user.id);
+
+        // Обновление метаданных существующих вложений
+        const existingAttachmentsMeta = values.attachments
+          .filter(att => !(att.source instanceof File) && att.id)
+          .map(att => ({
+            id: att.id as string,
+            typeAttachment: att.meta?.typeAttachment || (att.meta?.agreedTo ? 'CONSTRUCTION' : 'DOCUMENT'),
+            sizeXY: att.meta?.typeAttachment === 'CONSTRUCTION' ? (att.meta?.sizeXY ?? undefined) : undefined,
+            clarification: att.meta?.clarification ?? undefined,
+            typeStructureId: att.meta?.typeAttachment === 'CONSTRUCTION' ? (att.meta?.typeStructureId ?? undefined) : undefined,
+            approvalStatusId: att.meta?.typeAttachment === 'CONSTRUCTION' ? (att.meta?.approvalStatusId ?? undefined) : undefined,
+            agreedTo: att.meta?.agreedTo ?? undefined,
+          }));
+        if (existingAttachmentsMeta.length > 0) {
+          formData.append('existingAttachmentsMeta', JSON.stringify(existingAttachmentsMeta));
+        }
       }
 
       values.attachments.forEach(attachment => {
@@ -369,7 +624,7 @@ const RKList: React.FC = () => {
         }
       });
 
-      // Note: updating metadata of existing attachments is not supported by backend yet
+      // Примечание: обновление метаданных существующих вложений пока не поддержано бекендом
 
       if (mode === 'edit' && values.removedAttachments?.length) {
         formData.append('removedAttachments', JSON.stringify(values.removedAttachments));
@@ -413,13 +668,23 @@ const RKList: React.FC = () => {
 
   
 
+  const isArchivedBranch = (rk: RKData) => {
+    const status = rk.branch?.status;
+    return status === 2 || status === 3;
+  };
+
+  const baseList = useMemo(() => {
+    // Активные по умолчанию, Архив при включенном флаге
+    return (rkData || []).filter(rk => showArchive ? isArchivedBranch(rk) : !isArchivedBranch(rk));
+  }, [rkData, showArchive]);
+
   const filteredData = useMemo(() => {
     const startIdx = (currentPage - 1) * DEFAULT_PAGE_SIZE;
-    return rkData.slice(startIdx, startIdx + DEFAULT_PAGE_SIZE);
-  }, [rkData, currentPage]);
+    return baseList.slice(startIdx, startIdx + DEFAULT_PAGE_SIZE);
+  }, [baseList, currentPage]);
 
   const PaginationControls = useCallback(() => {
-    const totalPages = Math.ceil(rkData.length / DEFAULT_PAGE_SIZE);
+    const totalPages = Math.ceil(baseList.length / DEFAULT_PAGE_SIZE);
     return (
       <Group justify="center" mt="md">
         <Button
@@ -434,14 +699,15 @@ const RKList: React.FC = () => {
         </Text>
         <Button
           variant="outline"
-          disabled={currentPage * DEFAULT_PAGE_SIZE >= rkData.length}
+          disabled={currentPage * DEFAULT_PAGE_SIZE >= baseList.length}
           onClick={() => setCurrentPage(p => p + 1)}
         >
           Вперед
         </Button>
       </Group>
     );
-  }, [currentPage, rkData.length]);
+  }, [currentPage, baseList.length]);
+
 
   const EmptyState = useCallback(() => (
     <Paper withBorder p="xl" radius="md" shadow="xs" style={{ textAlign: 'center' }}>
@@ -452,6 +718,40 @@ const RKList: React.FC = () => {
     </Paper>
   ), [openCreateModal]);
 
+  const getBranchStatusBadge = (status?: number) => {
+    if (status === 0) {
+      return {
+        label: 'Новый',
+        color: 'blue' as const,
+        variant: 'light' as const,
+        style: {},
+      };
+    }
+    if (status === 1) {
+      return {
+        label: 'Действующий',
+        color: 'green' as const,
+        variant: 'filled' as const,
+        style: {},
+      };
+    }
+    if (status === 2) {
+      return {
+        label: 'Закрыт',
+        color: 'red' as const,
+        variant: 'filled' as const,
+        style: {},
+      };
+    }
+    // 3: Процедура закрытия — белый бейдж с рамкой
+    return {
+      label: 'Процедура закрытия',
+      color: 'gray' as const,
+      variant: 'outline' as const,
+      style: { backgroundColor: '#fff' },
+    };
+  };
+
   if (loading) {
     return (
       <Box style={{ height: '200px', position: 'relative' }}>
@@ -460,34 +760,45 @@ const RKList: React.FC = () => {
     );
   }
 
-  // Helper: compute days between agreedTo and an optional end date
+  // Helper: compute days remaining until the latest agreedTo among attachments
   const getDaysInfo = (rk: RKData) => {
-    const start = dayjs(rk.agreedTo).startOf('day');
-    const possibleEnd =
-      (rk as any).endAt ||
-      (rk as any).endDate ||
-      (rk as any).expiresAt ||
-      (rk as any).finishAt ||
-      (rk as any).finishDate ||
-      (rk as any).deadline ||
-      (rk as any).dueDate ||
-      null;
+    const today = dayjs().startOf('day');
+    const agreedDates = Array.isArray(rk.rkAttachment)
+      ? rk.rkAttachment
+          .map((att: any) => att.agreedTo ? dayjs(att.agreedTo).startOf('day') : null)
+          .filter((d: any) => d && d.isValid())
+      : [];
 
-    if (possibleEnd) {
-      const end = dayjs(possibleEnd).startOf('day');
-      const totalDays = end.diff(start, 'day');
-      return { label: `Срок: ${Math.max(totalDays, 0)} дн.` };
+    if (agreedDates.length === 0) {
+      return { label: 'Срок: не указан' };
     }
 
-    const passedDays = dayjs().startOf('day').diff(start, 'day');
-    return { label: `Прошло: ${Math.max(passedDays, 0)} дн.` };
+    // Берём максимальную дату согласования как дату окончания
+    const end = agreedDates.reduce((max: any, d: any) => (d.isAfter(max) ? d : max), agreedDates[0]);
+    const daysLeft = end.diff(today, 'day');
+    if (daysLeft >= 0) {
+      return { label: `Осталось: ${daysLeft} дн.` };
+    }
+    return { label: `Просрочено: ${Math.abs(daysLeft)} дн.` };
   };
 
-  return (
-    <DndProviderWrapper>
-      <Box p="md">
-        <Group justify="space-between" mb="md">
-          <Title order={2}>Реестр конструкций</Title>
+  // Per-attachment helpers will be computed inline during render
+
+return (
+  <DndProviderWrapper>
+    <Box p="md">
+      <Group justify="space-between" mb="md">
+        <Title order={2}>Реестр конструкций</Title>
+        <Group>
+          <Button
+            variant={showArchive ? 'filled' : 'outline'}
+            onClick={() => { setCurrentPage(1); setShowArchive(v => !v); }}
+          >
+            Архив
+          </Button>
+          <Button variant="outline" onClick={calendarHandlers.open}>
+            Календарь
+          </Button>
           <Button
             size="md"
             onClick={openCreateModal}
@@ -496,24 +807,52 @@ const RKList: React.FC = () => {
             Добавить конструкцию
           </Button>
         </Group>
-        <Stack gap="md">
-          {Array.isArray(rkData) && rkData.length > 0 ? (
-            <>
-              {filteredData.map((rk) => (
-                <Paper key={rk.id} withBorder p="md" radius="md" shadow="xs">
-                  <Stack gap="xs">
-                    <Group justify="space-between" align="flex-start">
-                      <Box style={{ flex: 1 }}>
-                        <Text fw={600} mb="xs">
-                          {rk.branch?.rrs || 'РРС не указан'}, {rk.branch?.name || 'Филиал не указан'}{rk.branch?.code ? ` (${rk.branch.code})` : ''}{rk.branch?.city ? ` - ${rk.branch.city}` : ''}
-                        </Text>
-                        <Text size="sm" c="dimmed">
-                          {rk.typeStructure?.name || 'Тип неизвестен'} | {rk.approvalStatus?.name || 'Статус неизвестен'}
-                        </Text>
-                      </Box>
+      </Group>
+      <Stack gap="md">
+        {Array.isArray(rkData) && rkData.length > 0 ? (
+          <>
+            {filteredData.map((rk) => (
+              <Paper key={rk.id} withBorder p="md" radius="md" shadow="xs">
+                <Stack gap="xs">
+                  <Group justify="space-between" align="flex-start">
+                    <Box style={{ flex: 1 }}>
+                      {/* Адрес и город филиала */}
+                      <Text fw={600} mb={4}>
+                        {rk.branch?.name || 'Филиал не указан'}
+                      </Text>
+                      <Text size="sm" c="dimmed" mb="xs">
+                        {rk.branch?.rrs || 'РРС не указан'}
+                      </Text>
+                      
+                      {/* Основная информация */}
+                      <Text size="sm" mb={4}>
+                        <Text span fw={500}>Город:</Text> {rk.branch?.city || 'не указан'}
+                      </Text>
+                      <Text size="sm">
+                        <Text span fw={500}>Адрес:</Text> {rk.branch?.address|| 'не указан'} 
+                        {rk.branch?.code}
+                      </Text>
+                    </Box>
+                    
+                    {/* Статус филиала и кнопки действий */}
+                    <Stack gap="xs" align="flex-end">
+                      {rk.branch?.status !== undefined && (
+                        (() => {
+                          const { label, color, variant, style } = getBranchStatusBadge(rk.branch?.status);
+                          return (
+                            <Badge
+                              color={color}
+                              variant={variant}
+                              style={{ textTransform: 'none', ...style }}
+                            >
+                              {label}
+                            </Badge>
+                          );
+                        })()
+                      )}
                       <Group>
-                      <ActionIcon
-                        color="blue"
+                        <ActionIcon
+                          color="blue"
                           onClick={() => {
                             setSelectedRK(rk);
                             modals.view[1].open();
@@ -525,124 +864,144 @@ const RKList: React.FC = () => {
                         <ActionIcon
                           color="blue"
                           onClick={() => openEditModal(rk)}
-                        disabled={fileUploading}
-                      >
-                        <IconPencil size={18} />
-                      </ActionIcon>
-                      <ActionIcon
-                        color="red"
-                        onClick={() => {
-                          setSelectedRK(rk);
-                          modals.delete[1].open();
-                        }}
-                        disabled={fileUploading}
-                      >
-                        <IconTrash size={18} />
-                      </ActionIcon>
+                          disabled={fileUploading}
+                        >
+                          <IconPencil size={18} />
+                        </ActionIcon>
+                        <ActionIcon
+                          color="red"
+                          onClick={() => {
+                            setSelectedRK(rk);
+                            modals.delete[1].open();
+                          }}
+                          disabled={fileUploading}
+                        >
+                          <IconTrash size={18} />
+                        </ActionIcon>
                       </Group>
-                    </Group>
+                    </Stack>
+                  </Group>
 
-                    {Array.isArray((rk as any).attachments || (rk as any).rkAttachment) && ((rk as any).attachments || (rk as any).rkAttachment).length > 0 && (
-                      <Box>
-                        <Text size="sm" fw={500} mb="xs">Прикрепленные файлы:</Text>
-                        <Stack gap="xs">
-                          {(((rk as any).attachments || (rk as any).rkAttachment) as any[]).map((att: any) => (
-                            <Group key={att.id} gap="xs">
-                              <IconFile size={16} />
-                              <Text size="sm">
-                                {(att.source || '').split('/').pop() || 'Файл'}
-                              </Text>
-                              {att.sizeXY && (
-                                <Text size="sm" c="dimmed">
-                                  (Размер: {att.sizeXY})
-                                </Text>
-                              )}
-                              {att.clarification && (
-                                <Text size="sm" c="dimmed">
-                                  {att.clarification}
-                                </Text>
-                              )}
-                            </Group>
-                          ))}
-                        </Stack>
-                      </Box>
-                    )}
+                  {/* Список конструкций */}
+                  {Array.isArray(rk.rkAttachment) && rk.rkAttachment.length > 0 && (
+                    <Box mt="sm">
+                      <Text size="sm" fw={500} mb="xs">Конструкции:</Text>
+                      <Stack gap="sm">
+                        {rk.rkAttachment.map((att) => (
+                          <AttachmentCard
+                            key={att.id}
+                            att={att as any}
+                            apiBase={API}
+                            onOpenImage={(url) => {
+                              setImagePreviewSrc(url);
+                              imagePreviewHandlers.open();
+                            }}
+                          />
+                        ))}
+                      </Stack>
+                    </Box>
+                  )}
 
-                    <Group justify="space-between" mt="xs">
+                  {/* Футер карточки */}
+                  <Group justify="space-between" mt="sm" pt="sm" style={{ borderTop: '1px solid #eee' }}>
+                    <Text size="xs" c="dimmed">
+                      Автор: {rk.userAdd?.name || 'Неизвестный пользователь'}
+                    </Text>
+                    <Group gap="md">
+                      <Text size="xs" c="dimmed">{getDaysInfo(rk).label}</Text>
                       <Text size="xs" c="dimmed">
-                        Автор: {rk.userAdd?.name || 'Неизвестный пользователь'}
+                        {dayjs(rk.agreedTo).format('DD.MM.YYYY HH:mm')}
                       </Text>
-                      <Group gap="md">
-                        <Text size="xs" c="dimmed">{getDaysInfo(rk).label}</Text>
-                        <Text size="xs" c="dimmed">{dayjs(rk.agreedTo).format('DD.MM.YYYY HH:mm')}</Text>
-                      </Group>
                     </Group>
-                  </Stack>
-                </Paper>
-              ))}
-              <PaginationControls />
-            </>
-          ) : (
-            <EmptyState />
-          )}
-        </Stack>
-        <DynamicFormModal
-          opened={modals.create[0]}
-          onClose={() => {
-            setRkForm(DEFAULT_RK_FORM);
-            modals.create[1].close();
-          }}
-          title="Добавить конструкцию"
-          mode="create"
-          fields={formConfig.fields}
-          initialValues={rkForm}
-          onSubmit={(values) => handleFormSubmit(values as RKFormValues, 'create')}
-        />
-        <DynamicFormModal
-          opened={modals.edit[0]}
-          onClose={() => {
-            setRkForm(DEFAULT_RK_FORM);
-            modals.edit[1].close();
-          }}
-          title="Редактировать конструкцию"
-          mode="edit"
-          fields={formConfig.fields}
-          initialValues={rkForm}
-          onSubmit={(values) => handleFormSubmit(values as RKFormValues, 'edit')}
-        />
-        <DynamicFormModal
-          opened={modals.view[0]}
-          onClose={() => modals.view[1].close()}
-          title="Просмотр конструкции"
-          mode="view"
-          initialValues={selectedRK || {}}
-          viewFieldsConfig={[
-            { label: 'РРС', value: (item) => item?.branch?.rrs || '-' },
-            { label: 'Филиал', value: (item) => `${item?.branch?.name || '-'}${item?.branch?.code ? ` (${item.branch.code})` : ''}${item?.branch?.city ? ` - ${item.branch.city}` : ''}` },
-            { label: 'Тип конструкции', value: (item) => item?.typeStructure?.name || '-' },
-            { label: 'Статус утверждения', value: (item) => item?.approvalStatus?.name || '-' },
-            { label: 'Дата согласования', value: (item) => dayjs(item?.agreedTo).format('DD.MM.YYYY HH:mm') },
-          ]}
-        />
-        <Modal
-          opened={modals.delete[0]}
-          onClose={() => modals.delete[1].close()}
-          title="Подтверждение удаления"
-          centered
-        >
-          <Text mb="md">Вы уверены, что хотите удалить эту конструкцию?</Text>
-          <Group justify="flex-end">
-            <Button variant="outline" onClick={() => modals.delete[1].close()}>
-              Отмена
-            </Button>
-            <Button color="red" onClick={handleDeleteConfirm} loading={fileUploading}>
-              Удалить
-            </Button>
-          </Group>
-        </Modal>
-      </Box>
-    </DndProviderWrapper>
-  );
-};
-
+                  </Group>
+                </Stack>
+              </Paper>
+            ))}
+            <PaginationControls />
+          </>
+        ) : (
+          <EmptyState />
+        )}
+      </Stack>
+      <DynamicFormModal
+        opened={modals.create[0]}
+        onClose={() => {
+          setRkForm(DEFAULT_RK_FORM);
+          modals.create[1].close();
+        }}
+        title="Добавить конструкцию"
+        mode="create"
+        fields={formConfigCreate.fields}
+        initialValues={rkForm}
+        onSubmit={(values) => handleFormSubmit(values as RKFormValues, 'create')}
+      />
+      <DynamicFormModal
+        opened={modals.edit[0]}
+        onClose={() => {
+          setRkForm(DEFAULT_RK_FORM);
+          modals.edit[1].close();
+        }}
+        title="Редактировать конструкцию"
+        mode="edit"
+        fields={formConfigEdit.fields}
+        initialValues={rkForm}
+        onSubmit={(values) => handleFormSubmit(values as RKFormValues, 'edit')}
+      />
+      <DynamicFormModal
+        opened={modals.view[0]}
+        onClose={() => modals.view[1].close()}
+        title="Просмотр конструкции"
+        mode="view"
+        initialValues={selectedRK || {}}
+        viewFieldsConfig={[
+          { label: 'РРС', value: (item) => item?.branch?.rrs || '-' },
+          { label: 'Филиал', value: (item) => `${item?.branch?.name || '-'}${item?.branch?.code ? ` (${item.branch.code})` : ''}${item?.branch?.city ? ` - ${item.branch.city}` : ''}` },
+          { label: 'Адрес', value: (item) => item?.branch?.address || '-' },
+          { label: 'Статус', value: (item) => 
+            item?.branch?.status === 0 ? 'Новый' : 
+            item?.branch?.status === 1 ? 'Действующий' : 
+            item?.branch?.status === 2 ? 'Закрыт' : 'Процедура закрытия'
+          },
+          { label: 'Тип конструкции', value: (item) => item?.typeStructure?.name || '-' },
+          { label: 'Статус утверждения', value: (item) => item?.approvalStatus?.name || '-' },
+          { label: 'Дата согласования', value: (item) => dayjs(item?.agreedTo).format('DD.MM.YYYY HH:mm') },
+        ]}
+      />
+      <Modal
+        opened={modals.delete[0]}
+        onClose={() => modals.delete[1].close()}
+        title="Подтверждение удаления"
+        centered
+      >
+        <Text mb="md">Вы уверены, что хотите удалить эту конструкцию?</Text>
+        <Group justify="flex-end">
+          <Button variant="outline" onClick={() => modals.delete[1].close()}>
+            Отмена
+          </Button>
+          <Button color="red" onClick={handleDeleteConfirm} loading={fileUploading}>
+            Удалить
+          </Button>
+        </Group>
+      </Modal>
+      <Modal
+        opened={imagePreviewOpened}
+        onClose={() => {
+          setImagePreviewSrc(null);
+          imagePreviewHandlers.close();
+        }}
+        title="Просмотр изображения"
+        size="xl"
+        centered
+      >
+        {imagePreviewSrc ? (
+          <Image src={imagePreviewSrc} radius="sm" h={500} fit="contain" alt="attachment" />
+        ) : (
+          <Text size="sm" c="dimmed">Нет изображения</Text>
+        )}
+      </Modal>
+      <RKCalendarModal opened={calendarOpened} onClose={calendarHandlers.close} rkList={rkData} />
+    </Box>
+  </DndProviderWrapper>
+);
+}
 export default RKList;
