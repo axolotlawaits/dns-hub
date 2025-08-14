@@ -2,6 +2,7 @@ import express from 'express'
 import { addRoute, getRoutes, updateRoute } from '../../controllers/supply/route.js'
 import z from 'zod';
 import { validateData } from '../../middleware/validation.js';
+import { authenticateToken } from '../../middleware/auth.js';
 
 const router = express.Router()
 
@@ -11,7 +12,7 @@ const addRouteSchema = z.object({
   filials: z.array(z.string()).min(2, 'не менее 2 филиалов')
 });
 
-router.get('/', getRoutes)
+router.get('/', authenticateToken, getRoutes)
 
 router.post('/', validateData(addRouteSchema), addRoute)
 

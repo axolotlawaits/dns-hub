@@ -108,14 +108,14 @@ export const login = async (req: Request, res: Response): Promise<any> => {
       const userUuid = getUserUuid?.uuid
 
       const payload = { userId: newUser.id, userUuid, positionName: newUser.position, groupName }
-      const token = jwt.sign(payload, accessPrivateKey, { algorithm: 'RS256', expiresIn: '30d' })
-      const refreshToken = jwt.sign(payload, refreshPrivateKey, { algorithm: 'RS256', expiresIn: '30d' })
+      const token = jwt.sign(payload, accessPrivateKey, { algorithm: 'RS256', expiresIn: '30m' })
+      const refreshToken = jwt.sign(payload, refreshPrivateKey, { algorithm: 'RS256', expiresIn: '90d' })
 
       res.cookie('refreshToken', refreshToken, {
         httpOnly: true,
         secure: true,
         sameSite: 'strict',      
-        maxAge: 30 * 24 * 60 * 60 * 1000
+        maxAge: 90 * 24 * 60 * 60 * 1000
       })
 
       return res.status(200).json({user: newUser, token})
@@ -135,14 +135,14 @@ export const login = async (req: Request, res: Response): Promise<any> => {
 
     const payload = { userId: user.id, userUuid, positionName: user.position, groupName }
 
-    const token = jwt.sign(payload, accessPrivateKey, { algorithm: 'RS256', expiresIn: '30d' })
-    const refreshToken = jwt.sign(payload, refreshPrivateKey, { algorithm: 'RS256', expiresIn: '30d' })
+    const token = jwt.sign(payload, accessPrivateKey, { algorithm: 'RS256', expiresIn: '30m' })
+    const refreshToken = jwt.sign(payload, refreshPrivateKey, { algorithm: 'RS256', expiresIn: '90d' })
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
       secure: true,
       sameSite: 'strict',      
-      maxAge: 30 * 24 * 60 * 60 * 1000
+      maxAge: 90 * 24 * 60 * 60 * 1000
     })
     
     return res.status(200).json({user, token})

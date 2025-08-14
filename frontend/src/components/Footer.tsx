@@ -48,7 +48,7 @@ const navLinks = [
     description: "Медиа портал"
   },
   {
-    href: "http://sale.partner.ru//",
+    href: "http://sale.partner.ru/login",
     icon: IconAppWindow,
     name: "Web - База",
     description: "Портал продаж"
