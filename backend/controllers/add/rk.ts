@@ -539,7 +539,7 @@ export const dailyRKJob = async () => {
         const managers = await prisma.userData.findMany({
           where: {
             branch_uuid: rk.branchId,
-            position: { name: { in: RK_MANAGER_POSITIONS } },
+            position: { is: { name: { in: RK_MANAGER_POSITIONS } } },
           },
           select: { fio: true, email: true },
         });

@@ -1,6 +1,6 @@
 // services/email.js
 import nodemailer from 'nodemailer';
-import { NotificationWithRelations } from '../controllers/app/notification.js';
+import type { NotificationWithRelations } from '../controllers/app/notification.js';
 import SMTPTransport from 'nodemailer/lib/smtp-transport';
 
 let transporter: nodemailer.Transporter | null = null;
@@ -32,12 +32,15 @@ function initialize() {
 
 // Генерация текста письма
 function generatePlainText(notification: NotificationWithRelations): string {
+  const senderName = notification.sender?.name ?? 'Система';
+  const senderEmailLine = notification.sender?.email ? `Email: ${notification.sender.email}` : '';
+  const toolLine = notification.tool?.name ? `Сервис: ${notification.tool.name}` : '';
   return `
     ${notification.message}
     
-    Отправитель: ${notification.sender?.name}
-    ${notification.sender?.email ? `Email: ${notification.sender.email}` : ''}
-    ${notification.tool ? `Сервис: ${notification.tool.name}` : ''}
+    Отправитель: ${senderName}
+    ${senderEmailLine}
+    ${toolLine}
   `.trim();
 }
 
@@ -121,7 +124,7 @@ function generateHtml(notification: NotificationWithRelations): string {
                                                                             <tbody>
                                                                                 <tr>
                                                                                     <td class="esd-block-text es-m-txt-l es-p5t" align="right">
-                                                                                        <p style="font-size: 20px; color: #ffffff;"><b>${notification.tool}</b></p>
+                                                                                         <p style="font-size: 20px; color: #ffffff;"><b>${notification.tool?.name ?? ''}</b></p>
                                                                                     </td>
                                                                                 </tr>
                                                                             </tbody>
@@ -162,7 +165,7 @@ function generateHtml(notification: NotificationWithRelations): string {
                                                                             <tbody>
                                                                                 <tr>
                                                                                     <td align="right" class="esd-block-text" bgcolor="#25292b">
-                                                                                        <p style="font-size: 17px; color: #ffffff;"><strong>Автор:</strong> ${notification.sender?.name}</p>
+                                                                                        <p style="font-size: 17px; color: #ffffff;"><strong>Автор:</strong> ${notification.sender?.name ?? 'Система'}</p>
                                                                                         <p style="font-size: 17px; color: #ffffff;"><strong></strong></p>
                                                                                     </td>
                                                                                 </tr>
@@ -295,7 +298,7 @@ async function send(notification: NotificationWithRelations): Promise<boolean> {
   }
   try {
     await transporter.sendMail({
-      from: `"${notification.sender?.name}" <${process.env.EMAIL_USER}>`,
+      from: `"${notification.sender?.name ?? 'DNS Hub'}" <${process.env.EMAIL_USER}>`,
       to: notification.receiver.email,
       subject: notification.title,
       text: generatePlainText(notification),
@@ -314,5 +317,21 @@ initialize();
 // Экспортируем API сервиса
 export const emailService = {
   send,
-  isConfigured: () => !!transporter
+  isConfigured: () => !!transporter,
+  sendRaw: async (toEmail: string, subject: string, message: string, senderName?: string): Promise<boolean> => {
+    if (!transporter || !toEmail) return false;
+    try {
+      await transporter.sendMail({
+        from: `"${senderName ?? 'DNS Hub'}" <${process.env.EMAIL_USER}>`,
+        to: toEmail,
+        subject,
+        text: message,
+        html: `<pre style=\"white-space:pre-wrap;font-family:inherit\">${message}</pre>`
+      });
+      return true;
+    } catch (error) {
+      console.error('Failed to send raw email:', error);
+      return false;
+    }
+  }
 };
