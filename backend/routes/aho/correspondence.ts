@@ -6,7 +6,8 @@ import {
   updateCorrespondence,
   deleteCorrespondence,
 } from '../../controllers/aho/correspondence.js';
-import uploadCorrespondence from '../../middleware/uploaderCorrespondence.js'; // Use default import
+import { createUploader } from '../../middleware/uploadFactory.js'; // Use default import
+const uploadCorrespondence = createUploader({ dest: './public/aho/correspondence', limits: { fileSize: 20 * 1024 * 1024 } });
 
 const router = Router();
 

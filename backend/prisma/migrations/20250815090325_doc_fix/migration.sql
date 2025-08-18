@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Doc" ALTER COLUMN "inn" SET DATA TYPE TEXT;

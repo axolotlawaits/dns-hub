@@ -33,6 +33,7 @@ import Handbook from './handbook/Handbook';
 import RouteComponent from '../features/Supply/Loaders/RouteComponent';
 import LoadersHome from '../features/Supply/Loaders/LoadersHome';
 import SupplyDocs from '../features/Accounting/SupplyDocs/SupplyDocs';
+import Roc from '../features/Accounting/Roc/Roc';
 import Media from '../features/Ad/Media/Media';
 import RK from '../features/Ad/RK/RK';
 import Retail from '../features/Retail/Retail';
@@ -114,6 +115,7 @@ function App() {
                   <Route path="/add/media" element={<Media />} />
                   
                   <Route path="/accounting/supply-docs" element={<SupplyDocs />} />
+                  <Route path="/accounting/contracts-register" element={<Roc />} />
                 </Route>
                 <Route path='/supply/loaders' element={<LoadersHome />} />
                 <Route path='/supply/loaders/route/:id' element={<RouteComponent />} />

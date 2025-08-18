@@ -13,6 +13,7 @@ import bookmarksRouter from './routes/app/bookmarks.js'
 import notificationRouter from './routes/app/notification.js'
 import correspondenceRouter from './routes/aho/correspondence.js'
 import supplydocsRouter from './routes/accounting/supplydocs.js'
+import rocRouter from './routes/accounting/roc.js'
 import navigationRouter from './routes/app/navigation.js'
 import typeRouter from './routes/app/type.js'
 import routeDayRouter from './routes/supply/routeDay.js'
@@ -26,6 +27,7 @@ import telegramRouter  from './routes/app/telegram.js'
 import schedule from 'node-schedule'
 import { scheduleRouteDay } from './controllers/supply/routeDay.js';
 import { dailyRKJob } from './controllers/add/rk.js';
+import { weeklyRocDocSync } from './controllers/accounting/roc.js';
 import fs from 'fs'
 import cookieParser from 'cookie-parser'
 import jwt from 'jsonwebtoken'
@@ -91,6 +93,7 @@ app.use('/hub-api/notifications', notificationRouter)
 app.use('/hub-api/aho/meter-reading', meterReadingRouter)
 app.use('/hub-api/aho/correspondence', correspondenceRouter)
 app.use('/hub-api/accounting/supply-docs', supplydocsRouter)
+app.use('/hub-api/accounting/roc', rocRouter)
 app.use('/hub-api/add/media', mediaRouter)
 app.use('/hub-api/add/rk', rkRouter)
 app.use('/hub-api/add/sliders', sliderRouter)
@@ -117,6 +120,14 @@ server.listen(2000, async function() {
       await dailyRKJob();
     } catch (e) {
       console.error('Daily cron error', e);
+    }
+  });
+  // Еженедельная синхронизация справочника Doc из ROC: каждое воскресенье в 03:00
+  schedule.scheduleJob('0 3 * * 0', async () => {
+    try {
+      await weeklyRocDocSync();
+    } catch (e) {
+      console.error('Weekly ROC->Doc sync error', e);
     }
   });
 });
