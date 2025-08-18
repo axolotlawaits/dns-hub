@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { getAllSliders, createSlider, getSliderById, updateSlider, deleteSlider } from '../../controllers/add/slider.js';
-import { createUploader } from '../../middleware/uploadFactory.js';
-const uploadSlider = createUploader({ dest: './public/add/slider', allowedMime: /^image\//, limits: { fileSize: 10 * 1024 * 1024 } });
+import uploadSlider from '../../middleware/uploaderSlider.js';
 
 const router = Router();
 

@@ -2,7 +2,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 
-const uploadDir = './public/aho/correspondence'
+const uploadDir = './public/accounting/roc'
 
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
@@ -17,6 +17,8 @@ const storage = multer.diskStorage({
   },
 });
 
-const uploadCorrespondence = multer({ storage: storage });
+const uploadRoc = multer({ storage: storage });
 
-export default uploadCorrespondence;
+export default uploadRoc;
+
+

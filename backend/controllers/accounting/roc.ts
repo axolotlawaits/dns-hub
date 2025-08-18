@@ -4,8 +4,7 @@ import { suggestParty, findPartyByInn } from '../../services/dadata.js';
 import { z } from 'zod';
 import { prisma } from '../../server.js';
 import fs from 'fs/promises';
-import { createUploader } from '../../middleware/uploadFactory.js';
-const uploadRoc = createUploader({ dest: './public/accounting/roc', limits: { fileSize: 50 * 1024 * 1024 } });
+import uploadRoc from '../../middleware/uploaderRoc.js';
 
 // Type chapters for ROC (align with RK approach: filter by chapter name; model filter optional)
 const ROC_TYPE_CHAPTER = 'Тип договора';

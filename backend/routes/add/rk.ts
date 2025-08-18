@@ -1,7 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { getRKList, getRKById, createRK, updateRK, deleteRK, getRKTypes, getRKStatuses, getBranchesList, notifyRK } from '../../controllers/add/rk.js';
-import { createUploader } from '../../middleware/uploadFactory.js';
-const uploadRK = createUploader({ dest: './public/add/RK', limits: { fileSize: 50 * 1024 * 1024 } });
+import uploadRK from '../../middleware/uploaderRK.js';
 
 const router = Router();
 
