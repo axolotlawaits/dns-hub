@@ -24,17 +24,13 @@ import rkRouter from './routes/add/rk.js'
 import sliderRouter from './routes/add/slider.js'
 import printServiceRouter from './routes/retail/printService.js'
 import telegramRouter  from './routes/app/telegram.js'
-import schedule from 'node-schedule'
-import { scheduleRouteDay } from './controllers/supply/routeDay.js';
-import { dailyRKJob } from './controllers/add/rk.js';
-import { weeklyRocDocSync } from './controllers/accounting/roc.js';
 import fs from 'fs'
 import cookieParser from 'cookie-parser'
-import jwt from 'jsonwebtoken'
 import { refreshToken } from './middleware/auth.js';
 import { createServer } from 'http';
 import { SocketIOService } from './socketio.js';
 import { telegramService } from './controllers/app/telegram.js';
+import { initToolsCron } from './tasks/cron.js';
 
 const app = express()
 export const prisma = new PrismaClient()
@@ -108,26 +104,11 @@ app.use('/hub-api/loaders/filial', filialRouter)
 
 app.post('/hub-api/refresh-token', refreshToken)
 
+initToolsCron()
+
 server.listen(2000, async function() {
   console.log('Server running on port 2000');
   await telegramService.stop();
   await new Promise(resolve => setTimeout(resolve, 1000));
   await telegramService.launch(); // Запуск бота
-  // Ежедневные задачи в 00:00
-  schedule.scheduleJob('0 0 * * *', async () => {
-    try {
-      await scheduleRouteDay();
-      await dailyRKJob();
-    } catch (e) {
-      console.error('Daily cron error', e);
-    }
-  });
-  // Еженедельная синхронизация справочника Doc из ROC: каждое воскресенье в 03:00
-  schedule.scheduleJob('0 3 * * 0', async () => {
-    try {
-      await weeklyRocDocSync();
-    } catch (e) {
-      console.error('Weekly ROC->Doc sync error', e);
-    }
-  });
 });
