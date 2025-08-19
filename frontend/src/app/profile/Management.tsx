@@ -5,6 +5,7 @@ import { useDisclosure } from "@mantine/hooks"
 import { Tool } from "../../components/Tools"
 import { IconExternalLink, IconLockAccess, IconLockOpen2, IconSearch } from "@tabler/icons-react"
 import { useNavigate } from "react-router"
+import { User, UserRole } from "../../contexts/UserContext"
 
 export type AccessLevel = 'READONLY' | 'CONTRIBUTOR' | 'FULL'
 
@@ -28,11 +29,23 @@ const accessLevels: AccessLevelName[] = [
   {type: 'FULL', name: 'полный'}
 ]
 
+type RolesTypeObject = {
+  value: UserRole
+  label: string
+}
+
+const rolesData: RolesTypeObject[] = [
+  { value: 'DEVELOPER', label: 'Разработчик' },
+  { value: 'ADMIN', label: 'Администратор' },
+  { value: 'SUPERVISOR', label: 'Руководитель' },
+  { value: 'EMPLOYEE', label: 'Сотрудник' },
+]
+
 function Management() {
   const [entityType, setEntityType] = useState<EntityType>('group')
   const [groups, setGroups] = useState([])
   const [positions, setPositions] = useState([])
-  const [users, setUsers] = useState([])
+  const [users, setUsers] = useState<User[]>([])
   const [curEntity, setCurEntity] = useState<string | null>(null)
   const [curAccess, setCurAccess] = useState<GroupAccess[]>([])
   const [tools, setTools] = useState<Tool[]>([])
@@ -107,6 +120,21 @@ function Management() {
     }
   }
 
+  const updateUserRole = async (role: string | null) => {
+    if (role && entityType === 'user') {
+      const response = await fetch(`${API}/user/${curEntity}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({role})
+      })
+      const json = await response.json()
+
+      if (response.ok) {
+        setUsers(users.map(user => user.id === json.id ? {...user, role: json.role} : user))
+      }
+    }
+  }
+
   return (
     <div id="profile-management">
       <div className="access-selection-area">
@@ -133,15 +161,30 @@ function Management() {
             }`}
           </h2>
           {entityType === 'user' ?
-            <Select 
-              data={users.map((u: any) => ({value: u.id, label: u.name}))} 
-              value={curEntity} 
-              onChange={setCurEntity} 
-              placeholder="Выбрать группу должностей" 
-              style={{ width: 300 }}
-              searchable
-              clearable
-            />
+            <>
+              <Select 
+                data={users.map((u: any) => ({value: u.id, label: u.name}))} 
+                value={curEntity} 
+                onChange={setCurEntity} 
+                placeholder="Выбрать группу должностей" 
+                style={{ width: 300 }}
+                searchable
+                clearable
+              />
+              {curEntity && 
+                <>
+                  <h2 className="access-heading">Изменить роль</h2>
+                  <Select 
+                    data={rolesData.map((u: any) => ({value: u.value, label: u.label}))} 
+                    value={users.find((u: User) => u.id === curEntity)?.role} 
+                    onChange={updateUserRole} 
+                    placeholder="Выберите роль" 
+                    style={{ width: 300 }}
+                    clearable
+                  />
+                </>
+              }
+            </>
           :
             <Select 
               data={entityType === 'group' ? groups.map((g: any) => ({value: g.uuid, label: g.name})) : positions.map((p: any) => ({value: p.uuid, label: p.name}))} 

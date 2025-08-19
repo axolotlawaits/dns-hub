@@ -12,7 +12,7 @@ export type User = {
   login: string;
 };
 
-type UserRole = 'DEVELOPER' | 'ADMIN' | 'SUPERVISOR' | 'EMPLOYEE';
+export type UserRole = 'DEVELOPER' | 'ADMIN' | 'SUPERVISOR' | 'EMPLOYEE';
 
 type Props = {
   children?: React.ReactNode;
