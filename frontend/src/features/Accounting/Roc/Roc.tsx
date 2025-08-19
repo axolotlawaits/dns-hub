@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Box, Card, Grid, Group, LoadingOverlay, Text, Title, Drawer, ActionIcon, Tooltip } from '@mantine/core';
+import { Box, Card, Grid, Group, LoadingOverlay, Text, Title, Drawer, ActionIcon, Tooltip, Tabs, Accordion, Stack, Button } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
 import { API } from '../../../config/constants';
@@ -8,7 +8,7 @@ import { FilterGroup } from '../../../utils/filter';
 import { DynamicFormModal, type FormConfig } from '../../../utils/formModal';
 import { useUserContext } from '../../../hooks/useUserContext';
 import { TableComponent } from '../../../utils/table';
-import { IconPlus, IconPencil, IconTrash } from '@tabler/icons-react';
+import { IconPlus, IconPencil, IconTrash, IconDownload } from '@tabler/icons-react';
 import { DndProviderWrapper } from '../../../utils/dnd';
 
 interface TypeOption { value: string; label: string; colorHex?: string | null }
@@ -64,7 +64,9 @@ const DEFAULT_FORM: any = {
   roc: { selectedByName: '' as string, selectedByInn: '' as string },
   doc: {
     fullName: '', name: '', address: '', inn: '', ogrn: '', kpp: '', taxationSystem: '', phone: '', email: '', siEgrul: '', statusCode: '', deStatusCode: '', liquidationDate: '', successorName: '', successorINN: ''
-  }
+  },
+  attachments: [],
+  additionalAttachments: [],
 };
 
 export default function RocList() {
@@ -76,6 +78,7 @@ export default function RocList() {
   const [types, setTypes] = useState<TypeOption[]>([]);
   const [statuses, setStatuses] = useState<TypeOption[]>([]);
   const [filters, setFilters] = useState({ column: [] as any[], sorting: [{ id: 'createdAt', desc: true }] });
+  const [activeTab, setActiveTab] = useState<'list' | 'byDoc'>('list');
 
   // local modal handled via Mantine Modal below
 
@@ -236,7 +239,8 @@ export default function RocList() {
         { name: 'terminationСonditions', label: 'Условия расторжения', type: 'textarea' },
         { name: 'peculiarities', label: 'Особенности', type: 'textarea' },
         { name: 'folderNo', label: '№ папки', type: 'text' },
-        { name: 'attachments', label: 'Вложения', type: 'file', withDnd: true, fileFields: [] },
+        { name: 'attachments', label: 'Вложения (основные)', type: 'file', withDnd: true, fileFields: [] },
+        { name: 'additionalAttachments', label: 'Доп. соглашения', type: 'file', withDnd: true, fileFields: [] },
       ],
     });
   }, [types, statuses, nameOptions, innOptions, idToParty, selectedPartyId, formValues]);
@@ -268,12 +272,65 @@ export default function RocList() {
 
   const [modalOpened, modalHandlers] = useDisclosure(false);
   const [drawerOpened, drawerHandlers] = useDisclosure(false);
+  const [viewModalOpened, viewModalHandlers] = useDisclosure(false);
+  const [selectedView, setSelectedView] = useState<RocData | null>(null);
+  const addAdditionalFiles = useCallback(async (rocId: string) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.onchange = async () => {
+      const files = Array.from(input.files || []);
+      if (!files.length) return;
+      const fd = new FormData();
+      files.forEach(f => fd.append('files', f));
+      fd.append('additional', 'true');
+      await fetch(`${API}/accounting/roc/${rocId}/attachments`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        body: fd,
+      }).catch(() => {});
+      await loadList();
+      // refresh current view data
+      if (selectedView && selectedView.id === rocId) {
+        const updated = (await fetchJson<RocData>(`${API}/accounting/roc/${rocId}`)) || null;
+        setSelectedView(updated);
+      }
+    };
+    input.click();
+  }, [API, loadList, selectedView, fetchJson]);
+
+  const groupedByDoc = useMemo(() => {
+    const groups: Array<{
+      key: string;
+      title: string;
+      subtitle?: string;
+      items: RocData[];
+    }> = [];
+    const byKey: Record<string, number> = {};
+    (data || []).forEach((row) => {
+      const doc = row.doc;
+      const key = doc?.id || `${doc?.inn || 'no-inn'}|${doc?.kpp || ''}|${doc?.name || row.name || 'unknown'}`;
+      const title = doc?.fullName || doc?.name || row.name || 'Без названия';
+      const subtitle = doc ? `ИНН ${doc.inn}${doc.kpp ? ` / КПП ${doc.kpp}` : ''}` : undefined;
+      if (byKey[key] == null) {
+        byKey[key] = groups.length;
+        groups.push({ key, title, subtitle, items: [row] });
+      } else {
+        groups[byKey[key]].items.push(row);
+      }
+    });
+    // Сортируем группы по названию
+    groups.sort((a, b) => a.title.localeCompare(b.title));
+    return groups;
+  }, [data]);
 
   const openCreate = () => {
     setFormValues({
       ...DEFAULT_FORM,
       userAddId: user?.id || '',
       userUpdatedId: user?.id || '',
+      attachments: [],
+      additionalAttachments: [],
     });
     setSelected(null);
     setSelectedPartyId(null);
@@ -295,6 +352,10 @@ export default function RocList() {
       userUpdatedId: user?.id || DEFAULT_FORM.userUpdatedId,
       roc: { selectedByName: '', selectedByInn: '' }
     });
+    const allAtt: any[] = (row as any)?.rocAttachment || [];
+    const base = allAtt.filter(a => !a.additional).map((a: any) => ({ id: a.id, source: a.source, meta: {} }));
+    const adds = allAtt.filter(a => a.additional).map((a: any) => ({ id: a.id, source: a.source, meta: {} }));
+    setFormValues((prev: any) => ({ ...prev, attachments: base, additionalAttachments: adds }));
     // Prefill multiselect from existing doc if present
     if (row.doc) {
       const id = `${row.doc.inn}|${row.doc.kpp || ''}|0`;
@@ -340,49 +401,102 @@ export default function RocList() {
         <Title order={2}>Реестр договоров</Title>
         <Tooltip label="Добавить договор"><ActionIcon color="blue" variant="filled" onClick={openCreate}><IconPlus size={18} /></ActionIcon></Tooltip>
       </Group>
-      <Grid>
-        <Grid.Col span={12}>
-          <FilterGroup
-            filters={filtersConfig}
-            columnFilters={filters.column}
-            onColumnFiltersChange={(columnId, value) =>
-              setFilters(prev => ({
-                ...prev,
-                column: [
-                  ...prev.column.filter(f => f.id !== columnId),
-                  ...(value ? [{ id: columnId, value }] : []),
-                ],
-              }))
-            }
-          />
-        </Grid.Col>
-        <Grid.Col span={12}>
+      <Tabs value={activeTab} onChange={(v) => setActiveTab((v as any) || 'list')}>
+        <Tabs.List>
+          <Tabs.Tab value="list">Реестр</Tabs.Tab>
+          <Tabs.Tab value="byDoc">По контрагентам</Tabs.Tab>
+        </Tabs.List>
+
+        <Tabs.Panel value="list" pt="md">
+          <Grid>
+            <Grid.Col span={12}>
+              <FilterGroup
+                filters={filtersConfig}
+                columnFilters={filters.column}
+                onColumnFiltersChange={(columnId, value) =>
+                  setFilters(prev => ({
+                    ...prev,
+                    column: [
+                      ...prev.column.filter(f => f.id !== columnId),
+                      ...(value ? [{ id: columnId, value }] : []),
+                    ],
+                  }))
+                }
+              />
+            </Grid.Col>
+            <Grid.Col span={12}>
+              <Card withBorder shadow="sm">
+                <TableComponent<RocData>
+                  data={data}
+                  columns={[
+                    { header: 'Контрагент', accessorKey: 'name', cell: info => <Text>{info.row.original.name}</Text> },
+                    { header: 'Тип договора', accessorKey: 'typeContract.name', cell: info => <Text>{info.row.original.typeContract?.name || '-'}</Text> },
+                    { header: 'Статус', accessorKey: 'statusContract.name', cell: info => <Text>{info.row.original.statusContract?.name || '-'}</Text> },
+                    { header: 'Номер', accessorKey: 'contractNumber', cell: info => <Text>{info.row.original.contractNumber || '-'}</Text> },
+                    { header: 'Дата', accessorKey: 'dateContract', cell: info => <Text>{info.row.original.dateContract ? dayjs(info.row.original.dateContract).format('DD.MM.YYYY') : '-'}</Text> },
+                    { header: 'Действует до', accessorKey: 'agreedTo', cell: info => <Text>{info.row.original.agreedTo ? dayjs(info.row.original.agreedTo).format('DD.MM.YYYY') : '-'}</Text> },
+                    { header: 'Действия', accessorKey: 'id', cell: info => (
+                      <Group gap={6}>
+                        <Tooltip label="Редактировать"><ActionIcon size="sm" variant="light" onClick={(e) => { e.stopPropagation(); openEdit(info.row.original); }}><IconPencil size={16} /></ActionIcon></Tooltip>
+                        <Tooltip label="Удалить"><ActionIcon size="sm" color="red" variant="light" onClick={async (e) => { e.stopPropagation(); await handleDeleteRow(info.row.original); }}><IconTrash size={16} /></ActionIcon></Tooltip>
+                      </Group>
+                    ) },
+                  ]}
+                  columnFilters={filters.column}
+                  sorting={[] as any}
+                  onColumnFiltersChange={() => {}}
+                  onSortingChange={() => {}}
+                  onRowClick={(row) => { setSelectedView(row); viewModalHandlers.open(); }}
+                />
+              </Card>
+            </Grid.Col>
+          </Grid>
+        </Tabs.Panel>
+
+        <Tabs.Panel value="byDoc" pt="md">
           <Card withBorder shadow="sm">
-            <TableComponent<RocData>
-              data={data}
-              columns={[
-                { header: 'Контрагент', accessorKey: 'name', cell: info => <Text>{info.row.original.name}</Text> },
-                { header: 'Тип договора', accessorKey: 'typeContract.name', cell: info => <Text>{info.row.original.typeContract?.name || '-'}</Text> },
-                { header: 'Статус', accessorKey: 'statusContract.name', cell: info => <Text>{info.row.original.statusContract?.name || '-'}</Text> },
-                { header: 'Номер', accessorKey: 'contractNumber', cell: info => <Text>{info.row.original.contractNumber || '-'}</Text> },
-                { header: 'Дата', accessorKey: 'dateContract', cell: info => <Text>{info.row.original.dateContract ? dayjs(info.row.original.dateContract).format('DD.MM.YYYY') : '-'}</Text> },
-                { header: 'Действует до', accessorKey: 'agreedTo', cell: info => <Text>{info.row.original.agreedTo ? dayjs(info.row.original.agreedTo).format('DD.MM.YYYY') : '-'}</Text> },
-                { header: 'Действия', accessorKey: 'id', cell: info => (
-                  <Group gap={6}>
-                    <Tooltip label="Редактировать"><ActionIcon size="sm" variant="light" onClick={(e) => { e.stopPropagation(); openEdit(info.row.original); }}><IconPencil size={16} /></ActionIcon></Tooltip>
-                    <Tooltip label="Удалить"><ActionIcon size="sm" color="red" variant="light" onClick={async (e) => { e.stopPropagation(); await handleDeleteRow(info.row.original); }}><IconTrash size={16} /></ActionIcon></Tooltip>
-                  </Group>
-                ) },
-              ]}
-              columnFilters={filters.column}
-              sorting={[] as any}
-              onColumnFiltersChange={() => {}}
-              onSortingChange={() => {}}
-              onRowClick={(row) => openEdit(row)}
-            />
+            <Accordion multiple>
+              {groupedByDoc.map((g) => (
+                <Accordion.Item key={g.key} value={g.key}>
+                  <Accordion.Control>
+                    <Group justify="space-between" wrap="nowrap">
+                      <Box>
+                        <Text fw={600}>{g.title}</Text>
+                        {g.subtitle && <Text size="sm" c="dimmed">{g.subtitle}</Text>}
+                      </Box>
+                      <Text size="sm" c="dimmed">Договоров: {g.items.length}</Text>
+                    </Group>
+                  </Accordion.Control>
+                  <Accordion.Panel>
+                    <Box>
+                      {g.items.map((row) => (
+                        <Group
+                          key={row.id}
+                          justify="space-between"
+                          py={6}
+                          onClick={() => { setSelectedView(row); viewModalHandlers.open(); }}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <Group gap={12}>
+                            <Text fw={500}>{row.name}</Text>
+                            <Text size="sm" c="dimmed">№ {row.contractNumber || '-'}</Text>
+                            <Text size="sm" c="dimmed">от {row.dateContract ? dayjs(row.dateContract).format('DD.MM.YYYY') : '-'}</Text>
+                            <Text size="sm" c="dimmed">до {row.agreedTo ? dayjs(row.agreedTo).format('DD.MM.YYYY') : '-'}</Text>
+                          </Group>
+                          <Group gap={6}>
+                            <Tooltip label="Редактировать"><ActionIcon size="sm" variant="light" onClick={(e) => { e.stopPropagation(); openEdit(row); }}><IconPencil size={16} /></ActionIcon></Tooltip>
+                            <Tooltip label="Удалить"><ActionIcon size="sm" color="red" variant="light" onClick={(e) => { e.stopPropagation(); handleDeleteRow(row); }}><IconTrash size={16} /></ActionIcon></Tooltip>
+                          </Group>
+                        </Group>
+                      ))}
+                    </Box>
+                  </Accordion.Panel>
+                </Accordion.Item>
+              ))}
+            </Accordion>
           </Card>
-        </Grid.Col>
-      </Grid>
+        </Tabs.Panel>
+      </Tabs>
 
       <DynamicFormModal
         opened={modalOpened}
@@ -402,17 +516,28 @@ export default function RocList() {
             name: payloadBase.name || (doc?.name ?? ''),
           };
           const saved = selected ? await handleUpdate(payload) : await handleCreate(payload);
-          const files: File[] = (vals as any).attachments?.map((a: any) => a.source).filter(Boolean) || [];
-          if (files.length) {
-            const fd = new FormData();
-            files.forEach(f => fd.append('files', f));
-            fd.append('additional', 'false');
-            const targetId = selected?.id || saved?.id;
-            if (targetId) {
+          const targetId = selected?.id || saved?.id;
+          if (targetId) {
+            const baseFiles: File[] = (vals as any).attachments?.map((a: any) => a.source).filter(Boolean) || [];
+            const addFiles: File[] = (vals as any).additionalAttachments?.map((a: any) => a.source).filter(Boolean) || [];
+            if (baseFiles.length) {
+              const fd = new FormData();
+              baseFiles.forEach(f => fd.append('files', f));
+              fd.append('additional', 'false');
               await fetch(`${API}/accounting/roc/${targetId}/attachments`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
                 body: fd,
+              }).catch(() => {});
+            }
+            if (addFiles.length) {
+              const fd2 = new FormData();
+              addFiles.forEach(f => fd2.append('files', f));
+              fd2.append('additional', 'true');
+              await fetch(`${API}/accounting/roc/${targetId}/attachments`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+                body: fd2,
               }).catch(() => {});
             }
           }
@@ -463,6 +588,79 @@ export default function RocList() {
           </>
         )}
       </Drawer>
+
+      <DynamicFormModal
+        opened={viewModalOpened}
+        onClose={viewModalHandlers.close}
+        title="Просмотр договора"
+        mode="view"
+        initialValues={{
+          ...(selectedView || {}),
+          attachments: (selectedView as any)?.rocAttachment || [],
+        }}
+        hideDefaultViewAttachments
+        viewSecondaryAttachments={[
+          { title: 'Доп. соглашения', list: ((selectedView as any)?.rocAttachment || []).filter((a: any) => a.additional) },
+        ]}
+        viewExtraContent={(vals) => {
+          const all = (vals as any)?.rocAttachment || [];
+          const base = all.filter((a: any) => !a.additional);
+          const additional = all.filter((a: any) => a.additional);
+          return (
+            <Stack>
+              <Box>
+                <Group justify="space-between" mb={6}>
+                  <Text fw={600}>Основные вложения</Text>
+                </Group>
+                {base.length === 0 ? (
+                  <Text size="sm" c="dimmed">Нет вложений</Text>
+                ) : (
+                  <Stack gap="xs">{base.map((att: any) => (
+                    <Group key={att.id} justify="space-between">
+                      <Text size="sm">{String(att.source || '').split('/').pop()}</Text>
+                      <ActionIcon component="a" href={`${API}/${String(att.source || '').replace(/\\/g,'/')}`} target="_blank" rel="noreferrer">
+                        <IconDownload size={16} />
+                      </ActionIcon>
+                    </Group>
+                  ))}</Stack>
+                )}
+              </Box>
+              <Box>
+                <Group justify="space-between" mb={6}>
+                  <Text fw={600}>Доп. соглашения</Text>
+                  {selectedView && (
+                    <Button size="xs" onClick={() => addAdditionalFiles(selectedView.id)}>Добавить</Button>
+                  )}
+                </Group>
+                {additional.length === 0 ? (
+                  <Text size="sm" c="dimmed">Нет доп. соглашений</Text>
+                ) : (
+                  <Stack gap="xs">{additional.map((att: any) => (
+                    <Group key={att.id} justify="space-between">
+                      <Text size="sm">{String(att.source || '').split('/').pop()}</Text>
+                      <ActionIcon component="a" href={`${API}/${String(att.source || '').replace(/\\/g,'/')}`} target="_blank" rel="noreferrer">
+                        <IconDownload size={16} />
+                      </ActionIcon>
+                    </Group>
+                  ))}</Stack>
+                )}
+              </Box>
+            </Stack>
+          );
+        }}
+        viewFieldsConfig={[
+          { label: 'Контрагент', value: (it) => it?.name || '-' },
+          { label: 'Тип договора', value: (it) => it?.typeContract?.name || '-' },
+          { label: 'Статус', value: (it) => it?.statusContract?.name || '-' },
+          { label: 'Номер договора', value: (it) => it?.contractNumber || '-' },
+          { label: 'Дата договора', value: (it) => it?.dateContract ? dayjs(it.dateContract).format('DD.MM.YYYY') : '-' },
+          { label: 'Действует до', value: (it) => it?.agreedTo ? dayjs(it.agreedTo).format('DD.MM.YYYY') : '-' },
+          { label: 'Контрагент (Doc)', value: (it) => it?.doc?.fullName || it?.doc?.name || '-' },
+          { label: 'ИНН/КПП', value: (it) => it?.doc ? `${it.doc.inn}${it.doc.kpp ? ` / ${it.doc.kpp}` : ''}` : '-' },
+          { label: 'ОГРН', value: (it) => it?.doc?.ogrn || '-' },
+          { label: 'Адрес', value: (it) => it?.doc?.address || '-' },
+        ]}
+      />
     </Box>
     </DndProviderWrapper>
   );

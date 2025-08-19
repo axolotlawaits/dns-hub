@@ -85,6 +85,9 @@ interface DynamicFormModalProps {
   onConfirm?: () => void;
   error?: string | null;
   extraContent?: (values: Record<string, any>, setFieldValue: (path: string, val: any) => void) => JSX.Element;
+  viewExtraContent?: (values: Record<string, any>) => JSX.Element;
+  hideDefaultViewAttachments?: boolean;
+  viewSecondaryAttachments?: Array<{ title: string; list: any[] }>;
 }
 
 // Helper functions
@@ -253,21 +256,21 @@ export const DynamicFormModal = ({
   onConfirm,
   error,
   extraContent,
+  viewExtraContent,
+  hideDefaultViewAttachments = false,
+  viewSecondaryAttachments = [],
 }: DynamicFormModalProps) => {
   const [previewId, setPreviewId] = useState<string | null>(null);
   const form = useForm({ initialValues });
-  const [attachments, setAttachments] = useState<FileAttachment[]>(initialValues.attachments || []);
+  const [attachmentsMap, setAttachmentsMap] = useState<Record<string, FileAttachment[]>>({});
   const initializedRef = useRef(false);
 
   useEffect(() => {
     if (opened && !initializedRef.current) {
       // Initialize once per open session
-      const incoming: any[] = (initialValues as any).attachments
-        || (initialValues as any).rkAttachment
-        || (initialValues as any).rocAttachment
-        || [];
+      const fileFieldNames = (fields || []).filter(f => f.type === 'file').map(f => f.name);
 
-      const normalized = incoming.map((att: any) => {
+      const buildNormalized = (arr: any[]) => arr.map((att: any) => {
         const knownKeys = new Set([
           'id', 'userAdd', 'userAddId', 'source', 'type', 'recordId', 'createdAt', 'updatedAt',
         ]);
@@ -280,14 +283,28 @@ export const DynamicFormModal = ({
         return { ...att, meta: derivedMeta } as FileAttachment;
       });
 
-      const preparedValues = {
-        removedAttachments: [],
-        ...initialValues,
-        attachments: normalized,
-      } as Record<string, any>;
+      const nextMap: Record<string, FileAttachment[]> = {};
+      for (const fieldName of fileFieldNames) {
+        const incoming: any[] = (initialValues as any)[fieldName] || [];
+        nextMap[fieldName] = buildNormalized(incoming);
+      }
 
+      // Backward-compat: if generic attachments provided but no specific field had values, map to first file field
+      if (fileFieldNames.length > 0) {
+        const generic: any[] = (initialValues as any).attachments
+          || (initialValues as any).rkAttachment
+          || (initialValues as any).rocAttachment
+          || [];
+        if (generic.length && (!nextMap[fileFieldNames[0]] || nextMap[fileFieldNames[0]].length === 0)) {
+          nextMap[fileFieldNames[0]] = buildNormalized(generic);
+        }
+      }
+
+      // Apply to form values as well
+      const preparedValues: Record<string, any> = { removedAttachments: [], ...initialValues };
+      for (const k of Object.keys(nextMap)) preparedValues[k] = nextMap[k];
       form.setValues(preparedValues);
-      setAttachments(normalized);
+      setAttachmentsMap(nextMap);
       initializedRef.current = true;
     }
     if (!opened) {
@@ -295,42 +312,46 @@ export const DynamicFormModal = ({
     }
   }, [opened]);
 
-  const handleMetaChange = useCallback(
-    (id: string | undefined, meta: Record<string, any>) => {
-      setAttachments(prev => {
-        const updated = prev.map(att => 
-          att.id === id ? { ...att, meta } : att
-        );
-        form.setFieldValue('attachments', updated);
-        return updated;
+  const handleMetaChangeFor = useCallback(
+    (fieldName: string) => (id: string | undefined, meta: Record<string, any>) => {
+      setAttachmentsMap(prev => {
+        const current = prev[fieldName] || [];
+        const updated = current.map(att => att.id === id ? { ...att, meta } : att);
+        const next = { ...prev, [fieldName]: updated };
+        form.setFieldValue(fieldName, updated);
+        return next;
       });
     },
     [form]
   );
 
-  const handleFileDrop = useCallback((files: File[]) => {
+  const handleFileDropFor = useCallback((fieldName: string) => (files: File[]) => {
     const newAttachments = files.map((file, idx) => ({
       id: `temp-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 8)}`,
       userAdd: initialValues.userAdd || '',
       source: file,
       meta: {},
     }));
-    setAttachments(prev => {
-      const next = [...prev, ...newAttachments];
-      form.setFieldValue('attachments', next);
+    setAttachmentsMap(prev => {
+      const current = prev[fieldName] || [];
+      const nextList = [...current, ...newAttachments];
+      const next = { ...prev, [fieldName]: nextList };
+      form.setFieldValue(fieldName, nextList);
       return next;
     });
   }, [initialValues.userAdd, form]);
 
-  const handleRemoveAttachment = useCallback((id: string | undefined) => {
-    setAttachments(prev => {
-      const newAttachments = prev.filter(a => a.id?.toString() !== id?.toString());
-      form.setFieldValue('attachments', newAttachments);
+  const handleRemoveAttachmentFor = useCallback((fieldName: string) => (id: string | undefined) => {
+    setAttachmentsMap(prev => {
+      const current = prev[fieldName] || [];
+      const newAttachments = current.filter(a => a.id?.toString() !== id?.toString());
+      const next = { ...prev, [fieldName]: newAttachments };
+      form.setFieldValue(fieldName, newAttachments);
       if (id) {
         const prevRemoved = (form.values as any).removedAttachments || [];
         form.setFieldValue('removedAttachments', [...prevRemoved, id]);
       }
-      return newAttachments;
+      return next;
     });
   }, [form]);
 
@@ -443,12 +464,12 @@ export const DynamicFormModal = ({
           <div key={field.name}>
             <Text fw={500} mb="sm">{field.label}</Text>
             <FileUploadComponent
-              onFilesDrop={handleFileDrop}
-              attachments={attachments}
-              onRemoveAttachment={handleRemoveAttachment}
+              onFilesDrop={handleFileDropFor(field.name)}
+              attachments={attachmentsMap[field.name] || []}
+              onRemoveAttachment={handleRemoveAttachmentFor(field.name)}
               withDnd={field.withDnd}
               fileFields={field.fileFields || []}
-              onMetaChange={handleMetaChange}
+              onMetaChange={handleMetaChangeFor(field.name)}
             />
           </div>
         );
@@ -457,7 +478,7 @@ export const DynamicFormModal = ({
       default:
         return null;
     }
-  }, [form, handleFileDrop, handleRemoveAttachment, attachments, handleMetaChange, mode]);
+  }, [form, handleFileDropFor, handleRemoveAttachmentFor, attachmentsMap, handleMetaChangeFor, mode]);
 
   const renderViewField = useCallback((config: ViewFieldConfig, item: any) => (
     <div key={config.label} style={{ marginBottom: '16px' }}>
@@ -470,13 +491,19 @@ export const DynamicFormModal = ({
     const fileName = typeof attachment.source === 'string'
       ? attachment.source.split('\\').pop() || 'Файл'
       : attachment.source.name;
-    const fileUrl = `${API}/${attachment.source}`;
+    const normalized = typeof attachment.source === 'string' ? String(attachment.source).replace(/\\/g, '/') : '';
+    const fileUrl = `${API}/${normalized}`;
+    const isImage = typeof attachment.source === 'string' && /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(normalized);
     const fileId = attachment.id || `temp-${fileName}-${Math.random().toString(36).slice(2, 11)}`;
     return (
       <Card key={fileId} p="sm" withBorder>
         <Group justify="space-between">
           <Group gap="xs" onClick={() => setPreviewId(fileId)} style={{ cursor: 'pointer' }}>
-            {getFileIcon(fileName)}
+            {isImage ? (
+              <img src={fileUrl} alt={fileName} style={{ height: 42, width: 64, objectFit: 'cover', borderRadius: 4 }} />
+            ) : (
+              getFileIcon(fileName)
+            )}
             <Text size="sm">{fileName}</Text>
           </Group>
           <Text
@@ -491,14 +518,28 @@ export const DynamicFormModal = ({
             Скачать
           </Text>
         </Group>
+        {/* FilePreviewModal expects Attachment[] with required id:string. Map gently. */}
         <FilePreviewModal
           opened={previewId === fileId}
           onClose={() => setPreviewId(null)}
-          attachments={initialValues.attachments || []}
+          attachments={(() => {
+            const base: any[] = (initialValues as any).attachments
+              || (initialValues as any).rkAttachment
+              || (initialValues as any).rocAttachment
+              || [];
+            const extras: any[] = (viewSecondaryAttachments || []).flatMap(s => s.list || []);
+            const all = [...base, ...extras];
+            return all.map((a: any) => ({
+              id: String(a.id || `temp-${Math.random().toString(36).slice(2, 11)}`),
+              name: typeof a.source === 'string' ? (a.source.split('\\').pop() || 'Файл') : (a.source?.name || 'Файл'),
+              url: typeof a.source === 'string' ? `${API}/${a.source}` : (a.source ? URL.createObjectURL(a.source) : ''),
+              source: typeof a.source === 'string' ? a.source : '',
+            }));
+          })()}
         />
       </Card>
     );
-  }, [previewId, initialValues.attachments]);
+  }, [previewId, initialValues]);
 
   const modalContent = useMemo(() => {
     switch (mode) {
@@ -506,12 +547,20 @@ export const DynamicFormModal = ({
         return (
           <>
             {viewFieldsConfig.map(config => renderViewField(config, initialValues))}
-            {initialValues.attachments?.length > 0 && (
+            {!hideDefaultViewAttachments && (((initialValues as any).attachments?.length || (initialValues as any).rkAttachment?.length || (initialValues as any).rocAttachment?.length) > 0) && (
               <div style={{ marginTop: '16px' }}>
                 <Text fw={500} mb="sm">Приложения</Text>
                 <Stack gap="xs">
-                  {initialValues.attachments.map(renderAttachmentCard)}
+                  {(((initialValues as any).attachments
+                    || (initialValues as any).rkAttachment
+                    || (initialValues as any).rocAttachment
+                    || []) as any[]).map(renderAttachmentCard)}
                 </Stack>
+              </div>
+            )}
+            {typeof viewExtraContent === 'function' && (
+              <div style={{ marginTop: '16px' }}>
+                {viewExtraContent(initialValues)}
               </div>
             )}
           </>
@@ -540,7 +589,7 @@ export const DynamicFormModal = ({
         if (panelContent) {
           return (
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-              <form onSubmit={form.onSubmit(values => onSubmit?.({ ...values, attachments }))} style={{ flex: 1 }}>
+              <form onSubmit={form.onSubmit(values => onSubmit?.({ ...values }))} style={{ flex: 1 }}>
                 <Stack>
                   {fields.map(renderField)}
                   {error && <Alert color="red">{error}</Alert>}
@@ -565,7 +614,7 @@ export const DynamicFormModal = ({
 
         // No side panel → render classic single-column form (full width)
         return (
-          <form onSubmit={form.onSubmit(values => onSubmit?.({ ...values, attachments }))}>
+          <form onSubmit={form.onSubmit(values => onSubmit?.({ ...values }))}>
             <Stack>
               {fields.map(renderField)}
               {error && <Alert color="red">{error}</Alert>}
@@ -582,7 +631,7 @@ export const DynamicFormModal = ({
         );
       }
     }
-  }, [mode, viewFieldsConfig, initialValues, renderViewField, renderAttachmentCard, onClose, onConfirm, form, onSubmit, fields, renderField, error, attachments]);
+  }, [mode, viewFieldsConfig, initialValues, renderViewField, renderAttachmentCard, onClose, onConfirm, form, onSubmit, fields, renderField, error, attachmentsMap, hideDefaultViewAttachments, viewExtraContent]);
 
   return (
     <Modal opened={opened} onClose={() => { initializedRef.current = false; onClose(); }} title={title} size="xl" radius="md">
