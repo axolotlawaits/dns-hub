@@ -13,6 +13,7 @@ import bookmarksRouter from './routes/app/bookmarks.js'
 import notificationRouter from './routes/app/notification.js'
 import correspondenceRouter from './routes/aho/correspondence.js'
 import supplydocsRouter from './routes/accounting/supplydocs.js'
+import rocRouter from './routes/accounting/roc.js'
 import navigationRouter from './routes/app/navigation.js'
 import typeRouter from './routes/app/type.js'
 import routeDayRouter from './routes/supply/routeDay.js'
@@ -88,6 +89,7 @@ app.use('/hub-api/notifications', notificationRouter)
 app.use('/hub-api/aho/meter-reading', meterReadingRouter)
 app.use('/hub-api/aho/correspondence', correspondenceRouter)
 app.use('/hub-api/accounting/supply-docs', supplydocsRouter)
+app.use('/hub-api/accounting/roc', rocRouter)
 app.use('/hub-api/add/media', mediaRouter)
 app.use('/hub-api/add/rk', rkRouter)
 app.use('/hub-api/add/sliders', sliderRouter)

@@ -113,6 +113,8 @@ model Type {
   Tool                   Tool                   @relation(fields: [model_uuid], references: [id])
   rk_typeStructure       RKAttachment[]         @relation("RK_typeStructure")
   rk_approvalStatus      RKAttachment[]         @relation("RK_approvalStatus")
+  roc_typeContract       Roc[]                  @relation("Roc_typeContract")
+  roc_statusContract     Roc[]                  @relation("Roc_statusContract")
 }
 
 model Tool {
@@ -170,7 +172,10 @@ model User {
   Slider_Updated                  Slider[]                          @relation(name: "updated")
   RKAdded                         RK[]                              @relation("RK_UserAdd")
   RKUpdated                       RK[]                              @relation("RK_UserUpdated")
+  RocAdded                        Roc[]                             @relation("Roc_UserAdd")
+  RocUpdated                      Roc[]                             @relation("Roc_UserUpdated")
   RKAttachment                    RKAttachment[]
+  RocAttachment                   RocAttachment[]
 }          
 
 model GroupToolAccess {
@@ -394,7 +399,69 @@ model RKAttachment {
   rk                        RK                    @relation(fields: [recordId], references: [id])
   userAdd                   User                  @relation(fields: [userAddId], references: [id])
   typeAttachment            String
-}   
+}  
+
+model Doc {
+    id                        String                @id @default(uuid())
+    fullName                  String
+    name                      String
+    address                   String
+    inn                       String
+    ogrn                      String
+    kpp                       String
+    taxationSystem            String
+    phone                     String
+    email                     String
+    siEgrul                   String
+    statusCode                Int
+    deStatusCode              String
+    liquidationDate           DateTime
+    successorName             String
+    successorINN              String
+    updatedAt                 DateTime?             @updatedAt
+    roc                       Roc[]
+}
+
+model Roc {
+    id                        String                @id @default(uuid())
+    createdAt                 DateTime              @default(now())
+    updatedAt                 DateTime?             @updatedAt
+    userAdd                   User                  @relation("Roc_UserAdd", fields: [userAddId], references: [id])
+    userAddId                 String    
+    userUpdated               User?                 @relation("Roc_UserUpdated", fields: [userUpdatedId], references: [id])
+    userUpdatedId             String
+    terminationLetter         Boolean               @default(false)
+    dateSendCorrespondence    DateTime
+    docId                     String
+    doc                       Doc                 @relation(fields: [docId], references: [id])                       
+    shelfLife                 Int
+    name                      String
+    typeTerm                  RocTypeByTerm
+    contractNumber            String
+    dateContract              DateTime
+    agreedTo                  DateTime
+    typeContractId            String
+    typeContract              Type?                 @relation("Roc_typeContract", fields: [typeContractId], references: [id])   
+    statusContractId          String
+    statusContract            Type?                 @relation("Roc_statusContract", fields: [statusContractId], references: [id])           
+    terminationСonditions     String 
+    peculiarities             String
+    folderNo                  String
+    rocAttachment             RocAttachment[]   
+
+}
+
+model RocAttachment {
+  id                        String                @id @default(uuid())
+  createdAt                 DateTime              @default(now())              
+  source                    String                                      
+  type                      String              
+  recordId                  String              
+  userAddId                 String
+  roc                       Roc                   @relation(fields: [recordId], references: [id])
+  userAdd                   User                  @relation(fields: [userAddId], references: [id])
+  additional                Boolean               @default(false)
+}
 
 model PrintService {
   id        String   @id @default(uuid())
@@ -466,4 +533,11 @@ enum NotificationPriority {
   MEDIUM
   HIGH
   CRITICAL
+}
+
+enum RocTypeByTerm {
+  Urgent
+  Extended
+  Perpetual
+  LongTerm
 }

@@ -1,4 +1,4 @@
-import { Modal, TextInput, Select, Button, Alert, Stack, Textarea, Text, Group, Card, Paper, ActionIcon, NumberInput } from '@mantine/core';
+import { Modal, TextInput, Select, Button, Alert, Stack, Textarea, Text, Group, Card, Paper, ActionIcon, NumberInput, MultiSelect } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useState, useEffect, useCallback, useMemo, useRef, JSX } from 'react';
 import dayjs from 'dayjs';
@@ -33,8 +33,9 @@ export interface FormField {
   withDnd?: boolean;
   fileFields?: FileFieldConfig[]; // Конфигурация дополнительных полей для файлов
   // Дополнительные свойства для расширенного управления
-  onChange?: (value: any) => void;
+  onChange?: (value: any, setFieldValue?: (path: string, val: any) => void) => void;
   searchable?: boolean;
+  onSearchChange?: (search: string) => void;
   disabled?: boolean;
   loading?: boolean;
   leftSection?: JSX.Element;
@@ -83,6 +84,7 @@ interface DynamicFormModalProps {
   onSubmit?: (values: Record<string, any>) => void;
   onConfirm?: () => void;
   error?: string | null;
+  extraContent?: (values: Record<string, any>, setFieldValue: (path: string, val: any) => void) => JSX.Element;
 }
 
 // Helper functions
@@ -250,6 +252,7 @@ export const DynamicFormModal = ({
   onSubmit,
   onConfirm,
   error,
+  extraContent,
 }: DynamicFormModalProps) => {
   const [previewId, setPreviewId] = useState<string | null>(null);
   const form = useForm({ initialValues });
@@ -261,6 +264,7 @@ export const DynamicFormModal = ({
       // Initialize once per open session
       const incoming: any[] = (initialValues as any).attachments
         || (initialValues as any).rkAttachment
+        || (initialValues as any).rocAttachment
         || [];
 
       const normalized = incoming.map((att: any) => {
@@ -349,30 +353,58 @@ export const DynamicFormModal = ({
               const raw = e.target.value;
               const masked = typeof field.mask === 'function' ? field.mask(raw) : raw;
               form.setFieldValue(field.name, masked);
-              field.onChange?.(masked);
+              field.onChange?.(masked, form.setFieldValue);
             }}
           />
         );
       case 'textarea':
         return <Textarea key={field.name} {...commonProps} />;
-      case 'select':
+      case 'select': {
+        const getAtPath = (obj: any, path: string): any => {
+          return path.split('.').reduce((acc: any, key: string) => (acc == null ? undefined : acc[key]), obj);
+        };
+        if (field.multiple) {
+          const current: string[] = getAtPath(form.values, field.name) || [];
+          return (
+            <MultiSelect
+              key={field.name}
+              label={field.label}
+              data={field.options || []}
+              value={current}
+              searchable={field.searchable}
+              onSearchChange={(s) => field.onSearchChange?.(s)}
+              disabled={field.disabled}
+              placeholder={field.placeholder}
+              comboboxProps={{ withinPortal: true, zIndex: 9999 }}
+              onChange={(vals) => {
+                form.setFieldValue(field.name, vals);
+                field.onChange?.(vals, form.setFieldValue);
+              }}
+            />
+          );
+        }
+        const singleValue = (form.getInputProps(field.name) as any)?.value ?? '';
         return (
           <Select
             key={field.name}
             {...commonProps}
             data={field.options || []}
             searchable={field.searchable}
+            onSearchChange={(s) => field.onSearchChange?.(s)}
+            nothingFoundMessage="Не найдено"
             disabled={field.disabled}
             placeholder={field.placeholder}
             comboboxProps={{ withinPortal: true, zIndex: 9999 }}
-            value={(form.values as any)[field.name] ?? ''}
+            value={singleValue}
             onChange={(val) => {
               form.setFieldValue(field.name, val);
-              field.onChange?.(val ?? '');
+              field.onChange?.(val ?? '', form.setFieldValue);
             }}
           />
         );
-      case 'selectSearch':
+      }
+      case 'selectSearch': {
+        const singleValue = (form.getInputProps(field.name) as any)?.value ?? '';
         return (
           <Select
             key={field.name}
@@ -384,15 +416,24 @@ export const DynamicFormModal = ({
             disabled={field.disabled}
             placeholder={field.placeholder}
             comboboxProps={{ withinPortal: true, zIndex: 9999 }}
-            value={(form.values as any)[field.name] ?? ''}
+            value={singleValue}
             onChange={(val) => {
               form.setFieldValue(field.name, val);
-              field.onChange?.(val ?? '');
+              field.onChange?.(val ?? '', form.setFieldValue);
             }}
           />
         );
-      case 'date':
-        return <TextInput key={field.name} {...commonProps} type="date" />;
+      }
+      case 'date': {
+        const value = (form.getInputProps(field.name) as any)?.value;
+        const normalized = typeof value === 'string' && value.includes('T')
+          ? value.split('T')[0]
+          : value || '';
+        return <TextInput key={field.name} {...commonProps} type="date" value={normalized} onChange={(e) => {
+          form.setFieldValue(field.name, e.target.value);
+          field.onChange?.(e.target.value, form.setFieldValue);
+        }} />;
+      }
       case 'datetime':
         return <TextInput key={field.name} {...commonProps} type="datetime-local" />;
       case 'number':
@@ -482,7 +523,7 @@ export const DynamicFormModal = ({
               Вы уверены, что хотите удалить запись? {dayjs(initialValues.ReceiptDate).format('DD.MM.YYYY')}?
             </Text>
             <Group justify="flex-end">
-              <Button variant="default" onClick={onClose}>
+              <Button variant="default" onClick={() => { initializedRef.current = false; onClose(); }}>
                 Отмена
               </Button>
               <Button color="red" onClick={onConfirm}>
@@ -491,14 +532,45 @@ export const DynamicFormModal = ({
             </Group>
           </>
         );
-      default:
+      default: {
+        const panelContent = typeof extraContent === 'function'
+          ? extraContent(form.values, form.setFieldValue)
+          : null;
+
+        if (panelContent) {
+          return (
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+              <form onSubmit={form.onSubmit(values => onSubmit?.({ ...values, attachments }))} style={{ flex: 1 }}>
+                <Stack>
+                  {fields.map(renderField)}
+                  {error && <Alert color="red">{error}</Alert>}
+                  <Group justify="flex-end" mt="md">
+                    <Button variant="default" onClick={() => { initializedRef.current = false; onClose(); }}>
+                      Отмена
+                    </Button>
+                    <Button type="submit">
+                      {mode === 'create' ? 'Создать' : 'Сохранить'}
+                    </Button>
+                  </Group>
+                </Stack>
+              </form>
+              <div style={{ width: 380 }}>
+                <Card withBorder shadow="sm" p="md">
+                  {panelContent}
+                </Card>
+              </div>
+            </div>
+          );
+        }
+
+        // No side panel → render classic single-column form (full width)
         return (
           <form onSubmit={form.onSubmit(values => onSubmit?.({ ...values, attachments }))}>
             <Stack>
               {fields.map(renderField)}
               {error && <Alert color="red">{error}</Alert>}
               <Group justify="flex-end" mt="md">
-                <Button variant="default" onClick={onClose}>
+                <Button variant="default" onClick={() => { initializedRef.current = false; onClose(); }}>
                   Отмена
                 </Button>
                 <Button type="submit">
@@ -508,11 +580,12 @@ export const DynamicFormModal = ({
             </Stack>
           </form>
         );
+      }
     }
   }, [mode, viewFieldsConfig, initialValues, renderViewField, renderAttachmentCard, onClose, onConfirm, form, onSubmit, fields, renderField, error, attachments]);
 
   return (
-    <Modal opened={opened} onClose={onClose} title={title} size="xl" radius="md">
+    <Modal opened={opened} onClose={() => { initializedRef.current = false; onClose(); }} title={title} size="xl" radius="md">
       {modalContent}
     </Modal>
   );

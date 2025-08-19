@@ -1005,17 +1005,14 @@ return (
                         </ActionIcon>
                         <ActionIcon
                           color="blue"
-                          onClick={() => openEditModal(rk)}
+                          onClick={(e) => { e.stopPropagation(); openEditModal(rk); }}
                           disabled={fileUploading}
                         >
                           <IconPencil size={18} />
                         </ActionIcon>
                         <ActionIcon
                           color="red"
-                          onClick={() => {
-                            setSelectedRK(rk);
-                            modals.delete[1].open();
-                          }}
+                          onClick={(e) => { e.stopPropagation(); setSelectedRK(rk); modals.delete[1].open(); }}
                           disabled={fileUploading}
                         >
                           <IconTrash size={18} />

@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { getSupplyDocs, createSupplyDoc, getSupplyDocById, updateSupplyDoc, deleteSupplyDoc } from '../../controllers/accounting/supplydocs.js';
-import uploadSupplyDocs from '../../middleware/uploaderCorrespondence.js';
+import { createUploader } from '../../middleware/uploadFactory.js';
+const uploadSupplyDocs = createUploader({ preset: 'correspondence' });
 
 const router = Router();
 
