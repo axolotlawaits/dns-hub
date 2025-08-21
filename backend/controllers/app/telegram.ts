@@ -35,7 +35,19 @@ class TelegramService {
 
   // 3. Инициализация бота
   private initializeBot(): void {
-    this.bot = new Bot<MyContext>(process.env.TELEGRAM_BOT_TOKEN!);
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    if (!token) {
+      console.error('TELEGRAM_BOT_TOKEN not found');
+      return;
+    }
+    
+    const botName = process.env.TELEGRAM_BOT_NAME;
+    if (!botName) {
+      console.error('TELEGRAM_BOT_NAME not found');
+      return;
+    }
+    
+    this.bot = new Bot<MyContext>(token);
 
     // Настройка middleware
     this.bot.use(
@@ -90,8 +102,12 @@ class TelegramService {
 
   // 6. Запуск бота
   public async launch(): Promise<boolean> {
-    if (this.isRunning || !this.bot) {
-      console.log('Bot is already running');
+    if (this.isRunning) {
+      return false;
+    }
+    
+    if (!this.bot) {
+      console.error('Bot not initialized');
       return false;
     }
 
@@ -99,9 +115,6 @@ class TelegramService {
       await this.bot.start({
         drop_pending_updates: true,
         allowed_updates: ['message', 'callback_query'],
-        onStart: (info) => {
-          console.log(`Bot @${info.username} started`);
-        },
       });
 
       this.isRunning = true;
@@ -113,12 +126,10 @@ class TelegramService {
       if (this.retryCount < this.MAX_RETRIES) {
         this.retryCount++;
         const delay = Math.min(2000 * this.retryCount, 10000);
-        console.log(`Retrying in ${delay}ms...`);
         await new Promise((resolve) => setTimeout(resolve, delay));
         return this.launch();
       }
 
-      console.error('Max retries reached');
       return false;
     }
   }
@@ -130,7 +141,6 @@ class TelegramService {
     try {
       await this.bot.stop();
       this.isRunning = false;
-      console.log('Bot stopped successfully');
     } catch (error) {
       console.error('Error stopping bot:', error);
     }
@@ -187,7 +197,18 @@ class TelegramService {
     return {
       isRunning: this.isRunning,
       retryCount: this.retryCount,
+      botInitialized: !!this.bot,
+      hasToken: !!process.env.TELEGRAM_BOT_TOKEN,
+      hasBotName: !!process.env.TELEGRAM_BOT_NAME,
     };
+  }
+
+  // 11. Метод для принудительного перезапуска бота
+  public async restart(): Promise<boolean> {
+    await this.stop();
+    this.retryCount = 0;
+    this.initializeBot();
+    return this.launch();
   }
 }
 

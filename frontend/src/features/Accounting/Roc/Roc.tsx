@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Box, Card, Grid, Group, LoadingOverlay, Text, Title, Drawer, ActionIcon, Tooltip, Tabs, Accordion, Stack, Button } from '@mantine/core';
+import { Box, Card, Grid, Group, LoadingOverlay, Text, Title, Drawer, ActionIcon, Tooltip, Tabs, Accordion, Stack, Button, Paper } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
 import { API } from '../../../config/constants';
 // Switch Dadata calls to backend endpoints
 import { FilterGroup } from '../../../utils/filter';
 import { DynamicFormModal, type FormConfig } from '../../../utils/formModal';
+import { FilePreviewModal } from '../../../utils/FilePreviewModal';
 import { useUserContext } from '../../../hooks/useUserContext';
 import { TableComponent } from '../../../utils/table';
 import { IconPlus, IconPencil, IconTrash, IconDownload } from '@tabler/icons-react';
@@ -239,8 +240,8 @@ export default function RocList() {
         { name: 'terminationСonditions', label: 'Условия расторжения', type: 'textarea' },
         { name: 'peculiarities', label: 'Особенности', type: 'textarea' },
         { name: 'folderNo', label: '№ папки', type: 'text' },
-        { name: 'attachments', label: 'Вложения (основные)', type: 'file', withDnd: true, fileFields: [] },
-        { name: 'additionalAttachments', label: 'Доп. соглашения', type: 'file', withDnd: true, fileFields: [] },
+        { name: 'attachments', label: 'Вложения (основные)', type: 'file', withDnd: true },
+        { name: 'additionalAttachments', label: 'Доп. соглашения', type: 'file', withDnd: true },
       ],
     });
   }, [types, statuses, nameOptions, innOptions, idToParty, selectedPartyId, formValues]);
@@ -274,6 +275,7 @@ export default function RocList() {
   const [drawerOpened, drawerHandlers] = useDisclosure(false);
   const [viewModalOpened, viewModalHandlers] = useDisclosure(false);
   const [selectedView, setSelectedView] = useState<RocData | null>(null);
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const addAdditionalFiles = useCallback(async (rocId: string) => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -353,8 +355,16 @@ export default function RocList() {
       roc: { selectedByName: '', selectedByInn: '' }
     });
     const allAtt: any[] = (row as any)?.rocAttachment || [];
-    const base = allAtt.filter(a => !a.additional).map((a: any) => ({ id: a.id, source: a.source, meta: {} }));
-    const adds = allAtt.filter(a => a.additional).map((a: any) => ({ id: a.id, source: a.source, meta: {} }));
+    const base = allAtt.filter(a => !a.additional).map((a: any) => ({ 
+      id: a.id, 
+      source: a.source, 
+      meta: {} 
+    }));
+    const adds = allAtt.filter(a => a.additional).map((a: any) => ({ 
+      id: a.id, 
+      source: a.source, 
+      meta: {} 
+    }));
     setFormValues((prev: any) => ({ ...prev, attachments: base, additionalAttachments: adds }));
     // Prefill multiselect from existing doc if present
     if (row.doc) {
@@ -616,12 +626,24 @@ export default function RocList() {
                   <Text size="sm" c="dimmed">Нет вложений</Text>
                 ) : (
                   <Stack gap="xs">{base.map((att: any) => (
-                    <Group key={att.id} justify="space-between">
-                      <Text size="sm">{String(att.source || '').split('/').pop()}</Text>
-                      <ActionIcon component="a" href={`${API}/${String(att.source || '').replace(/\\/g,'/')}`} target="_blank" rel="noreferrer">
-                        <IconDownload size={16} />
-                      </ActionIcon>
-                    </Group>
+                    <Paper key={att.id} p="sm" withBorder>
+                      <Group justify="space-between" align="center">
+                        <Group gap="sm" align="center" onClick={() => setPreviewId(att.id)} style={{ cursor: 'pointer' }}>
+                          <img 
+                            src={`${API}/${String(att.source || '').replace(/\\/g,'/')}`} 
+                            alt={String(att.source || '').split('/').pop() || 'Файл'} 
+                            style={{ height: 60, width: 100, objectFit: 'contain', borderRadius: 6 }} 
+                          />
+                          <Text size="sm" c="dimmed">Предпросмотр</Text>
+                        </Group>
+                        <Group gap="sm">
+                          <Text size="sm">{String(att.source || '').split('/').pop()}</Text>
+                          <ActionIcon component="a" href={`${API}/${String(att.source || '').replace(/\\/g,'/')}`} target="_blank" rel="noreferrer">
+                            <IconDownload size={16} />
+                          </ActionIcon>
+                        </Group>
+                      </Group>
+                    </Paper>
                   ))}</Stack>
                 )}
               </Box>
@@ -636,12 +658,24 @@ export default function RocList() {
                   <Text size="sm" c="dimmed">Нет доп. соглашений</Text>
                 ) : (
                   <Stack gap="xs">{additional.map((att: any) => (
-                    <Group key={att.id} justify="space-between">
-                      <Text size="sm">{String(att.source || '').split('/').pop()}</Text>
-                      <ActionIcon component="a" href={`${API}/${String(att.source || '').replace(/\\/g,'/')}`} target="_blank" rel="noreferrer">
-                        <IconDownload size={16} />
-                      </ActionIcon>
-                    </Group>
+                    <Paper key={att.id} p="sm" withBorder>
+                      <Group justify="space-between" align="center">
+                        <Group gap="sm" align="center" onClick={() => setPreviewId(att.id)} style={{ cursor: 'pointer' }}>
+                          <img 
+                            src={`${API}/${String(att.source || '').replace(/\\/g,'/')}`} 
+                            alt={String(att.source || '').split('/').pop() || 'Файл'} 
+                            style={{ height: 60, width: 100, objectFit: 'contain', borderRadius: 6 }} 
+                          />
+                          <Text size="sm" c="dimmed">Предпросмотр</Text>
+                        </Group>
+                        <Group gap="sm">
+                          <Text size="sm">{String(att.source || '').split('/').pop()}</Text>
+                          <ActionIcon component="a" href={`${API}/${String(att.source || '').replace(/\\/g,'/')}`} target="_blank" rel="noreferrer">
+                            <IconDownload size={16} />
+                          </ActionIcon>
+                        </Group>
+                      </Group>
+                    </Paper>
                   ))}</Stack>
                 )}
               </Box>
@@ -660,6 +694,26 @@ export default function RocList() {
           { label: 'ОГРН', value: (it) => it?.doc?.ogrn || '-' },
           { label: 'Адрес', value: (it) => it?.doc?.address || '-' },
         ]}
+      />
+
+      {/* FilePreviewModal для просмотра файлов */}
+      <FilePreviewModal
+        opened={!!previewId}
+        onClose={() => setPreviewId(null)}
+        attachments={(() => {
+          const all = (selectedView as any)?.rocAttachment || [];
+          return all.map((att: any) => ({
+            id: String(att.id || `temp-${Math.random().toString(36).slice(2, 11)}`),
+            name: String(att.source || '').split('/').pop() || 'Файл',
+            url: `${API}/${String(att.source || '').replace(/\\/g,'/')}`,
+            source: String(att.source || ''),
+          }));
+        })()}
+        initialIndex={(() => {
+          if (!previewId) return 0;
+          const all = (selectedView as any)?.rocAttachment || [];
+          return all.findIndex((att: any) => att.id === previewId);
+        })()}
       />
     </Box>
     </DndProviderWrapper>

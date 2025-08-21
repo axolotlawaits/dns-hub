@@ -4,17 +4,25 @@ import crypto from 'crypto';
 
 const router = express.Router();
 
-router.get('/generate-link/:userId', async (req, res) => {
+router.get('/generate-link/:userId', async (req: any, res: any) => {
   try {
+    const botName = process.env.TELEGRAM_BOT_NAME;
+    if (!botName) {
+      return res.status(500).json({ error: 'Bot configuration error' });
+    }
+
     const token = crypto.randomBytes(32).toString('hex');
     
     await prisma.user.update({
       where: { id: req.params.userId },
-      data: { telegramLinkToken: token }
+      data: { 
+        telegramLinkToken: token,
+      }
     });
 
+    const link = `https://t.me/${botName}?start=${token}`;
     res.json({
-      link: `https://t.me/${process.env.TELEGRAM_BOT_NAME}?start=${token}`,
+      link,
       expires_in: "15 minutes"
     });
   } catch (error) {
@@ -23,30 +31,39 @@ router.get('/generate-link/:userId', async (req, res) => {
   }
 });
 
-router.get('/status/:userId', async (req, res) => {
+router.get('/status/:userId', async (req: any, res: any) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.params.userId },
-      select: { telegramChatId: true, name: true }
+      select: { 
+        telegramChatId: true, 
+        name: true,
+      }
     });
 
-    res.json({
+    const status = {
       is_connected: !!user?.telegramChatId,
       chat_id: user?.telegramChatId,
-      user_name: user?.name
-    });
+      user_name: user?.name,
+    };
+
+    res.json(status);
   } catch (error) {
     console.error('Status error:', error);
     res.status(500).json({ error: 'Status check failed' });
   }
 });
 
-router.post('/disconnect/:userId', async (req, res) => {
+router.post('/disconnect/:userId', async (req: any, res: any) => {
   try {
     await prisma.user.update({
       where: { id: req.params.userId },
-      data: { telegramChatId: null, telegramLinkToken: null }
+      data: { 
+        telegramChatId: null, 
+        telegramLinkToken: null,
+      }
     });
+    
     res.json({ success: true });
   } catch (error) {
     console.error('Disconnect error:', error);
@@ -54,9 +71,48 @@ router.post('/disconnect/:userId', async (req, res) => {
   }
 });
 
-router.post('/status/:userId', (req, res) => {
-  console.log(`Confirmation for ${req.params.userId}`);
+router.post('/status/:userId', (req: any, res: any) => {
   res.status(200).send({ success: true });
+});
+
+// Маршрут для проверки статуса бота
+router.get('/bot-status', async (req: any, res: any) => {
+  try {
+    const { telegramService } = await import('../../controllers/app/telegram.js');
+    const status = telegramService.status;
+    
+    res.json({
+      bot_status: status,
+      environment: {
+        hasToken: !!process.env.TELEGRAM_BOT_TOKEN,
+        hasBotName: !!process.env.TELEGRAM_BOT_NAME,
+        tokenPreview: process.env.TELEGRAM_BOT_TOKEN ? 
+          `${process.env.TELEGRAM_BOT_TOKEN.substring(0, 10)}...` : 'Not set',
+        botName: process.env.TELEGRAM_BOT_NAME || 'Not set'
+      }
+    });
+  } catch (error) {
+    console.error('Bot status check error:', error);
+    res.status(500).json({ error: 'Failed to check bot status' });
+  }
+});
+
+// Маршрут для перезапуска бота
+router.post('/bot-restart', async (req: any, res: any) => {
+  try {
+    const { telegramService } = await import('../../controllers/app/telegram.js');
+    
+    const success = await telegramService.restart();
+    
+    if (success) {
+      res.json({ success: true, message: 'Bot restarted successfully' });
+    } else {
+      res.status(500).json({ success: false, message: 'Bot restart failed' });
+    }
+  } catch (error) {
+    console.error('Bot restart error:', error);
+    res.status(500).json({ error: 'Failed to restart bot' });
+  }
 });
 
 export default router;
