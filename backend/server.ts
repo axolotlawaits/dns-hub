@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from "cors"
 import { PrismaClient } from "@prisma/client"
@@ -108,7 +109,16 @@ initToolsCron()
 
 server.listen(2000, async function() {
   console.log('Server running on port 2000');
-  await telegramService.stop();
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  await telegramService.launch(); // Запуск бота
+  
+  // Запуск Telegram бота
+  try {
+    const botStarted = await telegramService.launch();
+    if (botStarted) {
+      console.log('Telegram bot started');
+    } else {
+      console.log('Telegram bot failed to start - check .env file');
+    }
+  } catch (error) {
+    console.error('Failed to start Telegram bot:', error);
+  }
 });
