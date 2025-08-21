@@ -76,3 +76,20 @@
   color: #737373;
 }
 
+/* loader */
+
+.loaders-info {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.loader-info-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.loader-info-heading {
+  font-size: 18px;
+}

@@ -85,7 +85,7 @@ function Day({day, getDays}: {day: DayType, getDays: () => void}) {
                 }
               </Table.Td>
               <Table.Td>
-                <LoadersTimeRow loaders={filial.loaders}></LoadersTimeRow>
+                <LoadersTimeRow loaders={filial.loaders} getDays={getDays}></LoadersTimeRow>
               </Table.Td>
               <Table.Td>{filial.feedback}</Table.Td>
             </Table.Tr>

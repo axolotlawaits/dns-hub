@@ -39,3 +39,17 @@ export const getFilials = async (req: Request, res: Response): Promise<any> => {
   }
   res.status(400).json({error: 'ошибка при поиске филиалов'})
 }
+
+/* loaders */
+
+export const deleteLoader = async (req: Request, res: Response): Promise<any> => {
+  let loaderId = req.params.id
+
+  const newRoute = await prisma.loader.delete({where: { id: loaderId }})
+
+  if (newRoute) {
+    res.status(200).json(newRoute)
+  } else {
+    res.status(400).json({error: 'ошибка создания маршрута'})
+  }
+}

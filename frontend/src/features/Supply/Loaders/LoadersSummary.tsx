@@ -131,7 +131,7 @@ function LoadersSummary() {
               return (
                 <>
                   {calculateTotalRouteTime(routeDay) !== 0 &&
-                    <div className="summary-route-card">
+                    <div key={routeDay.id} className="summary-route-card">
                       <p>Маршрут: {routeDay.route.name}</p>
                       <p>Поставщик: {routeDay.route.contractor}</p>
                       <p id="test">

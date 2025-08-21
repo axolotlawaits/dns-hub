@@ -26,7 +26,7 @@ function AddLoadersModal({filial, getDays}: {filial: FilialType, getDays: () => 
     const flatLoaders = loadersData.flatMap(({ amount, ...rest }) =>
       Array(amount).fill(null).map(() => ({ ...rest }))
     )
-    console.log(flatLoaders)
+
     const response = await fetch(`${API}/loaders/filial/${filialId}`, {
       method: 'PATCH',
       body: JSON.stringify({loaders: flatLoaders, feedback}),
