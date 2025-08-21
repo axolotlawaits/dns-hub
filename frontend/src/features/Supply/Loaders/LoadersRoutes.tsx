@@ -1,4 +1,4 @@
-import { Card, Button, TextInput, MultiSelect, Stack, Select, Modal, Divider } from '@mantine/core'
+import { Card, Button, TextInput, MultiSelect, Stack, Select, Modal, Divider, ActionIcon, Group, Text } from '@mantine/core'
 import './styles/Home.css'
 import { Link } from 'react-router-dom'
 import { useEffect, useState } from 'react';
@@ -7,8 +7,9 @@ import { useDisclosure } from '@mantine/hooks';
 import { FilialType } from './Day';
 import dayjs from 'dayjs';
 import RouteEdit from './RouteEdit';
-import { IconPlus } from '@tabler/icons-react';
+import { IconPlus, IconTrash } from '@tabler/icons-react';
 import useAuthFetch from '../../../hooks/useAuthFetch';
+import { useUserContext } from '../../../hooks/useUserContext';
 
 export const rrsInitData = ['Алтай', 'Барнаул', 'Кемерово', 'Новокузнецк', 'Новосибирск', 'Новосибирская область', 'Омск', 'Томск']
 
@@ -29,6 +30,7 @@ type ValErrors = {
 
 function LoadersRoutes() {
   const authFetch = useAuthFetch()
+  const { user } = useUserContext()
   const [name, setName] = useState('')
   const [contractor, setContractor] = useState('')
   const [rrs, setRrs] = useState<string | null>('Новосибирск')
@@ -38,6 +40,7 @@ function LoadersRoutes() {
   const [routes, setRoutes] = useState<RouteType[]>([])
   const [opened, { open, close }] = useDisclosure(false)
   const [valErrors, setValErrors] = useState<ValErrors | null>(null)
+  const [routeDeleteId, setRouteDeleteId] = useState<string | null>(null)
 
   useEffect(() => {
     const getRoutes = async () => {
@@ -72,6 +75,21 @@ function LoadersRoutes() {
 
     if (response.ok) {
       setRoutes([...routes, json])
+      close()
+    } else {
+      setValErrors(json.errors)
+    }
+  }
+
+  const deleteRoute = async (routeId: string) => {
+    const response = await fetch(`${API}/loaders/route/${routeId}`, {
+      method: 'DELETE',
+      headers: { 'Content-type': 'application/json' }
+    })
+    const json = await response.json()
+
+    if (response.ok) {
+      setRoutes(routes.filter(route => route.id !== json.id))
       close()
     } else {
       setValErrors(json.errors)
@@ -132,7 +150,29 @@ function LoadersRoutes() {
                 <Divider my="md" />
                 <div className='route-card-footer'>
                   <span className='route-created'>{dayjs(route.createdAt).format('MMMM D, YYYY')}</span>
-                  <RouteEdit route={route} filialsData={filialsData} />
+                  <Group gap='xs'>
+                    {(dayjs().diff(route.createdAt, 'day') >= 5 && user?.role === 'EMPLOYEE') ?
+                      null
+                      :
+                      <RouteEdit route={route} filialsData={filialsData} />
+                    }
+                    {user?.role !== 'EMPLOYEE' &&
+                      <>
+                      <ActionIcon onClick={() => setRouteDeleteId(route.id)} size={26} variant="default" aria-label="ActionIcon with size as a number">
+                        <IconTrash size={18} />
+                      </ActionIcon>
+                      <Modal opened={routeDeleteId === route.id} onClose={() => setRouteDeleteId(null)}>
+                        <Stack gap='10px'>
+                          <Text>Удалить маршрут?</Text>
+                          <Group>
+                            <Button onClick={() => deleteRoute(route.id)} color="red">Удалить</Button>
+                            <Button onClick={() => setRouteDeleteId(null)} color="red" variant="light">Отмена</Button>
+                          </Group>
+                        </Stack>
+                      </Modal>
+                      </>
+                    }
+                  </Group>
                 </div>
               </Card>
             </div>

@@ -113,13 +113,12 @@ function App() {
                   <Route path="/aho/meter-reading" element={<MeterReading />} />
                   <Route path="/aho/correspondence" element={<Correspondence />} />
                   <Route path="/add/media" element={<Media />} />
-                  
+                  <Route path='/supply/loaders' element={<LoadersHome />} />
+                  <Route path='/supply/loaders/route/:id' element={<RouteComponent />} />
+                  <Route path='/retail/print-service' element={<PrintService />} />
                   <Route path="/accounting/supply-docs" element={<SupplyDocs />} />
                   <Route path="/accounting/contracts-register" element={<Roc />} />
                 </Route>
-                <Route path='/supply/loaders' element={<LoadersHome />} />
-                <Route path='/supply/loaders/route/:id' element={<RouteComponent />} />
-                <Route path='/retail/print-service' element={<PrintService />} />
               </Routes>
             </AppShell.Main>
             <Footer />

@@ -9,6 +9,7 @@ import html2canvas from 'html2canvas';
 import { useRef } from "react"
 import { RouteType } from "./LoadersRoutes"
 import { IconDownload, IconFileInfo } from "@tabler/icons-react"
+import { useUserContext } from "../../../hooks/useUserContext"
 
 export type FilialType = {
   id: string
@@ -27,6 +28,7 @@ export type DayType = {
 
 function Day({day, getDays}: {day: DayType, getDays: () => void}) {
   const [opened, { open, close }] = useDisclosure(false)
+  const { user } = useUserContext()
   const printRef = useRef(null)
 
   const calculateWorkHours = () => {
@@ -80,6 +82,8 @@ function Day({day, getDays}: {day: DayType, getDays: () => void}) {
               <Table.Td>
                 {filial.loaders.length > 0 ? 
                   filial.loaders.length
+                : (dayjs().diff(day.day, 'day') >= 5 && user?.role === 'DEVELOPER') ?
+                  null
                 :
                   <AddLoadersModal filial={filial} getDays={getDays}/>
                 }

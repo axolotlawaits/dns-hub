@@ -5,8 +5,10 @@ import { LoaderType } from "./Loaders"
 import { IconTrash } from "@tabler/icons-react"
 import { useState } from "react"
 import { API } from "../../../config/constants"
+import { useUserContext } from "../../../hooks/useUserContext"
 
 function LoadersTimeRow({loaders, getDays}: {loaders: LoaderType[], getDays: () => void}) {
+  const { user } = useUserContext()
   const [opened, { open, close }] = useDisclosure(false)
   const [deleteLoaderId, setDeleteLoaderId] = useState<string | null>(null)
 
@@ -42,19 +44,22 @@ function LoadersTimeRow({loaders, getDays}: {loaders: LoaderType[], getDays: () 
             <Stack key={loader.id} gap='5px'>
               <div className="loader-info-header">
                 <h2 className="loader-info-heading">{`грузчик ${i + 1}`}</h2>
-                <ActionIcon onClick={() => setDeleteLoaderId(loader.id)} variant="filled" color="red" aria-label="clear" size="md">
-                  <IconTrash style={{ width: '70%', height: '70%' }} />
-                </ActionIcon>
-                <Modal opened={deleteLoaderId === loader.id} onClose={() => setDeleteLoaderId(null)}>
-                  <Stack gap='10px'>
-                    <Text>Удалить грузчика?</Text>
-                    <Group>
-                      <Button onClick={() => deleteLoader(loader.id)} color="red">Удалить</Button>
-                      <Button variant="light">Отмена</Button>
-                    </Group>
-                  </Stack>
-       
-                </Modal>
+                {user?.role !== 'EMPLOYEE' &&
+                <>
+                  <ActionIcon onClick={() => setDeleteLoaderId(loader.id)} variant="filled" color="red" aria-label="clear" size="md">
+                    <IconTrash style={{ width: '70%', height: '70%' }} />
+                  </ActionIcon>
+                  <Modal opened={deleteLoaderId === loader.id} onClose={() => setDeleteLoaderId(null)}>
+                    <Stack gap='10px'>
+                      <Text>Удалить грузчика?</Text>
+                      <Group>
+                        <Button onClick={() => deleteLoader(loader.id)} color="red">Удалить</Button>
+                        <Button onClick={() => setDeleteLoaderId(null)} color="red" variant="light">Отмена</Button>
+                      </Group>
+                    </Stack>
+                  </Modal>
+                </>
+                }
               </div>
               <p>{`время работы на филиале: ${dayjs(loader.startTime).format('H:mm')} - ${dayjs(loader.endTime).format('H:mm')}`}</p>
               <p>{calculateHours(loader.startTime, loader.endTime)}</p>

@@ -57,3 +57,15 @@ export const updateRoute = async (req: Request, res: Response): Promise<any> => 
     }
   }
 }
+
+export const deleteRoute = async (req: Request, res: Response): Promise<any> => {
+  const routeId = req.params.id
+
+  const deletedRoute = await prisma.route.delete({where: {id: routeId}})
+  
+  if (deletedRoute) {
+    res.status(200).json(deletedRoute)
+  } else {
+    res.status(400).json({error: 'не удалось удалить маршрут'})
+  }
+}

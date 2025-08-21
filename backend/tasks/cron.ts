@@ -1,7 +1,7 @@
 import schedule from 'node-schedule'
-import { scheduleRouteDay } from '../controllers/supply/routeDay'
-import { dailyRKJob } from '../controllers/add/rk';
-import { weeklyRocDocSync } from '../controllers/accounting/roc';
+import { scheduleRouteDay } from '../controllers/supply/routeDay.js'
+import { dailyRKJob } from '../controllers/add/rk.js';
+import { weeklyRocDocSync } from '../controllers/accounting/roc.js';
 
 export const initToolsCron = () => {
   schedule.scheduleJob('0 0 * * *', async () => {
