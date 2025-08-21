@@ -292,7 +292,7 @@ model Filial {
   routeId    String
   routeDayId String?
   updatedAt  DateTime  @updatedAt
-  routeDay   RouteDay? @relation(fields: [routeDayId], references: [id])
+  routeDay   RouteDay? @relation(fields: [routeDayId], references: [id], onDelete: Cascade)
   route      Route     @relation(fields: [routeId], references: [id])
   loaders    Loader[]
 }
@@ -302,7 +302,7 @@ model Loader {
   startTime DateTime
   endTime   DateTime
   filialId  String
-  filial    Filial   @relation(fields: [filialId], references: [id])
+  filial    Filial   @relation(fields: [filialId], references: [id], onDelete: Cascade)
 }
 
 model SupplyDocs {
