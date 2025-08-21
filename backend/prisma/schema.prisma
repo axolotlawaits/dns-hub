@@ -293,7 +293,7 @@ model Filial {
   routeDayId String?
   updatedAt  DateTime  @updatedAt
   routeDay   RouteDay? @relation(fields: [routeDayId], references: [id], onDelete: Cascade)
-  route      Route     @relation(fields: [routeId], references: [id])
+  route      Route     @relation(fields: [routeId], references: [id], onDelete: Cascade)
   loaders    Loader[]
 }
 
