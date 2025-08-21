@@ -29,7 +29,7 @@ export const getFilials = async (req: Request, res: Response): Promise<any> => {
     where: {
       city, 
       status: {in: [0, 1]}, 
-      type: {in: ['Магазин', 'Сервиcный центр', 'Региональный цех ремонта', 'РСЦ']},
+      type: {in: ['Магазин', 'Сервиcный центр', 'Региональный цех ремонта', 'РСЦ', 'Администрация']},
     },
     select: {name: true}
   })

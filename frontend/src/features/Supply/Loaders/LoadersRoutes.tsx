@@ -77,7 +77,7 @@ function LoadersRoutes() {
       setValErrors(json.errors)
     }
   }
-  console.log(valErrors)
+
   return (
     <div id='routes-page-wrapper'>
       <Button 

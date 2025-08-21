@@ -280,7 +280,7 @@ model RouteDay {
   routeId   String
   createdAt DateTime @default(now())
   filials   Filial[]
-  route     Route    @relation(fields: [routeId], references: [id])
+  route     Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
 }
 
 model Filial {
