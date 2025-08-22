@@ -27,15 +27,23 @@ export const AccessContextProvider = ({ children }: Props) => {
 
   useEffect(() => {
     const getAccessedTools = async () => {
-      const response = await fetch(`${API}/access/${user?.id}?email=${user?.email}`)
-      const json = await response.json()
-      if (response.ok) {
+      if (!user?.id || !user?.email) return
+      setLoading(true)
+      try {
+        const response = await fetch(`${API}/access/${user.id}?email=${user.email}`)
+        if (!response.ok) throw new Error("Failed to fetch access")
+        const json = await response.json();
         setAccess(json)
+      } catch (error) {
+        setAccess([])
+        console.error(error)
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
+
     getAccessedTools()
-  }, [user?.email])
+  }, [user])
 
   return (
     <AccessContext.Provider value={{access, loading}}>

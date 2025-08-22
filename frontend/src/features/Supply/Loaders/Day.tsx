@@ -1,4 +1,4 @@
-import { Button, Modal, Space, Stack, Table } from "@mantine/core"
+import { Button, Group, Modal, Space, Stack, Table } from "@mantine/core"
 import dayjs from "dayjs"
 import LoadersTimeRow from "./LoadersTimeRow"
 import { LoaderType } from "./Loaders"
@@ -81,9 +81,12 @@ function Day({day, getDays}: {day: DayType, getDays: () => void}) {
               <Table.Td>{filial.name}</Table.Td>
               <Table.Td>
                 {filial.loaders.length > 0 ? 
-                  filial.loaders.length
-                : (dayjs().diff(day.day, 'day') >= 5 && user?.role === 'DEVELOPER') ?
-                  null
+                  <Group>
+                    <AddLoadersModal filial={filial} getDays={getDays}/>
+                    <span>{filial.loaders.length}</span>
+                  </Group>
+                : (dayjs().diff(day.day, 'day') >= 5 && user?.role === 'EMPLOYEE') ?
+                  <span>{filial.loaders.length === 0 ? '-' : filial.loaders.length}</span>
                 :
                   <AddLoadersModal filial={filial} getDays={getDays}/>
                 }
