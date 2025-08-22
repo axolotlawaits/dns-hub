@@ -161,10 +161,10 @@ function LoadersRoutes() {
                       <ActionIcon onClick={() => setRouteDeleteId(route.id)} size={26} variant="default" aria-label="ActionIcon with size as a number">
                         <IconTrash size={18} />
                       </ActionIcon>
-                      <Modal opened={routeDeleteId === route.id} onClose={() => setRouteDeleteId(null)}>
+                      <Modal opened={routeDeleteId === route.id} onClose={() => setRouteDeleteId(null)} size="xs" centered>
                         <Stack gap='10px'>
                           <Text>Удалить маршрут?</Text>
-                          <Group>
+                          <Group grow>
                             <Button onClick={() => deleteRoute(route.id)} color="red">Удалить</Button>
                             <Button onClick={() => setRouteDeleteId(null)} color="red" variant="light">Отмена</Button>
                           </Group>

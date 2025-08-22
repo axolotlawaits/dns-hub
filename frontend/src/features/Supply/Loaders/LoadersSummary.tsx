@@ -83,7 +83,7 @@ function LoadersSummary() {
     pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
     pdf.save(dayjs(dayData[0].day).format('MMMM D, YYYY'));
   }
-  console.log(dayData[0])
+
   return (
     <div className="loaders-summary-wrapper">
       <div className="loaders-summary-block">

@@ -1,4 +1,4 @@
-import { ActionIcon, Button, Group, Modal, Stack, Text } from "@mantine/core"
+import { ActionIcon, Button, Divider, Group, Modal, Stack, Text } from "@mantine/core"
 import { useDisclosure } from "@mantine/hooks"
 import dayjs from "dayjs"
 import { LoaderType } from "./Loaders"
@@ -41,6 +41,7 @@ function LoadersTimeRow({loaders, getDays}: {loaders: LoaderType[], getDays: () 
         <div className="loaders-info"> 
         {loaders.length > 0 && loaders.map((loader, i) => {
           return (
+            <>
             <Stack key={loader.id} gap='5px'>
               <div className="loader-info-header">
                 <h2 className="loader-info-heading">{`грузчик ${i + 1}`}</h2>
@@ -49,10 +50,10 @@ function LoadersTimeRow({loaders, getDays}: {loaders: LoaderType[], getDays: () 
                   <ActionIcon onClick={() => setDeleteLoaderId(loader.id)} variant="filled" color="red" aria-label="clear" size="md">
                     <IconTrash style={{ width: '70%', height: '70%' }} />
                   </ActionIcon>
-                  <Modal opened={deleteLoaderId === loader.id} onClose={() => setDeleteLoaderId(null)}>
+                  <Modal opened={deleteLoaderId === loader.id} onClose={() => setDeleteLoaderId(null)} size='xs' centered>
                     <Stack gap='10px'>
                       <Text>Удалить грузчика?</Text>
-                      <Group>
+                      <Group grow>
                         <Button onClick={() => deleteLoader(loader.id)} color="red">Удалить</Button>
                         <Button onClick={() => setDeleteLoaderId(null)} color="red" variant="light">Отмена</Button>
                       </Group>
@@ -64,6 +65,8 @@ function LoadersTimeRow({loaders, getDays}: {loaders: LoaderType[], getDays: () 
               <p>{`время работы на филиале: ${dayjs(loader.startTime).format('H:mm')} - ${dayjs(loader.endTime).format('H:mm')}`}</p>
               <p>{calculateHours(loader.startTime, loader.endTime)}</p>
             </Stack>
+            {i !== loaders.length - 1 && <Divider my="sm" />}
+            </>
           )
         })}
         </div>
