@@ -8,6 +8,7 @@ export type LoaderType = {
   id: string
   startTime: Date
   endTime: Date
+  filialId: string
 }
 
 type LoadersProps = {
@@ -50,7 +51,7 @@ function Loaders({index, handleLoadersData, handleLoadersAmount, valErrors}: Loa
     setAmount(amount)
     handleLoadersAmount(index, Number(amount))
   }
-
+  console.log(startTime)
   return (
     <Stack gap={10}>
       <p>Время начала</p>

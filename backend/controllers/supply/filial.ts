@@ -43,9 +43,25 @@ export const getFilials = async (req: Request, res: Response): Promise<any> => {
 /* loaders */
 
 export const deleteLoader = async (req: Request, res: Response): Promise<any> => {
-  let loaderId = req.params.id
+  const loaderId = req.params.id
 
   const newRoute = await prisma.loader.delete({where: { id: loaderId }})
+
+  if (newRoute) {
+    res.status(200).json(newRoute)
+  } else {
+    res.status(400).json({error: 'ошибка создания маршрута'})
+  }
+}
+
+export const updateLoader = async (req: Request, res: Response): Promise<any> => {
+  const loaderId = req.params.id
+  const loaderTime = req.body
+
+  const newRoute = await prisma.loader.update({
+    where: { id: loaderId },
+    data: loaderTime
+  })
 
   if (newRoute) {
     res.status(200).json(newRoute)

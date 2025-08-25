@@ -1,5 +1,5 @@
 import express from 'express'
-import { updateFilialData, getFilials, deleteLoader } from '../../controllers/supply/filial.js'
+import { updateFilialData, getFilials, deleteLoader, updateLoader } from '../../controllers/supply/filial.js'
 import z from 'zod';
 import { validateData } from '../../middleware/validation.js';
 
@@ -14,5 +14,7 @@ router.patch('/:id', validateData(updateFilialSchema), updateFilialData)
 router.get('/:id', getFilials)
 
 router.delete('/loader/:id', deleteLoader)
+
+router.patch('/loader/:id', updateLoader)
 
 export default router

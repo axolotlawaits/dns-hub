@@ -6,6 +6,7 @@ import { IconTrash } from "@tabler/icons-react"
 import { useState } from "react"
 import { API } from "../../../config/constants"
 import { useUserContext } from "../../../hooks/useUserContext"
+import { TimeInput } from "@mantine/dates"
 
 function LoadersTimeRow({loaders, getDays}: {loaders: LoaderType[], getDays: () => void}) {
   const { user } = useUserContext()
@@ -29,6 +30,26 @@ function LoadersTimeRow({loaders, getDays}: {loaders: LoaderType[], getDays: () 
       getDays()
     }
   }
+
+  const updateLoader = async (loader: LoaderType, time: string, isStart: boolean) => {
+    const currentDate = new Date()
+    const newDateString = `${currentDate.toDateString()} ${time}`
+    const newDate = new Date(newDateString)
+
+    const newTime = {
+      startTime: isStart ? newDate : loader.startTime, 
+      endTime: isStart ? loader.endTime : newDate,
+    }
+
+    const response = await fetch(`${API}/loaders/filial/loader/${loader.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(newTime),
+      headers: { 'Content-type': 'application/json' }
+    })
+    if (response.ok) {
+      getDays()
+    }
+  }
   
   return (
     <>
@@ -37,7 +58,7 @@ function LoadersTimeRow({loaders, getDays}: {loaders: LoaderType[], getDays: () 
       :
         <span>нет данных</span>
       }
-      <Modal opened={opened} onClose={close}>
+      <Modal opened={opened} onClose={close} size='lg'>
         <div className="loaders-info"> 
         {loaders.length > 0 && loaders.map((loader, i) => {
           return (
@@ -62,7 +83,21 @@ function LoadersTimeRow({loaders, getDays}: {loaders: LoaderType[], getDays: () 
                 </>
                 }
               </div>
-              <p>{`время работы на филиале: ${dayjs(loader.startTime).format('H:mm')} - ${dayjs(loader.endTime).format('H:mm')}`}</p>
+              <Group>
+                <span>время работы на филиале:</span>
+                <span>c</span>
+                <TimeInput 
+                  value={dayjs(loader.startTime).format('HH:mm')}
+                  onChange={(e) => updateLoader(loader, e.currentTarget.value, true)}
+                  size="xs"
+                />
+                <span>до</span>
+                <TimeInput 
+                  value={dayjs(loader.endTime).format('HH:mm')}
+                  onChange={(e) => updateLoader(loader, e.currentTarget.value, false)}
+                  size="xs"
+                />
+              </Group>
               <p>{calculateHours(loader.startTime, loader.endTime)}</p>
             </Stack>
             {i !== loaders.length - 1 && <Divider my="sm" />}

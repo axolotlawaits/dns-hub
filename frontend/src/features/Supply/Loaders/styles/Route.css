@@ -41,7 +41,8 @@
   flex-direction: column;
   gap: 10px;
   padding: 10px 15px;
-  background-color: #242424;
+  border-radius: 5px;
+  background-color: var(--bg);
 }
 
 .day-summary-block {
