@@ -1,4 +1,4 @@
-import { Card, Button, TextInput, MultiSelect, Stack, Select, Modal, Divider, ActionIcon, Group, Text } from '@mantine/core'
+import { Card, Button, TextInput, MultiSelect, Stack, Select, Modal, Divider, ActionIcon, Group, Text, ScrollArea } from '@mantine/core'
 import './styles/Home.css'
 import { Link } from 'react-router-dom'
 import { useEffect, useState } from 'react';
@@ -138,15 +138,17 @@ function LoadersRoutes() {
         {routes.length > 0 && routes.map((route: RouteType) => {
           return (
             <div key={route.id} >
-              <Card shadow="sm" padding="lg" radius="md" withBorder className='route-card'>
+              <Card shadow="sm" padding="lg" radius="md" withBorder className='route-card' h='250px'>
                 <Link className='card-text-link' to={`./route/${route.id}`}>{route.name}</Link>
-                <div>
-                  {route.filials.map(filial => {
-                    return (
-                      <p key={filial.id}>{filial.name}</p>
-                    )
-                  })}
-                </div>
+                <ScrollArea style={{ height: '100%' }} scrollbarSize={8}>
+                  <Stack gap='0px'>
+                    {route.filials.map(filial => {
+                      return (
+                        <p key={filial.id}>{filial.name}</p>
+                      )
+                    })}
+                  </Stack>
+                </ScrollArea>
                 <Divider my="md" />
                 <div className='route-card-footer'>
                   <span className='route-created'>{dayjs(route.createdAt).format('MMMM D, YYYY')}</span>

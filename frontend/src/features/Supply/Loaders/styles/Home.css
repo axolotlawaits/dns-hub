@@ -13,6 +13,7 @@
 .card-text-link{
   font-size: 18px;
   font-weight: bold;
+  margin-bottom: 10px;
 }
 
 .card-text-link:hover{
