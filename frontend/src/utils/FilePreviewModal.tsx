@@ -12,7 +12,6 @@ interface FilePreviewModalProps {
   onClose: () => void;
   attachments: Attachment[];
   initialIndex?: number;
-  apiBaseUrl?: string;
 }
 
 const SUPPORTED_IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
@@ -26,7 +25,6 @@ export const FilePreviewModal = ({
   onClose,
   attachments,
   initialIndex = 0,
-  apiBaseUrl = API
 }: FilePreviewModalProps) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [loading, setLoading] = useState(true);
@@ -81,11 +79,11 @@ export const FilePreviewModal = ({
         ? decodeURIComponent(source.split('\\').pop() || source.split('/').pop() || 'Файл')
         : source.name,
       fileUrl: typeof source === 'string'
-        ? `${apiBaseUrl}/${source}`
+        ? `${API}/${source}`
         : URL.createObjectURL(source),
       fileExt: ext
     };
-  }, [currentAttachment, apiBaseUrl]);
+  }, [currentAttachment, API]);
 
   const handleNext = useCallback(() => {
     setCurrentIndex(prev => {
