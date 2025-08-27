@@ -2,7 +2,7 @@ import { ActionIcon, Button, Divider, Group, Modal, Stack, Text } from "@mantine
 import { useDisclosure } from "@mantine/hooks"
 import dayjs from "dayjs"
 import { LoaderType } from "./Loaders"
-import { IconTrash } from "@tabler/icons-react"
+import { IconMoodEmpty, IconTrash } from "@tabler/icons-react"
 import { useState } from "react"
 import { API } from "../../../config/constants"
 import { useUserContext } from "../../../hooks/useUserContext"
@@ -60,7 +60,7 @@ function LoadersTimeRow({loaders, getDays}: {loaders: LoaderType[], getDays: () 
       }
       <Modal opened={opened} onClose={close} size='lg'>
         <div className="loaders-info"> 
-        {loaders.length > 0 && loaders.map((loader, i) => {
+        {loaders.length > 0 ? loaders.map((loader, i) => {
           return (
             <>
             <Stack key={loader.id} gap='5px'>
@@ -103,7 +103,13 @@ function LoadersTimeRow({loaders, getDays}: {loaders: LoaderType[], getDays: () 
             {i !== loaders.length - 1 && <Divider my="sm" />}
             </>
           )
-        })}
+        })
+          :
+          <Group gap='5px'>
+            <Text>список грузчиков пуст</Text>
+            <IconMoodEmpty />
+          </Group>
+        }
         </div>
       </Modal>
     </>

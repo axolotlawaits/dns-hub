@@ -2,17 +2,17 @@ import { useEffect, useRef, useState } from "react"
 import { API } from "../../../config/constants"
 import dayjs from "dayjs"
 import { DayType } from "./Day"
-import DatePicker from "react-datepicker"
-import { useThemeContext } from "../../../hooks/useThemeContext"
-import { Button, Table } from "@mantine/core"
+import { Button, Stack, Table } from "@mantine/core"
 import html2canvas from "html2canvas"
 import jsPDF from "jspdf"
 import { IconDownload } from "@tabler/icons-react"
+import { DatePicker } from '@mantine/dates'
+
+const today = new Date().toISOString().slice(0, 10)
 
 function LoadersSummary() {
-  const [date, setDate] = useState<Date | null>(new Date())
+  const [date, setDate] = useState<string | null>(today)
   const [dayData, setDayData] = useState<DayType[]>([])
-  const { isDark } = useThemeContext()
   const printRef = useRef(null)
 
   const calculateTotalRouteTime = (day: DayType) => {
@@ -86,23 +86,10 @@ function LoadersSummary() {
 
   return (
     <div className="loaders-summary-wrapper">
-      <div className="loaders-summary-block">
+      <Stack w='300px'>
         <h2>Выберите день</h2>
-        <DatePicker 
-          selected={date} 
-          onChange={setDate} 
-          inline
-          locale="ru"
-          calendarStartDay={1}
-          showMonthDropdown
-          showYearDropdown
-          dropdownMode="select"
-          dateFormat="dd.MM.yyyy"
-          className={isDark ? "dark-theme-datepicker" : ""}
-          popperClassName="no-border-popper"
-          calendarClassName={isDark ? "dark-calendar" : ""}
-        />
-      </div>
+        <DatePicker value={date} onChange={setDate} size="md"/>
+      </Stack>
       <div className="summary-and-download">
         <div ref={printRef} className="day-summary-card">
           <h2>Отчет за день</h2>

@@ -3,7 +3,9 @@ import { Notifications } from '@mantine/notifications';
 import { useDisclosure } from '@mantine/hooks';
 import { AppShell } from '@mantine/core';
 import '@mantine/core/styles.css';
+import '@mantine/dates/styles.css';
 import '@mantine/notifications/styles.css';
+import '@mantine/carousel/styles.css'
 import './styles/App.css';
 import './styles/Components.css';
 import './styles/Handbook.css';
