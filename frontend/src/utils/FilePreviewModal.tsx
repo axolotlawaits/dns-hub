@@ -1,5 +1,6 @@
 import { Modal, Image, Button, Loader, Stack, Text, Group, Paper } from '@mantine/core';
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { API } from '../config/constants';
 
 interface Attachment {
   id: string;
@@ -25,7 +26,7 @@ export const FilePreviewModal = ({
   onClose,
   attachments,
   initialIndex = 0,
-  apiBaseUrl = 'http://localhost:2000/hub-api/'
+  apiBaseUrl = API
 }: FilePreviewModalProps) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [loading, setLoading] = useState(true);
