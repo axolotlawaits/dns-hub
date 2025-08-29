@@ -110,8 +110,8 @@ model Devices {
   branchId                  String
   vendor                    String
   name                      String
-  timeFrom                  DateTime
-  timeUntil                 DateTime
+  timeFrom                  DateTime?
+  timeUntil                 DateTime?
   activity                  Activity
   network                   String
   number                    String

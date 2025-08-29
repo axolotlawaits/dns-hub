@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Devices" ALTER COLUMN "timeFrom" DROP NOT NULL,
+ALTER COLUMN "timeUntil" DROP NOT NULL;
