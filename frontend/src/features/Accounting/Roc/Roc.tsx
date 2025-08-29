@@ -8,7 +8,7 @@ import { FilterGroup } from '../../../utils/filter';
 import { DynamicFormModal, type FormConfig } from '../../../utils/formModal';
 import { FilePreviewModal } from '../../../utils/FilePreviewModal';
 import { useUserContext } from '../../../hooks/useUserContext';
-import { TableComponent } from '../../../utils/table';
+import { TableComponent } from '../../../utils/Table';
 import { IconPlus, IconPencil, IconTrash, IconDownload } from '@tabler/icons-react';
 import { DndProviderWrapper } from '../../../utils/dnd';
 

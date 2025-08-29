@@ -11,7 +11,7 @@ import { IconPencil, IconTrash } from '@tabler/icons-react';
 import { ColumnDef, ColumnFiltersState, SortingState } from '@tanstack/react-table';
 import { DndProviderWrapper } from '../../../utils/dnd';
 import { DynamicFormModal } from '../../../utils/formModal';
-import { TableComponent } from '../../../utils/table';
+import { TableComponent } from '../../../utils/Table';
 
 type Updater<T> = T | ((prev: T) => T);
 const MODEL_UUID = 'dd6ec264-4e8c-477a-b2d6-c62a956422c0';
