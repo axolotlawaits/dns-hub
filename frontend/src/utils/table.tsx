@@ -58,13 +58,14 @@ export function TableComponent<TData>({
   return (
     <>
       <Box style={{ overflowX: 'auto', position: 'relative' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <table className='table-main' style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id}>
+              <tr key={headerGroup.id} className='tr-main'>
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
+                    className='th-main'
                     style={{
                       width: header.getSize(),
                       cursor: header.column.getCanSort() ? 'pointer' : 'default',
@@ -105,6 +106,7 @@ export function TableComponent<TData>({
             {table.getRowModel().rows.map((row) => (
               <tr
                 key={row.id}
+                className='tr-main'
                 onClick={() => onRowClick?.(row.original)}
                 style={{
                   cursor: onRowClick ? 'pointer' : 'default',
@@ -114,6 +116,7 @@ export function TableComponent<TData>({
                 {row.getVisibleCells().map((cell) => (
                   <td
                     key={cell.id}
+                    className='td-main'
                     style={{
                       width: cell.column.getSize(),
                       padding: '16px',
