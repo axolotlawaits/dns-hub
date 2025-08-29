@@ -100,7 +100,24 @@ model Branch {
   supplyDocs             SupplyDocs[]   @relation("SupplyDocs_Branch")
   userData               UserData[]
   rk                     RK[]
+  devices                Devices[]
 }  
+
+model Devices {
+  id                        String                @id @default(uuid())
+  createdAt                 DateTime              @default(now()) 
+  branch                    Branch                @relation(fields: [branchId], references: [uuid])
+  branchId                  String
+  vendor                    String
+  name                      String
+  timeFrom                  DateTime
+  timeUntil                 DateTime
+  activity                  Activity
+  network                   String
+  number                    String
+  app                       String
+  os                        String
+}
 
 model Type {
   id                     String                 @id @default(uuid())
@@ -476,20 +493,6 @@ model PrintService {
   tovarId   String
   format    Int
   branch    Branch   @relation("BranchPrint", fields: [branchId], references: [uuid])
-}
-
-model Devices {
-  id                        String                @id @default(uuid())
-  createdAt                 DateTime              @default(now()) 
-  vendor                    String
-  name                      String
-  timeFrom                  DateTime
-  timeUntil                 DateTime
-  activity                  Activity
-  network                   String
-  number                    String
-  app                       String
-  os                        String
 }
 
 model Slider {
