@@ -79,27 +79,28 @@ model Group {
 }
 
 model Branch {
-  uuid          String         @id @default(uuid())
-  division      String
-  code          String
-  rrs           String
-  name          String
-  status        Int
-  city          String
-  address       String
-  last_update   DateTime
-  latitude      Float
-  longitude     Float
-  totalArea     Int
-  tradingArea   Int
-  warehouseArea Int
-  type          String
-  images        BranchImage[]
-  printService  PrintService[] @relation("BranchPrint")
-  supplyDocs    SupplyDocs[]   @relation("SupplyDocs_Branch")
-  userData      UserData[]
-  rk            RK[]
-}
+  uuid                   String         @id @default(uuid())
+  division               String
+  code                   String
+  rrs                    String
+  name                   String
+  status                 Int
+  city                   String
+  address                String
+  last_update            DateTime
+  latitude               Float
+  longitude              Float
+  totalArea              Int
+  tradingArea            Int
+  warehouseArea          Int
+  type                   String
+  typeOfDist             String?
+  images                 BranchImage[]
+  printService           PrintService[] @relation("BranchPrint")
+  supplyDocs             SupplyDocs[]   @relation("SupplyDocs_Branch")
+  userData               UserData[]
+  rk                     RK[]
+}  
 
 model Type {
   id                     String                 @id @default(uuid())
@@ -477,6 +478,20 @@ model PrintService {
   branch    Branch   @relation("BranchPrint", fields: [branchId], references: [uuid])
 }
 
+model Devices {
+  id                        String                @id @default(uuid())
+  createdAt                 DateTime              @default(now()) 
+  vendor                    String
+  name                      String
+  timeFrom                  DateTime
+  timeUntil                 DateTime
+  activity                  Activity
+  network                   String
+  number                    String
+  app                       String
+  os                        String
+}
+
 model Slider {
   id                String            @id @default(uuid())
   addedBy           User              @relation("added", fields: [addedById], references: [id])
@@ -540,4 +555,9 @@ enum RocTypeByTerm {
   Extended
   Perpetual
   LongTerm
+}
+
+enum Activity {
+  On
+  Off
 }
