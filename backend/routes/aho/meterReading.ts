@@ -1,11 +1,5 @@
 import { Router } from 'express';
-import {
-  getMeterReadings,
-  getMeterReadingById,
-  createMeterReading,
-  updateMeterReading,
-  deleteMeterReading,
-} from '../../controllers/aho/meterReading.js';
+import { getMeterReadings, getMeterReadingById, createMeterReading, updateMeterReading, deleteMeterReading } from '../../controllers/aho/meterReading.js';
 
 const router = Router();
 
