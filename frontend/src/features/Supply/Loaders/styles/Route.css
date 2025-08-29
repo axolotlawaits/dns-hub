@@ -41,7 +41,8 @@
   flex-direction: column;
   gap: 10px;
   padding: 10px 15px;
-  background-color: #242424;
+  border-radius: 5px;
+  background-color: var(--bg);
 }
 
 .day-summary-block {
@@ -76,3 +77,19 @@
   color: #737373;
 }
 
+/* loader */
+
+.loaders-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.loader-info-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.loader-info-heading {
+  font-size: 18px;
+}

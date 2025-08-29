@@ -1,5 +1,5 @@
 import express from 'express'
-import { addRoute, getRoutes, updateRoute } from '../../controllers/supply/route.js'
+import { addRoute, deleteRoute, getRoutes, updateRoute } from '../../controllers/supply/route.js'
 import z from 'zod';
 import { validateData } from '../../middleware/validation.js';
 import { authenticateToken } from '../../middleware/auth.js';
@@ -17,5 +17,7 @@ router.get('/', authenticateToken, getRoutes)
 router.post('/', validateData(addRouteSchema), addRoute)
 
 router.patch('/:id', updateRoute)
+
+router.delete('/:id', deleteRoute)
 
 export default router

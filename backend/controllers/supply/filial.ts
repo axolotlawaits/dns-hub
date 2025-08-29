@@ -29,7 +29,7 @@ export const getFilials = async (req: Request, res: Response): Promise<any> => {
     where: {
       city, 
       status: {in: [0, 1]}, 
-      type: {in: ['Магазин', 'Сервиcный центр', 'Региональный цех ремонта', 'РСЦ']},
+      type: {in: ['Магазин', 'Сервиcный центр', 'Региональный цех ремонта', 'РСЦ', 'Администрация']},
     },
     select: {name: true}
   })
@@ -38,4 +38,34 @@ export const getFilials = async (req: Request, res: Response): Promise<any> => {
     return res.status(200).json(filials.map(filial => filial.name))
   }
   res.status(400).json({error: 'ошибка при поиске филиалов'})
+}
+
+/* loaders */
+
+export const deleteLoader = async (req: Request, res: Response): Promise<any> => {
+  const loaderId = req.params.id
+
+  const newRoute = await prisma.loader.delete({where: { id: loaderId }})
+
+  if (newRoute) {
+    res.status(200).json(newRoute)
+  } else {
+    res.status(400).json({error: 'ошибка создания маршрута'})
+  }
+}
+
+export const updateLoader = async (req: Request, res: Response): Promise<any> => {
+  const loaderId = req.params.id
+  const loaderTime = req.body
+
+  const newRoute = await prisma.loader.update({
+    where: { id: loaderId },
+    data: loaderTime
+  })
+
+  if (newRoute) {
+    res.status(200).json(newRoute)
+  } else {
+    res.status(400).json({error: 'ошибка создания маршрута'})
+  }
 }

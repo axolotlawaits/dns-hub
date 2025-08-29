@@ -8,6 +8,7 @@ export type LoaderType = {
   id: string
   startTime: Date
   endTime: Date
+  filialId: string
 }
 
 type LoadersProps = {
