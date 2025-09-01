@@ -104,19 +104,20 @@ model Branch {
 }  
 
 model Devices {
-  id                        String                @id @default(uuid())
-  createdAt                 DateTime              @default(now()) 
-  branch                    Branch                @relation(fields: [branchId], references: [uuid])
-  branchId                  String
-  vendor                    String
-  name                      String
-  timeFrom                  String                @default("08:00") // Время начала воспроизведения в формате HH:MM
-  timeUntil                 String                @default("22:00") // Время окончания воспроизведения в формате HH:MM
-  activity                  Activity
-  network                   String
-  number                    String
-  app                       String
-  os                        String
+  id         String   @id @default(uuid())
+  createdAt  DateTime @default(now())
+  branch     Branch   @relation(fields: [branchId], references: [uuid])
+  branchId   String
+  vendor     String
+  name       String
+  timeFrom   String   @default("08:00")
+  timeUntil  String   @default("22:00")
+  activity   Activity
+  network    String
+  number     String
+  app        String
+  os         String
+  lastSeen   DateTime
 }
 
 model Type {
