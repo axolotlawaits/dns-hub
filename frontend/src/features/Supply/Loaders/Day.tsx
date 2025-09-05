@@ -1,4 +1,4 @@
-import { Button, Modal, Space, Stack, Table } from "@mantine/core"
+import { Button, Group, Modal, Space, Stack, Table } from "@mantine/core"
 import dayjs from "dayjs"
 import LoadersTimeRow from "./LoadersTimeRow"
 import { LoaderType } from "./Loaders"
@@ -9,6 +9,7 @@ import html2canvas from 'html2canvas';
 import { useRef } from "react"
 import { RouteType } from "./LoadersRoutes"
 import { IconDownload, IconFileInfo } from "@tabler/icons-react"
+import { useUserContext } from "../../../hooks/useUserContext"
 
 export type FilialType = {
   id: string
@@ -27,6 +28,7 @@ export type DayType = {
 
 function Day({day, getDays}: {day: DayType, getDays: () => void}) {
   const [opened, { open, close }] = useDisclosure(false)
+  const { user } = useUserContext()
   const printRef = useRef(null)
 
   const calculateWorkHours = () => {
@@ -79,13 +81,18 @@ function Day({day, getDays}: {day: DayType, getDays: () => void}) {
               <Table.Td>{filial.name}</Table.Td>
               <Table.Td>
                 {filial.loaders.length > 0 ? 
-                  filial.loaders.length
+                  <Group>
+                    <AddLoadersModal filial={filial} getDays={getDays}/>
+                    <span>{filial.loaders.length}</span>
+                  </Group>
+                : (dayjs().diff(day.day, 'day') >= 5 && user?.role === 'EMPLOYEE') ?
+                  <span>{filial.loaders.length === 0 ? '-' : filial.loaders.length}</span>
                 :
                   <AddLoadersModal filial={filial} getDays={getDays}/>
                 }
               </Table.Td>
               <Table.Td>
-                <LoadersTimeRow loaders={filial.loaders}></LoadersTimeRow>
+                <LoadersTimeRow loaders={filial.loaders} getDays={getDays}></LoadersTimeRow>
               </Table.Td>
               <Table.Td>{filial.feedback}</Table.Td>
             </Table.Tr>

@@ -3,7 +3,9 @@ import { Notifications } from '@mantine/notifications';
 import { useDisclosure } from '@mantine/hooks';
 import { AppShell } from '@mantine/core';
 import '@mantine/core/styles.css';
+import '@mantine/dates/styles.css';
 import '@mantine/notifications/styles.css';
+import '@mantine/carousel/styles.css'
 import './styles/App.css';
 import './styles/Components.css';
 import './styles/Handbook.css';
@@ -38,6 +40,7 @@ import Media from '../features/Ad/Media/Media';
 import RK from '../features/Ad/RK/RK';
 import Retail from '../features/Retail/Retail';
 import PrintService from '../features/Retail/PrintService/PrintService';
+import { Scanner } from '../features/Scanner';
 import Birthday from './Birthday';
 import ProfileInfo from './profile/ProfileInfo';
 import Profile from './profile/Profile';
@@ -114,7 +117,10 @@ function App() {
                   <Route path="/aho/meter-reading" element={<MeterReading />} />
                   <Route path="/aho/correspondence" element={<Correspondence />} />
                   <Route path="/add/media" element={<Media />} />
-                  
+                  <Route path='/supply/loaders' element={<LoadersHome />} />
+                  <Route path='/supply/loaders/route/:id' element={<RouteComponent />} />
+                  <Route path='/retail/print-service' element={<PrintService />} />
+                  <Route path='/scanner' element={<Scanner />} />
                   <Route path="/accounting/supply-docs" element={<SupplyDocs />} />
                   <Route path="/accounting/contracts-register" element={<Roc />} />
                 </Route>

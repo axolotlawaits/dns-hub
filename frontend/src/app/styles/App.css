@@ -261,32 +261,32 @@ a:active {
 }
 
 /* table */
-table
-{
+
+.table-main {
   width: 100%; 
   border-collapse: collapse; 
   table-layout: fixed;
 }
-tr
-{
+
+.tr-main {
     cursor: pointer;
     border-bottom: 1px solid #dee2e6;
 }
-tr:hover
-{
+
+.tr-main:hover {
   background-color: var(--select);
   transition: var(--hover-transition);
   color: var(--font);
 }
-th
-{
+
+.th-main {
   background-color: var(--bg);
   padding: 8px 16px;
   text-align: left;
   position: relative;
 }
-td
-{
+
+.td-main {
   padding: 12px 16px;
   overflow: hidden;
   text-overflow: ellipsis;

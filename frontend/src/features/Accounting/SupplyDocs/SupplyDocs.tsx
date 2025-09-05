@@ -9,7 +9,7 @@ import { IconPencil, IconTrash, IconX } from '@tabler/icons-react';
 import { ColumnDef, ColumnFiltersState, SortingState } from '@tanstack/react-table';
 import { DndProviderWrapper } from '../../../utils/dnd';
 import { DynamicFormModal } from '../../../utils/formModal';
-import { TableComponent } from '../../../utils/table';
+import { TableComponent } from '../../../utils/Table';
 import { API } from '../../../config/constants';
 
 // Типы
