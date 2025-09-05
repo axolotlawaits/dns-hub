@@ -185,3 +185,20 @@ export const getLastUser = async (req: Request, res: Response): Promise<any> => 
     return res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+export const updateUser = async (req: Request, res: Response): Promise<any> => {
+  const newUserData = req.body
+  const userId = req.params.id
+
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: newUserData
+  })
+
+  if (user) {
+    res.status(200).json(user)
+  } else {
+    res.status(400).json({error: 'не удалась обновить пользователя'})
+  }
+}
+

@@ -6,6 +6,8 @@ import path from 'path'
 import userRouter from './routes/app/user.js'
 import accessRouter from './routes/app/access.js'
 import newsRouter from './routes/app/news.js'
+import deviceRouter from './routes/app/device.js'
+import radioRouter from './routes/app/radio.js'
 import meterReadingRouter from './routes/aho/meterReading.js'
 import searchRouter from './routes/app/search.js'
 import profileRouter from './routes/app/profile.js'
@@ -24,6 +26,7 @@ import mediaRouter from './routes/add/media.js'
 import rkRouter from './routes/add/rk.js'
 import sliderRouter from './routes/add/slider.js'
 import printServiceRouter from './routes/retail/printService.js'
+import adminRouter from './routes/admin.js'
 import telegramRouter  from './routes/app/telegram.js'
 import fs from 'fs'
 import cookieParser from 'cookie-parser'
@@ -82,6 +85,8 @@ app.use("/hub-api", express.static(__dirname))
 app.use('/hub-api/user', userRouter)
 app.use('/hub-api/access', accessRouter)
 app.use('/hub-api/news', newsRouter)
+app.use('/hub-api/device', deviceRouter)
+app.use('/hub-api/radio', radioRouter)
 app.use('/hub-api/profile', profileRouter)
 app.use('/hub-api/telegram', telegramRouter);
 app.use('/hub-api/birthday', birthdayRouter)
@@ -94,6 +99,7 @@ app.use('/hub-api/accounting/roc', rocRouter)
 app.use('/hub-api/add/media', mediaRouter)
 app.use('/hub-api/add/rk', rkRouter)
 app.use('/hub-api/add/sliders', sliderRouter)
+app.use('/hub-api/radio', adminRouter)
 app.use('/hub-api/search', searchRouter)
 app.use('/hub-api/navigation', navigationRouter);
 app.use('/hub-api/type', typeRouter);

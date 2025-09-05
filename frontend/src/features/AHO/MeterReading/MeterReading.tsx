@@ -140,20 +140,23 @@ const ReadingsChart = React.memo(({ data }: { data: MeterReadingWithFormattedDat
   const chartData = useMemo(() => data.map(reading => ({
     date: reading.formattedDate,
     displayDate: reading.displayDate,
-    ...reading.formattedData,
-    'КакДома - Электричество': (reading.formattedData['КакДома - Электричество'] || 0) -
-                              (reading.formattedData['ProДвери - Электричество'] || 0)
+    // Используем расчетные данные (разности) вместо абсолютных показаний
+    'Офис - Холодная вода': reading.diffs['Офис - Холодная вода'] || 0,
+    'ProДвери - Электричество': reading.diffs['ProДвери - Электричество'] || 0,
+    'КакДома - Электричество': reading.diffs['КакДома - Электричество'] || 0,
+    'КакДома - Холодная вода': reading.diffs['КакДома - Холодная вода'] || 0,
+    'КакДома - Горячая вода': reading.diffs['КакДома - Горячая вода'] || 0,
   })), [data]);
 
   const meterTypes = useMemo(() => {
     const types = new Set<string>();
-    data.forEach(reading => Object.keys(reading.formattedData).forEach(type => types.add(type)));
+    data.forEach(reading => Object.keys(reading.diffs).forEach(type => types.add(type)));
     return Array.from(types);
   }, [data]);
 
   return (
     <Paper withBorder p="md" radius="md" shadow="sm" style={{ height: '100%', backgroundColor: 'var(--layer)' }}>
-      <Title order={4} mb="md" style={{ color: 'var(--font)' }}>График показаний</Title>
+      <Title order={4} mb="md" style={{ color: 'var(--font)' }}>График потребления за месяц</Title>
       <ResponsiveContainer width="100%" height={400}>
         <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -166,7 +169,7 @@ const ReadingsChart = React.memo(({ data }: { data: MeterReadingWithFormattedDat
               borderRadius: '4px',
               boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
             }}
-            formatter={(value: number, name: string) => [`${value} ${name.includes('Электричество') ? 'кВт·ч' : 'м³'}`, name]}
+            formatter={(value: number, name: string) => [`${value} ${name.includes('Электричество') ? 'кВт·ч/м' : 'м³/м'}`, name]}
             labelFormatter={(label) => `Дата: ${label}`}
           />
           <Legend wrapperStyle={{ paddingTop: '20px' }} />
@@ -198,9 +201,7 @@ const ReadingRow = React.memo(({
   onDelete: () => void;
 }) => {
   const formattedData = useMemo(() => ({
-    ...reading.formattedData,
-    'КакДома - Электричество': (reading.formattedData['КакДома - Электричество'] || 0) -
-                              (reading.formattedData['ProДвери - Электричество'] || 0)
+    ...reading.formattedData
   }), [reading.formattedData]);
 
   const unitSuffix = useCallback((key: string) => (
@@ -294,7 +295,6 @@ const ReadingRow = React.memo(({
 });
 
 const TotalsBlock = React.memo(({ totals }: { totals: ReturnType<typeof calculateTotals> }) => {
-  const adjustedKakDomaElectricity = totals.kakDomaElectricity - totals.proDveriElectricity;
   return (
     <Paper withBorder p="md" radius="md" shadow="sm" style={{ marginBottom: '20px', backgroundColor: 'var(--layer)' }}>
       <Title order={4} mb="md" style={{ color: 'var(--font)' }}>Общие итоги</Title>
@@ -320,7 +320,7 @@ const TotalsBlock = React.memo(({ totals }: { totals: ReturnType<typeof calculat
           <Stack gap={4}>
             <Text ta="left" style={{ color: 'var(--font)' }}>
               <Text span fw={500}>Электричество: </Text>
-              <Text span>{formatValue('Электричество', adjustedKakDomaElectricity)}</Text>
+              <Text span>{formatValue('Электричество', totals.kakDomaElectricity)}</Text>
             </Text>
             <Text ta="left" style={{ color: 'var(--font)' }}>
               <Text span fw={500}>Холодная вода: </Text>

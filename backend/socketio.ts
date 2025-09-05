@@ -2,7 +2,8 @@ import { Server } from 'socket.io';
 import { createServer } from 'http';
 
 type ConnectionInfo = {
-  userId: string;
+  userId?: string;
+  deviceId?: string;
   socketId: string;
   connectedAt: Date;
   lastActivity: Date;
@@ -11,7 +12,9 @@ type ConnectionInfo = {
 export class SocketIOService {
   private static instance: SocketIOService;
   private io: Server | null = null;
-  private connections = new Map<string, ConnectionInfo>();
+  private connections = new Map<string, ConnectionInfo>(); // key: socketId
+  private deviceToSockets = new Map<string, Set<string>>(); // deviceId -> socketIds
+  private userToSockets = new Map<string, Set<string>>(); // userId -> socketIds
 
   public static getInstance(): SocketIOService {
     if (!SocketIOService.instance) {
@@ -35,14 +38,14 @@ export class SocketIOService {
         credentials: true
       },
       path: '/socket.io',
-      transports: ['websocket', 'polling'], // Добавляем polling как fallback
-      pingTimeout: 60000, // Увеличиваем таймаут
-      pingInterval: 20000, // Уменьшаем интервал
+      transports: ['websocket', 'polling'], // сохраняем polling для старых клиентов уведомлений
+      pingTimeout: 60000,
+      pingInterval: 25000,
       cookie: false,
-      allowEIO3: true, // Для совместимости
+      allowEIO3: true,
       serveClient: false,
       connectionStateRecovery: {
-        maxDisconnectionDuration: 2 * 60 * 1000, // 2 минуты
+        maxDisconnectionDuration: 2 * 60 * 1000,
         skipMiddlewares: true
       }
     });
@@ -55,117 +58,304 @@ export class SocketIOService {
     if (!this.io) return;
 
     this.io.on('connection', (socket) => {
-      const userId = socket.handshake.query.userId as string;
-      
-      if (!userId) {
-        console.warn('[Socket.IO] Connection attempt without userId');
+      const rawUser = (socket.handshake.query.userId || '') as string;
+      const rawDevice = (socket.handshake.query.deviceId || '') as string;
+      const userId = String(rawUser || '').trim();
+      const deviceId = String(rawDevice || '').trim();
+
+      if (!userId && !deviceId) {
+        console.warn('[Socket.IO] Connection attempt without userId/deviceId');
         socket.disconnect(true);
         return;
       }
 
-      // Более мягкая обработка старых соединений
-      this.gracefullyHandleOldConnections(userId, socket.id);
-
-      const connectionInfo: ConnectionInfo = {
-        userId,
-        socketId: socket.id,
-        connectedAt: new Date(),
-        lastActivity: new Date()
-      };
-
-      this.connections.set(socket.id, connectionInfo);
-      console.log(`[Socket.IO] ${userId} connected (socketId:${socket.id})`);
+      this.registerSocket({ userId: userId || undefined, deviceId: deviceId || undefined, socketId: socket.id });
 
       socket.emit('connection_ack', {
         status: 'connected',
-        userId,
+        userId: userId || null,
+        deviceId: deviceId || null,
         socketId: socket.id,
         timestamp: Date.now()
       });
 
-      socket.on('disconnect', (reason) => {
-        this.connections.delete(socket.id);
-        console.log(`[Socket.IO] ${userId} disconnected (${reason})`);
+      socket.on('device_register', (payload: any) => {
+        const did = String(payload?.deviceId || '').trim();
+        if (did) this.registerDeviceSocket(did, socket.id);
       });
 
-      socket.on('error', (err) => {
-        console.error(`[Socket.IO] ${userId} error:`, err);
-        this.connections.delete(socket.id);
+      socket.on('user_register', (payload: any) => {
+        const uid = String(payload?.userId || '').trim();
+        if (uid) this.registerUserSocket(uid, socket.id);
       });
 
-      // Обновляем активность при любом сообщении
-      socket.onAny(() => {
+      socket.on('pong', () => {
+        const conn = this.connections.get(socket.id);
+        if (conn) conn.lastActivity = new Date();
+      });
+
+      socket.on('heartbeat', (payload: any) => {
         const conn = this.connections.get(socket.id);
         if (conn) {
           conn.lastActivity = new Date();
+          console.log(`[Socket.IO] heartbeat received from deviceId=${payload?.deviceId}`);
         }
+      });
+
+      socket.onAny(() => {
+        const conn = this.connections.get(socket.id);
+        if (conn) conn.lastActivity = new Date();
+      });
+
+      socket.on('disconnect', (reason) => {
+        this.unregisterSocket(socket.id);
+        console.log(`[Socket.IO] socket disconnected (${reason})`);
+      });
+
+      socket.on('error', (err) => {
+        console.error(`[Socket.IO] socket error:`, err);
+        this.unregisterSocket(socket.id);
       });
     });
   }
 
-  private gracefullyHandleOldConnections(userId: string, newSocketId: string): void {
-    const activeConnections = this.getUserConnections(userId);
-    
-    // Закрываем только действительно старые соединения
-    activeConnections.forEach(conn => {
-      const inactiveDuration = Date.now() - conn.lastActivity.getTime();
-      if (inactiveDuration > 30000) { // 30 секунд неактивности
-        this.io?.sockets.sockets.get(conn.socketId)?.disconnect(true);
-        this.connections.delete(conn.socketId);
-        console.log(`[Socket.IO] Closed inactive connection for ${userId} (${conn.socketId})`);
+  private registerSocket(init: { userId?: string; deviceId?: string; socketId: string }) {
+    const { userId, deviceId, socketId } = init;
+
+    // Close other sockets for same deviceId (policy: 1 active per device)
+    if (deviceId) {
+      const existing = this.deviceToSockets.get(deviceId) || new Set<string>();
+      existing.forEach((sid) => {
+        if (sid !== socketId) {
+          this.io?.sockets.sockets.get(sid)?.disconnect(true);
+          this.connections.delete(sid);
+        }
+      });
+      this.deviceToSockets.set(deviceId, new Set([socketId]));
+    }
+
+    if (userId) {
+      const set = this.userToSockets.get(userId) || new Set<string>();
+      set.add(socketId);
+      this.userToSockets.set(userId, set);
+    }
+
+    const info: ConnectionInfo = {
+      userId,
+      deviceId,
+      socketId,
+      connectedAt: new Date(),
+      lastActivity: new Date()
+    };
+    this.connections.set(socketId, info);
+
+    console.log(`[Socket.IO] registered socketId=${socketId} userId=${userId || '-'} deviceId=${deviceId || '-'}`);
+  }
+
+  private registerDeviceSocket(deviceId: string, socketId: string) {
+    this.registerSocket({ deviceId, socketId });
+  }
+
+  private registerUserSocket(userId: string, socketId: string) {
+    this.registerSocket({ userId, socketId });
+  }
+
+  private unregisterSocket(socketId: string) {
+    const info = this.connections.get(socketId);
+    if (info) {
+      if (info.deviceId) {
+        const set = this.deviceToSockets.get(info.deviceId);
+        if (set) {
+          set.delete(socketId);
+          if (set.size === 0) this.deviceToSockets.delete(info.deviceId);
+        }
       }
-    });
+      if (info.userId) {
+        const setU = this.userToSockets.get(info.userId);
+        if (setU) {
+          setU.delete(socketId);
+          if (setU.size === 0) this.userToSockets.delete(info.userId);
+        }
+      }
+      this.connections.delete(socketId);
+    }
   }
 
   private setupCleanupInterval(): void {
-    // Регулярная очистка неактивных соединений
     setInterval(() => {
       const now = Date.now();
       this.connections.forEach((conn, socketId) => {
         const inactiveDuration = now - conn.lastActivity.getTime();
-        if (inactiveDuration > 120000) { // 2 минуты неактивности
+        if (inactiveDuration > 5 * 60 * 1000) {
           this.io?.sockets.sockets.get(socketId)?.disconnect(true);
-          this.connections.delete(socketId);
+          this.unregisterSocket(socketId);
           console.log(`[Socket.IO] Cleaned up inactive connection ${socketId}`);
         }
       });
-    }, 60000); // Каждую минуту
+    }, 60000);
+  }
+
+  public isDeviceConnected(deviceId: string): boolean {
+    const set = this.deviceToSockets.get(deviceId);
+    if (!set || set.size === 0) return false;
+    
+    const now = new Date();
+    // Проверяем, есть ли активные сокеты для этого устройства
+    for (const socketId of set) {
+      const conn = this.connections.get(socketId);
+      if (conn) {
+        // Считаем устройство активным, если последняя активность была менее 2 минут назад
+        const timeSinceLastActivity = now.getTime() - conn.lastActivity.getTime();
+        if (timeSinceLastActivity < 2 * 60 * 1000) { // 2 минуты
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  }
+
+  public getConnectedDeviceIds(): string[] {
+    const now = new Date();
+    const activeDevices: string[] = [];
+    
+    for (const [deviceId, socketIds] of this.deviceToSockets.entries()) {
+      // Проверяем, есть ли активные сокеты для этого устройства
+      let hasActiveSocket = false;
+      for (const socketId of socketIds) {
+        const conn = this.connections.get(socketId);
+        if (conn) {
+          // Считаем устройство активным, если последняя активность была менее 2 минут назад
+          const timeSinceLastActivity = now.getTime() - conn.lastActivity.getTime();
+          if (timeSinceLastActivity < 2 * 60 * 1000) { // 2 минуты
+            hasActiveSocket = true;
+            break;
+          }
+        }
+      }
+      
+      if (hasActiveSocket) {
+        activeDevices.push(deviceId);
+      }
+    }
+    
+    return activeDevices;
+  }
+
+  public async sendToDeviceWithAck<T = any>(deviceId: string, event: string, payload?: any, timeoutMs: number = 3000): Promise<{ ok: boolean; data?: T; error?: string }>{
+    const socketIds = Array.from(this.deviceToSockets.get(deviceId) || []);
+    if (socketIds.length === 0) return { ok: false, error: 'DEVICE_OFFLINE' };
+    const socketId = socketIds[0];
+    const socket: any = this.io?.sockets.sockets.get(socketId);
+    if (!socket) return { ok: false, error: 'SOCKET_NOT_FOUND' };
+    try {
+      if (typeof socket.timeout === 'function' && typeof socket.emitWithAck === 'function') {
+        const resp = await socket.timeout(timeoutMs).emitWithAck(event, payload ?? {});
+        return { ok: true, data: resp as T };
+      }
+      socket.emit(event, payload ?? {});
+      return { ok: true };
+    } catch (e: any) {
+      return { ok: false, error: String(e?.message || e) };
+    }
+  }
+
+  // Backward-compatible notifications API
+  private getUserConnections(userId: string): ConnectionInfo[] {
+    const sockets = Array.from(this.userToSockets.get(userId) || []);
+    return sockets.map((sid) => this.connections.get(sid)).filter(Boolean) as ConnectionInfo[];
   }
 
   public sendToUser(userId: string, message: any): boolean {
-    const connections = this.getUserConnections(userId);
-    if (connections.length === 0) return false;
-
+    const conns = this.getUserConnections(userId);
+    if (conns.length === 0) return false;
     let success = true;
-    connections.forEach(conn => {
+    conns.forEach(conn => {
       try {
         this.io?.to(conn.socketId).emit('notification', {
           ...message,
           sentAt: new Date().toISOString()
         });
-        conn.lastActivity = new Date(); // Обновляем активность
+        conn.lastActivity = new Date();
       } catch (err) {
-        console.error(`[Socket.IO] Error sending to ${userId}:`, err);
-        this.connections.delete(conn.socketId);
+        console.error(`[Socket.IO] Error sending to user ${userId}:`, err);
         success = false;
       }
     });
-
     return success;
   }
 
-  private getUserConnections(userId: string): ConnectionInfo[] {
-    return Array.from(this.connections.values())
-      .filter(conn => conn.userId === userId);
-  }
-
   public getConnectedUsers(): string[] {
-    return Array.from(new Set(
-      Array.from(this.connections.values()).map(conn => conn.userId)
-    ));
+    return Array.from(this.userToSockets.keys());
   }
 
   public getConnectionCount(): number {
     return this.connections.size;
+  }
+
+  // Device ping with ack fallback
+  public async pingDevices(deviceIds: string[], timeoutMs: number = 1500): Promise<Record<string, { online: boolean; rttMs?: number }>> {
+    const results: Record<string, { online: boolean; rttMs?: number }> = {};
+    const promises: Promise<void>[] = [];
+
+    deviceIds.forEach((deviceId) => {
+      const socketIds = Array.from(this.deviceToSockets.get(deviceId) || []);
+      if (socketIds.length === 0) {
+        results[deviceId] = { online: false };
+        return;
+      }
+      const socketId = socketIds[0];
+      const socket = this.io?.sockets.sockets.get(socketId) as any;
+      if (!socket) {
+        results[deviceId] = { online: false };
+        return;
+      }
+
+      const start = Date.now();
+      const p = new Promise<void>((resolve) => {
+        let settled = false;
+        const timer = setTimeout(() => {
+          if (!settled) {
+            results[deviceId] = { online: true }; // presence-only fallback
+            settled = true;
+            resolve();
+          }
+        }, timeoutMs);
+
+        try {
+          if (typeof socket.timeout === 'function' && typeof socket.emitWithAck === 'function') {
+            socket.timeout(timeoutMs).emitWithAck('ping').then(() => {
+              if (!settled) {
+                clearTimeout(timer);
+                results[deviceId] = { online: true, rttMs: Date.now() - start };
+                settled = true;
+                resolve();
+              }
+            }).catch(() => {
+              if (!settled) {
+                clearTimeout(timer);
+                results[deviceId] = { online: this.isDeviceConnected(deviceId) };
+                settled = true;
+                resolve();
+              }
+            });
+          } else {
+            socket.emit('ping');
+          }
+        } catch (_) {
+          if (!settled) {
+            clearTimeout(timer);
+            results[deviceId] = { online: this.isDeviceConnected(deviceId) };
+            settled = true;
+            resolve();
+          }
+        }
+      });
+
+      promises.push(p);
+    });
+
+    await Promise.all(promises);
+    return results;
   }
 }

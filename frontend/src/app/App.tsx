@@ -46,6 +46,7 @@ import ProtectedRoute from '../components/ProtectedRoute';
 import NoAccess from '../components/NoAccess';
 import Bookmarks from './Bookmarks';
 import Notification from './Notification';
+import Radio from '../features/Retail/Radio/Radio';
 
 function App() {
   const { user } = useUserContext();
@@ -120,6 +121,7 @@ function App() {
                 <Route path='/supply/loaders' element={<LoadersHome />} />
                 <Route path='/supply/loaders/route/:id' element={<RouteComponent />} />
                 <Route path='/retail/print-service' element={<PrintService />} />
+                <Route path='/retail/radio' element={<Radio />} />
               </Routes>
             </AppShell.Main>
             <Footer />

@@ -79,26 +79,43 @@ model Group {
 }
 
 model Branch {
-  uuid          String         @id @default(uuid())
-  division      String
-  code          String
-  rrs           String
-  name          String
-  status        Int
-  city          String
-  address       String
-  last_update   DateTime
-  latitude      Float
-  longitude     Float
-  totalArea     Int
-  tradingArea   Int
-  warehouseArea Int
-  type          String
-  images        BranchImage[]
-  printService  PrintService[] @relation("BranchPrint")
-  supplyDocs    SupplyDocs[]   @relation("SupplyDocs_Branch")
-  userData      UserData[]
-  rk            RK[]
+  uuid                   String         @id @default(uuid())
+  division               String
+  code                   String
+  rrs                    String
+  name                   String
+  status                 Int
+  city                   String
+  address                String
+  last_update            DateTime
+  latitude               Float
+  longitude              Float
+  totalArea              Int
+  tradingArea            Int
+  warehouseArea          Int
+  type                   String
+  typeOfDist             String?
+  images                 BranchImage[]
+  printService           PrintService[] @relation("BranchPrint")
+  supplyDocs             SupplyDocs[]   @relation("SupplyDocs_Branch")
+  userData               UserData[]
+  rk                     RK[]
+  devices                Devices[]
+}  
+
+model Devices {
+  id         String   @id @default(uuid())
+  createdAt  DateTime @default(now()) 
+  branch     Branch   @relation(fields: [branchId], references: [uuid])
+  branchId   String
+  vendor     String
+  name       String
+  timeFrom   String   @default("08:00") // Время начала воспроизведения (HH:MM)
+  timeUntil  String   @default("22:00") // Время окончания воспроизведения (HH:MM)
+  network    String
+  number     String
+  app        String
+  os         String
 }
 
 model Type {
@@ -280,7 +297,7 @@ model RouteDay {
   routeId   String
   createdAt DateTime @default(now())
   filials   Filial[]
-  route     Route    @relation(fields: [routeId], references: [id])
+  route     Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
 }
 
 model Filial {
@@ -292,8 +309,8 @@ model Filial {
   routeId    String
   routeDayId String?
   updatedAt  DateTime  @updatedAt
-  routeDay   RouteDay? @relation(fields: [routeDayId], references: [id])
-  route      Route     @relation(fields: [routeId], references: [id])
+  routeDay   RouteDay? @relation(fields: [routeDayId], references: [id], onDelete: Cascade)
+  route      Route     @relation(fields: [routeId], references: [id], onDelete: Cascade)
   loaders    Loader[]
 }
 
@@ -302,7 +319,7 @@ model Loader {
   startTime DateTime
   endTime   DateTime
   filialId  String
-  filial    Filial   @relation(fields: [filialId], references: [id])
+  filial    Filial   @relation(fields: [filialId], references: [id], onDelete: Cascade)
 }
 
 model SupplyDocs {
@@ -540,4 +557,9 @@ enum RocTypeByTerm {
   Extended
   Perpetual
   LongTerm
+}
+
+enum Activity {
+  On
+  Off
 }
