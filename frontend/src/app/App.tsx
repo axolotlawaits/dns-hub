@@ -26,6 +26,7 @@ import Settlements from '../features/Settlements/Settlements';
 import Supply from '../features/Supply/Supply';
 import Transformation from '../features/Transformation/Transformation';
 import Automation from '../features/Automation/Automation';
+import Safety from '../features/Safety/Safety';
 import { useUserContext } from '../hooks/useUserContext';
 import MeterReading from '../features/AHO/MeterReading/MeterReading';
 import Correspondence from '../features/AHO/Correspondence/Correspondence';
@@ -132,6 +133,7 @@ function App() {
                 <Route path='/ad' element={<Ad />} />
                 <Route path='/aho' element={<Aho />} />
                 <Route path='/automation' element={<Automation />} />
+                <Route path='/safety' element={<Safety />} />
                 <Route path='/jurists' element={<Jurists />} />
                 <Route path='/problem-books' element={<ProblemBooks />} />
                 <Route path='/service' element={<Service />} />

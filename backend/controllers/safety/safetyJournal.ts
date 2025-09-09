@@ -4,6 +4,8 @@ import { prisma } from '../../server.js';
 import fs from 'fs/promises';
 import path from 'path';
 
+// TypeScript restart needed for Prisma types
+
 // Схемы валидации
 const SafetyJournalSchema = z.object({
   userAddId: z.string(),
