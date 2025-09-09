@@ -1,17 +1,23 @@
-.wrapper {
-  height: 100%;
+/* ========================================
+   СОВРЕМЕННЫЙ ДИЗАЙН LOGIN
+   ======================================== */
+
+.login-wrapper {
+  min-height: 100vh;
   width: 100%;
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
   display: flex;
+  align-items: center;
+  justify-content: center;
   transition: background-image 1s ease-in-out, filter 0.5s ease;
   position: relative;
   overflow: hidden;
-  
+  padding: var(--space-4);
 }
 
-.wrapper::after {
+.login-wrapper::after {
   content: '';
   position: absolute;
   top: 0;
@@ -19,66 +25,183 @@
   width: 100%;
   height: 100%;
   background: linear-gradient(
-    to bottom,
-    rgba(0, 0, 0, 0.2) 0%,
-    rgba(0, 0, 0, 0.4) 100%
+    135deg,
+    rgba(0, 0, 0, 0.1) 0%,
+    rgba(0, 0, 0, 0.3) 50%,
+    rgba(0, 0, 0, 0.1) 100%
   );
   pointer-events: none;
 }
 
-.form {
-  border-right: 1px solid rgba(255, 255, 255, 0.2);
-  width: 30%;
-  min-width: 400px;
-  max-width: 600px;
-  margin-left: 5%;
-  height: 100vh;
-  display: flex !important;
-  justify-content: center;
-  align-items: center;
-  padding: 30px;
-  background-color: var(--bg-alpha) !important;
-  backdrop-filter: blur(12px);
-  z-index: 1;
+.login-container {
   position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 480px;
+}
+
+.login-form {
+  background: var(--theme-bg-elevated) !important;
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--theme-border);
+  position: relative;
+  overflow: hidden;
+}
+
+.login-form::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--color-blue-500), var(--color-purple-500), var(--color-pink-500));
+}
+
+.form-header {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  z-index: 10;
+}
+
+.theme-toggle {
+  background: var(--theme-bg-secondary);
+  border: 1px solid var(--theme-border);
+  transition: var(--transition-all);
+}
+
+.theme-toggle:hover {
+  background: var(--theme-bg-hover);
+  transform: scale(1.05);
 }
 
 .form-content {
   width: 100%;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
+  padding: var(--space-6) 0;
 }
 
-.title {
-  font-family: Greycliff CF;
-  color: var(--font);
-}
-
-.weather-info {
+.welcome-section {
   text-align: center;
-  margin-bottom: 20px;
-  font-size: 0.9rem;
-  color: #555;
-  text-transform: capitalize;
+  margin-bottom: var(--space-2);
 }
 
-.weather-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  margin-bottom: 20px;
-  color: #555;
+.welcome-title {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-weight: 700;
+  color: var(--theme-text-primary);
+  margin-bottom: var(--space-2);
+  background: linear-gradient(135deg, var(--color-blue-600), var(--color-purple-600));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
-/* Анимации погоды */
+/* Стили для полей ввода */
+.login-input,
+.password-input {
+  transition: var(--transition-all);
+}
+
+.login-input .mantine-TextInput-input,
+.password-input .mantine-PasswordInput-input {
+  background: var(--theme-bg-secondary);
+  border: 2px solid var(--theme-border);
+  border-radius: var(--radius-lg);
+  transition: var(--transition-all);
+  font-size: var(--font-size-md);
+  padding: var(--space-4);
+}
+
+.login-input .mantine-TextInput-input:focus,
+.password-input .mantine-PasswordInput-input:focus {
+  border-color: var(--color-blue-500);
+  box-shadow: 0 0 0 3px var(--color-blue-100);
+  background: var(--theme-bg-primary);
+}
+
+.login-input .mantine-TextInput-label,
+.password-input .mantine-PasswordInput-label {
+  color: var(--theme-text-primary);
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+/* Стили для кнопок */
+.login-button {
+  background: linear-gradient(135deg, var(--color-blue-500), var(--color-blue-600));
+  border: none;
+  border-radius: var(--radius-lg);
+  font-weight: 600;
+  font-size: var(--font-size-md);
+  padding: var(--space-4) var(--space-6);
+  transition: var(--transition-all);
+  box-shadow: var(--theme-shadow-md);
+}
+
+.login-button:hover {
+  background: linear-gradient(135deg, var(--color-blue-600), var(--color-blue-700));
+  transform: translateY(-2px);
+  box-shadow: var(--theme-shadow-lg);
+}
+
+.login-button:active {
+  transform: translateY(0);
+}
+
+.switch-user-button {
+  color: var(--theme-text-secondary);
+  transition: var(--transition-all);
+}
+
+.switch-user-button:hover {
+  color: var(--color-blue-500);
+  background: var(--color-blue-50);
+}
+
+/* Стили для карточки пользователя */
+.user-profile-card {
+  transition: var(--transition-all);
+  border: 2px solid var(--theme-border);
+}
+
+.user-profile-card:hover {
+  border-color: var(--color-blue-300);
+  transform: translateY(-2px);
+  box-shadow: var(--theme-shadow-lg);
+}
+
+.user-avatar {
+  border: 3px solid var(--color-blue-200);
+  transition: var(--transition-all);
+}
+
+.user-avatar:hover {
+  border-color: var(--color-blue-400);
+  transform: scale(1.05);
+}
+
+/* Стили для алертов */
+.error-alert {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-red-200);
+  background: var(--color-red-50);
+}
+
+/* Стили для разделителя */
+.mantine-Divider-root {
+  border-color: var(--theme-border);
+  color: var(--theme-text-tertiary);
+}
+
+/* Стили для погодных эффектов */
 .weather-effect {
   position: absolute;
   width: 100%;
   height: 100%;
   pointer-events: none;
-  z-index: 0;
+  z-index: 1;
 }
 
 .rain {
@@ -101,57 +224,46 @@
   100% { background-position: 0 100%; }
 }
 
-@media (max-width: 768px) {
-  .form {
-    width: 100%;
-    max-width: 100%;
-    min-width: unset;
-    background-color: rgba(255, 255, 255, 0.95);
-    margin-left: 0;
-  }
-  
-  .wrapper {
-    background-position: 60% center;
-  }
-}
+/* Стили для кредита изображения */
 .image-credit {
   position: fixed;
-  right: 24px;
-  bottom: 24px;
-  padding: 12px 20px;
-  background: var(--bg-alpha);
-  backdrop-filter: blur(12px);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  font-family: 'Segoe UI', system-ui, sans-serif;
-  line-height: 1.5;
+  right: var(--space-6);
+  bottom: var(--space-6);
+  padding: var(--space-4) var(--space-5);
+  background: var(--theme-bg-elevated);
+  backdrop-filter: blur(20px);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--theme-shadow-lg);
+  border: 1px solid var(--theme-border);
+  text-decoration: none;
+  transition: var(--transition-all);
   max-width: 320px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  overflow: hidden;
+  z-index: 10;
 }
 
 .image-credit:hover {
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--theme-bg-primary);
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--theme-shadow-xl);
 }
 
 .image-title {
   font-weight: 600;
-  color: var(--font);
-  font-size: 0.95rem;
+  color: var(--theme-text-primary);
+  font-size: var(--font-size-sm);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin-bottom: var(--space-1);
 }
 
 .image-author {
-  color: var(--font);
-  font-size: 0.85rem;
+  color: var(--theme-text-secondary);
+  font-size: var(--font-size-xs);
   opacity: 0.9;
 }
 
+/* Стили для загрузчика */
 .bg-loader {
   position: fixed;
   top: 0;
@@ -163,13 +275,86 @@
   justify-content: center;
   background: rgba(0, 0, 0, 0.4);
   z-index: 100;
+  backdrop-filter: blur(4px);
 }
 
-/* Анимация смены фона */
-.wrapper {
-  transition: background-image 0.5s ease-in-out;
+/* Анимации */
+.login-form {
+  animation: slideInUp 0.6s ease-out;
 }
-.location-text
-{
-  margin: 20px !important;
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .login-wrapper {
+    padding: var(--space-2);
+  }
+  
+  .login-container {
+    max-width: 100%;
+  }
+  
+  .login-form {
+    padding: var(--space-6);
+  }
+  
+  .welcome-title {
+    font-size: var(--font-size-2xl);
+  }
+  
+  .login-button,
+  .switch-user-button {
+    font-size: var(--font-size-sm);
+    padding: var(--space-3) var(--space-4);
+  }
+  
+  .image-credit {
+    right: var(--space-2);
+    bottom: var(--space-2);
+    padding: var(--space-3);
+    max-width: 280px;
+  }
+}
+
+@media (max-width: 480px) {
+  .login-form {
+    padding: var(--space-4);
+  }
+  
+  .form-content {
+    padding: var(--space-4) 0;
+  }
+  
+  .welcome-title {
+    font-size: var(--font-size-xl);
+  }
+}
+
+/* Темная тема */
+[data-mantine-color-scheme="dark"] .login-form {
+  background: rgba(30, 30, 30, 0.95) !important;
+  border-color: var(--theme-border);
+}
+
+[data-mantine-color-scheme="dark"] .login-form::before {
+  background: linear-gradient(90deg, var(--color-blue-400), var(--color-purple-400), var(--color-pink-400));
+}
+
+[data-mantine-color-scheme="dark"] .image-credit {
+  background: rgba(30, 30, 30, 0.95);
+  border-color: var(--theme-border);
+}
+
+[data-mantine-color-scheme="dark"] .bg-loader {
+  background: rgba(0, 0, 0, 0.6);
 }

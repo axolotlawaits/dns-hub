@@ -4,31 +4,30 @@ import Bookmarks from './Bookmarks';
 import Notifications from '../components/Notifications/Notifications';
 
 function Home() {
+
   return (
     <div id='Home' style={{ 
       display: 'flex', 
       width: '100%',
-      height: '100vh'
+      minHeight: '100vh',
+      padding: '20px',
+      gap: '20px',
+      background: 'var(--theme-bg-primary)'
     }}>
       {/* Левая колонка (70% ширины) */}
       <div style={{ 
         width: '70%',
         display: 'flex',
-        flexDirection: 'column'
+        flexDirection: 'column',
+        gap: '20px'
       }}>
-        {/* Блок News - 50% высоты левой колонки */}
-        <div style={{ 
-          height: '35%',
-          overflow: 'hidden'
-        }}>
+        {/* Новости */}
+        <div style={{ minHeight: '200px' }}>
           <News />
         </div>
         
-        {/* Блок Bookmarks - 50% высоты левой колонки */}
-        <div style={{ 
-          height: '50%',
-          overflow: 'hidden'
-        }}>
+        {/* Закладки */}
+        <div style={{ minHeight: '400px' }}>
           <Bookmarks />
         </div>
       </div>
@@ -38,13 +37,16 @@ function Home() {
         width: '30%',
         display: 'flex',
         flexDirection: 'column',
-        gap: '20px' // Добавляем отступ между блоками
+        gap: '20px'
       }}>
+        {/* Уведомления */}
         <div style={{ flex: 1 }}>
-            <Notifications /> {/* Новый блок уведомлений */}
+          <Notifications />
         </div>
+
+        {/* Дни рождения */}
         <div style={{ flex: 1 }}>
-            <Birthday />
+          <Birthday />
         </div>
       </div>
     </div>

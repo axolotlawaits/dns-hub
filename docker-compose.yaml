@@ -3,6 +3,13 @@ services:
   backend:
     build: ./backend
     image: axolotlawaits/hub:backend
+    network_mode: "host"  # Доступ к хостовой сети
+    environment:
+      - NODE_ENV=production
+    volumes:
+      - ./backend/uploads:/app/uploads  # Для сохранения файлов
   frontend:
     build: ./frontend
     image: axolotlawaits/hub:frontend
+    ports:
+      - "80:80"

@@ -4,13 +4,14 @@
   align-items: center;
   margin-left: auto;
   height: 100%;
+  gap: 8px;
 }
 
 .footer-divider {
   height: 60%;
-  margin: 0 16px;
+  margin: 0 8px;
   align-self: center;
-  border-color: var(--mantine-color-gray-3);
+  border-color: var(--theme-border);
 }
 
 /* Блок времени */
@@ -81,7 +82,8 @@
 .calendar-dropdown {
   padding: 0;
   border: none;
-  box-shadow: var(--mantine-shadow-md);
+  box-shadow: var(--theme-shadow-lg);
+  border-radius: var(--radius-lg);
 }
 /* Темная тема для календаря */
 /* Полностью прозрачный контейнер */
@@ -94,36 +96,111 @@
 
 /* Темная тема для календаря */
 .dark-calendar {
-  background-color: var(--mantine-color-dark-7) !important;
-  border: none !important;
-  color: var(--mantine-color-gray-1) !important;
+  background-color: var(--theme-bg-elevated) !important;
+  border: 1px solid var(--theme-border) !important;
+  color: var(--theme-text-primary) !important;
+  border-radius: var(--radius-lg) !important;
 }
 
 .dark-calendar .react-datepicker__header {
-  background-color: var(--mantine-color-dark-7) !important;
-  border-bottom: 1px solid var(--mantine-color-dark-5) !important;
+  background-color: var(--theme-bg-elevated) !important;
+  border-bottom: 1px solid var(--theme-border) !important;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0 !important;
 }
 
 .dark-calendar .react-datepicker__current-month,
 .dark-calendar .react-datepicker__day-name,
 .dark-calendar .react-datepicker__day {
-  color: var(--mantine-color-gray-1) !important;
+  color: var(--theme-text-primary) !important;
 }
 
 .dark-calendar .react-datepicker__day:hover {
-  background-color: var(--mantine-color-dark-5) !important;
+  background-color: var(--theme-bg-hover) !important;
 }
 
 .dark-calendar .react-datepicker__day--selected {
-  background-color: var(--mantine-color-blue-6) !important;
+  background-color: var(--color-blue-500) !important;
   color: white !important;
 }
 
 .dark-calendar .react-datepicker__day--today {
   font-weight: bold;
-  color: var(--mantine-color-blue-4) !important;
+  color: var(--color-blue-400) !important;
 }
 
 .dark-calendar .react-datepicker__navigation-icon::before {
-  border-color: var(--mantine-color-gray-3) !important;
+  border-color: var(--theme-border) !important;
+}
+
+/* Адаптивность футера */
+@media (max-width: 1200px) {
+  .footer-time-option,
+  .footer-weather-option {
+    padding: 6px 8px;
+  }
+  
+  .footer-time {
+    font-size: 14px;
+  }
+  
+  .footer-date {
+    font-size: 10px;
+  }
+  
+  .weather-temp {
+    font-size: 14px;
+  }
+  
+  .weather-location {
+    font-size: 10px;
+    max-width: 80px;
+  }
+}
+
+@media (max-width: 900px) {
+  .footer-time-option,
+  .footer-weather-option {
+    padding: 4px 6px;
+  }
+  
+  .footer-time {
+    font-size: 12px;
+  }
+  
+  .footer-date {
+    font-size: 9px;
+  }
+  
+  .weather-temp {
+    font-size: 12px;
+  }
+  
+  .weather-location {
+    font-size: 9px;
+    max-width: 60px;
+  }
+}
+
+@media (max-width: 768px) {
+  .footer-time-option,
+  .footer-weather-option {
+    padding: 3px 4px;
+  }
+  
+  .footer-time {
+    font-size: 11px;
+  }
+  
+  .footer-date {
+    font-size: 8px;
+  }
+  
+  .weather-temp {
+    font-size: 11px;
+  }
+  
+  .weather-location {
+    font-size: 8px;
+    max-width: 50px;
+  }
 }

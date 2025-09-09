@@ -1,44 +1,169 @@
+/* ========================================
+   СОВРЕМЕННЫЕ УВЕДОМЛЕНИЯ
+   ======================================== */
+
 .notifications-container {
-  position: relative;
-  padding: var(--mantine-spacing-md);
+  height: auto;
+  padding: 0 12px 12px 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.notification-paper {
-  border-left: 3px solid;
+.notifications-list {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 250px;
+}
+
+.notification-item {
   background-color: transparent;
+  border: 1px solid var(--theme-border-primary);
+  border-radius: 12px;
+  transition: var(--transition-all);
   cursor: pointer;
-  transition: all 0.2s ease;
+  padding: 12px;
+  margin-bottom: 8px;
+  box-shadow: none;
 }
 
-.notification-paper:hover {
-  background-color: rgba(255, 255, 255, 0.2);
-}
-
-.notification-paper.unread:hover {
-  background-color: rgba(var(--notification-color-rgb), 0.4);
+.notification-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
 }
 
 .notification-icon {
-  color: var(--notification-color);
+  flex-shrink: 0;
 }
 
-.notification-title {
-  font-weight: 600;
+.notification-text {
+  flex: 1;
+  min-width: 0;
 }
 
-.notification-title.read {
-  font-weight: 500;
+.notification-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
 }
 
-.notification-time {
-  white-space: nowrap;
-  color: var(--mantine-color-dimmed);
+.notification-badges {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
 }
 
-.notification-message {
-  color: var(--mantine-color-dimmed);
+.notification-action {
+  flex-shrink: 0;
 }
 
-.notification-badge {
-  margin-right: 4px;
+.notification-item:hover {
+  background-color: var(--theme-bg-elevated);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  border-color: var(--color-primary-300);
+}
+
+.notification-unread {
+  border-left: 3px solid var(--color-primary-500);
+  background-color: var(--theme-bg-elevated);
+}
+
+.notification-unread:hover {
+  background-color: var(--theme-bg-hover);
+}
+
+/* Пустое состояние */
+.notifications-empty {
+  background-color: transparent;
+  border: 1px solid var(--theme-border-primary);
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  margin-top: 8px;
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notifications-empty-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.notifications-empty-icon {
+  color: var(--theme-text-tertiary);
+  opacity: 0.6;
+}
+
+/* Переключатель уведомлений */
+.notifications-toggle {
+  background: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border-primary);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+}
+
+.notifications-toggle:hover {
+  background: var(--theme-bg-hover);
+  border-color: var(--color-primary-300);
+}
+
+.all-notifications-card {
+  background: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border-primary);
+  transition: var(--transition-all);
+  cursor: pointer;
+}
+
+.all-notifications-card:hover {
+  background: var(--theme-bg-hover);
+  border-color: var(--color-primary-300);
+  transform: translateY(-1px);
+  box-shadow: var(--theme-shadow-md);
+}
+
+/* Темная тема */
+[data-theme="dark"] .notifications-container {
+  background: transparent;
+}
+
+[data-theme="dark"] .notification-item {
+  background-color: transparent;
+  border-color: var(--theme-border-primary);
+}
+
+[data-theme="dark"] .notification-item:hover {
+  background-color: var(--theme-bg-elevated);
+  border-color: var(--color-primary-400);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .notification-unread {
+  background-color: var(--theme-bg-elevated);
+  border-left-color: var(--color-primary-400);
+}
+
+[data-theme="dark"] .notification-unread:hover {
+  background-color: var(--theme-hover-bg);
+}
+
+[data-theme="dark"] .notifications-empty {
+  background-color: transparent;
+  border-color: var(--theme-border-primary);
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .notifications-container {
+    padding: 0;
+  }
+  
+  .notification-card {
+    padding: var(--space-3);
+  }
 }

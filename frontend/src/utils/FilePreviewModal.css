@@ -1,0 +1,51 @@
+/* ========================================
+   FILE PREVIEW MODAL - МАКСИМАЛЬНЫЙ Z-INDEX
+   ======================================== */
+
+.file-preview-modal {
+  z-index: 9999999 !important;
+}
+
+.file-preview-modal .mantine-Modal-overlay {
+  z-index: 9999998 !important;
+}
+
+.file-preview-modal .mantine-Modal-content {
+  z-index: 9999999 !important;
+  position: relative !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none !important;
+  max-height: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.file-preview-modal .mantine-Modal-root {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  z-index: 9999999 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.file-preview-modal .mantine-Modal-inner {
+  position: relative !important;
+  z-index: 9999999 !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Гарантированное отображение поверх всех элементов */
+.file-preview-modal {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  z-index: 9999999 !important;
+}

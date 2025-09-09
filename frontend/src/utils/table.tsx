@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useReactTable, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, flexRender, type ColumnDef, type ColumnFiltersState, type SortingState, type PaginationState, type FilterFn, type OnChangeFn } from '@tanstack/react-table';
-import { Pagination, Select, Flex, Group, Box, Text } from '@mantine/core';
-import { IconArrowUp, IconArrowDown } from '@tabler/icons-react';
+import { Pagination, Select, Flex, Group, Box, Text, Card, Badge, ThemeIcon } from '@mantine/core';
+import { IconArrowUp, IconArrowDown, IconCalendar, IconClock } from '@tabler/icons-react';
+import './styles/tableUtils.css';
 
 export interface TableComponentProps<TData> {
   data: TData[];
@@ -56,26 +57,24 @@ export function TableComponent<TData>({
   });
 
   return (
-    <>
+    <Card shadow="sm" radius="lg" padding="md" className="table-container">
       <Box style={{ overflowX: 'auto', position: 'relative' }}>
-        <table className='table-main' style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <table className='modern-table'>
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id} className='tr-main'>
+              <tr key={headerGroup.id} className='table-header-row'>
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
-                    className='th-main'
+                    className={`table-header-cell ${header.column.getIsResizing() ? 'resizing' : ''}`}
                     style={{
                       width: header.getSize(),
                       cursor: header.column.getCanSort() ? 'pointer' : 'default',
                       position: 'relative',
-                      padding: '16px',
-                      borderBottom: '1px solid #dee2e6',
                     }}
                     onClick={header.column.getToggleSortingHandler()}
                   >
-                    <Group gap="xs">
+                    <Group gap="xs" align="center">
                       {flexRender(header.column.columnDef.header, header.getContext())}
                       {{
                         asc: <IconArrowUp size={14} />,
@@ -85,16 +84,9 @@ export function TableComponent<TData>({
                     <div
                       onMouseDown={header.getResizeHandler()}
                       onTouchStart={header.getResizeHandler()}
+                      className="table-resize-handle"
                       style={{
-                        position: 'absolute',
-                        right: 0,
-                        top: 0,
-                        height: '100%',
-                        width: '4px',
-                        backgroundColor: header.column.getIsResizing() ? '#228be6' : '#ddd',
-                        cursor: 'col-resize',
-                        userSelect: 'none',
-                        touchAction: 'none',
+                        backgroundColor: header.column.getIsResizing() ? 'var(--color-primary-500)' : 'var(--theme-border)',
                       }}
                     />
                   </th>
@@ -103,24 +95,21 @@ export function TableComponent<TData>({
             ))}
           </thead>
           <tbody>
-            {table.getRowModel().rows.map((row) => (
+            {table.getRowModel().rows.map((row, index) => (
               <tr
                 key={row.id}
-                className='tr-main'
+                className={`table-row ${index % 2 === 0 ? 'table-row--even' : 'table-row--odd'}`}
                 onClick={() => onRowClick?.(row.original)}
                 style={{
                   cursor: onRowClick ? 'pointer' : 'default',
-                  borderBottom: '1px solid #dee2e6',
                 }}
               >
                 {row.getVisibleCells().map((cell) => (
                   <td
                     key={cell.id}
-                    className='td-main'
+                    className={`table-cell ${cell.column.getIsResizing() ? 'resizing' : ''}`}
                     style={{
                       width: cell.column.getSize(),
-                      padding: '16px',
-                      whiteSpace: 'nowrap',
                     }}
                   >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -131,25 +120,42 @@ export function TableComponent<TData>({
           </tbody>
         </table>
         {table.getRowModel().rows.length === 0 && (
-          <Text ta="center" p="md">
-            Нет данных для отображения
-          </Text>
+          <Card shadow="sm" radius="md" padding="xl" className="table-empty-state">
+            <Group justify="center" align="center">
+              <ThemeIcon size="lg" color="gray" variant="light">
+                <IconCalendar size={24} />
+              </ThemeIcon>
+              <Text ta="center" c="dimmed" size="lg">
+                Нет данных для отображения
+              </Text>
+            </Group>
+          </Card>
         )}
       </Box>
 
-      <Flex justify="space-between" align="center" mt="md">
-        <Select
-          value={table.getState().pagination.pageSize.toString()}
-          onChange={(value) => table.setPageSize(Number(value))}
-          data={paginationOptions}
-          style={{ width: '120px' }}
-        />
+      <Flex justify="space-between" align="center" mt="md" className="table-pagination">
+        <Group gap="sm">
+          <Text size="sm" c="dimmed">
+            Показать:
+          </Text>
+          <Select
+            value={table.getState().pagination.pageSize.toString()}
+            onChange={(value) => table.setPageSize(Number(value))}
+            data={paginationOptions}
+            style={{ width: '120px' }}
+            size="sm"
+          />
+          <Text size="sm" c="dimmed">
+            записей
+          </Text>
+        </Group>
         <Pagination
           value={table.getState().pagination.pageIndex + 1}
           onChange={(page) => table.setPageIndex(page - 1)}
           total={table.getPageCount()}
+          size="sm"
         />
       </Flex>
-    </>
+    </Card>
   );
 }

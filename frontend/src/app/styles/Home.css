@@ -1,0 +1,558 @@
+/* ========================================
+   СОВРЕМЕННАЯ ГЛАВНАЯ СТРАНИЦА
+   ======================================== */
+
+.modern-home {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, var(--theme-bg-primary) 0%, var(--theme-bg-tertiary) 100%);
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  overflow-y: auto;
+}
+
+/* Заголовок */
+.home-header {
+  margin-bottom: var(--space-8);
+}
+
+.home-header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-6);
+  margin-bottom: var(--space-4);
+}
+
+.home-title {
+  background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-400));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-size: var(--font-size-4xl);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+  margin-bottom: var(--space-2);
+}
+
+.home-subtitle {
+  font-size: var(--font-size-lg);
+  line-height: var(--line-height-normal);
+  opacity: 0.9;
+}
+
+.refresh-button,
+.settings-button {
+  color: var(--theme-text-secondary);
+  transition: var(--transition-all);
+}
+
+.refresh-button:hover,
+.settings-button:hover {
+  color: var(--theme-text-primary);
+  background-color: var(--theme-hover-bg);
+}
+
+.refresh-button:active {
+  transform: translateY(0);
+}
+
+.loading-alert {
+  animation: slideDown 300ms ease-out;
+}
+
+/* Карточки дашборда */
+.dashboard-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-6);
+  margin-bottom: var(--space-8);
+}
+
+.dashboard-card {
+  background-color: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border-primary);
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+.dashboard-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--color-primary-400), var(--color-primary-600));
+  opacity: 0;
+  transition: var(--transition-all);
+}
+
+.dashboard-card:hover {
+  box-shadow: var(--theme-shadow-lg);
+  border-color: var(--theme-border-focus);
+}
+
+.dashboard-card:hover::before {
+  opacity: 1;
+}
+
+.card-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-lg);
+  background-color: var(--theme-bg-tertiary);
+  transition: var(--transition-all);
+}
+
+.dashboard-card:hover .card-icon {
+  transform: scale(1.05);
+}
+
+.card-count {
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-lg);
+}
+
+.trend-badge {
+  font-weight: var(--font-weight-semibold);
+}
+
+.card-action {
+  color: var(--theme-text-tertiary);
+  transition: var(--transition-all);
+}
+
+.dashboard-card:hover .card-action {
+  color: var(--theme-text-primary);
+  transform: translateX(2px);
+}
+
+/* Основной контент */
+.home-content {
+  margin-bottom: var(--space-8);
+  width: 100%;
+  padding-right: 20px;
+}
+
+/* Отступы для переходов на инструменты */
+.home-content .content-card {
+  margin-bottom: var(--space-6);
+  transition: var(--transition-all);
+}
+
+.home-content .content-card:hover {
+  box-shadow: var(--theme-shadow-lg);
+}
+
+.content-grid {
+  display: grid;
+  grid-template-columns: 70% 30%;
+  gap: var(--space-6);
+  width: 100%;
+}
+
+.left-column,
+.right-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  height: 100%;
+}
+
+/* Левая колонка - пропорции по высоте */
+.left-column .news-card {
+  flex: 0 0 40%;
+  min-height: 0;
+}
+
+.left-column .bookmarks-card {
+  flex: 0 0 60%;
+  min-height: 0;
+}
+
+/* Правая колонка - пропорции по высоте */
+.right-column .notifications-card {
+  flex: 0 0 60%;
+  min-height: 0;
+  max-height: 400px;
+}
+
+.right-column .birthday-card {
+  flex: 0 0 40%;
+  min-height: 0;
+}
+
+.content-card {
+  background: transparent;
+  border: none;
+  transition: var(--transition-all);
+  height: 100%;
+  padding: 0;
+}
+
+/* Темная тема для карточек */
+[data-theme="dark"] .content-card {
+  background: transparent;
+  border: none;
+}
+
+/* Темная тема для виджетов */
+[data-theme="dark"] .news-widget,
+[data-theme="dark"] .bookmarks-widget,
+[data-theme="dark"] .notifications-widget,
+[data-theme="dark"] .birthday-widget {
+  background: transparent;
+  border: none;
+}
+
+.section-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background-color: var(--theme-bg-tertiary);
+  color: var(--color-primary-500);
+  transition: var(--transition-all);
+}
+
+.content-card:hover .section-icon {
+  background-color: var(--color-primary-100);
+  color: var(--color-primary-600);
+}
+
+.section-action {
+  color: var(--theme-text-secondary);
+  transition: var(--transition-all);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.section-action:hover {
+  color: var(--theme-text-primary);
+  background-color: var(--theme-hover-bg);
+}
+
+.section-action:active {
+  transform: scale(0.98);
+}
+
+/* Улучшенные стили для карточек дашборда */
+.dashboard-card {
+  transition: var(--transition-all);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.dashboard-card:hover {
+  box-shadow: var(--theme-shadow-lg);
+}
+
+.dashboard-card:active {
+  transform: translateY(0);
+}
+
+/* Стили для кнопок действий */
+.refresh-button,
+.settings-button {
+  transition: var(--transition-all);
+}
+
+.refresh-button:hover,
+.settings-button:hover {
+  background-color: var(--theme-hover-bg);
+}
+
+.refresh-button:active,
+.settings-button:active {
+  transform: scale(0.95);
+}
+
+/* Стили для кликабельных badge */
+.badge-clickable {
+  cursor: pointer;
+  transition: var(--transition-all);
+}
+
+.badge-clickable:hover {
+  box-shadow: var(--theme-shadow-sm);
+}
+
+/* Контейнеры контента */
+.news-container,
+.bookmarks-container,
+.notifications-container,
+.birthday-container {
+  height: 100%;
+  overflow: auto;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+/* Виджеты без подложек */
+.news-widget,
+.bookmarks-widget,
+.notifications-widget,
+.birthday-widget {
+  height: 100%;
+  transition: var(--transition-all);
+}
+
+/* Стили для заголовков секций */
+.section-header {
+  margin-bottom: var(--space-4);
+}
+
+.section-header .section-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background-color: var(--theme-bg-tertiary);
+  color: var(--color-primary-500);
+  transition: var(--transition-all);
+}
+
+.section-header .section-action {
+  color: var(--theme-text-secondary);
+  transition: var(--transition-all);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.section-header .section-action:hover {
+  color: var(--theme-text-primary);
+  background-color: var(--theme-hover-bg);
+}
+
+/* Специально для уведомлений */
+.notifications-container {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.birthday-card {
+  background-color: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border-primary);
+  transition: var(--transition-all);
+  cursor: pointer;
+}
+
+.birthday-card:hover {
+  box-shadow: var(--theme-shadow-md);
+}
+
+.birthday-today {
+  border-left: 3px solid var(--color-red-500);
+  background: linear-gradient(135deg, var(--color-red-50), var(--theme-bg-elevated));
+}
+
+.birthday-today:hover {
+  background: linear-gradient(135deg, var(--color-red-100), var(--theme-bg-elevated));
+}
+
+.birthday-empty {
+  background-color: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border-primary);
+  text-align: center;
+}
+
+.bookmark-card {
+  background-color: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border-primary);
+  transition: var(--transition-all);
+  cursor: pointer;
+}
+
+.bookmark-card:hover {
+  box-shadow: var(--theme-shadow-md);
+  border-color: var(--color-blue-300);
+}
+
+.all-bookmarks-card {
+  background: linear-gradient(135deg, var(--color-green-50), var(--color-green-100));
+  border: 1px solid var(--color-green-200);
+  transition: var(--transition-all);
+  cursor: pointer;
+}
+
+.all-bookmarks-card:hover {
+  background: linear-gradient(135deg, var(--color-green-100), var(--color-green-200));
+  box-shadow: var(--theme-shadow-md);
+}
+
+/* Подвал */
+.home-footer {
+  padding: var(--space-4) 0;
+  border-top: 1px solid var(--theme-border-primary);
+  margin-top: var(--space-8);
+}
+
+/* Анимации */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dashboard-card {
+  animation: fadeInUp 400ms ease-out;
+}
+
+.dashboard-card:nth-child(1) { animation-delay: 0ms; }
+.dashboard-card:nth-child(2) { animation-delay: 100ms; }
+.dashboard-card:nth-child(3) { animation-delay: 200ms; }
+.dashboard-card:nth-child(4) { animation-delay: 300ms; }
+
+/* Адаптивность */
+@media (max-width: 1200px) {
+  .dashboard-cards {
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: var(--space-4);
+  }
+}
+
+@media (max-width: 768px) {
+  .modern-home {
+    padding: var(--space-4);
+  }
+  
+  .home-header-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-4);
+  }
+  
+  .home-title {
+    font-size: var(--font-size-3xl);
+  }
+  
+  .home-subtitle {
+    font-size: var(--font-size-base);
+  }
+  
+  .dashboard-cards {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+  }
+  
+  .content-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+  }
+  
+  .news-container,
+  .bookmarks-container,
+  .notifications-container {
+    height: 100%;
+  }
+  
+  .birthday-container {
+    height: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .home-title {
+    font-size: var(--font-size-2xl);
+  }
+  
+  .dashboard-card {
+    padding: var(--space-4);
+  }
+  
+  .card-icon {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+/* Темная тема - дополнительные стили */
+[data-theme="dark"] .modern-home {
+  background: linear-gradient(135deg, var(--theme-bg-primary) 0%, var(--color-gray-800) 100%);
+}
+
+[data-theme="dark"] .home-title {
+  background: linear-gradient(135deg, var(--color-primary-400), var(--color-primary-300));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+[data-theme="dark"] .dashboard-card::before {
+  background: linear-gradient(90deg, var(--color-primary-300), var(--color-primary-500));
+}
+
+[data-theme="dark"] .content-card:hover .section-icon {
+  background-color: var(--color-primary-900);
+  color: var(--color-primary-300);
+}
+
+/* Состояния загрузки */
+.dashboard-card.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.dashboard-card.loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  border: 2px solid transparent;
+  border-top: 2px solid currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Фокус для доступности */
+.dashboard-card:focus-visible {
+  outline: 2px solid var(--theme-border-focus);
+  outline-offset: 2px;
+}
+
+.section-action:focus-visible {
+  outline: 2px solid var(--theme-border-focus);
+  outline-offset: 2px;
+}

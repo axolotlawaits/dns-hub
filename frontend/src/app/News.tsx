@@ -2,12 +2,27 @@ import { useState, useEffect, useRef } from 'react';
 import { API } from '../config/constants';
 import { User } from '../contexts/UserContext';
 import { formatName, truncateText } from '../utils/format';
-import { Button, Modal, TextInput, Title, Text, Group, ActionIcon, Box, LoadingOverlay, ThemeIcon, Avatar, Flex, Paper, Divider } from '@mantine/core';
+import { 
+  Modal, 
+  TextInput, 
+  Text, 
+  Group, 
+  ActionIcon, 
+  Box, 
+  LoadingOverlay, 
+  ThemeIcon,
+  Avatar, 
+  Divider,
+  Card,
+  Stack,
+  Title,
+  Button
+} from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { useUserContext } from '../hooks/useUserContext';
 import dayjs from 'dayjs';
 import TiptapEditor from '../utils/editor';
-import { IconNews, IconPencil, IconPlus, IconTrash, IconClock } from '@tabler/icons-react';
+import { IconPencil, IconTrash, IconChevronRight, IconNews } from '@tabler/icons-react';
 import './styles/News.css';
 
 type News = {
@@ -27,14 +42,15 @@ export default function NewsList() {
   const [newsForm, setNewsForm] = useState({
     name: '',
     description: '',
+    userId: user?.id || '',
   });
-  const [visibleCount, setVisibleCount] = useState(5);
+  const [visibleCount, setVisibleCount] = useState(3);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const [viewModalOpened, { open: openViewModal, close: closeViewModal }] = useDisclosure(false);
   const [editModalOpened, { open: openEditModal, close: closeEditModal }] = useDisclosure(false);
-  const [createModalOpened, { open: openCreateModal, close: closeCreateModal }] = useDisclosure(false);
-  const [deleteModalOpened, { open: openDeleteModal, close: closeDeleteModal }] = useDisclosure(false);
+  const [createModalOpened, { close: closeCreateModal }] = useDisclosure(false);
+  const [deleteModalOpened, { close: closeDeleteModal }] = useDisclosure(false);
   const [allNewsModalOpened, { open: openAllNewsModal, close: closeAllNewsModal }] = useDisclosure(false);
 
   const calculateVisibleCount = () => {
@@ -48,23 +64,8 @@ export default function NewsList() {
     const count = Math.floor((containerWidth - allNewsCardWidth) / cardWidth);
 
     // Минимум 1 карточка должна быть видна
-    setVisibleCount(Math.max(count, 0));
+    setVisibleCount(Math.max(1, count));
   };
-
-  useEffect(() => {
-    const fetchNews = async () => {
-      try {
-        const response = await fetch(`${API}/news`);
-        const data = await response.json();
-        setNews(data);
-      } catch (err) {
-        console.error('Failed to load news:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchNews();
-  }, []);
 
   useEffect(() => {
     calculateVisibleCount();
@@ -73,356 +74,389 @@ export default function NewsList() {
   }, []);
 
   useEffect(() => {
-    calculateVisibleCount();
-  }, [news]);
-
-  const groupNewsByMonth = () => {
-    const grouped: Record<string, News[]> = {};
-
-    news.forEach(item => {
-      const monthYear = dayjs(item.createdAt).format('MMMM YYYY');
-      if (!grouped[monthYear]) {
-        grouped[monthYear] = [];
+    const fetchNews = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch(`${API}/news`);
+        if (!response.ok) {
+          throw new Error('Ошибка загрузки новостей');
+        }
+        const data = await response.json();
+        setNews(data);
+      } catch (error) {
+        console.error('Ошибка загрузки новостей:', error);
+      } finally {
+        setLoading(false);
       }
-      grouped[monthYear].push(item);
-    });
-    return grouped;
-  };
+    };
 
-  const groupedNews = groupNewsByMonth();
+    fetchNews();
+  }, []);
 
-  const handleViewNews = (item: News) => {
-    setSelectedNews(item);
-    openViewModal();
-  };
-
-  const handleEditNews = (item: News, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSelectedNews(item);
-    setNewsForm({ name: item.name, description: item.description });
-    openEditModal();
-  };
-
-  const handleDeleteNews = (item: News, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSelectedNews(item);
-    openDeleteModal();
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (!selectedNews) return;
-    try {
-      await fetch(`${API}/news/${selectedNews.id}`, { method: 'DELETE' });
-      setNews(news.filter(item => item.id !== selectedNews.id));
-      closeDeleteModal();
-    } catch (err) {
-      console.error('Failed to delete news:', err);
-    }
-  };
-
-  const handleCreateNews = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
+  const handleCreateNews = async () => {
     try {
       const response = await fetch(`${API}/news`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...newsForm,
-          userId: user.id
-        }),
-      });
-      const newNews = await response.json();
-      if(response.ok) {
-        setNews([newNews, ...news]);
-        closeCreateModal();
-      }
-    } catch (err) {
-      console.error('Failed to create news:', err);
-    }
-  };
-
-  const handleEditNewsSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedNews) return;
-    try {
-      await fetch(`${API}/news/${selectedNews.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(newsForm),
       });
-      setNews(news.map(item =>
-        item.id === selectedNews.id ? { ...item, ...newsForm } : item
-      ));
-      closeEditModal();
-    } catch (err) {
-      console.error('Failed to edit news:', err);
+
+      if (!response.ok) {
+        throw new Error('Ошибка создания новости');
+      }
+
+      const newNews = await response.json();
+        setNews([newNews, ...news]);
+      setNewsForm({ name: '', description: '', userId: user?.id || '' });
+        closeCreateModal();
+    } catch (error) {
+      console.error('Ошибка создания новости:', error);
     }
   };
 
-  if (loading) {
-    return <LoadingOverlay visible />;
-  }
+  const handleUpdateNews = async () => {
+    if (!selectedNews) return;
+
+    try {
+      const response = await fetch(`${API}/news/${selectedNews.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newsForm),
+      });
+
+      if (!response.ok) {
+        throw new Error('Ошибка обновления новости');
+      }
+
+      const updatedNews = await response.json();
+      setNews(news.map(n => n.id === selectedNews.id ? updatedNews : n));
+      setSelectedNews(null);
+      setNewsForm({ name: '', description: '', userId: user?.id || '' });
+      closeEditModal();
+    } catch (error) {
+      console.error('Ошибка обновления новости:', error);
+    }
+  };
+
+  const handleRemoveNews = async () => {
+    if (!selectedNews) return;
+
+    try {
+      const response = await fetch(`${API}/news/${selectedNews.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Ошибка удаления новости');
+      }
+
+      setNews(news.filter(n => n.id !== selectedNews.id));
+      setSelectedNews(null);
+      closeDeleteModal();
+    } catch (error) {
+      console.error('Ошибка удаления новости:', error);
+    }
+  };
+
+  const handleEditNews = (newsItem: News) => {
+    setSelectedNews(newsItem);
+    setNewsForm({
+      name: newsItem.name,
+      description: newsItem.description,
+      userId: user?.id || '',
+    });
+    openEditModal();
+  };
+
+
+  const handleViewNews = (newsItem: News) => {
+    setSelectedNews(newsItem);
+    openViewModal();
+  };
+
+  const visibleNews = news.slice(0, visibleCount);
 
   return (
-    <Box p="md" className="news-page-container">
-      <Flex justify="space-between" align="center" mb="xl">
-        <Group gap="sm">
-          <ThemeIcon variant="light" color="blue" size={36} radius="md">
-            <IconNews size={20} />
-          </ThemeIcon>
-          <Title order={2} fw={600}>Новости</Title>
-        </Group>
-        <Group>
-          <Button
-            leftSection={<IconPlus size={18} />}
-            variant="light"
+    <Box className="news-widget">
+      <LoadingOverlay visible={loading} />
+      
+      <Group gap="sm" mb="md">
+        <ThemeIcon size="md" color="blue" variant="light">
+          <IconNews size={20} />
+        </ThemeIcon>
+        <Text size="lg" fw={600}>
+          Новости
+        </Text>
+      </Group>
+      
+      <Stack gap="md" ref={containerRef}>
+        {visibleNews.map((newsItem) => (
+          <Card
+            key={newsItem.id}
+            shadow="sm"
             radius="md"
-            onClick={() => {
-              setNewsForm({ name: '', description: '' });
-              openCreateModal();
+            padding="md"
+            style={{ 
+              background: 'var(--theme-bg-elevated)',
+              color: 'var(--theme-text-primary)',
+              cursor: 'pointer',
+              border: '1px solid var(--theme-border-primary)'
             }}
+            onClick={() => handleViewNews(newsItem)}
           >
-            Новая запись
-          </Button>
+            <Group justify="space-between" align="flex-start">
+              <Box style={{ flex: 1 }}>
+                <Text size="lg" fw={600} mb="xs">
+                  {newsItem.name}
+                </Text>
+                <Text size="sm" opacity={0.9} mb="sm">
+                  {truncateText(newsItem.description, 120)}
+                </Text>
+                <Text size="xs" opacity={0.7}>
+                  {dayjs(newsItem.createdAt).format('DD.MM.YYYY')}
+                </Text>
+              </Box>
+              <ActionIcon variant="subtle" color="var(--theme-text-secondary)" size="sm">
+                <IconChevronRight size={16} />
+              </ActionIcon>
+            </Group>
+          </Card>
+        ))}
+      </Stack>
+      
+      {news.length > visibleCount && (
+        <Group gap="sm">
+          <Card
+            className="all-news-card"
+            shadow="sm"
+            radius="md"
+            padding="md"
+            onClick={openAllNewsModal}
+            style={{ flex: 1 }}
+          >
+            <Group justify="center" align="center">
+              <ThemeIcon size="md" color="blue" variant="light">
+                <IconChevronRight size={20} />
+              </ThemeIcon>
+              <Text size="sm" fw={500} c="var(--theme-text-primary)">
+                Показать все новости
+              </Text>
+              <Text size="xs" c="var(--theme-text-secondary)">
+                +{news.length - visibleCount}
+              </Text>
+            </Group>
+          </Card>
         </Group>
-      </Flex>
-      {news.length === 0 ? (
-        <Paper radius="md" shadow="none" bg="none" className="empty-state">
-          <Text size="lg" c="dimmed" ta="center">Пока нет новостей</Text>
-        </Paper>
-      ) : (
-        <div className="news-container" ref={containerRef}>
-          {news.slice(0, visibleCount).map(newsItem => (
-            <Paper
-              key={newsItem.id}
-              withBorder
-              radius="md"
-              p="md"
-              className="news-item"
-              onClick={() => handleViewNews(newsItem)}
-              style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}
-            >
-              {(user?.id === newsItem.userId || user?.role !== 'EMPLOYEE') && (
-                <Flex gap="xs" style={{ position: 'absolute', top: '10px', right: '10px' }}>
+      )}
+
+      {/* Модальные окна */}
+      <Modal
+        opened={viewModalOpened}
+        onClose={closeViewModal}
+        title="Просмотр новости"
+        size="lg"
+        className="form-modal"
+        centered
+        overlayProps={{
+          backgroundOpacity: 0.5,
+        }}
+        withCloseButton
+        closeOnClickOutside
+        closeOnEscape
+      >
+        {selectedNews && (
+          <Stack gap="md">
+            <Title order={3}>{selectedNews.name}</Title>
+            <div dangerouslySetInnerHTML={{ __html: selectedNews.description }} />
+            <Divider />
+            <Group justify="space-between">
+              <Group gap="sm">
+                <Avatar size="sm" src={selectedNews.user.image} name={selectedNews.user.name} />
+                <Box>
+                  <Text size="sm" fw={500}>{formatName(selectedNews.user.name)}</Text>
+                  <Text size="xs" c="var(--theme-text-tertiary)">
+                    {dayjs(selectedNews.createdAt).format('DD.MM.YYYY HH:mm')}
+                  </Text>
+                </Box>
+              </Group>
+              {user?.id === selectedNews.userId && (
+                <Group gap="xs">
                   <ActionIcon
                     variant="subtle"
                     color="blue"
-                    radius="md"
-                    onClick={(e) => handleEditNews(newsItem, e)}
+                    onClick={() => handleEditNews(selectedNews)}
                   >
                     <IconPencil size={16} />
                   </ActionIcon>
                   <ActionIcon
                     variant="subtle"
                     color="red"
-                    radius="md"
-                    onClick={(e) => handleDeleteNews(newsItem, e)}
+                    onClick={handleRemoveNews}
                   >
                     <IconTrash size={16} />
                   </ActionIcon>
-                </Flex>
+                </Group>
               )}
-              <div style={{ flex: 1 }}>
-                <Text fw={600} size="lg" mb="sm" lineClamp={2}>
-                  {newsItem.name}
-                </Text>
-                <Text size="sm" c="dimmed" mb="md" lineClamp={3}>
-                  {truncateText(newsItem.description, 200)}
-                </Text>
-              </div>
-              <div className="news-item-footer" style={{ marginTop: 'auto' }}>
-                <Flex justify="space-between" align="center">
-                  <Group gap="xs">
-                    <Avatar src={`data:image/png;base64,${newsItem.user.image}`} size="sm" color="blue" radius="xl" />
-                    <Text size="xs">{formatName(newsItem.user.name)}</Text>
                   </Group>
-                  <Group gap="xs">
-                    <IconClock size={14} />
-                    <Text size="xs">
-                      {dayjs(newsItem.createdAt).format('D MMM YYYY')}
-                    </Text>
-                  </Group>
-                </Flex>
-              </div>
-            </Paper>
-          ))}
-          {news.length > visibleCount && (
-            <Paper
-              withBorder
-              radius="md"
-              p="md"
-              className="news-item all-news-card"
-              onClick={openAllNewsModal}
-            >
-              <Flex direction="column" align="center" justify="center" h="100%">
-                <IconNews size={40} />
-                <Text fw={600} size="lg" mt="md">
-                  Все новости
-                </Text>
-                <Text size="sm" c="dimmed" mt="xs">
-                  +{news.length - visibleCount} новостей
-                </Text>
-              </Flex>
-            </Paper>
-          )}
-        </div>
-      )}
-      <Modal
-        opened={allNewsModalOpened}
-        onClose={closeAllNewsModal}
-        size="xl"
-        radius="md"
-        title="Архив новостей"
-      >
-        <div className="all-news-container">
-          {Object.entries(groupedNews).map(([monthYear, newsItems]) => (
-            <div key={monthYear} className="news-month-group">
-              <Divider
-                my="md"
-                label={
-                  <Text fw={600} size="lg">
-                    {monthYear}
-                  </Text>
-                }
-                labelPosition="left"
-              />
-              {newsItems.map(item => (
-                <Paper
-                  key={item.id}
-                  withBorder
-                  radius="md"
-                  p="md"
-                  mb="md"
-                  className="news-item-archive"
-                  onClick={() => {
-                    setSelectedNews(item);
-                    closeAllNewsModal();
-                    openViewModal();
-                  }}
-                >
-                  <Text fw={600} size="md" mb="xs">
-                    {item.name}
-                  </Text>
-                  <Text size="sm" c="dimmed" lineClamp={1} mb="xs">
-                    {truncateText(item.description, 100)}
-                  </Text>
-                  <Flex justify="space-between" align="center">
-                    <Group gap="xs">
-                      <Avatar src={`data:image/png;base64,${item.user.image}`} size="sm" color="blue" radius="xl" />
-                      <Text size="xs">{formatName(item.user.name)}</Text>
-                    </Group>
-                    <Group gap="xs">
-                      <IconClock size={14} />
-                      <Text size="xs">
-                        {dayjs(item.createdAt).format('D MMM YYYY')}
-                      </Text>
-                    </Group>
-                  </Flex>
-                </Paper>
-              ))}
-            </div>
-          ))}
-        </div>
-      </Modal>
-      <Modal
-        opened={viewModalOpened}
-        onClose={closeViewModal}
-        size="xl"
-        radius="md"
-        title={
-          <Text fw={600} size="xl">
-            {selectedNews?.name}
-          </Text>
-        }
-      >
-        {selectedNews && (
-          <>
-            <div
-              className="safe-html-content"
-              dangerouslySetInnerHTML={{ __html: selectedNews.description }}
-            />
-            <Flex justify="space-between" mt="xl" c="dimmed">
-              <Group gap="xs">
-                <Avatar src={`data:image/png;base64,${selectedNews.user.image}`} size="sm" color="blue" radius="xl" />
-                <Text size="sm">{formatName(selectedNews.user.name)}</Text>
-              </Group>
-              <Group gap="xs">
-                <IconClock size={16} />
-                <Text size="sm">
-                  {dayjs(selectedNews.createdAt).format('D MMMM YYYY, HH:mm')}
-                </Text>
-              </Group>
-            </Flex>
-          </>
+          </Stack>
         )}
       </Modal>
+
+      <Modal
+        opened={createModalOpened}
+        onClose={closeCreateModal}
+        title="Создать новость"
+        size="lg"
+        className="form-modal"
+        centered
+        overlayProps={{
+          backgroundOpacity: 0.5,
+        }}
+        withCloseButton
+        closeOnClickOutside
+        closeOnEscape
+      >
+        <Stack gap="md">
+          <TextInput
+            label="Заголовок"
+            value={newsForm.name}
+            onChange={(e) => setNewsForm({ ...newsForm, name: e.target.value })}
+            placeholder="Введите заголовок новости"
+          />
+          <Box>
+            <Text size="sm" fw={500} mb="xs">Описание</Text>
+            <TiptapEditor
+              content={newsForm.description}
+              onChange={(content) => setNewsForm({ ...newsForm, description: content })}
+            />
+          </Box>
+          <Group justify="flex-end">
+            <Button variant="outline" onClick={closeCreateModal}>
+              Отмена
+            </Button>
+            <Button onClick={handleCreateNews}>
+              Создать
+            </Button>
+              </Group>
+        </Stack>
+      </Modal>
+
       <Modal
         opened={editModalOpened}
         onClose={closeEditModal}
         title="Редактировать новость"
-        size="xl"
-        radius="md"
+        size="lg"
+        className="form-modal"
+        centered
+        overlayProps={{
+          backgroundOpacity: 0.5,
+        }}
+        withCloseButton
+        closeOnClickOutside
+        closeOnEscape
       >
-        <form onSubmit={handleEditNewsSubmit}>
+        <Stack gap="md">
           <TextInput
-            label="Название"
+            label="Заголовок"
             value={newsForm.name}
-            onChange={(e) => setNewsForm({...newsForm, name: e.target.value})}
-            required
-            mb="md"
-            radius="md"
+            onChange={(e) => setNewsForm({ ...newsForm, name: e.target.value })}
+            placeholder="Введите заголовок новости"
           />
+          <Box>
+            <Text size="sm" fw={500} mb="xs">Описание</Text>
           <TiptapEditor
             content={newsForm.description}
-            onChange={(content) => setNewsForm({...newsForm, description: content})}
-          />
-          <Button type="submit" fullWidth mt="xl" radius="md">
-            Сохранить изменения
+              onChange={(content) => setNewsForm({ ...newsForm, description: content })}
+            />
+          </Box>
+          <Group justify="flex-end">
+            <Button variant="outline" onClick={closeEditModal}>
+              Отмена
           </Button>
-        </form>
-      </Modal>
-      <Modal
-        opened={createModalOpened}
-        onClose={closeCreateModal}
-        title="Новая новость"
-        size="xl"
-        radius="md"
-      >
-        <form onSubmit={handleCreateNews}>
-          <TextInput
-            label="Название"
-            value={newsForm.name}
-            onChange={(e) => setNewsForm({...newsForm, name: e.target.value})}
-            required
-            mb="md"
-            radius="md"
-          />
-          <TiptapEditor
-            content={newsForm.description}
-            onChange={(content) => setNewsForm({...newsForm, description: content})}
-          />
-          <Button type="submit" fullWidth mt="xl" radius="md">
-            Опубликовать
+            <Button onClick={handleUpdateNews}>
+              Сохранить
           </Button>
-        </form>
+          </Group>
+        </Stack>
       </Modal>
+
       <Modal
         opened={deleteModalOpened}
         onClose={closeDeleteModal}
-        title="Удалить новость?"
+        title="Удалить новость"
         size="sm"
-        radius="md"
+        className="form-modal delete-mode"
+        centered
+        overlayProps={{
+          backgroundOpacity: 0.5,
+        }}
+        withCloseButton
+        closeOnClickOutside
+        closeOnEscape
       >
-        <Text mb="xl">Вы уверены, что хотите удалить "{selectedNews?.name}"? Это действие нельзя отменить.</Text>
-        <Flex justify="flex-end" gap="sm">
-          <Button variant="default" onClick={closeDeleteModal} radius="md">
+        <Stack gap="md">
+          <Text>Вы уверены, что хотите удалить эту новость?</Text>
+          <Group justify="flex-end">
+            <Button variant="outline" onClick={closeDeleteModal}>
             Отмена
           </Button>
-          <Button color="red" onClick={handleDeleteConfirm} radius="md">
+            <Button color="red" onClick={handleRemoveNews}>
             Удалить
           </Button>
-        </Flex>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={allNewsModalOpened}
+        onClose={closeAllNewsModal}
+        title="Все новости"
+        size="xl"
+        className="form-modal"
+        centered
+        overlayProps={{
+          backgroundOpacity: 0.5,
+        }}
+        withCloseButton
+        closeOnClickOutside
+        closeOnEscape
+      >
+        <Stack gap="md">
+          {news.map((newsItem) => (
+            <Card key={newsItem.id} shadow="sm" radius="md" padding="md">
+              <Group justify="space-between" align="flex-start">
+                <Box style={{ flex: 1 }}>
+                  <Text size="sm" fw={600} mb="xs">{newsItem.name}</Text>
+                  <Text size="xs" c="var(--theme-text-secondary)" mb="sm">
+                    {truncateText(newsItem.description, 150)}
+                  </Text>
+                  <Group gap="xs" justify="space-between">
+                    <Group gap="xs">
+                      <Avatar size="xs" src={newsItem.user.image} name={newsItem.user.name} />
+                      <Text size="xs" c="var(--theme-text-tertiary)">
+                        {formatName(newsItem.user.name)}
+                      </Text>
+                    </Group>
+                    <Text size="xs" c="var(--theme-text-tertiary)">
+                      {dayjs(newsItem.createdAt).format('DD.MM.YYYY')}
+                    </Text>
+                  </Group>
+                </Box>
+                <ActionIcon
+                  variant="subtle"
+                  size="sm"
+                  onClick={() => handleViewNews(newsItem)}
+                >
+                  <IconChevronRight size={14} />
+                </ActionIcon>
+              </Group>
+            </Card>
+          ))}
+        </Stack>
       </Modal>
     </Box>
   );

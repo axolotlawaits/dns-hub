@@ -1,12 +1,34 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { API } from '../config/constants';
-import { Box, Title, Text, Group, LoadingOverlay, Grid, ActionIcon, Anchor, Modal, Button, ThemeIcon, TextInput, Card, Alert, Tooltip } from '@mantine/core';
-import { IconBookmark, IconTrash, IconExternalLink, IconPlus, IconCheck, IconX, IconSortAscending, IconEdit, IconDeviceFloppy, IconGripVertical } from '@tabler/icons-react';
+import { 
+  Box, 
+  Text, 
+  Group, 
+  LoadingOverlay, 
+  ActionIcon, 
+  Modal, 
+  ThemeIcon, 
+  Card, 
+  Alert, 
+  Badge,
+  Grid,
+  Tooltip
+} from '@mantine/core';
+import { 
+  IconBookmark, 
+  IconTrash, 
+  IconExternalLink, 
+  IconPlus, 
+  IconX, 
+  IconEdit, 
+  IconGripVertical
+} from '@tabler/icons-react';
 import { useUserContext } from '../hooks/useUserContext';
 import { useDisclosure } from '@mantine/hooks';
-import { normalizeUrl, isValidUrl, isSecureUrl, getPreviewUrl } from '../utils/url';
+import { normalizeUrl, isValidUrl } from '../utils/url';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
-import styles from './styles/Bookmarks.module.css';
+import { DynamicFormModal, FormField } from '../utils/formModal';
+import './styles/Bookmarks.css';
 
 interface Bookmark {
   id: string;
@@ -25,53 +47,54 @@ export default function BookmarksList() {
   const [originalBookmarks, setOriginalBookmarks] = useState<Bookmark[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [deleteModalOpen, { open: openDeleteModal, close: closeDeleteModal }] = useDisclosure(false);
+  const [viewAllModalOpen, { open: openViewAllModal, close: closeViewAllModal }] = useDisclosure(false);
   const [addModalOpen, { open: openAddModal, close: closeAddModal }] = useDisclosure(false);
   const [editModalOpen, { open: openEditModal, close: closeEditModal }] = useDisclosure(false);
-  const [viewAllModalOpen, { open: openViewAllModal, close: closeViewAllModal }] = useDisclosure(false);
+  const [deleteModalOpen, { open: openDeleteModal, close: closeDeleteModal }] = useDisclosure(false);
   const [selectedBookmark, setSelectedBookmark] = useState<Bookmark | null>(null);
   const [newBookmark, setNewBookmark] = useState(DEFAULT_BOOKMARK);
-  const [urlError, setUrlError] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ message: string; color: string } | null>(null);
-  const [isSorting, setIsSorting] = useState(false);
 
-  const hasBookmarks = useMemo(() => bookmarks.length > 0, [bookmarks]);
-  const isAddDisabled = useMemo(
-    () => !newBookmark.name || !newBookmark.url || !!urlError,
-    [newBookmark.name, newBookmark.url, urlError]
-  );
 
-  const isEditDisabled = useMemo(
-    () => !selectedBookmark?.name || !selectedBookmark?.url || !!urlError,
-    [selectedBookmark, urlError]
-  );
+  // Конфигурация полей для модальных окон
+  const bookmarkFields: FormField[] = [
+    {
+      name: 'name',
+      label: 'Название',
+      type: 'text',
+      required: true,
+      placeholder: 'Введите название закладки'
+    },
+    {
+      name: 'url',
+      label: 'URL',
+      type: 'text',
+      required: true,
+      placeholder: 'https://example.com'
+    }
+  ];
+
 
   const showNotification = useCallback((message: string, color: string) => {
     setNotification({ message, color });
-    setTimeout(() => setNotification(null), 5000);
+    setTimeout(() => setNotification(null), 3000);
   }, []);
 
+
   const fetchBookmarks = useCallback(async () => {
-    if (!user?.id) {
-      setError('Пользователь не авторизован');
-      setLoading(false);
-      return;
-    }
+    if (!user?.id) return;
+
     try {
       setLoading(true);
       const response = await fetch(`${API}/bookmarks/${user.id}`);
-      if (!response.ok) throw new Error(`Ошибка загрузки данных: ${response.status}`);
+      if (!response.ok) {
+        throw new Error('Ошибка загрузки закладок');
+      }
       const data = await response.json();
-      const bookmarksWithSecurity = data.map((bookmark: Bookmark) => ({
-        ...bookmark,
-        secure: isSecureUrl(bookmark.url),
-        preview: getPreviewUrl(bookmark.url)
-      }));
-      setBookmarks(bookmarksWithSecurity);
-      setOriginalBookmarks([...bookmarksWithSecurity]);
+      setBookmarks(data);
+      setOriginalBookmarks(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Неизвестная ошибка');
-      console.error('Ошибка:', err);
     } finally {
       setLoading(false);
     }
@@ -81,464 +104,437 @@ export default function BookmarksList() {
     fetchBookmarks();
   }, [fetchBookmarks]);
 
-  const handleDelete = useCallback(async (id: string) => {
-    try {
-      const response = await fetch(`${API}/bookmarks/${id}`, { method: 'DELETE' });
-      if (!response.ok) throw new Error('Не удалось удалить закладку');
-      setBookmarks(prev => prev.filter(b => b.id !== id));
-      setOriginalBookmarks(prev => prev.filter(b => b.id !== id));
-      showNotification('Закладка удалена', 'green');
-    } catch (err) {
-      showNotification(err instanceof Error ? err.message : 'Неизвестная ошибка', 'red');
-    } finally {
-      closeDeleteModal();
-    }
-  }, [closeDeleteModal, showNotification]);
+  const handleAddBookmark = async (values: Record<string, any>) => {
+    if (!user?.id) return;
 
-  const handleAddBookmark = useCallback(async () => {
-    if (!isValidUrl(newBookmark.url)) {
-      setUrlError('Некорректный URL');
+    try {
+      const normalizedUrl = normalizeUrl(values.url);
+      if (!isValidUrl(normalizedUrl)) {
+        setError('Некорректный URL');
       return;
     }
-    try {
-      const normalizedUrl = normalizeUrl(newBookmark.url);
+
       const response = await fetch(`${API}/bookmarks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: newBookmark.name,
+          name: values.name,
           url: normalizedUrl,
-          userId: user?.id,
-          order: bookmarks.length
-        })
+          userId: user.id,
+          order: bookmarks.length,
+        }),
       });
-      if (!response.ok) throw new Error('Не удалось добавить закладку');
-      const addedBookmark = await response.json();
-      const newBookmarkWithPreview = {
-        ...addedBookmark,
-        secure: isSecureUrl(addedBookmark.url),
-        preview: getPreviewUrl(addedBookmark.url)
-      };
-      setBookmarks(prev => [...prev, newBookmarkWithPreview]);
-      setOriginalBookmarks(prev => [...prev, newBookmarkWithPreview]);
-      setNewBookmark(DEFAULT_BOOKMARK);
-      showNotification('Закладка добавлена', 'green');
-      closeAddModal();
-    } catch (err) {
-      showNotification(err instanceof Error ? err.message : 'Неизвестная ошибка', 'red');
-    }
-  }, [newBookmark, user?.id, bookmarks.length, closeAddModal, showNotification]);
 
-  const handleUpdateBookmark = useCallback(async () => {
-    if (!selectedBookmark) return;
-    if (!isValidUrl(selectedBookmark.url)) {
-      setUrlError('Некорректный URL');
-      return;
+      if (!response.ok) {
+        throw new Error('Ошибка создания закладки');
+      }
+
+      const newBookmarkData = await response.json();
+      setBookmarks([...bookmarks, newBookmarkData]);
+      setNewBookmark(DEFAULT_BOOKMARK);
+      setError(null);
+      closeAddModal();
+      showNotification('Закладка добавлена', 'green');
+    } catch (err) {
+      showNotification(err instanceof Error ? err.message : 'Ошибка создания закладки', 'red');
     }
+  };
+
+  const handleEditBookmark = async (values: Record<string, any>) => {
+    if (!selectedBookmark || !user?.id) return;
+
     try {
-      const normalizedUrl = normalizeUrl(selectedBookmark.url);
+      const normalizedUrl = normalizeUrl(values.url);
+      if (!isValidUrl(normalizedUrl)) {
+        setError('Некорректный URL');
+        return;
+      }
+
       const response = await fetch(`${API}/bookmarks/${selectedBookmark.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: selectedBookmark.name,
-          url: normalizedUrl
-        })
+          name: values.name,
+          url: normalizedUrl,
+          userId: user.id,
+        }),
       });
-      if (!response.ok) throw new Error('Не удалось обновить закладку');
-      const updatedBookmark = await response.json();
-      const updatedBookmarkWithPreview = {
-        ...updatedBookmark,
-        secure: isSecureUrl(updatedBookmark.url),
-        preview: getPreviewUrl(updatedBookmark.url)
-      };
-      setBookmarks(prev => prev.map(b => b.id === updatedBookmark.id ? updatedBookmarkWithPreview : b));
-      setOriginalBookmarks(prev => prev.map(b => b.id === updatedBookmark.id ? updatedBookmarkWithPreview : b));
-      showNotification('Закладка обновлена', 'green');
-      closeEditModal();
-    } catch (err) {
-      showNotification(err instanceof Error ? err.message : 'Неизвестная ошибка', 'red');
-    }
-  }, [selectedBookmark, closeEditModal, showNotification]);
 
-  const handleDragEnd = useCallback((result: DropResult) => {
-    if (!result.destination || !isSorting) return;
+      if (!response.ok) {
+        throw new Error('Ошибка обновления закладки');
+      }
+
+      const updatedBookmark = await response.json();
+      setBookmarks(bookmarks.map(b => b.id === selectedBookmark.id ? updatedBookmark : b));
+      setSelectedBookmark(null);
+      setError(null);
+      closeEditModal();
+      showNotification('Закладка обновлена', 'green');
+    } catch (err) {
+      showNotification(err instanceof Error ? err.message : 'Ошибка обновления закладки', 'red');
+    }
+  };
+
+  const handleDeleteBookmark = async () => {
+    if (!selectedBookmark) return;
+
+    try {
+      const response = await fetch(`${API}/bookmarks/${selectedBookmark.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Ошибка удаления закладки');
+      }
+
+      setBookmarks(bookmarks.filter(b => b.id !== selectedBookmark.id));
+      setSelectedBookmark(null);
+      closeDeleteModal();
+      showNotification('Закладка удалена', 'green');
+    } catch (err) {
+      showNotification(err instanceof Error ? err.message : 'Ошибка удаления закладки', 'red');
+    }
+  };
+
+  const handleDragEnd = async (result: DropResult) => {
+    if (!result.destination) return;
+
     const items = Array.from(bookmarks);
     const [reorderedItem] = items.splice(result.source.index, 1);
     items.splice(result.destination.index, 0, reorderedItem);
-    const updatedBookmarks = items.map((item, index) => ({
-      ...item,
-      order: index
+
+    const updatedBookmarks = items.map((bookmark, index) => ({
+      ...bookmark,
+      order: index,
     }));
+
     setBookmarks(updatedBookmarks);
-  }, [bookmarks, isSorting]);
 
-  const saveSorting = useCallback(async () => {
     try {
-      const response = await fetch(`${API}/bookmarks/reorder`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user?.id}`
-        },
+      await fetch(`${API}/bookmarks/reorder`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          bookmarks: bookmarks.map(b => ({ id: b.id, order: b.order })),
-          userId: user?.id
-        })
+          bookmarks: updatedBookmarks.map(({ id, order }) => ({ id, order })),
+        }),
       });
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || 'Failed to save order');
-      }
-      setOriginalBookmarks([...bookmarks]);
-      setIsSorting(false);
-      showNotification('Сортировка сохранена', 'green');
     } catch (err) {
-      console.error('Order update error:', err);
-      setBookmarks([...originalBookmarks]);
-      setIsSorting(false);
-      showNotification(
-        err instanceof Error ? err.message : 'Failed to save order',
-        'red'
-      );
+      console.error('Ошибка сохранения порядка закладок:', err);
+      setBookmarks(originalBookmarks);
     }
-  }, [bookmarks, user?.id, originalBookmarks, showNotification]);
+  };
 
-  const cancelSorting = useCallback(() => {
-    setBookmarks([...originalBookmarks]);
-    setIsSorting(false);
-  }, [originalBookmarks]);
-
-  const startSorting = useCallback(() => {
-    setIsSorting(true);
-  }, []);
-
-  const validateUrl = useCallback((url: string) => {
-    setUrlError(isValidUrl(url) ? null : 'Некорректный URL');
-  }, []);
-
-  const openEditModalWithBookmark = useCallback((bookmark: Bookmark) => {
+  const openEditModalForBookmark = (bookmark: Bookmark) => {
     setSelectedBookmark(bookmark);
     openEditModal();
-  }, [openEditModal]);
+  };
 
-  const openDeleteModalWithBookmark = useCallback((bookmark: Bookmark) => {
+  const openDeleteModalForBookmark = (bookmark: Bookmark) => {
     setSelectedBookmark(bookmark);
     openDeleteModal();
-  }, [openDeleteModal]);
+  };
 
-  const resetAddForm = useCallback(() => {
+  const openAddModalHandler = () => {
     setNewBookmark(DEFAULT_BOOKMARK);
-    setUrlError(null);
+    setError(null);
     openAddModal();
-  }, [openAddModal]);
+  };
 
-  if (loading) return <LoadingOverlay visible />;
-  if (error) return <Text c="red">Ошибка: {error}</Text>;
+  const visibleBookmarks = bookmarks.slice(0, 6);
 
-  const visibleBookmarks = bookmarks.slice(0, 8);
-  const hasMoreBookmarks = bookmarks.length > 8;
+  if (loading) {
+    return (
+      <Box className="bookmarks-container">
+        <LoadingOverlay visible={loading} />
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box className="bookmarks-container">
+        <Alert
+          icon={<IconX size={16} />}
+          title="Ошибка загрузки"
+          color="red"
+          variant="light"
+        >
+          {error}
+        </Alert>
+      </Box>
+    );
+  }
 
   return (
-    <Box p="md">
+    <Box className="bookmarks-widget">
+      <Group gap="sm" mb="md">
+        <ThemeIcon size="md" color="green" variant="light">
+          <IconBookmark size={20} />
+        </ThemeIcon>
+        <Text size="lg" fw={600}>
+          Закладки
+        </Text>
+      </Group>
+
       {notification && (
         <Alert
           color={notification.color}
           onClose={() => setNotification(null)}
+          withCloseButton
           mb="md"
-          icon={notification.color === 'green' ? <IconCheck size={18} /> : <IconX size={18} />}
         >
           {notification.message}
         </Alert>
       )}
-      <Group justify="space-between" mb="md">
-        <Group gap="xs">
-          <ThemeIcon variant="light" color="blue" size="lg" radius="xl">
-            <IconBookmark size={18} />
-          </ThemeIcon>
-          <Title order={2}>Мои закладки</Title>
-        </Group>
-        <Group>
-          {isSorting ? (
-            <Group gap="xs">
-              <Button
-                leftSection={<IconX size={18} />}
-                onClick={cancelSorting}
-                variant="light"
-                color="red"
-              >
-                Отмена
-              </Button>
-              <Button
-                leftSection={<IconDeviceFloppy size={18} />}
-                onClick={saveSorting}
-                variant="light"
-                color="green"
-              >
-                Сохранить
-              </Button>
-            </Group>
-          ) : (
-            <Button
-              leftSection={<IconSortAscending size={18} />}
-              onClick={startSorting}
-              variant="light"
+
+      <Grid gutter="md">
+        {visibleBookmarks.map((bookmark) => (
+          <Grid.Col key={bookmark.id} span={4}>
+            <Card
+              className="bookmark-card"
+              shadow="sm"
+              radius="md"
+              padding={0}
+              style={{ height: '200px', position: 'relative', overflow: 'hidden' }}
             >
-              Сортировать
-            </Button>
-          )}
-          {!isSorting && (
-            <Button
-              leftSection={<IconPlus size={18} />}
-              onClick={resetAddForm}
-              variant="light"
-            >
-              Добавить
-            </Button>
-          )}
-        </Group>
-      </Group>
-      {!hasBookmarks ? (
-        <Text c="dimmed">У вас пока нет сохраненных закладок</Text>
-      ) : (
-        <DragDropContext onDragEnd={handleDragEnd}>
-          <Droppable droppableId="bookmarks" direction="horizontal">
-            {(provided) => (
-              <Grid
-                gutter="md"
-                ref={provided.innerRef}
-                {...provided.droppableProps}
-              >
-                {visibleBookmarks.map((bookmark, index) => (
-                  <Draggable
-                    key={bookmark.id}
-                    draggableId={bookmark.id}
-                    index={index}
-                    isDragDisabled={!isSorting}
-                  >
-                    {(provided) => (
-                      <Grid.Col
-                        span={{ base: 12, sm: 6, md: 4, lg: 3 }}
-                        ref={provided.innerRef}
-                        {...provided.draggableProps}
-                      >
-                        <Card
-                          withBorder
-                          p={0}
-                          radius="md"
-                          className={`${styles.card} ${isSorting ? styles.sorting : ''}`}
-                        >
-                          <div className={styles.imageContainer}>
-                            {isSorting && (
-                              <div
-                                {...provided.dragHandleProps}
-                                className={styles.dragHandle}
-                              >
-                                <IconGripVertical size={18} color="white" />
-                              </div>
-                            )}
+              {/* Превью изображения или градиент */}
+              <div className="bookmark-preview">
+                {bookmark.preview ? (
                             <img
                               src={bookmark.preview}
                               alt={bookmark.name}
-                              className={styles.image}
-                              loading="lazy"
-                            />
-                            <Tooltip label={isSecureUrl(bookmark.url).message} position="left">
-                              <div style={{ position: 'absolute', top: '10px', right: '10px' }}>
-                                {isSecureUrl(bookmark.url).icon}
+                    className="bookmark-image"
+                  />
+                ) : (
+                  <div className="bookmark-gradient">
+                    <ThemeIcon size="xl" color="blue" variant="light">
+                      <IconBookmark size={32} />
+                    </ThemeIcon>
                               </div>
-                            </Tooltip>
+                )}
                           </div>
-                          <div className={styles.content}>
-                            <Text fw={500} truncate className={styles.name}>
-                              {bookmark.name}
-                            </Text>
-                            <div className={styles.actions}>
-                              <Group justify="space-between">
-                                <Anchor href={bookmark.url} target="_blank" size="sm" c="gray.3">
-                                  <IconExternalLink size={25} style={{ marginRight: 5 }} />
-                                  Перейти
-                                </Anchor>
-                                <Group gap={4}>
+
+              {/* Градиентный оверлей */}
+              <div className="bookmark-overlay">
+                <div className="bookmark-content">
+                  <Group gap="xs" mt="xs">
+                    {bookmark.secure && (
+                      <Badge size="xs" color="green" variant="light">
+                        HTTPS
+                      </Badge>
+                    )}
+                    <Text size="xs" c="rgba(255,255,255,0.8)" className="bookmark-url">
+                      {bookmark.url.replace(/^https?:\/\//, '')}
+                    </Text>
+                  </Group>
+                </div>
+
+                {/* Действия */}
+                <div className="bookmark-actions">
+                  <Group gap="xs">
+                    <Tooltip label="Открыть">
+                      <ActionIcon
+                        variant="filled"
+                        color="blue"
+                        size="sm"
+                        component="a"
+                        href={bookmark.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <IconExternalLink size={14} />
+                      </ActionIcon>
+                    </Tooltip>
+                    
+                    <Tooltip label="Редактировать">
                                   <ActionIcon
-                                    variant="subtle"
-                                    color="gray.3"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openEditModalWithBookmark(bookmark);
-                                    }}
-                                  >
-                                    <IconEdit size={25} />
+                        variant="filled"
+                        color="orange"
+                        size="sm"
+                        onClick={() => openEditModalForBookmark(bookmark)}
+                      >
+                        <IconEdit size={14} />
                                   </ActionIcon>
+                    </Tooltip>
+                    
+                    <Tooltip label="Удалить">
                                   <ActionIcon
-                                    variant="subtle"
-                                    color="gray.3"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openDeleteModalWithBookmark(bookmark);
-                                    }}
-                                  >
-                                    <IconTrash size={25} />
+                        variant="filled"
+                        color="red"
+                        size="sm"
+                        onClick={() => openDeleteModalForBookmark(bookmark)}
+                      >
+                        <IconTrash size={14} />
                                   </ActionIcon>
-                                </Group>
+                    </Tooltip>
                               </Group>
                             </div>
                           </div>
                         </Card>
                       </Grid.Col>
-                    )}
-                  </Draggable>
-                ))}
-                {provided.placeholder}
-              </Grid>
-            )}
-          </Droppable>
-        </DragDropContext>
-      )}
-      {hasMoreBookmarks && (
-      <Button
-        onClick={openViewAllModal}
-        mt="md"
-        leftSection={<IconBookmark size={18} />}
-        variant="light"
-      >
-        Посмотреть все
-      </Button>
+        ))}
+        
+        {/* Кнопка добавления */}
+        <Grid.Col span={4}>
+          <Card
+            className="bookmark-add-card"
+            shadow="sm"
+            radius="md"
+            padding={0}
+            style={{ height: '200px', position: 'relative', overflow: 'hidden' }}
+            onClick={openAddModalHandler}
+          >
+            <div className="bookmark-add-content">
+              <ThemeIcon size="xl" color="gray" variant="light">
+                <IconPlus size={32} />
+              </ThemeIcon>
+              <Text size="lg" fw={500} c="var(--theme-text-secondary)" mt="md">
+                Добавить закладку
+              </Text>
+            </div>
+          </Card>
+        </Grid.Col>
 
-      )}
+        {/* Показать все закладки */}
+        {bookmarks.length > 6 && (
+          <Grid.Col span={12}>
+            <Card
+              className="bookmark-show-all"
+              shadow="sm"
+              radius="md"
+              padding="md"
+        onClick={openViewAllModal}
+            >
+              <Group justify="center" align="center">
+                <ThemeIcon size="md" color="blue" variant="light">
+                  <IconBookmark size={20} />
+                </ThemeIcon>
+                <Text size="sm" fw={500} c="var(--theme-text-primary)">
+                  Показать все закладки
+                </Text>
+                <Text size="xs" c="var(--theme-text-secondary)">
+                  +{bookmarks.length - 6}
+                </Text>
+              </Group>
+            </Card>
+          </Grid.Col>
+        )}
+      </Grid>
+
+      {/* Модальные окна */}
+
+
       <Modal
         opened={viewAllModalOpen}
         onClose={closeViewAllModal}
-        title={
-          <Group justify="space-between">
-            <Title order={3}>Все закладки</Title>
-            <Group>
-              {isSorting ? (
-                <Group gap="xs">
-                  <Button
-                    leftSection={<IconX size={18} />}
-                    onClick={cancelSorting}
-                    variant="light"
-                    color="red"
-                    size="xs"
-                  >
-                    Отмена
-                  </Button>
-                  <Button
-                    leftSection={<IconDeviceFloppy size={18} />}
-                    onClick={saveSorting}
-                    variant="light"
-                    color="green"
-                    size="xs"
-                  >
-                    Сохранить
-                  </Button>
-                </Group>
-              ) : (
-                <>
-                  <Button
-                    leftSection={<IconSortAscending size={18} />}
-                    onClick={startSorting}
-                    variant="light"
-                    size="xs"
-                  >
-                    Сортировать
-                  </Button>
-                  <Button
-                    leftSection={<IconPlus size={18} />}
-                    onClick={resetAddForm}
-                    variant="light"
-                    size="xs"
-                  >
-                    Добавить
-                  </Button>
-                </>
-              )}
-            </Group>
-          </Group>
-        }
-        size="70%"
+        title="Все закладки"
+        size="xl"
+        className="form-modal"
+        centered
+        overlayProps={{
+          backgroundOpacity: 0.5,
+        }}
+        withCloseButton
+        closeOnClickOutside
+        closeOnEscape
       >
         <DragDropContext onDragEnd={handleDragEnd}>
-          <Droppable droppableId="allBookmarks" direction="horizontal">
+          <Droppable droppableId="bookmarks">
             {(provided) => (
-              <Grid
-                gutter="md"
-                ref={provided.innerRef}
-                {...provided.droppableProps}
-              >
+              <div {...provided.droppableProps} ref={provided.innerRef}>
+                <Grid gutter="md">
                 {bookmarks.map((bookmark, index) => (
-                  <Draggable
-                    key={bookmark.id}
-                    draggableId={bookmark.id}
-                    index={index}
-                    isDragDisabled={!isSorting}
-                  >
-                    {(provided) => (
-                      <Grid.Col
-                        span={{ base: 12, sm: 6, md: 4, lg: 3 }}
+                    <Draggable key={bookmark.id} draggableId={bookmark.id} index={index}>
+                      {(provided, snapshot) => (
+                        <Grid.Col span={4}>
+                          <Card
                         ref={provided.innerRef}
                         {...provided.draggableProps}
-                      >
-                        <Card
-                          withBorder
-                          p={0}
+                            className={`bookmark-card ${snapshot.isDragging ? 'dragging' : ''}`}
+                            shadow="sm"
                           radius="md"
-                          className={styles.card}
-                        >
-                          <div className={styles.imageContainer}>
-                            {isSorting && (
-                              <div
-                                {...provided.dragHandleProps}
-                                className={styles.dragHandle}
-                              >
-                                <IconGripVertical size={18} color="white" />
-                              </div>
-                            )}
+                            padding={0}
+                            style={{ height: '200px', position: 'relative', overflow: 'hidden' }}
+                          >
+                            <div className="bookmark-preview">
+                              {bookmark.preview ? (
                             <img
                               src={bookmark.preview}
                               alt={bookmark.name}
-                              className={styles.image}
-                              loading="lazy"
-                            />
-                            <Tooltip label={isSecureUrl(bookmark.url).message} position="left">
-                              <div style={{ position: 'absolute', top: '10px', right: '10px' }}>
-                                {isSecureUrl(bookmark.url).icon}
+                                  className="bookmark-image"
+                                />
+                              ) : (
+                                <div className="bookmark-gradient">
+                                  <ThemeIcon size="xl" color="blue" variant="light">
+                                    <IconBookmark size={32} />
+                                  </ThemeIcon>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="bookmark-overlay">
+                              <div className="bookmark-content">
+                                <Text size="lg" fw={600} c="white" className="bookmark-title">
+                                  {bookmark.name}
+                                </Text>
+                                
+                                <Group gap="xs" mt="xs">
+                                  {bookmark.secure && (
+                                    <Badge size="xs" color="green" variant="light">
+                                      HTTPS
+                                    </Badge>
+                                  )}
+                                  <Text size="xs" c="rgba(255,255,255,0.8)" className="bookmark-url">
+                                    {bookmark.url.replace(/^https?:\/\//, '')}
+                                  </Text>
+                                </Group>
                               </div>
+
+                              <div className="bookmark-actions">
+                                <Group gap="xs">
+                                  <div {...provided.dragHandleProps}>
+                                    <Tooltip label="Перетащить">
+                                      <ActionIcon variant="filled" color="gray" size="sm">
+                                        <IconGripVertical size={14} />
+                                      </ActionIcon>
                             </Tooltip>
                           </div>
-                          <div className={styles.content}>
-                            <Text fw={500} truncate className={styles.name}>
-                              {bookmark.name}
-                            </Text>
-                            <div className={styles.actions}>
-                              <Group justify="space-between">
-                                <Anchor href={bookmark.url} target="_blank" size="sm" c="gray.3">
-                                  <IconExternalLink size={25} style={{ marginRight: 5 }} />
-                                  Перейти
-                                </Anchor>
-                                <Group gap={4}>
+                                  
+                                  <Tooltip label="Открыть">
+                                    <ActionIcon
+                                      variant="filled"
+                                      color="blue"
+                                      size="sm"
+                                      component="a"
+                                      href={bookmark.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      <IconExternalLink size={14} />
+                                    </ActionIcon>
+                                  </Tooltip>
+                                  
+                                  <Tooltip label="Редактировать">
                                   <ActionIcon
-                                    variant="subtle"
-                                    color="gray.3"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openEditModalWithBookmark(bookmark);
-                                    }}
-                                  >
-                                    <IconEdit size={25} />
+                                      variant="filled"
+                                      color="orange"
+                                      size="sm"
+                                      onClick={() => openEditModalForBookmark(bookmark)}
+                                    >
+                                      <IconEdit size={14} />
                                   </ActionIcon>
+                                  </Tooltip>
+                                  
+                                  <Tooltip label="Удалить">
                                   <ActionIcon
-                                    variant="subtle"
-                                    color="gray.3"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openDeleteModalWithBookmark(bookmark);
-                                    }}
-                                  >
-                                    <IconTrash size={16} />
+                                      variant="filled"
+                                      color="red"
+                                      size="sm"
+                                      onClick={() => openDeleteModalForBookmark(bookmark)}
+                                    >
+                                      <IconTrash size={14} />
                                   </ActionIcon>
-                                </Group>
+                                  </Tooltip>
                               </Group>
                             </div>
                           </div>
@@ -549,81 +545,41 @@ export default function BookmarksList() {
                 ))}
                 {provided.placeholder}
               </Grid>
+              </div>
             )}
           </Droppable>
         </DragDropContext>
       </Modal>
-      <Modal opened={deleteModalOpen} onClose={closeDeleteModal} title="Удаление закладки">
-        <Text mb="md">Вы уверены, что хотите удалить закладку "{selectedBookmark?.name}"?</Text>
-        <Group justify="flex-end">
-          <Button variant="default" onClick={closeDeleteModal}>Отмена</Button>
-          <Button color="red" onClick={() => selectedBookmark && handleDelete(selectedBookmark.id)}>
-            Удалить
-          </Button>
-        </Group>
-      </Modal>
-      <Modal opened={addModalOpen} onClose={closeAddModal} title="Добавление закладки">
-        <TextInput
-          label="Название"
-          placeholder="Мой любимый сайт"
-          value={newBookmark.name}
-          onChange={(e) => setNewBookmark(prev => ({ ...prev, name: e.target.value }))}
-          mb="md"
-        />
-        <TextInput
-          label="URL"
-          placeholder="https://example.ru или example.ru"
-          value={newBookmark.url}
-          onChange={(e) => {
-            setNewBookmark(prev => ({ ...prev, url: e.target.value }));
-            validateUrl(e.target.value);
-          }}
-          error={urlError}
-          mb="md"
-        />
-        <Group justify="flex-end">
-          <Button variant="default" onClick={closeAddModal}>Отмена</Button>
-          <Button
-            color="blue"
-            onClick={handleAddBookmark}
-            disabled={isAddDisabled}
-          >
-            Добавить
-          </Button>
-        </Group>
-      </Modal>
-      <Modal opened={editModalOpen} onClose={closeEditModal} title="Редактирование закладки">
-        <TextInput
-          label="Название"
-          placeholder="Мой любимый сайт"
-          value={selectedBookmark?.name || ''}
-          onChange={(e) => selectedBookmark && setSelectedBookmark({ ...selectedBookmark, name: e.target.value })}
-          mb="md"
-        />
-        <TextInput
-          label="URL"
-          placeholder="https://example.ru или example.ru"
-          value={selectedBookmark?.url || ''}
-          onChange={(e) => {
-            if (selectedBookmark) {
-              setSelectedBookmark({ ...selectedBookmark, url: e.target.value });
-              validateUrl(e.target.value);
-            }
-          }}
-          error={urlError}
-          mb="md"
-        />
-        <Group justify="flex-end">
-          <Button variant="default" onClick={closeEditModal}>Отмена</Button>
-          <Button
-            color="blue"
-            onClick={handleUpdateBookmark}
-            disabled={isEditDisabled}
-          >
-            Сохранить
-          </Button>
-        </Group>
-      </Modal>
+
+      {/* Модальные окна */}
+      <DynamicFormModal
+        opened={addModalOpen}
+        onClose={closeAddModal}
+        title="Добавить закладку"
+        mode="create"
+        fields={bookmarkFields}
+        initialValues={newBookmark}
+        onSubmit={handleAddBookmark}
+      />
+
+      <DynamicFormModal
+        opened={editModalOpen}
+        onClose={closeEditModal}
+        title="Редактировать закладку"
+        mode="edit"
+        fields={bookmarkFields}
+        initialValues={selectedBookmark || DEFAULT_BOOKMARK}
+        onSubmit={handleEditBookmark}
+      />
+
+      <DynamicFormModal
+        opened={deleteModalOpen}
+        onClose={closeDeleteModal}
+        title="Удалить закладку"
+        mode="delete"
+        initialValues={selectedBookmark || {}}
+        onConfirm={handleDeleteBookmark}
+      />
     </Box>
   );
 }

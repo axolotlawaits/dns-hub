@@ -1,0 +1,357 @@
+/* ========================================
+   FORM MODAL - ИЗНАЧАЛЬНЫЙ ДИЗАЙН
+   ======================================== */
+
+.form-modal {
+  z-index: 999999 !important;
+}
+
+.form-modal .mantine-Modal-overlay {
+  z-index: 999998 !important;
+}
+
+.form-modal .mantine-Modal-content {
+  z-index: 999999 !important;
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  max-width: 95vw !important;
+  max-height: 90vh !important;
+  width: 800px !important;
+  min-width: 600px !important;
+  height: auto !important;
+  border-radius: 16px !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+}
+
+.form-modal .mantine-Modal-header {
+  padding: 24px 24px 16px 24px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #e2e8f0;
+  border-radius: 16px 16px 0 0;
+}
+
+.form-modal .mantine-Modal-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+
+.form-modal .mantine-Modal-close {
+  color: #64748b;
+  background: transparent;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.form-modal .mantine-Modal-close:hover {
+  color: #1e293b;
+  background-color: #e2e8f0;
+  transform: scale(1.05);
+}
+
+.form-modal .mantine-Modal-body {
+  padding: 24px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: #ffffff;
+}
+
+/* Темная тема для модальных окон */
+[data-mantine-color-scheme="dark"] .form-modal .mantine-Modal-header {
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  border-bottom-color: #475569;
+}
+
+[data-mantine-color-scheme="dark"] .form-modal .mantine-Modal-title {
+  color: #f1f5f9;
+}
+
+[data-mantine-color-scheme="dark"] .form-modal .mantine-Modal-close {
+  color: #94a3b8;
+}
+
+[data-mantine-color-scheme="dark"] .form-modal .mantine-Modal-close:hover {
+  color: #f1f5f9;
+  background-color: #475569;
+}
+
+[data-mantine-color-scheme="dark"] .form-modal .mantine-Modal-body {
+  background: #0f172a;
+}
+
+[data-mantine-color-scheme="dark"] .form-modal .mantine-Modal-content {
+  background: #0f172a;
+  border: 1px solid #334155;
+}
+
+/* Дополнительные стили для правильного отображения */
+.form-modal .mantine-Modal-root {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  z-index: 999999 !important;
+}
+
+.form-modal .mantine-Modal-inner {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  z-index: 999999 !important;
+}
+
+/* Стили для полей формы */
+.form-modal .mantine-TextInput-root,
+.form-modal .mantine-Select-root,
+.form-modal .mantine-Textarea-root,
+.form-modal .mantine-NumberInput-root,
+.form-modal .mantine-MultiSelect-root {
+  margin-bottom: 16px;
+}
+
+.form-modal .mantine-TextInput-label,
+.form-modal .mantine-Select-label,
+.form-modal .mantine-Textarea-label,
+.form-modal .mantine-NumberInput-label,
+.form-modal .mantine-MultiSelect-label {
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+/* Стили для кнопок */
+.form-modal .mantine-Button-root {
+  margin-right: 8px;
+}
+
+/* Стили для алертов */
+.form-modal .mantine-Alert-root {
+  margin-bottom: 16px;
+}
+
+/* Стили для карточек файлов */
+.form-modal .file-card {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  background: #f9f9f9;
+}
+
+.form-modal .file-card:hover {
+  background: #f0f0f0;
+}
+
+/* Стили для полей просмотра */
+.form-modal .view-field {
+  margin-bottom: 16px;
+}
+
+.form-modal .view-field-label {
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.form-modal .view-field-value {
+  color: #666;
+  padding: 8px;
+  background: #f5f5f5;
+  border-radius: 4px;
+}
+
+/* Стили для режима удаления */
+.form-modal.delete-mode .mantine-Modal-header {
+  background: #ffebee;
+  border-bottom-color: #ffcdd2;
+}
+
+.form-modal.delete-mode .mantine-Modal-title {
+  color: #c62828;
+}
+
+/* Стили для режима просмотра */
+.form-modal.view-mode .mantine-Modal-header {
+  background: #e3f2fd;
+  border-bottom-color: #bbdefb;
+}
+
+.form-modal.view-mode .mantine-Modal-title {
+  color: #1565c0;
+}
+
+/* Темная тема для полей формы */
+[data-mantine-color-scheme="dark"] .form-modal .mantine-TextInput-input,
+[data-mantine-color-scheme="dark"] .form-modal .mantine-Select-input,
+[data-mantine-color-scheme="dark"] .form-modal .mantine-Textarea-input,
+[data-mantine-color-scheme="dark"] .form-modal .mantine-NumberInput-input,
+[data-mantine-color-scheme="dark"] .form-modal .mantine-MultiSelect-input {
+  background: #1e293b;
+  border-color: #475569;
+  color: #f1f5f9;
+}
+
+[data-mantine-color-scheme="dark"] .form-modal .mantine-TextInput-input:focus,
+[data-mantine-color-scheme="dark"] .form-modal .mantine-Select-input:focus,
+[data-mantine-color-scheme="dark"] .form-modal .mantine-Textarea-input:focus,
+[data-mantine-color-scheme="dark"] .form-modal .mantine-NumberInput-input:focus,
+[data-mantine-color-scheme="dark"] .form-modal .mantine-MultiSelect-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+[data-mantine-color-scheme="dark"] .form-modal .mantine-TextInput-label,
+[data-mantine-color-scheme="dark"] .form-modal .mantine-Select-label,
+[data-mantine-color-scheme="dark"] .form-modal .mantine-Textarea-label,
+[data-mantine-color-scheme="dark"] .form-modal .mantine-NumberInput-label,
+[data-mantine-color-scheme="dark"] .form-modal .mantine-MultiSelect-label {
+  color: #e2e8f0;
+}
+
+[data-mantine-color-scheme="dark"] .form-modal .mantine-Button-root {
+  background: #3b82f6;
+  color: white;
+  border: none;
+}
+
+[data-mantine-color-scheme="dark"] .form-modal .mantine-Button-root:hover {
+  background: #2563eb;
+}
+
+[data-mantine-color-scheme="dark"] .form-modal .mantine-Button-root[data-variant="outline"] {
+  background: transparent;
+  color: #e2e8f0;
+  border-color: #475569;
+}
+
+[data-mantine-color-scheme="dark"] .form-modal .mantine-Button-root[data-variant="outline"]:hover {
+  background: #475569;
+  border-color: #64748b;
+}
+
+[data-mantine-color-scheme="dark"] .form-modal .view-field-value {
+  background: #1e293b;
+  color: #e2e8f0;
+  border: 1px solid #475569;
+}
+
+[data-mantine-color-scheme="dark"] .form-modal .view-field-label {
+  color: #e2e8f0;
+}
+
+/* Стили для селектов в fileFields - универсальный подход */
+.form-modal .file-fields .mantine-Select-root {
+  position: relative;
+  z-index: 10000 !important;
+}
+
+/* Универсальные стили для всех выпадающих списков в модальном окне */
+.form-modal [data-mantine-combobox-dropdown],
+.form-modal [data-mantine-select-dropdown],
+.form-modal .mantine-Select-dropdown,
+.form-modal .mantine-Combobox-dropdown,
+.form-modal .mantine-Popover-dropdown {
+  z-index: 10001 !important;
+  position: fixed !important;
+}
+
+.form-modal [data-mantine-combobox-option],
+.form-modal [data-mantine-select-option],
+.form-modal .mantine-Select-option,
+.form-modal .mantine-Combobox-option,
+.form-modal .mantine-Popover-option {
+  z-index: 10001 !important;
+}
+
+/* Дополнительные стили для порталов */
+[data-mantine-portal] {
+  z-index: 10001 !important;
+}
+
+/* Стили для всех элементов с высоким z-index в модальном окне */
+.form-modal *[style*="z-index"] {
+  z-index: 10001 !important;
+}
+
+/* Специальные стили для селекта в fileFields */
+.form-modal .file-field-select {
+  position: relative !important;
+  z-index: 10000 !important;
+}
+
+.form-modal .file-field-select .mantine-Select-input {
+  cursor: pointer !important;
+  pointer-events: auto !important;
+}
+
+.form-modal .file-field-select .mantine-Select-rightSection {
+  pointer-events: auto !important;
+}
+
+/* Стили для открытого выпадающего списка */
+.form-modal .file-field-select[data-expanded="true"] .mantine-Select-dropdown,
+.form-modal .file-field-select[data-expanded="true"] [data-mantine-combobox-dropdown] {
+  z-index: 10001 !important;
+  position: fixed !important;
+}
+
+/* Дополнительные стили для принудительного отображения */
+.form-modal .file-field-select .mantine-Select-dropdown,
+.form-modal .file-field-select [data-mantine-combobox-dropdown] {
+  z-index: 10001 !important;
+  position: fixed !important;
+  pointer-events: auto !important;
+}
+
+/* Стили для всех возможных выпадающих списков */
+.form-modal [data-mantine-portal] {
+  z-index: 10001 !important;
+}
+
+.form-modal [data-mantine-portal] * {
+  z-index: 10001 !important;
+}
+
+/* КРИТИЧЕСКИ ВАЖНО: Правильные z-index для выпадающих списков */
+/* Эти стили должны иметь максимальный приоритет */
+.mantine-Select-dropdown,
+.mantine-Combobox-dropdown,
+[data-mantine-combobox-dropdown],
+[data-mantine-select-dropdown],
+[data-mantine-portal] .mantine-Select-dropdown,
+[data-mantine-portal] .mantine-Combobox-dropdown {
+  z-index: 9999999 !important;
+  position: fixed !important;
+  pointer-events: auto !important;
+}
+
+/* Стили для опций */
+.mantine-Select-option,
+.mantine-Combobox-option,
+[data-mantine-combobox-option],
+[data-mantine-select-option],
+[data-mantine-portal] .mantine-Select-option,
+[data-mantine-portal] .mantine-Combobox-option {
+  z-index: 9999999 !important;
+  pointer-events: auto !important;
+}
+
+/* Стили для портала */
+[data-mantine-portal] {
+  z-index: 9999999 !important;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+}
+
+/* Стили для всех элементов в портале */
+[data-mantine-portal] * {
+  z-index: 9999999 !important;
+}

@@ -26,6 +26,8 @@ import mediaRouter from './routes/add/media.js'
 import rkRouter from './routes/add/rk.js'
 import sliderRouter from './routes/add/slider.js'
 import printServiceRouter from './routes/retail/printService.js'
+import scannerRouter from './routes/scanner/scanner.js'
+import safetyJournalRouter from './routes/safety/safetyJournal.js'
 import adminRouter from './routes/admin.js'
 import telegramRouter  from './routes/app/telegram.js'
 import fs from 'fs'
@@ -104,6 +106,8 @@ app.use('/hub-api/search', searchRouter)
 app.use('/hub-api/navigation', navigationRouter);
 app.use('/hub-api/type', typeRouter);
 app.use('/hub-api/retail/print-service', printServiceRouter);
+app.use('/hub-api/scanner', scannerRouter);
+app.use('/hub-api/safety/journal', safetyJournalRouter);
 /* loader (mb fix later) */
 app.use('/hub-api/loaders/route', routeRouter)
 app.use('/hub-api/loaders/routeDay', routeDayRouter)

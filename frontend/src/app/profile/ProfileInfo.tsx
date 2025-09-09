@@ -2,10 +2,49 @@ import { useState, useEffect } from 'react';
 import { useUserContext } from '../../hooks/useUserContext';
 import { API } from '../../config/constants';
 import { notificationSystem } from '../../utils/Push';
-import { Avatar, Card, Text, Group, Badge, Skeleton, Stack, Box, Modal, Button, PasswordInput, Image, FileButton, Paper, Loader, CopyButton, Tooltip, ActionIcon } from '@mantine/core';
+import { 
+  Avatar, 
+  Card, 
+  Text, 
+  Group, 
+  Badge, 
+  Skeleton, 
+  Stack, 
+  Box, 
+  Modal, 
+  Button, 
+  PasswordInput, 
+  Image, 
+  FileButton, 
+  Loader, 
+  CopyButton, 
+  Tooltip, 
+  ActionIcon,
+  Title,
+  Divider,
+  ThemeIcon,
+  Grid,
+  Alert,
+  Switch
+} from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import QRCode from 'react-qr-code';
-import { IconBrandTelegram, IconLink, IconUnlink, IconCopy, IconCheck, IconMail, IconNotification } from '@tabler/icons-react';
+import { 
+  IconBrandTelegram, 
+  IconLink, 
+  IconUnlink, 
+  IconCopy, 
+  IconCheck, 
+  IconMail, 
+  IconBuilding,
+  IconCalendar,
+  IconMail as IconMailSolid,
+  IconEdit,
+  IconCamera,
+  IconShield,
+  IconBell,
+  IconQrcode
+} from '@tabler/icons-react';
 
 interface UserData {
   fio: string;
@@ -282,174 +321,301 @@ const ProfileInfo = () => {
   if (!userData) return <Text>Нет данных пользователя</Text>;
 
   return (
-    <Stack gap="md">
-      <Card shadow="sm" padding="lg" radius="md" withBorder style={{ width: '100%' }}>
-        <Group align="flex-start" wrap="nowrap">
-          <Box style={{ position: 'relative' }}>
-            <Avatar
-              src={user?.image ? `data:image/jpeg;base64,${user.image}` : null}
-              size={120}
-              radius={60}
-              style={{ cursor: 'pointer' }}
-              onClick={openPhotoModal}
-            />
-            <Text
-              size="sm"
-              style={{
-                cursor: 'pointer',
-                textAlign: 'center',
-                marginTop: 8,
-                textDecoration: 'underline',
-                color: '#228be6'
-              }}
-              onClick={openPhotoModal}
-            >
-              {user?.image ? 'Сменить фото' : 'Добавить фото'}
-            </Text>
-          </Box>
-          <Box style={{ flex: 1 }}>
-            <Group justify="space-between">
-              <Text size="lg" fw={500}>{userData.fio}</Text>
-              <Badge color={userData.status === 'active' ? 'green' : 'red'} variant="light">
-                {userData.status}
-              </Badge>
-            </Group>
-            <Text size="sm" c="dimmed" mt={4}>{userData.position.name || 'Не указано'}</Text>
-            <Group gap="xl" mt="md">
-              <Stack gap="xs">
-                <Group gap="md">
-                  <Text size="sm" c="dimmed">РРС:</Text>
-                  <Text size="sm">{userData.branch.rrs || 'Не указано'}</Text>
-                </Group>
-                <Group gap="md">
-                  <Text size="sm" c="dimmed">Отдел:</Text>
-                  <Text size="sm">{userData.branch.name || 'Не указано'}</Text>
-                </Group>
-              </Stack>
-              <Stack gap="xs">
-                <Group gap="md">
-                  <Text size="sm" c="dimmed">Дата рождения:</Text>
-                  <Text size="sm">{new Date(userData.birthday).toLocaleDateString()}</Text>
-                </Group>
-                <Group gap="md">
-                  <Text size="sm" c="dimmed">Email:</Text>
-                  <Text size="sm">{userData.email}</Text>
-                </Group>
-              </Stack>
-            </Group>
-          </Box>
-        </Group>
-      </Card>
-      <Box style={{ width: '100%', display: 'flex', justifyContent: 'flex-end' }}>
-        <div style={{ width: 300 }}>
-          <Paper shadow="sm" p="lg" radius="md" withBorder>
-            <Group mb="md" align="center">
-              <IconNotification size={24} />
-              <Text size="lg" fw={500}>Уведомления</Text>
-            </Group>
-            {telegramLoading ? (
-              <Group justify="center">
-                <Loader size="sm" />
-                <Text>Проверка статуса...</Text>
+    <Stack gap="lg">
+      {/* Основная информация о пользователе */}
+      <Card shadow="lg" padding="xl" radius="lg" className="profile-main-card">
+        <Grid gutter="lg">
+          <Grid.Col span={{ base: 12, md: 4 }}>
+            <Stack align="center" gap="md">
+              <Box className="avatar-container">
+                <Avatar
+                  src={user?.image ? `data:image/jpeg;base64,${user.image}` : null}
+                  size={120}
+                  radius="xl"
+                  className="profile-avatar"
+                />
+                <ActionIcon
+                  size="md"
+                  radius="xl"
+                  color="blue"
+                  variant="filled"
+                  className="avatar-edit-button"
+                  onClick={openPhotoModal}
+                >
+                  <IconCamera size={16} />
+                </ActionIcon>
+              </Box>
+              <Button
+                variant="subtle"
+                leftSection={<IconEdit size={16} />}
+                onClick={openPhotoModal}
+                size="sm"
+                className="edit-photo-button"
+              >
+                {user?.image ? 'Сменить фото' : 'Добавить фото'}
+              </Button>
+            </Stack>
+          </Grid.Col>
+          
+          <Grid.Col span={{ base: 12, md: 8 }}>
+            <Stack gap="md">
+              <Group justify="space-between" align="flex-start">
+                <Box>
+                  <Title order={2} c="var(--theme-text-primary)" mb="xs">
+                    {userData.fio}
+                  </Title>
+                  <Text size="md" c="var(--theme-text-secondary)" mb="sm">
+                    {userData.position.name || 'Должность не указана'}
+                  </Text>
+                </Box>
+                <Badge 
+                  size="md" 
+                  color={userData.status === 'active' ? 'green' : 'red'} 
+                  variant="light"
+                  className="status-badge"
+                >
+                  {userData.status === 'active' ? 'Активен' : 'Неактивен'}
+                </Badge>
               </Group>
-            ) : (
-              <>
-                <Stack gap="sm">
-                  <Group justify="space-between" align="center">
-                    <Group>
-                      <IconBrandTelegram size={18} />
-                      <Text size="sm" fw={500}>Telegram</Text>
-                    </Group>
-                    <Badge color={isTelegramConnected ? "green" : "gray"} variant="light">
-                      {isTelegramConnected ? "Подключен" : "Не подключен"}
-                    </Badge>
+
+              <Grid gutter="sm">
+                <Grid.Col span={6}>
+                  <Group gap="sm" mb="sm">
+                    <ThemeIcon size="md" color="blue" variant="light">
+                      <IconBuilding size={16} />
+                    </ThemeIcon>
+                    <Box>
+                      <Text size="sm" c="var(--theme-text-tertiary)" fw={500}>
+                        РРС
+                      </Text>
+                      <Text size="md" c="var(--theme-text-primary)">
+                        {userData.branch.rrs || 'Не указано'}
+                      </Text>
+                    </Box>
                   </Group>
+                  
+                  <Group gap="sm" mb="sm">
+                    <ThemeIcon size="md" color="green" variant="light">
+                      <IconBuilding size={16} />
+                    </ThemeIcon>
+                    <Box>
+                      <Text size="sm" c="var(--theme-text-tertiary)" fw={500}>
+                        Отдел
+                      </Text>
+                      <Text size="md" c="var(--theme-text-primary)">
+                        {userData.branch.name || 'Не указано'}
+                      </Text>
+                    </Box>
+                  </Group>
+                </Grid.Col>
+                
+                <Grid.Col span={6}>
+                  <Group gap="sm" mb="sm">
+                    <ThemeIcon size="md" color="orange" variant="light">
+                      <IconCalendar size={16} />
+                    </ThemeIcon>
+                    <Box>
+                      <Text size="sm" c="var(--theme-text-tertiary)" fw={500}>
+                        Дата рождения
+                      </Text>
+                      <Text size="md" c="var(--theme-text-primary)">
+                        {new Date(userData.birthday).toLocaleDateString()}
+                      </Text>
+                    </Box>
+                  </Group>
+                  
+                  <Group gap="sm" mb="sm">
+                    <ThemeIcon size="md" color="purple" variant="light">
+                      <IconMailSolid size={16} />
+                    </ThemeIcon>
+                    <Box>
+                      <Text size="sm" c="var(--theme-text-tertiary)" fw={500}>
+                        Email
+                      </Text>
+                      <Text size="md" c="var(--theme-text-primary)">
+                        {userData.email}
+                      </Text>
+                    </Box>
+                  </Group>
+                </Grid.Col>
+              </Grid>
+            </Stack>
+          </Grid.Col>
+        </Grid>
+      </Card>
+
+      {/* Настройки уведомлений */}
+      <Card shadow="lg" padding="xl" radius="lg" className="notifications-card">
+        <Group mb="md" align="center">
+          <ThemeIcon size="md" color="blue" variant="light">
+            <IconBell size={18} />
+          </ThemeIcon>
+          <Title order={4} c="var(--theme-text-primary)">
+            Настройки уведомлений
+          </Title>
+        </Group>
+
+        <Grid gutter="lg">
+          <Grid.Col span={{ base: 12, md: 6 }}>
+            <Card padding="md" radius="md" className="notification-service-card">
+              <Group justify="space-between" mb="sm">
+                <Group gap="sm">
+                  <ThemeIcon size="sm" color="blue" variant="light">
+                    <IconBrandTelegram size={16} />
+                  </ThemeIcon>
+                  <Text fw={600} c="var(--theme-text-primary)">
+                    Telegram
+                  </Text>
+                </Group>
+                {telegramLoading ? (
+                  <Loader size="sm" />
+                ) : (
+                                  <Badge 
+                  color={isTelegramConnected ? "green" : "gray"} 
+                  variant="light"
+                  size="sm"
+                >
+                  {isTelegramConnected ? "Подключен" : "Не подключен"}
+                </Badge>
+                )}
+              </Group>
+              
+              {!telegramLoading && (
+                <>
                   {isTelegramConnected ? (
-                    <>
-                      {telegramUserName && <Text size="sm" c="dimmed">@{telegramUserName}</Text>}
+                    <Stack gap="md">
+                      {telegramUserName && (
+                        <Text size="sm" c="var(--theme-text-secondary)">
+                          @{telegramUserName}
+                        </Text>
+                      )}
                       <Button
-                        leftSection={<IconUnlink size={18} />}
+                        leftSection={<IconUnlink size={16} />}
                         variant="outline"
                         color="red"
                         onClick={disconnectTelegram}
                         fullWidth
+                        size="sm"
+                        className="disconnect-button"
                       >
                         Отключить
                       </Button>
-                    </>
+                    </Stack>
                   ) : (
                     <Button
-                      leftSection={<IconLink size={18} />}
+                      leftSection={<IconLink size={16} />}
                       onClick={generateTelegramLink}
                       loading={isGeneratingLink}
                       fullWidth
+                      size="sm"
+                      className="connect-button"
                     >
                       Подключить Telegram
                     </Button>
                   )}
-                </Stack>
-                <Stack gap="sm" mt="md">
-                  <Group justify="space-between" align="center">
-                    <Group>
-                      <IconMail size={18} />
-                      <Text size="sm" fw={500}>Почта</Text>
-                    </Group>
-                    <Badge color={emailNotificationsEnabled ? "green" : "gray"} variant="light">
-                      {emailNotificationsEnabled ? "Включена" : "Отключена"}
-                    </Badge>
-                  </Group>
-                  <Button
-                    onClick={toggleEmailNotifications}
-                    fullWidth
-                    variant={emailNotificationsEnabled ? "outline" : "filled"}
-                    color={emailNotificationsEnabled ? "red" : "green"}
-                  >
-                    {emailNotificationsEnabled ? "Отключить" : "Включить"}
-                  </Button>
-                </Stack>
-              </>
-            )}
-          </Paper>
-        </div>
-      </Box>
+                </>
+              )}
+            </Card>
+          </Grid.Col>
+          
+          <Grid.Col span={{ base: 12, md: 6 }}>
+            <Card padding="md" radius="md" className="notification-service-card">
+              <Group justify="space-between" mb="sm">
+                <Group gap="sm">
+                  <ThemeIcon size="sm" color="green" variant="light">
+                    <IconMail size={16} />
+                  </ThemeIcon>
+                  <Text fw={600} c="var(--theme-text-primary)">
+                    Email уведомления
+                  </Text>
+                </Group>
+                <Badge 
+                  color={emailNotificationsEnabled ? "green" : "gray"} 
+                  variant="light"
+                  size="sm"
+                >
+                  {emailNotificationsEnabled ? "Включены" : "Отключены"}
+                </Badge>
+              </Group>
+              
+              <Group justify="space-between" align="center">
+                <Text size="sm" c="var(--theme-text-secondary)">
+                  Получать уведомления по почте
+                </Text>
+                <Switch
+                  checked={emailNotificationsEnabled}
+                  onChange={toggleEmailNotifications}
+                  color="green"
+                  size="sm"
+                />
+              </Group>
+            </Card>
+          </Grid.Col>
+        </Grid>
+      </Card>
       <Modal
         opened={telegramModalOpened}
         onClose={closeTelegramModal}
-        title="Подключение Telegram"
+        title={
+          <Group gap="sm">
+            <ThemeIcon size="md" color="blue" variant="light">
+              <IconBrandTelegram size={18} />
+            </ThemeIcon>
+            <Text fw={600}>Подключение Telegram</Text>
+          </Group>
+        }
         centered
         size="lg"
+        className="telegram-modal"
       >
-        <Stack align="center">
-          <QRCode value={telegramLink} size={200} />
-          <Text size="sm" mt="md" fw={500}>Или используйте ссылку:</Text>
-          <Group w="100%">
-            <Text
-              size="sm"
-              style={{
-                flex: 1,
-                wordBreak: 'break-all',
-                padding: '8px 12px',
-                backgroundColor: 'var(--mantine-color-gray-1)',
-                borderRadius: 'var(--mantine-radius-sm)'
-              }}
-            >
-              {telegramLink}
+        <Stack align="center" gap="sm">
+          <Card padding="md" radius="md" className="qr-code-card">
+            <Stack align="center" gap="sm">
+              <QRCode value={telegramLink} size={200} />
+              <Text size="sm" c="var(--theme-text-secondary)" ta="center">
+                Отсканируйте QR-код в приложении Telegram
+              </Text>
+            </Stack>
+          </Card>
+          
+          <Divider label="или" labelPosition="center" w="100%" my="xs" />
+          
+          <Box w="100%">
+            <Text size="sm" fw={500} mb="xs" c="var(--theme-text-primary)">
+              Используйте ссылку:
             </Text>
-            <CopyButton value={telegramLink}>
-              {({ copied, copy }) => (
-                <Tooltip label={copied ? 'Скопировано!' : 'Копировать'} withArrow>
-                  <ActionIcon
-                    color={copied ? 'teal' : 'gray'}
-                    variant="light"
-                    onClick={copy}
-                    size="lg"
-                  >
-                    {copied ? <IconCheck size={18} /> : <IconCopy size={18} />}
-                  </ActionIcon>
-                </Tooltip>
-              )}
-            </CopyButton>
-          </Group>
+            <Group w="100%">
+              <Text
+                size="sm"
+                className="telegram-link-text"
+                style={{
+                  flex: 1,
+                  wordBreak: 'break-all',
+                  padding: 'var(--space-3)',
+                  backgroundColor: 'var(--theme-bg-secondary)',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--theme-border)'
+                }}
+              >
+                {telegramLink}
+              </Text>
+              <CopyButton value={telegramLink}>
+                {({ copied, copy }) => (
+                  <Tooltip label={copied ? 'Скопировано!' : 'Копировать'} withArrow>
+                    <ActionIcon
+                      color={copied ? 'teal' : 'gray'}
+                      variant="light"
+                      onClick={copy}
+                      size="lg"
+                    >
+                      {copied ? <IconCheck size={18} /> : <IconCopy size={18} />}
+                    </ActionIcon>
+                  </Tooltip>
+                )}
+              </CopyButton>
+            </Group>
+          </Box>
+          
           <Button
             component="a"
             href={telegramLink}
@@ -457,70 +623,166 @@ const ProfileInfo = () => {
             rel="noopener noreferrer"
             leftSection={<IconBrandTelegram size={18} />}
             fullWidth
-            mt="md"
+            size="md"
+            className="telegram-open-button"
           >
             Открыть в Telegram
           </Button>
-          <Text size="xs" c="dimmed" mt="sm">
-            Ссылка действительна в течение 15 минут
-          </Text>
+          
+          <Alert 
+            icon={<IconQrcode size={16} />} 
+            color="blue" 
+            variant="light"
+            className="telegram-info-alert"
+            mt="xs"
+          >
+            <Text size="sm">
+              Ссылка действительна в течение 15 минут
+            </Text>
+          </Alert>
         </Stack>
       </Modal>
-      <Modal opened={photoModalOpened} onClose={closePhotoModal} title={user?.image ? 'Смена фото профиля' : 'Добавление фото профиля'} centered>
-        <Group justify="center" mb="xl">
-          {user?.image && (
-            <Box>
-              <Text size="sm" mb="xs">Текущее фото:</Text>
-              <Image
-                src={`data:image/jpeg;base64,${user.image}`}
-                width={150}
-                height={150}
-                radius="md"
-              />
-            </Box>
-          )}
+      <Modal 
+        opened={photoModalOpened} 
+        onClose={closePhotoModal} 
+        title={
+          <Group gap="sm">
+            <ThemeIcon size="md" color="blue" variant="light">
+              <IconCamera size={18} />
+            </ThemeIcon>
+            <Text fw={600}>
+              {user?.image ? 'Смена фото профиля' : 'Добавление фото профиля'}
+            </Text>
+          </Group>
+        } 
+        centered
+        size="md"
+        className="photo-modal"
+      >
+        <Stack gap="md">
+          <Group justify="center" gap="md">
+            {user?.image && (
+              <Card padding="sm" radius="md" className="photo-preview-card">
+                <Stack align="center" gap="xs">
+                  <Text size="sm" fw={500} c="var(--theme-text-primary)">
+                    Текущее фото
+                  </Text>
+                  <Image
+                    src={`data:image/jpeg;base64,${user.image}`}
+                    width={100}
+                    height={100}
+                    radius="md"
+                    className="photo-preview"
+                  />
+                </Stack>
+              </Card>
+            )}
+            {newPhoto && (
+              <Card padding="sm" radius="md" className="photo-preview-card">
+                <Stack align="center" gap="xs">
+                  <Text size="sm" fw={500} c="var(--theme-text-primary)">
+                    Новое фото
+                  </Text>
+                  <Image
+                    src={newPhoto}
+                    width={100}
+                    height={100}
+                    radius="md"
+                    className="photo-preview"
+                  />
+                </Stack>
+              </Card>
+            )}
+          </Group>
+          
+          <FileButton onChange={handleFileSelect} accept="image/*">
+            {(props) => (
+              <Button 
+                {...props} 
+                fullWidth 
+                size="sm"
+                leftSection={<IconCamera size={16} />}
+                className="select-photo-button"
+              >
+                {newPhoto ? 'Выбрать другое фото' : 'Выбрать фото'}
+              </Button>
+            )}
+          </FileButton>
+          
           {newPhoto && (
-            <Box>
-              <Text size="sm" mb="xs">Новое фото:</Text>
-              <Image
-                src={newPhoto}
-                width={150}
-                height={150}
-                radius="md"
-              />
-            </Box>
-          )}
-        </Group>
-        <FileButton onChange={handleFileSelect} accept="image/*">
-          {(props) => (
-            <Button {...props} fullWidth>
-              {newPhoto ? 'Выбрать другое фото' : 'Выбрать фото'}
+            <Button 
+              fullWidth 
+              size="sm"
+              onClick={handleSavePhoto}
+              leftSection={<IconCheck size={16} />}
+              className="save-photo-button"
+            >
+              Сохранить фото
             </Button>
           )}
-        </FileButton>
-        {newPhoto && (
-          <Button fullWidth mt="md" onClick={handleSavePhoto}>
-            Сохранить фото
-          </Button>
-        )}
+        </Stack>
       </Modal>
-      <Modal opened={passwordModalOpened} onClose={closePasswordModal} title="Подтвердите смену фото" centered>
-        <PasswordInput
-          label="Введите ваш пароль"
-          value={password}
-          onChange={(e) => setPassword(e.currentTarget.value)}
-          placeholder="Пароль"
-          required
-          mt="md"
-        />
-        <Group justify="flex-end" mt="xl">
-          <Button variant="outline" onClick={closePasswordModal} disabled={isUpdating}>
-            Отмена
-          </Button>
-          <Button onClick={updatePhoto} loading={isUpdating}>
-            Подтвердить
-          </Button>
-        </Group>
+      <Modal 
+        opened={passwordModalOpened} 
+        onClose={closePasswordModal} 
+        title={
+          <Group gap="sm">
+            <ThemeIcon size="md" color="orange" variant="light">
+              <IconShield size={18} />
+            </ThemeIcon>
+            <Text fw={600}>Подтвердите смену фото</Text>
+          </Group>
+        } 
+        centered
+        size="sm"
+        className="password-modal"
+      >
+        <Stack gap="xs">
+          <Alert 
+            icon={<IconShield size={16} />} 
+            color="orange" 
+            variant="light"
+            className="password-alert"
+            mb="xs"
+          >
+            <Text size="sm">
+              Для изменения фото профиля необходимо подтвердить пароль
+            </Text>
+          </Alert>
+          
+          <PasswordInput
+            label="Введите ваш пароль"
+            value={password}
+            onChange={(e) => setPassword(e.currentTarget.value)}
+            placeholder="Пароль"
+            required
+            size="sm"
+            leftSection={<IconShield size={16} />}
+            className="password-input"
+            mb="xs"
+          />
+          
+          <Group justify="flex-end" gap="xs" mt="xs">
+            <Button 
+              variant="outline" 
+              onClick={closePasswordModal} 
+              disabled={isUpdating}
+              className="cancel-button"
+              size="sm"
+            >
+              Отмена
+            </Button>
+            <Button 
+              onClick={updatePhoto} 
+              loading={isUpdating}
+              leftSection={<IconCheck size={16} />}
+              className="confirm-button"
+              size="sm"
+            >
+              Подтвердить
+            </Button>
+          </Group>
+        </Stack>
       </Modal>
     </Stack>
   );

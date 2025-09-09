@@ -5,7 +5,7 @@ import { MantineProvider } from '@mantine/core'
 import { UserContextProvider } from './contexts/UserContext.jsx'
 import { DatesProvider } from '@mantine/dates'
 import dayjs from 'dayjs';
-import { ThemeContextProvider } from './contexts/ThemeContext.tsx'
+import { ThemeProvider } from './contexts/ThemeContext.tsx'
 import 'dayjs/locale/ru'
 import { useThemeContext } from './hooks/useThemeContext.tsx'
 import { AccessContextProvider } from './contexts/AccessContext.tsx'
@@ -41,9 +41,9 @@ createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <UserContextProvider>
         <AccessContextProvider>
-          <ThemeContextProvider>
+          <ThemeProvider>
             <Root />
-          </ThemeContextProvider>
+          </ThemeProvider>
         </AccessContextProvider>
       </UserContextProvider>
     </QueryClientProvider>

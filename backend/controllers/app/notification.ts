@@ -219,6 +219,13 @@ const cleanupExpiredNotifications = async () => {
   return { count: result.count };
 };
 
+const deleteNotification = async (notificationId: string) => {
+  const result = await prisma.notifications.delete({
+    where: { id: notificationId },
+  });
+  return result;
+};
+
 export const NotificationController = {
   create: createNotification,
   markAsRead,
@@ -226,4 +233,5 @@ export const NotificationController = {
   getNotifications,
   getUnreadCount,
   cleanupExpired: cleanupExpiredNotifications,
+  delete: deleteNotification,
 };

@@ -1,4 +1,23 @@
-import { Button, Paper, PasswordInput, TextInput, Title, Loader, ActionIcon, Avatar, Text, Group } from '@mantine/core';
+import { 
+  Button, 
+  Paper, 
+  PasswordInput, 
+  TextInput, 
+  Title, 
+  Loader, 
+  ActionIcon, 
+  Avatar, 
+  Text, 
+  Group,
+  Stack,
+  Card,
+  Box,
+  Container,
+  Transition,
+  Alert,
+  ThemeIcon,
+  Divider
+} from '@mantine/core';
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useUserContext } from '../hooks/useUserContext';
 import { useNavigate } from 'react-router';
@@ -6,7 +25,17 @@ import { API } from '../config/constants';
 import './styles/Login.css';
 import { useWeather, Weather } from './Weather';
 import { useThemeContext } from '../hooks/useThemeContext';
-import { IconBrightnessDown, IconMoon } from '@tabler/icons-react';
+import { 
+  IconBrightnessDown, 
+  IconMoon, 
+  IconUser, 
+  IconLock, 
+  IconLogin,
+  IconArrowRight,
+  IconRefresh,
+  IconAlertCircle,
+  IconCheck
+} from '@tabler/icons-react';
 import { formatName } from '../utils/format';
 
 // Типы вынесены в начало для лучшей читаемости
@@ -86,23 +115,54 @@ const fetchUserInfo = async (login: string): Promise<UserInfo> => {
 const ThemeToggleButton = ({ isDark, toggleTheme }: { isDark: Boolean | null; toggleTheme: () => void }) => (
   <ActionIcon 
     onClick={toggleTheme} 
-    size={36} 
-    variant="default" 
+    size="lg" 
+    variant="subtle" 
+    color="gray"
     aria-label="Toggle theme"
-    style={{ position: 'absolute', top: '10px', right: '10px' }}
+    className="theme-toggle"
   >
-    {isDark ? <IconMoon size={22} /> : <IconBrightnessDown size={22} />}
+    {isDark ? <IconMoon size={20} /> : <IconBrightnessDown size={20} />}
   </ActionIcon>
 );
 
 const UserProfileCard = ({ userInfo }: { userInfo: UserInfo }) => (
-  <Paper p="md" shadow="sm" mb="xl" style={{ textAlign: 'center' }}>
-    <Group justify="center" mb="sm">
-      <Avatar src={userInfo.photo} size="xl" radius="xl" />
-    </Group>
-    <Text size="lg" fw={500}>{userInfo.name}</Text>
-    <Text size="sm" c="dimmed">@{userInfo.login}</Text>
-  </Paper>
+  <Card 
+    p="xl" 
+    shadow="lg" 
+    radius="lg" 
+    mb="xl" 
+    className="user-profile-card"
+    style={{ 
+      background: 'var(--theme-bg-elevated)',
+      border: '1px solid var(--theme-border)',
+      textAlign: 'center'
+    }}
+  >
+    <Stack align="center" gap="md">
+      <Avatar 
+        src={userInfo.photo} 
+        size="xl" 
+        radius="xl"
+        className="user-avatar"
+      />
+      <Box>
+        <Text size="lg" fw={600} c="var(--theme-text-primary)">
+          {userInfo.name}
+        </Text>
+        <Text size="sm" c="var(--theme-text-secondary)">
+          @{userInfo.login}
+        </Text>
+      </Box>
+      <Group gap="xs" mt="xs">
+        <ThemeIcon size="sm" color="green" variant="light">
+          <IconCheck size={14} />
+        </ThemeIcon>
+        <Text size="xs" c="var(--theme-text-secondary)">
+          Известный пользователь
+        </Text>
+      </Group>
+    </Stack>
+  </Card>
 );
 
 const PhotoCredit = ({ photo }: { photo: PhotoInfo }) => (
@@ -251,99 +311,149 @@ function Login() {
   }), [currentPhoto?.url, weatherCondition]);
 
   return (
-    <div className="wrapper" style={backgroundStyle}>
+    <div className="login-wrapper" style={backgroundStyle}>
       {!currentPhoto && (
         <div className="bg-loader">
-          <Loader variant="dots" color="#fff" />
+          <Loader variant="dots" color="var(--color-blue-500)" size="lg" />
         </div>
       )}
       {weatherCondition === 'rain' && <div className="weather-effect rain" />}
       {weatherCondition === 'snow' && <div className="weather-effect snow" />}
       {currentPhoto && <PhotoCredit photo={currentPhoto} />}
       
-      <Paper className="form" radius="md" p={30}>
-        <ThemeToggleButton isDark={isDark} toggleTheme={toggleTheme} />
-        
-        <form onSubmit={handleSubmit} className="form-content">
-          <Title order={2} className="title" ta="center" mb={50}>
-            Добро пожаловать
-          </Title>
-          <Weather />
+      <Container size="sm" className="login-container">
+        <Paper 
+          className="login-form" 
+          radius="xl" 
+          p="xl"
+          shadow="xl"
+        >
+          <Box className="form-header">
+            <ThemeToggleButton isDark={isDark} toggleTheme={toggleTheme} />
+          </Box>
           
-          {formState === 'knownUser' && userInfo ? (
-            <>
-              <UserProfileCard userInfo={userInfo} />
+          <form onSubmit={handleSubmit} className="form-content">
+            <Stack gap="xl" align="center">
+              <Box className="welcome-section">
+                <Title order={1} className="welcome-title" ta="center">
+                  Добро пожаловать
+                </Title>
+                <Text size="lg" c="var(--theme-text-secondary)" ta="center" mt="sm">
+                  Войдите в систему для продолжения
+                </Text>
+                <Weather />
+              </Box>
               
-              <PasswordInput 
-                label="Введите пароль для входа" 
-                placeholder="Ваш пароль"
-                mt="md" 
-                size="md"
-                value={userData.pass} 
-                onChange={handleInputChange('pass')}
-                error={validationErrors?.pass}
-                required
-                autoFocus
-              />
+              {ldapError && (
+                <Alert 
+                  icon={<IconAlertCircle size={16} />} 
+                  color="red" 
+                  variant="light"
+                  className="error-alert"
+                >
+                  {ldapError}
+                </Alert>
+              )}
               
-              <Button 
-                fullWidth 
-                mt="xl" 
-                size="md" 
-                loading={isLoading}
-                type="submit"
+              <Transition 
+                mounted={formState === 'knownUser' && !!userInfo} 
+                transition="slide-down" 
+                duration={300}
               >
-                Войти
-              </Button>
+                {(styles) => (
+                  <div style={styles}>
+                    {userInfo && <UserProfileCard userInfo={userInfo} />}
+                  </div>
+                )}
+              </Transition>
               
-              <Button 
-                variant="subtle" 
-                fullWidth 
-                mt="sm" 
-                size="sm"
-                onClick={handleLoginAsDifferentUser}
-              >
-                Войти под другим пользователем
-              </Button>
-            </>
-          ) : (
-            <>
-              <TextInput 
-                label="Логин" 
-                placeholder="Введите ваш логин"
-                size="md"
-                value={userData.login} 
-                onChange={handleInputChange('login')}
-                onBlur={handleLoginBlur}
-                error={validationErrors?.login || ldapError}
-                required 
-                autoFocus={formState === 'newUser'}
-              />
-              
-              <PasswordInput 
-                label="Пароль" 
-                placeholder="Введите ваш пароль"
-                mt="md" 
-                size="md"
-                value={userData.pass} 
-                onChange={handleInputChange('pass')}
-                error={validationErrors?.pass}
-                required
-              />
-              
-              <Button 
-                fullWidth 
-                mt="xl" 
-                size="md" 
-                loading={isLoading}
-                type="submit"
-              >
-                Войти
-              </Button>
-            </>
-          )}
-        </form>
-      </Paper>
+              <Stack gap="md" w="100%">
+                {formState === 'knownUser' && userInfo ? (
+                  <>
+                    <PasswordInput 
+                      label="Введите пароль для входа" 
+                      placeholder="Ваш пароль"
+                      size="lg"
+                      leftSection={<IconLock size={20} />}
+                      value={userData.pass} 
+                      onChange={handleInputChange('pass')}
+                      error={validationErrors?.pass}
+                      required
+                      autoFocus
+                      className="password-input"
+                    />
+                    
+                    <Button 
+                      fullWidth 
+                      size="lg" 
+                      loading={isLoading}
+                      type="submit"
+                      leftSection={<IconLogin size={20} />}
+                      rightSection={<IconArrowRight size={20} />}
+                      className="login-button"
+                    >
+                      Войти
+                    </Button>
+                    
+                    <Divider label="или" labelPosition="center" />
+                    
+                    <Button 
+                      variant="subtle" 
+                      fullWidth 
+                      size="md"
+                      onClick={handleLoginAsDifferentUser}
+                      leftSection={<IconRefresh size={18} />}
+                      className="switch-user-button"
+                    >
+                      Войти под другим пользователем
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <TextInput 
+                      label="Логин" 
+                      placeholder="Введите ваш логин"
+                      size="lg"
+                      leftSection={<IconUser size={20} />}
+                      value={userData.login} 
+                      onChange={handleInputChange('login')}
+                      onBlur={handleLoginBlur}
+                      error={validationErrors?.login || ldapError}
+                      required 
+                      autoFocus={formState === 'newUser'}
+                      className="login-input"
+                    />
+                    
+                    <PasswordInput 
+                      label="Пароль" 
+                      placeholder="Введите ваш пароль"
+                      size="lg"
+                      leftSection={<IconLock size={20} />}
+                      value={userData.pass} 
+                      onChange={handleInputChange('pass')}
+                      error={validationErrors?.pass}
+                      required
+                      className="password-input"
+                    />
+                    
+                    <Button 
+                      fullWidth 
+                      size="lg" 
+                      loading={isLoading}
+                      type="submit"
+                      leftSection={<IconLogin size={20} />}
+                      rightSection={<IconArrowRight size={20} />}
+                      className="login-button"
+                    >
+                      Войти
+                    </Button>
+                  </>
+                )}
+              </Stack>
+            </Stack>
+          </form>
+        </Paper>
+      </Container>
     </div>
   );
 }

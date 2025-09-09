@@ -1,11 +1,25 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Box, Title, Text, Group, LoadingOverlay, Divider, Badge,  ThemeIcon, ScrollArea, ActionIcon, Button, Stack, Paper,  useMantineTheme,  Indicator } from '@mantine/core';
-import { useColorScheme } from '@mantine/hooks';
+import { useState, useEffect, useCallback } from 'react';
+import { 
+  Box, 
+  Text, 
+  Group, 
+  LoadingOverlay, 
+  Badge, 
+  ThemeIcon, 
+  ActionIcon, 
+  Stack, 
+  Card,
+  Button
+} from '@mantine/core';
 import dayjs from 'dayjs';
-import { IconBell, IconAlertCircle, IconInfoCircle, IconCheck, IconMail, IconX, IconCircleCheck, IconCircleCheckFilled } from '@tabler/icons-react';
+import { 
+  IconBell, 
+  IconAlertCircle, 
+  IconInfoCircle, 
+  IconCheck, 
+  IconX
+} from '@tabler/icons-react';
 import { useUserContext } from '../../hooks/useUserContext';
-import { showNotification } from '@mantine/notifications';
-import { useSocketIO } from '../../hooks/useSocketIO'; // Измененный импорт
 import { API } from '../../config/constants';
 import './Notifications.css';
 
@@ -42,289 +56,221 @@ const NOTIFICATION_COLORS = {
   EVENT: 'violet',
 };
 
-export function Notifications() {
+function NotificationsList() {
   const { user } = useUserContext();
-  const theme = useMantineTheme();
-  const colorScheme = useColorScheme();
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'all' | 'unread'>('unread');
-
-  const { lastNotification } = useSocketIO(); // Изменено на useSocketIO
+  const [showAll, setShowAll] = useState(false);
 
   const fetchNotifications = useCallback(async () => {
     if (!user?.id) return;
 
-    setIsLoading(true);
     try {
-      const params = new URLSearchParams({
-        limit: '20',
-        userId: user.id,
-        ...(activeTab === 'unread' && { unreadOnly: 'true' })
-      });
-
-      const response = await fetch(`${API}/notifications?${params}`, {
-        credentials: 'include'
-      });
-
-      if (!response.ok) throw new Error('Не удалось загрузить уведомления');
-
-      const { data } = await response.json();
-      setNotifications(data);
+      setLoading(true);
+      const response = await fetch(`${API}/notifications?userId=${user.id}&limit=20`);
+      if (!response.ok) {
+        throw new Error('Ошибка загрузки уведомлений');
+      }
+      const data = await response.json();
+      setNotifications(data.data || []);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Неизвестная ошибка';
-      setError(errorMessage);
-      showNotification({
-        title: 'Ошибка',
-        message: 'Не удалось загрузить уведомления',
-        color: 'red',
-      });
+      setError(err instanceof Error ? err.message : 'Неизвестная ошибка');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
-  }, [user?.id, activeTab]);
+  }, [user?.id]);
 
-  const markAsRead = useCallback(async (id: string) => {
+  const markAsRead = useCallback(async (notificationId: string) => {
     try {
-      const response = await fetch(`${API}/notifications/read/${id}`, {
+      const response = await fetch(`${API}/notifications/read/${notificationId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user?.id }),
-        credentials: 'include'
       });
-
-      if (!response.ok) throw new Error('Не удалось отметить как прочитанное');
-
-      setNotifications(prev =>
-        prev.map(n => n.id === id ? { ...n, read: true } : n)
+      if (!response.ok) {
+        throw new Error('Ошибка обновления уведомления');
+      }
+      setNotifications(prev => 
+        prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
       );
     } catch (err) {
-      showNotification({
-        title: 'Ошибка',
-        message: 'Не удалось отметить уведомление как прочитанное',
-        color: 'red',
-      });
+      console.error('Ошибка обновления уведомления:', err);
     }
   }, [user?.id]);
 
-  const markAllAsRead = useCallback(async () => {
-    try {
-      const response = await fetch(`${API}/notifications/read-all`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user?.id }),
-        credentials: 'include'
-      });
 
-      const data = await response.json();
-      if (data.success) {
-        showNotification({
-          title: 'Успех',
-          message: `Отмечено ${data.count} уведомлений как прочитанных`,
-          color: 'green',
-        });
-        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-      }
-    } catch (err) {
-      showNotification({
-        title: 'Ошибка',
-        message: 'Не удалось отметить все уведомления как прочитанные',
-        color: 'red',
-      });
-    }
-  }, [user?.id]);
 
   useEffect(() => {
     fetchNotifications();
   }, [fetchNotifications]);
 
   useEffect(() => {
-    if (!lastNotification) return;
+    // Socket functionality will be implemented later
+    // For now, we'll just show a placeholder
+  }, []);
+
+  const getNotificationIcon = (type: string) => {
+    const IconComponent = NOTIFICATION_ICONS[type as keyof typeof NOTIFICATION_ICONS] || IconInfoCircle;
+    return <IconComponent size={16} />;
+  };
+
+  const getNotificationColor = (type: string) => {
+    return NOTIFICATION_COLORS[type as keyof typeof NOTIFICATION_COLORS] || 'blue';
+  };
+
+  const formatTime = (dateString: string) => {
+    const date = dayjs(dateString);
+    const now = dayjs();
+    const diffInMinutes = now.diff(date, 'minute');
     
-    setNotifications(prev => {
-      const newNotification = lastNotification;
-      const exists = prev.some(n => n.id === newNotification.id);
+    if (diffInMinutes < 1) return 'только что';
+    if (diffInMinutes < 60) return `${diffInMinutes} мин назад`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} ч назад`;
+    return date.format('DD.MM.YYYY');
+  };
 
-      return exists
-        ? prev.map(n => n.id === newNotification.id ? newNotification : n)
-        : [newNotification, ...prev].slice(0, 20);
-    });
-  }, [lastNotification]); // Изменено на lastNotification
+  if (loading) {
+    return (
+      <Box className="notifications-container">
+        <LoadingOverlay visible={loading} />
+      </Box>
+    );
+  }
 
-  const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
-  const filteredNotifications = useMemo(() =>
-    activeTab === 'unread'
-      ? notifications.filter(n => !n.read)
-      : notifications
-  , [notifications, activeTab]);
-
-  if (isLoading) return <LoadingOverlay visible />;
-  if (error) return <Box p="md"><Text c="red">{error}</Text></Box>;
-
-
+  if (error) {
   return (
     <Box className="notifications-container">
-      <Group mb="md" justify="space-between">
-        <Group gap="xs">
-          <Indicator label={unreadCount} size={18} disabled={unreadCount === 0} color="red">
-            <ThemeIcon variant="light" color="blue" size="lg" radius="xl">
-              <IconBell size={18} />
+        <Card shadow="sm" radius="md" padding="md">
+          <Group gap="sm">
+            <ThemeIcon size="sm" color="red" variant="light">
+              <IconX size={16} />
             </ThemeIcon>
-          </Indicator>
-          <Title order={3}>Уведомления</Title>
+            <Text size="sm" c="var(--theme-text-secondary)">
+              Ошибка загрузки уведомлений
+            </Text>
         </Group>
+        </Card>
+      </Box>
+    );
+  }
 
-        <Group>
-          <Button.Group>
-            <Button
-              variant={activeTab === 'unread' ? 'light' : 'subtle'}
-              size="sm"
-              onClick={() => setActiveTab('unread')}
-            >
-              Непрочитанные
-            </Button>
-            <Button
-              variant={activeTab === 'all' ? 'light' : 'subtle'}
-              size="sm"
-              onClick={() => setActiveTab('all')}
-            >
-              Все
-            </Button>
-          </Button.Group>
+  if (!Array.isArray(notifications) || notifications.length === 0) {
+    return (
+      <Box className="notifications-container">
+        <Card shadow="none" radius="md" padding="md" className="notifications-empty">
+          <Stack gap="md" align="center">
+            <ThemeIcon size="xl" color="gray" variant="light">
+              <IconBell size={32} />
+            </ThemeIcon>
+            <Text size="sm" c="var(--theme-text-secondary)" ta="center">
+              Нет новых уведомлений
+            </Text>
+          </Stack>
+        </Card>
+      </Box>
+    );
+  }
 
-          {unreadCount > 0 && (
-            <Button
-              variant="subtle"
-              size="sm"
-              leftSection={<IconCircleCheckFilled size={16} />}
-              onClick={markAllAsRead}
-            >
-              Прочитать все
-            </Button>
-          )}
+  const unreadNotifications = notifications.filter(n => !n.read);
+  const allNotifications = notifications;
+  const visibleNotifications = showAll ? allNotifications : unreadNotifications;
+
+  return (
+    <Box className="notifications-widget">
+      <Group justify="space-between" mb="md">
+        <Group gap="sm">
+          <ThemeIcon size="md" color="blue" variant="light">
+            <IconBell size={20} />
+          </ThemeIcon>
+          <Text size="lg" fw={600}>
+            Уведомления
+          </Text>
         </Group>
+        <Button
+          variant="subtle"
+          size="xs"
+          onClick={() => setShowAll(!showAll)}
+        >
+          {showAll ? 'Непрочитанные' : 'Все'}
+        </Button>
       </Group>
 
-      <Divider mb="md" />
-
-      <ScrollArea.Autosize mah={500}>
-        {filteredNotifications.length === 0 ? (
-          <Box py="xl" ta="center">
-            <ThemeIcon variant="light" color="gray" size={50} radius="xl" mb="sm">
-              <IconCheck size={30} />
-            </ThemeIcon>
-            <Text c="dimmed" fw={500}>Нет уведомлений</Text>
-            {activeTab === 'unread' && (
-              <Text size="sm" c="dimmed" mt="xs">Все уведомления прочитаны</Text>
-            )}
-          </Box>
+      <div className="notifications-list">
+        {visibleNotifications.length === 0 ? (
+          <div className="notifications-empty">
+            <div className="notifications-empty-content">
+              <div className="notifications-empty-icon">
+                <IconBell size={32} />
+              </div>
+              <Text size="sm" c="var(--theme-text-secondary)" ta="center">
+                {showAll ? 'Нет уведомлений' : 'Нет непрочитанных уведомлений'}
+              </Text>
+            </div>
+          </div>
         ) : (
-          <Stack gap="sm">
-            {filteredNotifications.map((notification) => {
-              const Icon = NOTIFICATION_ICONS[notification.type];
-              const color = NOTIFICATION_COLORS[notification.type];
+          visibleNotifications.map((notification) => {
+          const color = getNotificationColor(notification.type);
               const isUnread = !notification.read;
 
-              const colorIndex = colorScheme === 'dark' ? 4 : 5;
-              const rgbColor = hexToRgb(theme.colors[color][colorIndex]);
-
               return (
-                <Paper
+            <div
                   key={notification.id}
-                  withBorder
-                  p="sm"
-                  radius="sm"
-                  className={`notification-paper ${isUnread ? 'unread' : ''}`}
-                  style={{
-                    borderLeftColor: theme.colors[color][colorIndex],
-                    '--notification-color': theme.colors[color][colorIndex],
-                    '--notification-color-rgb': rgbColor
-                  }}
-                  onClick={() => !isUnread && markAsRead(notification.id)}
-                >
-                  <Group justify="space-between" align="flex-start" wrap="nowrap">
-                    <Group align="flex-start" gap="sm" wrap="nowrap">
-                      <ThemeIcon color={color} variant="light" size={40} radius="xl" className="notification-icon">
-                        <Icon size={18} />
+              className={`notification-item ${isUnread ? 'notification-unread' : ''}`}
+            >
+              <div className="notification-content">
+                <div className="notification-icon">
+                  <ThemeIcon size="sm" color={color} variant="light">
+                    {getNotificationIcon(notification.type)}
                       </ThemeIcon>
-
-                      <Stack gap={4} style={{ flex: 1 }}>
-                        <Group justify="space-between" wrap="nowrap">
-                          <Text fw={isUnread ? 600 : 500} lineClamp={1} className={`notification-title ${isUnread ? '' : 'read'}`}>
+                </div>
+                <div className="notification-text">
+                  <Text size="sm" fw={isUnread ? 600 : 500} c="var(--theme-text-primary)" mb={4}>
                             {notification.title}
                           </Text>
-                          <Text size="xs" className="notification-time">
-                            {dayjs(notification.createdAt).format('D MMM HH:mm')}
-                          </Text>
-                        </Group>
-
-                        <Text size="sm" c="dimmed" lineClamp={2} className="notification-message">
+                  <Text size="xs" c="var(--theme-text-secondary)" mb="xs">
                           {notification.message}
                         </Text>
-
-                        <Group gap="xs" mt={4}>
+                  <div className="notification-meta">
+                    <div className="notification-badges">
+                      {notification.sender && (
+                        <Badge size="xs" variant="light" color="gray">
+                          {notification.sender.name}
+                        </Badge>
+                      )}
                           {notification.tool && (
-                            <Badge
-                              variant="light"
-                              color="gray"
-                              className="notification-badge"
-                              leftSection={notification.tool.icon && (
-                                <img
-                                  src={notification.tool.icon}
-                                  width={12}
-                                  height={12}
-                                  alt=""
-                                />
-                              )}
-                            >
+                        <Badge size="xs" variant="light" color="blue">
                               {notification.tool.name}
                             </Badge>
                           )}
-
-                          {notification.channel?.includes('EMAIL') && (
-                            <Badge variant="light" color="blue" leftSection={<IconMail size={12} />} className="notification-badge">
-                              Email
-                            </Badge>
-                          )}
-                        </Group>
-                      </Stack>
-                    </Group>
-
-                    {isUnread ? (
+                    </div>
+                    <Text size="xs" c="var(--theme-text-tertiary)">
+                      {formatTime(notification.createdAt)}
+                    </Text>
+                  </div>
+                </div>
+                
+                {isUnread && (
                       <ActionIcon
                         variant="subtle"
-                        color="gray"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          markAsRead(notification.id);
-                        }}
-                        aria-label="Отметить как прочитанное"
-                      >
-                        <IconCircleCheck size={18} />
+                    size="sm"
+                    color="blue"
+                    onClick={() => markAsRead(notification.id)}
+                    title="Отметить как прочитанное"
+                    className="notification-action"
+                  >
+                    <IconCheck size={14} />
                       </ActionIcon>
-                    ) : (
-                      <ThemeIcon variant="transparent" color="green" size="sm">
-                        <IconCircleCheckFilled size={16} />
-                      </ThemeIcon>
                     )}
-                  </Group>
-                </Paper>
+              </div>
+            </div>
               );
-            })}
-          </Stack>
+          })
         )}
-      </ScrollArea.Autosize>
+      </div>
     </Box>
   );
 }
 
-function hexToRgb(hex: string): string {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `${r}, ${g}, ${b}`;
-}
-
-export default Notifications;
+export default NotificationsList;

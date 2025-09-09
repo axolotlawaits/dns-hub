@@ -59,4 +59,14 @@ router.get('/unread-count/:userId', async (req, res) => {
   }
 });
 
+// Delete notification by ID
+router.delete('/:id', async (req, res) => {
+  try {
+    const result = await NotificationController.delete(req.params.id);
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Invalid data' });
+  }
+});
+
 export default router;

@@ -4,7 +4,7 @@ import { useUserContext } from '../../../hooks/useUserContext';
 import { notificationSystem } from '../../../utils/Push';
 import { formatName, formatValue } from '../../../utils/format';
 import { FilterGroup } from '../../../utils/filter';
-import { Button, Title, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Divider, Paper, Pagination, Select } from '@mantine/core';
+import { Button, Title, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Pagination, Select } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
 import { IconPencil, IconTrash, IconArrowUp, IconArrowDown } from '@tabler/icons-react';
@@ -155,39 +155,125 @@ const ReadingsChart = React.memo(({ data }: { data: MeterReadingWithFormattedDat
   }, [data]);
 
   return (
-    <Paper withBorder p="md" radius="md" shadow="sm" style={{ height: '100%', backgroundColor: 'var(--layer)' }}>
-      <Title order={4} mb="md" style={{ color: 'var(--font)' }}>График потребления за месяц</Title>
-      <ResponsiveContainer width="100%" height={400}>
-        <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-          <XAxis dataKey="displayDate" tick={{ fill: '#555' }} tickMargin={10} />
-          <YAxis tick={{ fill: '#555' }} tickMargin={10} />
-          <Tooltip
-            contentStyle={{
-              background: '#fff',
-              border: '1px solid #ddd',
-              borderRadius: '4px',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-            }}
-            formatter={(value: number, name: string) => [`${value} ${name.includes('Электричество') ? 'кВт·ч/м' : 'м³/м'}`, name]}
-            labelFormatter={(label) => `Дата: ${label}`}
-          />
-          <Legend wrapperStyle={{ paddingTop: '20px' }} />
-          {meterTypes.map((type, index) => (
-            <Line
-              key={type}
-              type="monotone"
-              dataKey={type}
-              name={type}
-              stroke={COLORS[index % COLORS.length]}
-              strokeWidth={2}
-              activeDot={{ r: 6, strokeWidth: 0 }}
-              dot={{ r: 3 }}
+    <Box style={{
+      background: 'var(--theme-bg-elevated)',
+      borderRadius: '16px',
+      padding: '24px',
+      border: '1px solid var(--theme-border-primary)',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+      position: 'relative',
+      overflow: 'hidden'
+    }}>
+      {/* Градиентный фон */}
+      <Box style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: '4px',
+        background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
+        borderRadius: '16px 16px 0 0'
+      }} />
+      
+      <Group gap="md" mb="lg">
+        <Box style={{
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          borderRadius: '12px',
+          padding: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <Text size="xl" fw={700} c="white">
+            📊
+          </Text>
+        </Box>
+        <Box>
+          <Title order={3} style={{ color: 'var(--theme-text-primary)', margin: 0 }}>
+            График потребления
+          </Title>
+          <Text size="sm" c="var(--theme-text-secondary)" mt={4}>
+            Динамика потребления по месяцам
+          </Text>
+        </Box>
+      </Group>
+
+      <Box style={{
+        background: 'var(--theme-bg-primary)',
+        borderRadius: '12px',
+        padding: '16px',
+        border: '1px solid var(--theme-border-secondary)'
+      }}>
+        <ResponsiveContainer width="100%" height={400}>
+          <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+            <CartesianGrid 
+              strokeDasharray="3 3" 
+              stroke="var(--theme-border-secondary)" 
+              opacity={0.5}
             />
-          ))}
-        </LineChart>
-      </ResponsiveContainer>
-    </Paper>
+            <XAxis 
+              dataKey="displayDate" 
+              tick={{ 
+                fill: 'var(--theme-text-secondary)',
+                fontSize: 12
+              }} 
+              tickMargin={10}
+              axisLine={{ stroke: 'var(--theme-border-secondary)' }}
+            />
+            <YAxis 
+              tick={{ 
+                fill: 'var(--theme-text-secondary)',
+                fontSize: 12
+              }} 
+              tickMargin={10}
+              axisLine={{ stroke: 'var(--theme-border-secondary)' }}
+            />
+            <Tooltip
+              contentStyle={{
+                background: 'var(--theme-bg-elevated)',
+                border: '1px solid var(--theme-border-primary)',
+                borderRadius: '12px',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                color: 'var(--theme-text-primary)'
+              }}
+              formatter={(value: number, name: string) => [
+                `${value} ${name.includes('Электричество') ? 'кВт·ч/м' : 'м³/м'}`, 
+                name
+              ]}
+              labelFormatter={(label) => `Дата: ${label}`}
+            />
+            <Legend 
+              wrapperStyle={{ 
+                paddingTop: '20px',
+                color: 'var(--theme-text-primary)'
+              }} 
+            />
+            {meterTypes.map((type, index) => (
+              <Line
+                key={type}
+                type="monotone"
+                dataKey={type}
+                name={type}
+                stroke={COLORS[index % COLORS.length]}
+                strokeWidth={3}
+                activeDot={{ 
+                  r: 8, 
+                  strokeWidth: 2,
+                  stroke: COLORS[index % COLORS.length],
+                  fill: 'var(--theme-bg-elevated)'
+                }}
+                dot={{ 
+                  r: 4,
+                  fill: COLORS[index % COLORS.length],
+                  stroke: 'var(--theme-bg-elevated)',
+                  strokeWidth: 2
+                }}
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </Box>
+    </Box>
   );
 });
 
@@ -224,117 +310,361 @@ const ReadingRow = React.memo(({
   );
 
   return (
-    <Paper withBorder p="md" radius="md" shadow="xs" mb="sm" style={{ backgroundColor: 'var(--layer)' }}>
-      <Group align="flex-start" wrap="nowrap">
-        <Box style={{ flex: 1 }}>
-          <Text size="sm" c="dimmed" mb={4} ta="left">Офис</Text>
+    <Box style={{
+      background: 'var(--theme-bg-elevated)',
+      borderRadius: '16px',
+      padding: '20px',
+      border: '1px solid var(--theme-border-primary)',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+      transition: 'all 0.2s ease',
+      cursor: 'pointer',
+      position: 'relative',
+      overflow: 'hidden'
+    }}
+    onMouseEnter={(e) => {
+      e.currentTarget.style.transform = 'translateY(-2px)';
+      e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)';
+    }}
+    onMouseLeave={(e) => {
+      e.currentTarget.style.transform = 'translateY(0)';
+      e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+    }}
+    >
+      {/* Градиентная полоса сверху */}
+      <Box style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: '4px',
+        background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
+        borderRadius: '16px 16px 0 0'
+      }} />
+      
+      {/* Заголовок с датой */}
+      <Group justify="space-between" align="center" mb="md">
+        <Box>
+          <Text size="lg" fw={600} c="var(--theme-text-primary)">
+            {reading.displayDate}
+          </Text>
+          <Text size="sm" c="var(--theme-text-secondary)">
+            Автор: {reading.userName}
+          </Text>
+        </Box>
+        <Group gap="xs">
+          <ActionIcon 
+            color="blue" 
+            variant="light" 
+            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            style={{ 
+              background: 'var(--theme-bg-secondary)',
+              border: '1px solid var(--theme-border-primary)'
+            }}
+          >
+            <IconPencil size={16} />
+          </ActionIcon>
+          <ActionIcon 
+            color="red" 
+            variant="light" 
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            style={{ 
+              background: 'var(--theme-bg-secondary)',
+              border: '1px solid var(--theme-border-primary)'
+            }}
+          >
+            <IconTrash size={16} />
+          </ActionIcon>
+        </Group>
+      </Group>
+
+      {/* Показания по объектам */}
+      <Box style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: '16px'
+      }}>
+        {/* Офис */}
+        <Box style={{
+          background: 'var(--theme-bg-primary)',
+          borderRadius: '12px',
+          padding: '16px',
+          border: '1px solid var(--theme-border-secondary)'
+        }}>
+          <Group gap="sm" mb="sm">
+            <Box style={{
+              background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+              borderRadius: '8px',
+              padding: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Text size="sm" fw={600} c="white">🏢</Text>
+            </Box>
+            <Text size="sm" fw={600} c="var(--theme-text-primary)">Офис</Text>
+          </Group>
           {formattedData['Офис - Холодная вода'] !== undefined ? (
-            <Text ta="left" style={{ color: 'var(--font)' }}>
-              <Text span fw={500}>Холодная вода: </Text>
-              <Text span>{formatValue('Холодная вода', formattedData['Офис - Холодная вода'])}</Text>
-              <Text span c="dimmed"> ({formatDelta('Офис - Холодная вода')})</Text>
-            </Text>
-          ) : (
-            <Text c="dimmed" ta="left">Нет данных</Text>
-          )}
-        </Box>
-        <Divider orientation="vertical" />
-        <Box style={{ flex: 1 }}>
-          <Text size="sm" c="dimmed" mb={4} ta="left">ProДвери</Text>
-          {formattedData['ProДвери - Электричество'] !== undefined ? (
-            <Text ta="left" style={{ color: 'var(--font)' }}>
-              <Text span fw={500}>Электричество: </Text>
-              <Text span>{formatValue('Электричество', formattedData['ProДвери - Электричество'])}</Text>
-              <Text span c="dimmed"> ({formatDelta('ProДвери - Электричество')})</Text>
-            </Text>
-          ) : (
-            <Text c="dimmed" ta="left">Нет данных</Text>
-          )}
-        </Box>
-        <Divider orientation="vertical" />
-        <Box style={{ flex: 1 }}>
-          <Text size="sm" c="dimmed" mb={4} ta="left">Как дома</Text>
-          <Stack gap={4}>
-            {formattedData['КакДома - Электричество'] !== undefined && (
-              <Text ta="left" style={{ color: 'var(--font)' }}>
-                <Text span fw={500}>Электричество: </Text>
-                <Text span>{formatValue('Электричество', formattedData['КакДома - Электричество'])}</Text>
-                <Text span c="dimmed"> ({formatDelta('КакДома - Электричество')})</Text>
+            <Box>
+              <Text size="sm" c="var(--theme-text-secondary)" mb={4}>Холодная вода</Text>
+              <Text size="lg" fw={600} c="var(--theme-text-primary)" mb={2}>
+                {formatValue('Холодная вода', formattedData['Офис - Холодная вода'])}
               </Text>
+              <Text size="xs" c="var(--theme-text-secondary)">
+                {formatDelta('Офис - Холодная вода')}
+              </Text>
+            </Box>
+          ) : (
+            <Text size="sm" c="var(--theme-text-secondary)">Нет данных</Text>
+          )}
+        </Box>
+
+        {/* ProДвери */}
+        <Box style={{
+          background: 'var(--theme-bg-primary)',
+          borderRadius: '12px',
+          padding: '16px',
+          border: '1px solid var(--theme-border-secondary)'
+        }}>
+          <Group gap="sm" mb="sm">
+            <Box style={{
+              background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+              borderRadius: '8px',
+              padding: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Text size="sm" fw={600} c="white">⚡</Text>
+            </Box>
+            <Text size="sm" fw={600} c="var(--theme-text-primary)">ProДвери</Text>
+          </Group>
+          {formattedData['ProДвери - Электричество'] !== undefined ? (
+            <Box>
+              <Text size="sm" c="var(--theme-text-secondary)" mb={4}>Электричество</Text>
+              <Text size="lg" fw={600} c="var(--theme-text-primary)" mb={2}>
+                {formatValue('Электричество', formattedData['ProДвери - Электричество'])}
+              </Text>
+              <Text size="xs" c="var(--theme-text-secondary)">
+                {formatDelta('ProДвери - Электричество')}
+              </Text>
+            </Box>
+          ) : (
+            <Text size="sm" c="var(--theme-text-secondary)">Нет данных</Text>
+          )}
+        </Box>
+
+        {/* Как дома */}
+        <Box style={{
+          background: 'var(--theme-bg-primary)',
+          borderRadius: '12px',
+          padding: '16px',
+          border: '1px solid var(--theme-border-secondary)'
+        }}>
+          <Group gap="sm" mb="sm">
+            <Box style={{
+              background: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+              borderRadius: '8px',
+              padding: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Text size="sm" fw={600} c="var(--theme-text-primary)">🏠</Text>
+            </Box>
+            <Text size="sm" fw={600} c="var(--theme-text-primary)">Как дома</Text>
+          </Group>
+          <Stack gap="sm">
+            {formattedData['КакДома - Электричество'] !== undefined && (
+              <Box>
+                <Text size="xs" c="var(--theme-text-secondary)" mb={2}>Электричество</Text>
+                <Text size="md" fw={500} c="var(--theme-text-primary)" mb={1}>
+                  {formatValue('Электричество', formattedData['КакДома - Электричество'])}
+                </Text>
+                <Text size="xs" c="var(--theme-text-secondary)">
+                  {formatDelta('КакДома - Электричество')}
+                </Text>
+              </Box>
             )}
             {formattedData['КакДома - Холодная вода'] !== undefined && (
-              <Text ta="left" style={{ color: 'var(--font)' }}>
-                <Text span fw={500}>Холодная вода: </Text>
-                <Text span>{formatValue('Холодная вода', formattedData['КакДома - Холодная вода'])}</Text>
-                <Text span c="dimmed"> ({formatDelta('КакДома - Холодная вода')})</Text>
-              </Text>
+              <Box>
+                <Text size="xs" c="var(--theme-text-secondary)" mb={2}>Холодная вода</Text>
+                <Text size="md" fw={500} c="var(--theme-text-primary)" mb={1}>
+                  {formatValue('Холодная вода', formattedData['КакДома - Холодная вода'])}
+                </Text>
+                <Text size="xs" c="var(--theme-text-secondary)">
+                  {formatDelta('КакДома - Холодная вода')}
+                </Text>
+              </Box>
             )}
             {formattedData['КакДома - Горячая вода'] !== undefined && (
-              <Text ta="left" style={{ color: 'var(--font)' }}>
-                <Text span fw={500}>Горячая вода: </Text>
-                <Text span>{formatValue('Горячая вода', formattedData['КакДома - Горячая вода'])}</Text>
-                <Text span c="dimmed"> ({formatDelta('КакДома - Горячая вода')})</Text>
-              </Text>
+              <Box>
+                <Text size="xs" c="var(--theme-text-secondary)" mb={2}>Горячая вода</Text>
+                <Text size="md" fw={500} c="var(--theme-text-primary)" mb={1}>
+                  {formatValue('Горячая вода', formattedData['КакДома - Горячая вода'])}
+                </Text>
+                <Text size="xs" c="var(--theme-text-secondary)">
+                  {formatDelta('КакДома - Горячая вода')}
+                </Text>
+              </Box>
             )}
-            {!hasKakDomaData && <Text c="dimmed" ta="left">Нет данных</Text>}
+            {!hasKakDomaData && (
+              <Text size="sm" c="var(--theme-text-secondary)">Нет данных</Text>
+            )}
           </Stack>
         </Box>
-        <Stack gap="xs" justify="center" style={{ width: 'auto', marginLeft: 'auto', padding: '4px 0' }}>
-          <ActionIcon color="blue" variant="light" onClick={(e) => { e.stopPropagation(); onEdit(); }}>
-            <IconPencil size={18} />
-          </ActionIcon>
-          <ActionIcon color="red" variant="light" onClick={(e) => { e.stopPropagation(); onDelete(); }}>
-            <IconTrash size={18} />
-          </ActionIcon>
-        </Stack>
-      </Group>
-      <Text size="sm" c="dimmed" mt="sm">Автор: {reading.userName}</Text>
-      <Text size="sm" c="dimmed">Дата: {reading.displayDate}</Text>
-    </Paper>
+      </Box>
+    </Box>
   );
 });
 
 const TotalsBlock = React.memo(({ totals }: { totals: ReturnType<typeof calculateTotals> }) => {
   return (
-    <Paper withBorder p="md" radius="md" shadow="sm" style={{ marginBottom: '20px', backgroundColor: 'var(--layer)' }}>
-      <Title order={4} mb="md" style={{ color: 'var(--font)' }}>Общие итоги</Title>
-      <Group align="flex-start" wrap="nowrap">
-        <Box style={{ flex: 1 }}>
-          <Text size="sm" c="dimmed" mb={4} ta="left">Офис</Text>
-          <Text ta="left" style={{ color: 'var(--font)' }}>
-            <Text span fw={500}>Холодная вода: </Text>
-            <Text span>{formatValue('Холодная вода', totals.officeColdWater)}</Text>
+    <Box style={{
+      background: 'var(--theme-bg-elevated)',
+      borderRadius: '16px',
+      padding: '24px',
+      border: '1px solid var(--theme-border-primary)',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+      position: 'relative',
+      overflow: 'hidden'
+    }}>
+      {/* Градиентный фон */}
+      <Box style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: '4px',
+        background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
+        borderRadius: '16px 16px 0 0'
+      }} />
+      
+      <Group gap="md" mb="lg">
+        <Box style={{
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          borderRadius: '12px',
+          padding: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <Text size="xl" fw={700} c="white">
+            📈
           </Text>
         </Box>
-        <Divider orientation="vertical" />
-        <Box style={{ flex: 1 }}>
-          <Text size="sm" c="dimmed" mb={4} ta="left">ProДвери</Text>
-          <Text ta="left" style={{ color: 'var(--font)' }}>
-            <Text span fw={500}>Электричество: </Text>
-            <Text span>{formatValue('Электричество', totals.proDveriElectricity)}</Text>
+        <Box>
+          <Title order={3} style={{ color: 'var(--theme-text-primary)', margin: 0 }}>
+            Общие итоги
+          </Title>
+          <Text size="sm" c="var(--theme-text-secondary)" mt={4}>
+            Текущие показания по всем объектам
           </Text>
         </Box>
-        <Divider orientation="vertical" />
-        <Box style={{ flex: 1 }}>
-          <Text size="sm" c="dimmed" mb={4} ta="left">Как дома</Text>
-          <Stack gap={4}>
-            <Text ta="left" style={{ color: 'var(--font)' }}>
-              <Text span fw={500}>Электричество: </Text>
-              <Text span>{formatValue('Электричество', totals.kakDomaElectricity)}</Text>
-            </Text>
-            <Text ta="left" style={{ color: 'var(--font)' }}>
-              <Text span fw={500}>Холодная вода: </Text>
-              <Text span>{formatValue('Холодная вода', totals.kakDomaColdWater)}</Text>
-            </Text>
-            <Text ta="left" style={{ color: 'var(--font)' }}>
-              <Text span fw={500}>Горячая вода: </Text>
-              <Text span>{formatValue('Горячая вода', totals.kakDomaHotWater)}</Text>
-            </Text>
+      </Group>
+
+      <Box style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: '16px'
+      }}>
+        {/* Офис */}
+        <Box style={{
+          background: 'var(--theme-bg-primary)',
+          borderRadius: '12px',
+          padding: '16px',
+          border: '1px solid var(--theme-border-secondary)',
+          textAlign: 'center'
+        }}>
+          <Group gap="sm" justify="center" mb="sm">
+            <Box style={{
+              background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+              borderRadius: '8px',
+              padding: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Text size="sm" fw={600} c="white">🏢</Text>
+            </Box>
+            <Text size="sm" fw={600} c="var(--theme-text-primary)">Офис</Text>
+          </Group>
+          <Text size="sm" c="var(--theme-text-secondary)" mb={4}>Холодная вода</Text>
+          <Text size="xl" fw={700} c="var(--theme-text-primary)">
+            {formatValue('Холодная вода', totals.officeColdWater)}
+          </Text>
+        </Box>
+
+        {/* ProДвери */}
+        <Box style={{
+          background: 'var(--theme-bg-primary)',
+          borderRadius: '12px',
+          padding: '16px',
+          border: '1px solid var(--theme-border-secondary)',
+          textAlign: 'center'
+        }}>
+          <Group gap="sm" justify="center" mb="sm">
+            <Box style={{
+              background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+              borderRadius: '8px',
+              padding: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Text size="sm" fw={600} c="white">⚡</Text>
+            </Box>
+            <Text size="sm" fw={600} c="var(--theme-text-primary)">ProДвери</Text>
+          </Group>
+          <Text size="sm" c="var(--theme-text-secondary)" mb={4}>Электричество</Text>
+          <Text size="xl" fw={700} c="var(--theme-text-primary)">
+            {formatValue('Электричество', totals.proDveriElectricity)}
+          </Text>
+        </Box>
+
+        {/* Как дома */}
+        <Box style={{
+          background: 'var(--theme-bg-primary)',
+          borderRadius: '12px',
+          padding: '16px',
+          border: '1px solid var(--theme-border-secondary)',
+          textAlign: 'center'
+        }}>
+          <Group gap="sm" justify="center" mb="sm">
+            <Box style={{
+              background: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+              borderRadius: '8px',
+              padding: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Text size="sm" fw={600} c="var(--theme-text-primary)">🏠</Text>
+            </Box>
+            <Text size="sm" fw={600} c="var(--theme-text-primary)">Как дома</Text>
+          </Group>
+          <Stack gap="sm">
+            <Box>
+              <Text size="xs" c="var(--theme-text-secondary)" mb={2}>Электричество</Text>
+              <Text size="lg" fw={600} c="var(--theme-text-primary)">
+                {formatValue('Электричество', totals.kakDomaElectricity)}
+              </Text>
+            </Box>
+            <Box>
+              <Text size="xs" c="var(--theme-text-secondary)" mb={2}>Холодная вода</Text>
+              <Text size="lg" fw={600} c="var(--theme-text-primary)">
+                {formatValue('Холодная вода', totals.kakDomaColdWater)}
+              </Text>
+            </Box>
+            <Box>
+              <Text size="xs" c="var(--theme-text-secondary)" mb={2}>Горячая вода</Text>
+              <Text size="lg" fw={600} c="var(--theme-text-primary)">
+                {formatValue('Горячая вода', totals.kakDomaHotWater)}
+              </Text>
+            </Box>
           </Stack>
         </Box>
-        <Box style={{ width: 60 }}></Box>
-      </Group>
-    </Paper>
+      </Box>
+    </Box>
   );
 });
 
@@ -659,79 +989,178 @@ const MeterReadingsList = () => {
   if (loading) return <LoadingOverlay visible />;
 
   return (
-    <Box p="md">
-      <Box mb="md">
-        <FilterGroup
-          filters={filters}
-          columnFilters={columnFilters}
-          onColumnFiltersChange={handleFilterChange}
-        />
-        <Button
-          variant="outline"
-          onClick={() => setColumnFilters([])}
-          mt="sm"
-          style={{ marginRight: 'auto', display: 'block' }}
-        >
-          Сбросить все фильтры
-        </Button>
-      </Box>
-      <Group justify="space-between" mb="md">
-        <Group gap="xs">
-          <Title order={2} style={{ color: 'var(--font)' }}>Показания счётчиков</Title>
-          {sortOrder === 'asc' ? (
-            <IconArrowUp size={18} style={{ color: 'var(--font)', cursor: 'pointer' }} onClick={toggleSortOrder} />
-          ) : (
-            <IconArrowDown size={18} style={{ color: 'var(--font)', cursor: 'pointer' }} onClick={toggleSortOrder} />
-          )}
+    <Box p="md" style={{ background: 'var(--theme-bg-primary)', minHeight: '100vh' }}>
+      {/* Заголовок и навигация */}
+      <Box mb="xl" style={{ 
+        background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
+        borderRadius: '16px',
+        padding: '24px',
+        border: '1px solid var(--theme-border-primary)',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
+      }}>
+        <Group justify="space-between" mb="md">
+          <Group gap="md">
+            <Box style={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              borderRadius: '12px',
+              padding: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Text size="xl" fw={700} c="white">
+                📊
+              </Text>
+            </Box>
+            <Box>
+              <Title order={1} style={{ color: 'var(--theme-text-primary)', margin: 0 }}>
+                Показания счётчиков
+              </Title>
+              <Text size="sm" c="var(--theme-text-secondary)" mt={4}>
+                Управление показаниями коммунальных услуг
+              </Text>
+            </Box>
+          </Group>
+          <Group gap="sm">
+            <Button
+              variant="outline"
+              onClick={() => setColumnFilters([])}
+              size="sm"
+            >
+              Сбросить фильтры
+            </Button>
+            <Button
+              size="md"
+              variant="gradient"
+              gradient={{ from: 'blue', to: 'cyan' }}
+              onClick={() => {
+                setReadingForm(DEFAULT_READING_FORM);
+                modals.create[1].open();
+              }}
+            >
+              + Добавить показание
+            </Button>
+          </Group>
         </Group>
-        <Button
-          size="md"
-          variant="light"
-          onClick={() => {
-            setReadingForm(DEFAULT_READING_FORM);
-            modals.create[1].open();
-          }}
-        >
-          Добавить показание
-        </Button>
-      </Group>
-      <Box style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
-        <Box style={{ flex: 1 }}>
-          <Stack gap="md" style={{ height: '100%' }}>
-            <Stack gap="md" style={{ flex: 1 }}>
-              {paginatedData.length > 0 ? (
-                paginatedData.map((reading) => (
-                  <ReadingRow
-                    key={reading.id}
-                    reading={reading}
-                    onEdit={() => handleTableAction('edit', reading)}
-                    onDelete={() => handleTableAction('delete', reading)}
-                  />
-                ))
-              ) : (
-                <Paper withBorder p="xl" radius="md" shadow="xs" style={{ backgroundColor: 'var(--layer)' }}>
-                  <Text c="dimmed" ta="center">Нет данных для отображения</Text>
-                </Paper>
-              )}
-            </Stack>
-            <Group justify="space-between" mt="md">
-              <Select
-                value={pageSize.toString()}
-                onChange={(value) => {
-                  setPageSize(Number(value));
-                  setCurrentPage(1);
-                }}
-                data={PAGE_SIZE_OPTIONS}
-              />
+        
+        {/* Фильтры */}
+        <Box style={{
+          background: 'var(--theme-bg-primary)',
+          borderRadius: '12px',
+          padding: '16px',
+          border: '1px solid var(--theme-border-secondary)'
+        }}>
+          <FilterGroup
+            filters={filters}
+            columnFilters={columnFilters}
+            onColumnFiltersChange={handleFilterChange}
+          />
+        </Box>
+      </Box>
+      {/* Основной контент с адаптивной сеткой */}
+      <Box style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+        gap: '24px',
+        alignItems: 'start'
+      }}>
+        {/* Левая колонка - Список показаний */}
+        <Box>
+          <Box mb="md" style={{
+            background: 'var(--theme-bg-elevated)',
+            borderRadius: '12px',
+            padding: '16px',
+            border: '1px solid var(--theme-border-primary)'
+          }}>
+            <Group justify="space-between" align="center">
+              <Group gap="sm">
+                <Text size="lg" fw={600} c="var(--theme-text-primary)">
+                  Показания по месяцам
+                </Text>
+                <ActionIcon
+                  variant="subtle"
+                  onClick={toggleSortOrder}
+                  style={{ 
+                    background: 'var(--theme-bg-secondary)',
+                    border: '1px solid var(--theme-border-primary)'
+                  }}
+                >
+                  {sortOrder === 'asc' ? <IconArrowUp size={16} /> : <IconArrowDown size={16} />}
+                </ActionIcon>
+              </Group>
+              <Text size="sm" c="var(--theme-text-secondary)">
+                {paginatedData.length} из {sortedData.length}
+              </Text>
+            </Group>
+          </Box>
+
+          <Stack gap="md" mb="md">
+            {paginatedData.length > 0 ? (
+              paginatedData.map((reading) => (
+                <ReadingRow
+                  key={reading.id}
+                  reading={reading}
+                  onEdit={() => handleTableAction('edit', reading)}
+                  onDelete={() => handleTableAction('delete', reading)}
+                />
+              ))
+            ) : (
+              <Box style={{
+                background: 'var(--theme-bg-elevated)',
+                borderRadius: '16px',
+                padding: '48px 24px',
+                textAlign: 'center',
+                border: '2px dashed var(--theme-border-secondary)'
+              }}>
+                <Text size="xl" mb="md">📊</Text>
+                <Text size="lg" fw={500} c="var(--theme-text-primary)" mb="sm">
+                  Нет данных для отображения
+                </Text>
+                <Text size="sm" c="var(--theme-text-secondary)">
+                  Добавьте первое показание, чтобы начать работу
+                </Text>
+              </Box>
+            )}
+          </Stack>
+
+          {/* Пагинация */}
+          <Box style={{
+            background: 'var(--theme-bg-elevated)',
+            borderRadius: '12px',
+            padding: '16px',
+            border: '1px solid var(--theme-border-primary)'
+          }}>
+            <Group justify="space-between" align="center">
+              <Group gap="sm" align="center">
+                <Text size="sm" c="var(--theme-text-secondary)">
+                  Показать:
+                </Text>
+                <Select
+                  value={pageSize.toString()}
+                  onChange={(value) => {
+                    setPageSize(Number(value));
+                    setCurrentPage(1);
+                  }}
+                  data={PAGE_SIZE_OPTIONS}
+                  size="sm"
+                  style={{ width: '80px' }}
+                />
+                <Text size="sm" c="var(--theme-text-secondary)">
+                  записей
+                </Text>
+              </Group>
               <Pagination
                 value={currentPage}
                 onChange={setCurrentPage}
                 total={Math.ceil(sortedData.length / pageSize)}
+                size="sm"
               />
             </Group>
-          </Stack>
+          </Box>
         </Box>
-        <Box style={{ flex: 1 }}>
+
+        {/* Правая колонка - Статистика и график */}
+        <Box>
           <Stack gap="md">
             <TotalsBlock totals={totals} />
             <ReadingsChart data={filteredData} />

@@ -6,6 +6,7 @@ import { API } from '../config/constants';
 import { FileDropZone } from './dnd';
 import { IconFile, IconFileTypePdf, IconFileTypeDoc, IconFileTypeXls, IconFileTypePpt, IconFileTypeZip, IconPhoto, IconFileTypeJs, IconFileTypeHtml, IconFileTypeCss, IconFileTypeTxt, IconFileTypeCsv, IconX } from '@tabler/icons-react';
 import { FilePreviewModal } from './FilePreviewModal';
+import './formModal.css';
 
 // Types and interfaces
 export type FieldType = 'text' | 'number' | 'select' | 'selectSearch' | 'date' | 'datetime' | 'textarea' | 'file' | 'boolean';
@@ -19,6 +20,10 @@ interface FileFieldConfig {
   mask?: (value: string) => string;
   visible?: (meta: Record<string, any>) => boolean;
   placeholder?: string;
+  searchable?: boolean;
+  clearable?: boolean;
+  allowDeselect?: boolean;
+  onChange?: (value: any) => void;
 }
 
 export interface FormField {
@@ -142,6 +147,10 @@ const FileUploadComponent = ({
           [field.name]: nextValue
         };
         onMetaChange(attachment.id, newMeta);
+        // Вызываем onChange из конфигурации поля, если он есть
+        if (field.onChange) {
+          field.onChange(nextValue);
+        }
       },
       required: typeof field.required === 'function' ? field.required(attachment.meta || {}) : !!field.required,
       style: { width: '150px' },
@@ -160,6 +169,20 @@ const FileUploadComponent = ({
             label={field.label}
             data={field.options || []}
             placeholder={field.placeholder}
+            searchable={field.searchable}
+            clearable={field.clearable}
+            allowDeselect={field.allowDeselect}
+            withinPortal={true}
+            zIndex={9999999}
+            comboboxProps={{ withinPortal: true, zIndex: 9999999 }}
+            className="file-field-select"
+            onClick={(e) => {
+              console.log('Select clicked:', e);
+              e.stopPropagation();
+            }}
+            onFocus={(e) => {
+              console.log('Select focused:', e);
+            }}
           />
         );
       case 'date':
@@ -196,7 +219,7 @@ const FileUploadComponent = ({
             <Text size="sm" c="dimmed">Предпросмотр</Text>
           </Group>
 
-          <Group gap="sm" align="flex-end">
+          <Group gap="sm" align="flex-end" className="file-fields">
             {visibleFields.map(field => (
               <div key={`${attachment.id}-${field.name}`}>
                 {renderField(field, attachment)}
@@ -396,7 +419,7 @@ export const DynamicFormModal = ({
               onSearchChange={(s) => field.onSearchChange?.(s)}
               disabled={field.disabled}
               placeholder={field.placeholder}
-              comboboxProps={{ withinPortal: true, zIndex: 9999 }}
+              comboboxProps={{ withinPortal: true, zIndex: 10001 }}
               onChange={(vals) => {
                 form.setFieldValue(field.name, vals);
                 field.onChange?.(vals, form.setFieldValue);
@@ -415,7 +438,7 @@ export const DynamicFormModal = ({
             nothingFoundMessage="Не найдено"
             disabled={field.disabled}
             placeholder={field.placeholder}
-            comboboxProps={{ withinPortal: true, zIndex: 9999 }}
+            comboboxProps={{ withinPortal: true, zIndex: 10001 }}
             value={singleValue}
             onChange={(val) => {
               form.setFieldValue(field.name, val);
@@ -436,7 +459,7 @@ export const DynamicFormModal = ({
             clearable
             disabled={field.disabled}
             placeholder={field.placeholder}
-            comboboxProps={{ withinPortal: true, zIndex: 9999 }}
+            comboboxProps={{ withinPortal: true, zIndex: 10001 }}
             value={singleValue}
             onChange={(val) => {
               form.setFieldValue(field.name, val);
@@ -481,9 +504,16 @@ export const DynamicFormModal = ({
   }, [form, handleFileDropFor, handleRemoveAttachmentFor, attachmentsMap, handleMetaChangeFor, mode]);
 
   const renderViewField = useCallback((config: ViewFieldConfig, item: any) => (
-    <div key={config.label} style={{ marginBottom: '16px' }}>
-      <Text fw={500} mb="xs">{config.label}</Text>
-      <Text>{config.value(item) || '-'}</Text>
+    <div key={config.label} className="view-field">
+      <Text fw={500} mb="xs" c="var(--theme-text-primary)" size="sm">{config.label}</Text>
+      <Text c="var(--theme-text-secondary)" size="sm" style={{ 
+        background: 'var(--theme-bg-secondary)', 
+        padding: 'var(--space-2) var(--space-3)', 
+        borderRadius: 'var(--radius-sm)',
+        border: '1px solid var(--theme-border)'
+      }}>
+        {config.value(item) || '-'}
+      </Text>
     </div>
   ), []);
 
@@ -496,15 +526,22 @@ export const DynamicFormModal = ({
     const isImage = typeof attachment.source === 'string' && /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(normalized);
     const fileId = attachment.id || `temp-${fileName}-${Math.random().toString(36).slice(2, 11)}`;
     return (
-      <Card key={fileId} p="sm" withBorder>
+      <Card key={fileId} p="sm" withBorder className="file-card">
         <Group justify="space-between">
           <Group gap="xs" onClick={() => setPreviewId(fileId)} style={{ cursor: 'pointer' }}>
             {isImage ? (
-              <img src={fileUrl} alt={fileName} style={{ height: 42, width: 64, objectFit: 'cover', borderRadius: 4 }} />
+              <img 
+                src={fileUrl} 
+                alt={fileName} 
+                className="file-preview"
+                style={{ height: 42, width: 64, objectFit: 'cover' }} 
+              />
             ) : (
-              getFileIcon(fileName)
+              <div className="file-icon">
+                {getFileIcon(fileName)}
+              </div>
             )}
-            <Text size="sm">{fileName}</Text>
+            <Text size="sm" c="var(--theme-text-primary)">{fileName}</Text>
           </Group>
           <Text
             size="sm"
@@ -545,11 +582,35 @@ export const DynamicFormModal = ({
     switch (mode) {
       case 'view':
         return (
-          <>
-            {viewFieldsConfig.map(config => renderViewField(config, initialValues))}
+          <Stack gap="lg">
+            <Group gap="md" align="flex-start" mb="md">
+              <div style={{
+                background: 'var(--color-blue-100)',
+                borderRadius: 'var(--radius-md)',
+                padding: 'var(--space-3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <IconFile size={24} color="var(--color-blue-600)" />
+              </div>
+              <div style={{ flex: 1 }}>
+                <Text size="lg" fw={600} c="var(--theme-text-primary)" mb="xs">
+                  Просмотр записи
+                </Text>
+                <Text c="var(--theme-text-secondary)" size="sm">
+                  Детальная информация о записи
+                </Text>
+              </div>
+            </Group>
+            
+            <Stack gap="md">
+              {viewFieldsConfig.map(config => renderViewField(config, initialValues))}
+            </Stack>
+            
             {!hideDefaultViewAttachments && (((initialValues as any).attachments?.length || (initialValues as any).rkAttachment?.length || (initialValues as any).rocAttachment?.length) > 0) && (
-              <div style={{ marginTop: '16px' }}>
-                <Text fw={500} mb="sm">Приложения</Text>
+              <div>
+                <Text fw={500} mb="sm" c="var(--theme-text-primary)">Приложения</Text>
                 <Stack gap="xs">
                   {(((initialValues as any).attachments
                     || (initialValues as any).rkAttachment
@@ -559,27 +620,53 @@ export const DynamicFormModal = ({
               </div>
             )}
             {typeof viewExtraContent === 'function' && (
-              <div style={{ marginTop: '16px' }}>
+              <div>
                 {viewExtraContent(initialValues)}
               </div>
             )}
-          </>
+          </Stack>
         );
       case 'delete':
         return (
-          <>
-            <Text mb="xl">
-              Вы уверены, что хотите удалить запись? {dayjs(initialValues.ReceiptDate).format('DD.MM.YYYY')}?
-            </Text>
-            <Group justify="flex-end">
-              <Button variant="default" onClick={() => { initializedRef.current = false; onClose(); }}>
+          <Stack gap="lg">
+            <Group gap="md" align="flex-start">
+              <div style={{
+                background: 'var(--color-red-100)',
+                borderRadius: 'var(--radius-md)',
+                padding: 'var(--space-3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <IconX size={24} color="var(--color-red-600)" />
+              </div>
+              <div style={{ flex: 1 }}>
+                <Text size="lg" fw={600} c="var(--theme-text-primary)" mb="xs">
+                  Подтверждение удаления
+                </Text>
+                <Text c="var(--theme-text-secondary)">
+                  Вы уверены, что хотите удалить эту запись? Это действие нельзя отменить.
+                  {initialValues.ReceiptDate && ` (${dayjs(initialValues.ReceiptDate).format('DD.MM.YYYY')})`}
+                </Text>
+              </div>
+            </Group>
+            <Group justify="flex-end" gap="sm">
+              <Button 
+                variant="outline" 
+                onClick={() => { initializedRef.current = false; onClose(); }}
+                className="cancel-button"
+              >
                 Отмена
               </Button>
-              <Button color="red" onClick={onConfirm}>
+              <Button 
+                color="red" 
+                onClick={onConfirm}
+                className="delete-button"
+              >
                 Удалить
               </Button>
             </Group>
-          </>
+          </Stack>
         );
       default: {
         const panelContent = typeof extraContent === 'function'
@@ -634,7 +721,21 @@ export const DynamicFormModal = ({
   }, [mode, viewFieldsConfig, initialValues, renderViewField, renderAttachmentCard, onClose, onConfirm, form, onSubmit, fields, renderField, error, attachmentsMap, hideDefaultViewAttachments, viewExtraContent]);
 
   return (
-    <Modal opened={opened} onClose={() => { initializedRef.current = false; onClose(); }} title={title} size="xl" radius="md">
+    <Modal 
+      opened={opened} 
+      onClose={() => { initializedRef.current = false; onClose(); }} 
+      title={title} 
+      size="xl" 
+      radius="lg"
+      className={`form-modal ${mode === 'delete' ? 'delete-mode' : mode === 'view' ? 'view-mode' : ''}`}
+      centered
+      overlayProps={{
+        backgroundOpacity: 0.5,
+      }}
+      withCloseButton
+      closeOnClickOutside
+      closeOnEscape
+    >
       {modalContent}
     </Modal>
   );

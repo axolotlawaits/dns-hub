@@ -4,14 +4,14 @@ import { useUserContext } from '../../../hooks/useUserContext';
 import { notificationSystem } from '../../../utils/Push';
 import { formatName } from '../../../utils/format';
 import { dateRange, FilterGroup } from '../../../utils/filter';
-import { Button, Title, Box, LoadingOverlay, Grid, Card, Group, ActionIcon } from '@mantine/core';
+import { Button, Title, Box, LoadingOverlay, Group, ActionIcon, Text, Badge, Avatar, Card } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
 import { IconPencil, IconTrash } from '@tabler/icons-react';
 import { ColumnDef, ColumnFiltersState, SortingState } from '@tanstack/react-table';
 import { DndProviderWrapper } from '../../../utils/dnd';
 import { DynamicFormModal } from '../../../utils/formModal';
-import { TableComponent } from '../../../utils/Table';
+import { TableComponent } from '../../../utils/table';
 
 interface TypeMailOption {
   value: string;
@@ -92,6 +92,7 @@ const getFilterOptions = <T,>(data: T[], mapper: (item: T) => string) => {
     .filter((v, i, a) => a.indexOf(v) === i);
   return values.map(value => ({ value, label: value }));
 };
+
 
 export default function CorrespondenceList() {
   const { user } = useUserContext();
@@ -278,54 +279,187 @@ export default function CorrespondenceList() {
       header: 'Дата получения',
       filterFn: dateRange,
       sortingFn: 'datetime',
+      cell: ({ getValue }) => (
+        <Text size="sm" fw={500} c="var(--theme-text-primary)">
+          {getValue() as string}
+        </Text>
+      ),
     },
     {
       accessorKey: 'from',
       header: 'От',
       filterFn: 'includesString',
+      cell: ({ getValue }) => (
+        <Text size="sm" c="var(--theme-text-primary)">
+          {getValue() as string}
+        </Text>
+      ),
     },
     {
       accessorKey: 'to',
       header: 'Кому',
       filterFn: 'includesString',
+      cell: ({ getValue }) => (
+        <Text size="sm" c="var(--theme-text-primary)">
+          {getValue() as string}
+        </Text>
+      ),
     },
     {
       accessorKey: 'typeMailName',
       header: 'Тип письма',
       filterFn: 'includesString',
+      cell: ({ getValue }) => {
+        const type = getValue() as string;
+        const getTypeColor = (type: string) => {
+          const colors: Record<string, string> = {
+            'Входящее': 'blue',
+            'Исходящее': 'green',
+            'Внутреннее': 'orange',
+            'Служебное': 'purple',
+            'Без типа': 'gray'
+          };
+          return colors[type] || 'gray';
+        };
+        return (
+          <Badge color={getTypeColor(type)} variant="light" size="sm">
+            {type}
+          </Badge>
+        );
+      },
     },
     {
       accessorKey: 'numberMail',
       header: 'Номер письма',
       filterFn: 'includesString',
+      cell: ({ getValue }) => (
+        <Text size="sm" c="var(--theme-text-secondary)">
+          № {getValue() as string}
+        </Text>
+      ),
+    },
+    {
+      accessorKey: 'content',
+      header: 'Содержание',
+      cell: ({ getValue }) => {
+        const content = getValue() as string;
+        return (
+          <Text 
+            size="sm" 
+            c="var(--theme-text-primary)"
+            style={{ 
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              lineHeight: 1.4,
+              maxWidth: '300px'
+            }}
+          >
+            {content}
+          </Text>
+        );
+      },
+    },
+    {
+      accessorKey: 'attachments',
+      header: 'Вложения',
+      cell: ({ getValue }) => {
+        const attachments = getValue() as CorrespondenceAttachment[];
+        const getFileIcon = (filename: string) => {
+          const ext = filename.split('.').pop()?.toLowerCase();
+          const icons: Record<string, string> = {
+            'pdf': '📄',
+            'doc': '📝',
+            'docx': '📝',
+            'xls': '📊',
+            'xlsx': '📊',
+            'jpg': '🖼️',
+            'jpeg': '🖼️',
+            'png': '🖼️',
+            'gif': '🖼️',
+            'zip': '📦',
+            'rar': '📦',
+            'txt': '📄'
+          };
+          return icons[ext || ''] || '📎';
+        };
+        
+        if (attachments.length === 0) {
+          return <Text size="sm" c="var(--theme-text-secondary)">Нет</Text>;
+        }
+        
+        return (
+          <Group gap="xs">
+            {attachments.slice(0, 2).map((attachment, index) => (
+              <Box
+                key={index}
+                style={{
+                  background: 'var(--theme-bg-secondary)',
+                  borderRadius: '6px',
+                  padding: '4px 8px',
+                  border: '1px solid var(--theme-border-secondary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+              >
+                <Text size="xs">{getFileIcon(attachment.source)}</Text>
+                <Text size="xs" c="var(--theme-text-secondary)">
+                  {attachment.source.split('/').pop()?.split('\\').pop()?.substring(0, 8) || 'Файл'}
+                </Text>
+              </Box>
+            ))}
+            {attachments.length > 2 && (
+              <Text size="xs" c="var(--theme-text-secondary)">
+                +{attachments.length - 2}
+              </Text>
+            )}
+          </Group>
+        );
+      },
     },
     {
       accessorKey: 'userName',
       header: 'Автор',
       filterFn: 'includesString',
+      cell: ({ getValue }) => (
+        <Group gap="sm">
+          <Avatar size="sm" radius="md" color="blue">
+            {(getValue() as string).charAt(0).toUpperCase()}
+          </Avatar>
+          <Text size="sm" c="var(--theme-text-primary)">
+            {getValue() as string}
+          </Text>
+        </Group>
+      ),
     },
     {
       id: 'actions',
       header: 'Действия',
       cell: ({ row }) => (
-        <Group wrap="nowrap">
+        <Group gap="xs">
           <ActionIcon
             color="blue"
+            variant="light"
             onClick={(e) => {
               e.stopPropagation();
               handleTableAction('edit', row.original);
             }}
+            size="sm"
           >
-            <IconPencil size={18} />
+            <IconPencil size={16} />
           </ActionIcon>
           <ActionIcon
             color="red"
+            variant="light"
             onClick={(e) => {
               e.stopPropagation();
               handleTableAction('delete', row.original);
             }}
+            size="sm"
           >
-            <IconTrash size={18} />
+            <IconTrash size={16} />
           </ActionIcon>
         </Group>
       ),
@@ -385,14 +519,6 @@ export default function CorrespondenceList() {
     }));
   }, []);
 
-  const handleSortingChange = useCallback((updaterOrValue: any) => {
-    setState(prev => ({
-      ...prev,
-      sorting: typeof updaterOrValue === 'function'
-        ? updaterOrValue(prev.sorting)
-        : updaterOrValue
-    }));
-  }, []);
 
   const handleFormSubmit = useCallback(async (values: Record<string, any>, mode: 'create' | 'edit') => {
     const formData = new FormData();
@@ -477,50 +603,152 @@ export default function CorrespondenceList() {
 
   return (
     <DndProviderWrapper>
-      <Box p="md">
-        <Button
-          fullWidth
-          mt="xl"
-          size="md"
-          onClick={() => {
-            setState(prev => ({
-              ...prev,
-              correspondenceForm: {
-                ...DEFAULT_CORRESPONDENCE_FORM,
-                ReceiptDate: dayjs().format('YYYY-MM-DDTHH:mm')
-              }
-            }));
-            modals.create[1].open();
-          }}
-        >
-          Добавить корреспонденцию
-        </Button>
-        <Title order={2} mt="md" mb="lg">
-          Корреспонденция
-        </Title>
-        <Grid>
-          <Grid.Col span={12}>
+      <Box p="md" style={{ background: 'var(--theme-bg-primary)', minHeight: '100vh' }}>
+        {/* Современный заголовок */}
+        <Box mb="xl" style={{ 
+          background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
+          borderRadius: '16px',
+          padding: '24px',
+          border: '1px solid var(--theme-border-primary)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
+        }}>
+          <Group justify="space-between" mb="md">
+            <Group gap="md">
+              <Box style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                borderRadius: '12px',
+                padding: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Text size="xl" fw={700} c="white">
+                  📧
+                </Text>
+              </Box>
+              <Box>
+                <Title order={1} style={{ color: 'var(--theme-text-primary)', margin: 0 }}>
+                  Корреспонденция
+                </Title>
+                <Text size="sm" c="var(--theme-text-secondary)" mt={4}>
+                  Управление входящей и исходящей корреспонденцией
+                </Text>
+              </Box>
+            </Group>
+            <Button
+              size="md"
+              variant="gradient"
+              gradient={{ from: 'blue', to: 'cyan' }}
+              onClick={() => {
+                setState(prev => ({
+                  ...prev,
+                  correspondenceForm: {
+                    ...DEFAULT_CORRESPONDENCE_FORM,
+                    ReceiptDate: dayjs().format('YYYY-MM-DDTHH:mm')
+                  }
+                }));
+                modals.create[1].open();
+              }}
+            >
+              + Добавить корреспонденцию
+            </Button>
+          </Group>
+
+          {/* Статистика */}
+          <Group gap="lg" mb="md">
+            <Box style={{
+              background: 'var(--theme-bg-primary)',
+              borderRadius: '12px',
+              padding: '16px',
+              border: '1px solid var(--theme-border-secondary)',
+              textAlign: 'center',
+              minWidth: '120px'
+            }}>
+              <Text size="xl" fw={700} c="var(--theme-text-primary)">
+                {state.correspondence.length}
+              </Text>
+              <Text size="sm" c="var(--theme-text-secondary)">
+                Всего писем
+              </Text>
+            </Box>
+            <Box style={{
+              background: 'var(--theme-bg-primary)',
+              borderRadius: '12px',
+              padding: '16px',
+              border: '1px solid var(--theme-border-secondary)',
+              textAlign: 'center',
+              minWidth: '120px'
+            }}>
+              <Text size="xl" fw={700} c="var(--theme-text-primary)">
+                {state.correspondence.filter(c => dayjs(c.ReceiptDate).isAfter(dayjs().subtract(30, 'days'))).length}
+              </Text>
+              <Text size="sm" c="var(--theme-text-secondary)">
+                За 30 дней
+              </Text>
+            </Box>
+            <Box style={{
+              background: 'var(--theme-bg-primary)',
+              borderRadius: '12px',
+              padding: '16px',
+              border: '1px solid var(--theme-border-secondary)',
+              textAlign: 'center',
+              minWidth: '120px'
+            }}>
+              <Text size="xl" fw={700} c="var(--theme-text-primary)">
+                {state.correspondence.reduce((acc, c) => acc + c.attachments.length, 0)}
+              </Text>
+              <Text size="sm" c="var(--theme-text-secondary)">
+                Вложений
+              </Text>
+            </Box>
+          </Group>
+
+          {/* Фильтры */}
+          <Box style={{
+            background: 'var(--theme-bg-primary)',
+            borderRadius: '12px',
+            padding: '16px',
+            border: '1px solid var(--theme-border-secondary)'
+          }}>
             <FilterGroup
               filters={filters}
               columnFilters={state.columnFilters}
               onColumnFiltersChange={handleColumnFiltersChange}
             />
-          </Grid.Col>
-          <Grid.Col span={12}>
-            <Card withBorder shadow="sm">
-              <TableComponent<CorrespondenceWithFormattedData>
-                data={tableData}
-                columns={columns}
-                columnFilters={state.columnFilters}
-                sorting={state.sorting}
-                onColumnFiltersChange={handleColumnFiltersChange}
-                onSortingChange={handleSortingChange}
-                filterFns={{ dateRange }}
-                onRowClick={(rowData) => handleTableAction('view', rowData)}
-              />
-            </Card>
-          </Grid.Col>
-        </Grid>
+          </Box>
+        </Box>
+        {/* Таблица корреспонденции */}
+        <Card style={{
+          background: 'var(--theme-bg-elevated)',
+          borderRadius: '16px',
+          border: '1px solid var(--theme-border-primary)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+          overflow: 'hidden'
+        }}>
+          <TableComponent<CorrespondenceWithFormattedData>
+            data={tableData}
+            columns={columns}
+            columnFilters={state.columnFilters}
+            sorting={state.sorting}
+            onColumnFiltersChange={handleColumnFiltersChange}
+            onSortingChange={(updaterOrValue) => {
+              setState(prev => ({
+                ...prev,
+                sorting: typeof updaterOrValue === 'function'
+                  ? updaterOrValue(prev.sorting)
+                  : updaterOrValue
+              }));
+            }}
+            filterFns={{ dateRange }}
+            onRowClick={(rowData) => handleTableAction('view', rowData)}
+            paginationOptions={[
+              { value: '10', label: '10' },
+              { value: '20', label: '20' },
+              { value: '50', label: '50' },
+              { value: '100', label: '100' },
+            ]}
+          />
+        </Card>
         <DynamicFormModal
           opened={modals.view[0]}
           onClose={modals.view[1].close}

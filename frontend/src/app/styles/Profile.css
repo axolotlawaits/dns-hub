@@ -1,47 +1,494 @@
-.profile-page-wrapper {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+/* ========================================
+   СОВРЕМЕННЫЙ ДИЗАЙН ЛИЧНОГО КАБИНЕТА
+   ======================================== */
+
+.profile-container {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding-bottom: 100px; /* Отступ снизу чтобы контент не обрезался футером */
 }
 
+/* Заголовок страницы */
+.profile-header {
+  margin-bottom: var(--space-3);
+}
+
+/* Навигация по вкладкам */
+.profile-navigation {
+  background: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border);
+  margin-bottom: var(--space-4);
+}
+
+.profile-tabs-list {
+  background: transparent;
+  border: none;
+}
+
+.profile-tab-item {
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  transition: var(--transition-all);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+}
+
+.profile-tab-item:hover {
+  background: var(--theme-bg-hover);
+  transform: translateY(-1px);
+}
+
+.profile-tab-item[data-active="true"] {
+  background: linear-gradient(135deg, var(--color-blue-500), var(--color-blue-600));
+  color: white;
+  box-shadow: var(--theme-shadow-md);
+}
+
+/* Основная карточка профиля */
+.profile-main-card {
+  background: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border);
+  transition: var(--transition-all);
+  margin-bottom: var(--space-4);
+}
+
+.profile-main-card:hover {
+  box-shadow: var(--theme-shadow-md);
+  transform: translateY(-1px);
+}
+
+/* Контейнер аватара */
+.avatar-container {
+  position: relative;
+  display: inline-block;
+}
+
+.profile-avatar {
+  border: 3px solid var(--color-blue-200);
+  transition: var(--transition-all);
+  box-shadow: var(--theme-shadow-sm);
+  width: 120px;
+  height: 120px;
+}
+
+.profile-avatar:hover {
+  border-color: var(--color-blue-400);
+  transform: scale(1.02);
+}
+
+.avatar-edit-button {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  box-shadow: var(--theme-shadow-sm);
+  transition: var(--transition-all);
+  width: 32px;
+  height: 32px;
+}
+
+.avatar-edit-button:hover {
+  transform: scale(1.05);
+  box-shadow: var(--theme-shadow-md);
+}
+
+.edit-photo-button {
+  transition: var(--transition-all);
+}
+
+.edit-photo-button:hover {
+  transform: translateY(-1px);
+}
+
+/* Статус бейдж */
+.status-badge {
+  font-weight: 600;
+  font-size: var(--font-size-xs);
+  padding: var(--space-1) var(--space-2);
+}
+
+/* Карточка уведомлений */
+.notifications-card {
+  background: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border);
+  transition: var(--transition-all);
+  margin-bottom: var(--space-4);
+}
+
+.notifications-card:hover {
+  box-shadow: var(--theme-shadow-md);
+  transform: translateY(-1px);
+}
+
+.notification-service-card {
+  background: var(--theme-bg-secondary);
+  border: 1px solid var(--theme-border);
+  transition: var(--transition-all);
+}
+
+.notification-service-card:hover {
+  border-color: var(--color-blue-300);
+  box-shadow: var(--theme-shadow-sm);
+}
+
+/* Кнопки уведомлений */
+.connect-button {
+  background: linear-gradient(135deg, var(--color-blue-500), var(--color-blue-600));
+  border: none;
+  font-weight: 600;
+  transition: var(--transition-all);
+}
+
+.connect-button:hover {
+  background: linear-gradient(135deg, var(--color-blue-600), var(--color-blue-700));
+  transform: translateY(-1px);
+  box-shadow: var(--theme-shadow-md);
+}
+
+.disconnect-button {
+  transition: var(--transition-all);
+}
+
+.disconnect-button:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--theme-shadow-sm);
+}
+
+/* Модальные окна */
+.telegram-modal .mantine-Modal-content {
+  background: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border);
+}
+
+.qr-code-card {
+  background: var(--theme-bg-secondary);
+  border: 1px solid var(--theme-border);
+  text-align: center;
+}
+
+.telegram-link-text {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: var(--font-size-xs);
+}
+
+.telegram-open-button {
+  background: linear-gradient(135deg, var(--color-blue-500), var(--color-blue-600));
+  border: none;
+  font-weight: 600;
+  transition: var(--transition-all);
+}
+
+.telegram-open-button:hover {
+  background: linear-gradient(135deg, var(--color-blue-600), var(--color-blue-700));
+  transform: translateY(-1px);
+  box-shadow: var(--theme-shadow-md);
+}
+
+.telegram-info-alert {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-blue-200);
+}
+
+/* Модальное окно фото */
+.photo-modal .mantine-Modal-content {
+  background: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border);
+}
+
+.photo-preview-card {
+  background: var(--theme-bg-secondary);
+  border: 1px solid var(--theme-border);
+  transition: var(--transition-all);
+}
+
+.photo-preview-card:hover {
+  border-color: var(--color-blue-300);
+  transform: translateY(-2px);
+  box-shadow: var(--theme-shadow-sm);
+}
+
+.photo-preview {
+  border-radius: var(--radius-md);
+  border: 2px solid var(--theme-border);
+  transition: var(--transition-all);
+}
+
+.photo-preview:hover {
+  border-color: var(--color-blue-300);
+  transform: scale(1.02);
+}
+
+.select-photo-button {
+  background: linear-gradient(135deg, var(--color-blue-500), var(--color-blue-600));
+  border: none;
+  font-weight: 600;
+  transition: var(--transition-all);
+}
+
+.select-photo-button:hover {
+  background: linear-gradient(135deg, var(--color-blue-600), var(--color-blue-700));
+  transform: translateY(-1px);
+  box-shadow: var(--theme-shadow-md);
+}
+
+.save-photo-button {
+  background: linear-gradient(135deg, var(--color-green-500), var(--color-green-600));
+  border: none;
+  font-weight: 600;
+  transition: var(--transition-all);
+}
+
+.save-photo-button:hover {
+  background: linear-gradient(135deg, var(--color-green-600), var(--color-green-700));
+  transform: translateY(-1px);
+  box-shadow: var(--theme-shadow-md);
+}
+
+/* Модальное окно пароля */
+.password-modal .mantine-Modal-content {
+  background: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border);
+}
+
+.password-alert {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-orange-200);
+}
+
+.password-input .mantine-PasswordInput-input {
+  background: var(--theme-bg-secondary);
+  border: 2px solid var(--theme-border);
+  border-radius: var(--radius-lg);
+  transition: var(--transition-all);
+  font-size: var(--font-size-md);
+  padding: var(--space-4);
+}
+
+.password-input .mantine-PasswordInput-input:focus {
+  border-color: var(--color-orange-500);
+  box-shadow: 0 0 0 3px var(--color-orange-100);
+  background: var(--theme-bg-primary);
+}
+
+.password-input .mantine-PasswordInput-label {
+  color: var(--theme-text-primary);
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.cancel-button {
+  background: var(--theme-bg-secondary);
+  border-color: var(--theme-border);
+  color: var(--theme-text-primary);
+  transition: var(--transition-all);
+}
+
+.cancel-button:hover {
+  background: var(--theme-bg-hover);
+  border-color: var(--color-gray-400);
+  color: var(--theme-text-primary);
+}
+
+.confirm-button {
+  background: linear-gradient(135deg, var(--color-green-500), var(--color-green-600));
+  border: none;
+  font-weight: 600;
+  transition: var(--transition-all);
+}
+
+.confirm-button:hover {
+  background: linear-gradient(135deg, var(--color-green-600), var(--color-green-700));
+  transform: translateY(-1px);
+  box-shadow: var(--theme-shadow-md);
+}
+
+/* Управление доступом */
 #profile-management {
   display: flex;
   flex-direction: column;
-  gap: 50px;
+  gap: var(--space-6);
+  padding: var(--space-4);
+}
+
+.access-selection-area {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.access-select-block {
+  background: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  transition: var(--transition-all);
+}
+
+.access-select-block:hover {
+  border-color: var(--color-blue-300);
+  box-shadow: var(--theme-shadow-sm);
+  transform: translateY(-1px);
+}
+
+.access-heading {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--theme-text-primary);
+  margin-bottom: var(--space-3);
 }
 
 .access-tools-block {
   display: flex;
   flex-direction: column;
-  gap: 30px;
-}
-
-.access-heading {
-  font-size: 20px;
-  color: var(--font);
+  gap: var(--space-4);
 }
 
 .access-tools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-3);
 }
 
-.access-selection-area {
+.tool-card {
+  background: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  transition: var(--transition-all);
   display: flex;
-  justify-content: space-around;
+  justify-content: space-between;
+  align-items: center;
 }
 
-.access-select-block {
+.tool-card:hover {
+  border-color: var(--color-blue-300);
+  box-shadow: var(--theme-shadow-sm);
+  transform: translateY(-1px);
+}
+
+.tool-card.access.lvl1 {
+  border-left: 4px solid var(--color-green-500);
+}
+
+.tool-card.access.lvl2 {
+  border-left: 4px solid var(--color-orange-500);
+}
+
+.tool-card.access.lvl3 {
+  border-left: 4px solid var(--color-red-500);
+}
+
+.tool-card.showcase {
+  opacity: 0.6;
+  background: var(--theme-bg-secondary);
+}
+
+.tool-text {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-1);
+}
+
+.tool-name {
+  font-weight: 600;
+  color: var(--theme-text-primary);
+  font-size: var(--font-size-md);
+}
+
+.tool-access {
+  font-size: var(--font-size-sm);
+  color: var(--theme-text-secondary);
+}
+
+.tool-card-action {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
 }
 
 .access-modal-action {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-3);
   width: 100%;
-  justify-content: space-between;
+}
+
+/* Анимации */
+.profile-container {
+  animation: fadeInUp 0.6s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .profile-container {
+    padding: var(--space-4);
+  }
+  
+  .access-selection-area {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+  }
+  
+  .access-tools {
+    grid-template-columns: 1fr;
+  }
+  
+  .tool-card {
+    flex-direction: column;
+    gap: var(--space-3);
+    text-align: center;
+  }
+  
+  .tool-card-action {
+    justify-content: center;
+  }
+  
+  .profile-main-card .mantine-Grid-root {
+    flex-direction: column;
+  }
+  
+  .avatar-container {
+    margin-bottom: var(--space-4);
+  }
+}
+
+@media (max-width: 480px) {
+  .profile-container {
+    padding: var(--space-2);
+  }
+  
+  .access-select-block {
+    padding: var(--space-4);
+  }
+  
+  .tool-card {
+    padding: var(--space-3);
+  }
+}
+
+/* Темная тема */
+[data-mantine-color-scheme="dark"] .profile-main-card,
+[data-mantine-color-scheme="dark"] .notifications-card,
+[data-mantine-color-scheme="dark"] .access-select-block {
+  background: rgba(30, 30, 30, 0.95);
+  border-color: var(--theme-border);
+}
+
+[data-mantine-color-scheme="dark"] .notification-service-card,
+[data-mantine-color-scheme="dark"] .photo-preview-card {
+  background: rgba(40, 40, 40, 0.95);
+  border-color: var(--theme-border);
 }

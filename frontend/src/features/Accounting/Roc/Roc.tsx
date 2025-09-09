@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Box, Card, Grid, Group, LoadingOverlay, Text, Title, Drawer, ActionIcon, Tooltip, Tabs, Accordion, Stack, Button, Paper } from '@mantine/core';
+import { Box, Grid, Group, LoadingOverlay, Text, Title, Drawer, ActionIcon, Tooltip, Tabs, Accordion, Stack, Button, Paper, Badge } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
 import { API } from '../../../config/constants';
@@ -8,7 +8,7 @@ import { FilterGroup } from '../../../utils/filter';
 import { DynamicFormModal, type FormConfig } from '../../../utils/formModal';
 import { FilePreviewModal } from '../../../utils/FilePreviewModal';
 import { useUserContext } from '../../../hooks/useUserContext';
-import { TableComponent } from '../../../utils/Table';
+import { TableComponent } from '../../../utils/table';
 import { IconPlus, IconPencil, IconTrash, IconDownload } from '@tabler/icons-react';
 import { DndProviderWrapper } from '../../../utils/dnd';
 
@@ -405,52 +405,366 @@ export default function RocList() {
 
   return (
     <DndProviderWrapper>
-    <Box p="md">
+    <Box 
+      style={{
+        background: 'var(--theme-bg-primary)',
+        minHeight: '100vh',
+        padding: '20px'
+      }}
+    >
       {loading && <LoadingOverlay visible />}
-      <Group justify="space-between" mb="md">
-        <Title order={2}>Реестр договоров</Title>
-        <Tooltip label="Добавить договор"><ActionIcon color="blue" variant="filled" onClick={openCreate}><IconPlus size={18} /></ActionIcon></Tooltip>
-      </Group>
-      <Tabs value={activeTab} onChange={(v) => setActiveTab((v as any) || 'list')}>
-        <Tabs.List>
-          <Tabs.Tab value="list">Реестр</Tabs.Tab>
-          <Tabs.Tab value="byDoc">По контрагентам</Tabs.Tab>
+      
+      {/* Современный заголовок */}
+      <Box
+        style={{
+          background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
+          borderRadius: '16px',
+          padding: '24px',
+          marginBottom: '24px',
+          border: '1px solid var(--theme-border-primary)',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+          position: 'relative',
+          overflow: 'hidden'
+        }}
+      >
+        {/* Декоративные элементы */}
+        <Box
+          style={{
+            position: 'absolute',
+            top: '-20px',
+            right: '-20px',
+            width: '120px',
+            height: '120px',
+            background: 'rgba(255, 255, 255, 0.1)',
+            borderRadius: '50%',
+            zIndex: 1
+          }}
+        />
+        <Box
+          style={{
+            position: 'absolute',
+            bottom: '-30px',
+            left: '-30px',
+            width: '80px',
+            height: '80px',
+            background: 'rgba(255, 255, 255, 0.05)',
+            borderRadius: '50%',
+            zIndex: 1
+          }}
+        />
+        
+        <Group justify="space-between" align="center" style={{ position: 'relative', zIndex: 2 }}>
+          <Group gap="16px" align="center">
+            <Box
+              style={{
+                width: '48px',
+                height: '48px',
+                background: 'rgba(255, 255, 255, 0.2)',
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '24px'
+              }}
+            >
+              📋
+            </Box>
+            <Box>
+              <Title 
+                order={2} 
+                style={{ 
+                  color: 'white', 
+                  margin: 0,
+                  fontSize: '28px',
+                  fontWeight: '700'
+                }}
+              >
+                Реестр договоров
+              </Title>
+              <Text 
+                style={{ 
+                  color: 'rgba(255, 255, 255, 0.8)', 
+                  fontSize: '16px',
+                  marginTop: '4px'
+                }}
+              >
+                Управление договорами и контрагентами
+              </Text>
+            </Box>
+          </Group>
+          
+          <Tooltip label="Добавить договор">
+            <ActionIcon 
+              size="xl"
+              radius="xl"
+              onClick={openCreate}
+              style={{
+                background: 'rgba(255, 255, 255, 0.2)',
+                color: 'white',
+                border: '1px solid rgba(255, 255, 255, 0.3)',
+                backdropFilter: 'blur(10px)',
+                width: '48px',
+                height: '48px'
+              }}
+            >
+              <IconPlus size={24} />
+            </ActionIcon>
+          </Tooltip>
+        </Group>
+      </Box>
+      <Tabs 
+        value={activeTab} 
+        onChange={(v) => setActiveTab((v as any) || 'list')}
+        style={{ marginBottom: '24px' }}
+      >
+        <Tabs.List
+          style={{
+            background: 'var(--theme-bg-elevated)',
+            borderRadius: '12px',
+            padding: '4px',
+            border: '1px solid var(--theme-border-primary)',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)'
+          }}
+        >
+          <Tabs.Tab 
+            value="list"
+            style={{
+              borderRadius: '8px',
+              fontWeight: '600',
+              fontSize: '16px',
+              padding: '12px 24px',
+              transition: 'all 0.2s ease',
+              background: activeTab === 'list' 
+                ? 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))' 
+                : 'transparent',
+              color: activeTab === 'list' ? 'white' : 'var(--theme-text-primary)',
+              border: 'none'
+            }}
+          >
+            📊 Реестр
+          </Tabs.Tab>
+          <Tabs.Tab 
+            value="byDoc"
+            style={{
+              borderRadius: '8px',
+              fontWeight: '600',
+              fontSize: '16px',
+              padding: '12px 24px',
+              transition: 'all 0.2s ease',
+              background: activeTab === 'byDoc' 
+                ? 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))' 
+                : 'transparent',
+              color: activeTab === 'byDoc' ? 'white' : 'var(--theme-text-primary)',
+              border: 'none'
+            }}
+          >
+            🏢 По контрагентам
+          </Tabs.Tab>
         </Tabs.List>
 
         <Tabs.Panel value="list" pt="md">
           <Grid>
             <Grid.Col span={12}>
-              <FilterGroup
-                filters={filtersConfig}
-                columnFilters={filters.column}
-                onColumnFiltersChange={(columnId, value) =>
-                  setFilters(prev => ({
-                    ...prev,
-                    column: [
-                      ...prev.column.filter(f => f.id !== columnId),
-                      ...(value ? [{ id: columnId, value }] : []),
-                    ],
-                  }))
-                }
-              />
+              <Box
+                style={{
+                  background: 'var(--theme-bg-elevated)',
+                  borderRadius: '16px',
+                  padding: '20px',
+                  border: '1px solid var(--theme-border-primary)',
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
+                  marginBottom: '20px'
+                }}
+              >
+                <Group gap="12px" align="center" style={{ marginBottom: '16px' }}>
+                  <Box
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '16px'
+                    }}
+                  >
+                    🔍
+                  </Box>
+                  <Text 
+                    style={{ 
+                      fontSize: '18px', 
+                      fontWeight: '600',
+                      color: 'var(--theme-text-primary)'
+                    }}
+                  >
+                    Фильтры
+                  </Text>
+                </Group>
+                <FilterGroup
+                  filters={filtersConfig}
+                  columnFilters={filters.column}
+                  onColumnFiltersChange={(columnId, value) =>
+                    setFilters(prev => ({
+                      ...prev,
+                      column: [
+                        ...prev.column.filter(f => f.id !== columnId),
+                        ...(value ? [{ id: columnId, value }] : []),
+                      ],
+                    }))
+                  }
+                />
+              </Box>
             </Grid.Col>
             <Grid.Col span={12}>
-              <Card withBorder shadow="sm">
+              <Box
+                style={{
+                  background: 'var(--theme-bg-elevated)',
+                  borderRadius: '16px',
+                  border: '1px solid var(--theme-border-primary)',
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
+                  overflow: 'hidden'
+                }}
+              >
                 <TableComponent<RocData>
                   data={data}
                   columns={[
-                    { header: 'Контрагент', accessorKey: 'name', cell: info => <Text>{info.row.original.name}</Text> },
-                    { header: 'Тип договора', accessorKey: 'typeContract.name', cell: info => <Text>{info.row.original.typeContract?.name || '-'}</Text> },
-                    { header: 'Статус', accessorKey: 'statusContract.name', cell: info => <Text>{info.row.original.statusContract?.name || '-'}</Text> },
-                    { header: 'Номер', accessorKey: 'contractNumber', cell: info => <Text>{info.row.original.contractNumber || '-'}</Text> },
-                    { header: 'Дата', accessorKey: 'dateContract', cell: info => <Text>{info.row.original.dateContract ? dayjs(info.row.original.dateContract).format('DD.MM.YYYY') : '-'}</Text> },
-                    { header: 'Действует до', accessorKey: 'agreedTo', cell: info => <Text>{info.row.original.agreedTo ? dayjs(info.row.original.agreedTo).format('DD.MM.YYYY') : '-'}</Text> },
-                    { header: 'Действия', accessorKey: 'id', cell: info => (
-                      <Group gap={6}>
-                        <Tooltip label="Редактировать"><ActionIcon size="sm" variant="light" onClick={(e) => { e.stopPropagation(); openEdit(info.row.original); }}><IconPencil size={16} /></ActionIcon></Tooltip>
-                        <Tooltip label="Удалить"><ActionIcon size="sm" color="red" variant="light" onClick={async (e) => { e.stopPropagation(); await handleDeleteRow(info.row.original); }}><IconTrash size={16} /></ActionIcon></Tooltip>
-                      </Group>
-                    ) },
+                    { 
+                      header: 'Контрагент', 
+                      accessorKey: 'name', 
+                      cell: info => (
+                        <Text 
+                          style={{ 
+                            fontWeight: '600',
+                            color: 'var(--theme-text-primary)',
+                            fontSize: '15px'
+                          }}
+                        >
+                          {info.row.original.name}
+                        </Text>
+                      ) 
+                    },
+                    { 
+                      header: 'Тип договора', 
+                      accessorKey: 'typeContract.name', 
+                      cell: info => (
+                        <Badge
+                          variant="light"
+                          style={{
+                            background: 'var(--color-primary-100)',
+                            color: 'var(--color-primary-700)',
+                            fontWeight: '500',
+                            fontSize: '13px',
+                            padding: '6px 12px',
+                            borderRadius: '8px'
+                          }}
+                        >
+                          {info.row.original.typeContract?.name || '-'}
+                        </Badge>
+                      ) 
+                    },
+                    { 
+                      header: 'Статус', 
+                      accessorKey: 'statusContract.name', 
+                      cell: info => (
+                        <Badge
+                          variant="light"
+                          style={{
+                            background: 'var(--color-green-100)',
+                            color: 'var(--color-green-700)',
+                            fontWeight: '500',
+                            fontSize: '13px',
+                            padding: '6px 12px',
+                            borderRadius: '8px'
+                          }}
+                        >
+                          {info.row.original.statusContract?.name || '-'}
+                        </Badge>
+                      ) 
+                    },
+                    { 
+                      header: 'Номер', 
+                      accessorKey: 'contractNumber', 
+                      cell: info => (
+                        <Text 
+                          style={{ 
+                            color: 'var(--theme-text-secondary)',
+                            fontSize: '14px',
+                            fontFamily: 'monospace'
+                          }}
+                        >
+                          {info.row.original.contractNumber || '-'}
+                        </Text>
+                      ) 
+                    },
+                    { 
+                      header: 'Дата', 
+                      accessorKey: 'dateContract', 
+                      cell: info => (
+                        <Text 
+                          style={{ 
+                            color: 'var(--theme-text-primary)',
+                            fontSize: '14px',
+                            fontWeight: '500'
+                          }}
+                        >
+                          {info.row.original.dateContract ? dayjs(info.row.original.dateContract).format('DD.MM.YYYY') : '-'}
+                        </Text>
+                      ) 
+                    },
+                    { 
+                      header: 'Действует до', 
+                      accessorKey: 'agreedTo', 
+                      cell: info => (
+                        <Text 
+                          style={{ 
+                            color: 'var(--theme-text-primary)',
+                            fontSize: '14px',
+                            fontWeight: '500'
+                          }}
+                        >
+                          {info.row.original.agreedTo ? dayjs(info.row.original.agreedTo).format('DD.MM.YYYY') : '-'}
+                        </Text>
+                      ) 
+                    },
+                    { 
+                      header: 'Действия', 
+                      accessorKey: 'id', 
+                      cell: info => (
+                        <Group gap={8}>
+                          <Tooltip label="Редактировать">
+                            <ActionIcon 
+                              size="sm" 
+                              variant="light" 
+                              onClick={(e) => { e.stopPropagation(); openEdit(info.row.original); }}
+                              style={{
+                                background: 'var(--color-blue-100)',
+                                color: 'var(--color-blue-700)',
+                                border: '1px solid var(--color-blue-200)',
+                                borderRadius: '8px'
+                              }}
+                            >
+                              <IconPencil size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                          <Tooltip label="Удалить">
+                            <ActionIcon 
+                              size="sm" 
+                              color="red" 
+                              variant="light" 
+                              onClick={async (e) => { e.stopPropagation(); await handleDeleteRow(info.row.original); }}
+                              style={{
+                                background: 'var(--color-red-100)',
+                                color: 'var(--color-red-700)',
+                                border: '1px solid var(--color-red-200)',
+                                borderRadius: '8px'
+                              }}
+                            >
+                              <IconTrash size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                        </Group>
+                      ) 
+                    },
                   ]}
                   columnFilters={filters.column}
                   sorting={[] as any}
@@ -458,53 +772,222 @@ export default function RocList() {
                   onSortingChange={() => {}}
                   onRowClick={(row) => { setSelectedView(row); viewModalHandlers.open(); }}
                 />
-              </Card>
+              </Box>
             </Grid.Col>
           </Grid>
         </Tabs.Panel>
 
         <Tabs.Panel value="byDoc" pt="md">
-          <Card withBorder shadow="sm">
-            <Accordion multiple>
+          <Box
+            style={{
+              background: 'var(--theme-bg-elevated)',
+              borderRadius: '16px',
+              border: '1px solid var(--theme-border-primary)',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
+              overflow: 'hidden'
+            }}
+          >
+            <Accordion 
+              multiple
+              styles={{
+                root: {
+                  background: 'transparent'
+                },
+                item: {
+                  border: 'none',
+                  borderBottom: '1px solid var(--theme-border-secondary)',
+                  '&:last-child': {
+                    borderBottom: 'none'
+                  }
+                },
+                control: {
+                  padding: '20px',
+                  background: 'transparent',
+                  '&:hover': {
+                    background: 'var(--theme-bg-secondary)'
+                  }
+                },
+                panel: {
+                  padding: '0 20px 20px 20px',
+                  background: 'var(--theme-bg-secondary)'
+                }
+              }}
+            >
               {groupedByDoc.map((g) => (
                 <Accordion.Item key={g.key} value={g.key}>
                   <Accordion.Control>
                     <Group justify="space-between" wrap="nowrap">
-                      <Box>
-                        <Text fw={600}>{g.title}</Text>
-                        {g.subtitle && <Text size="sm" c="dimmed">{g.subtitle}</Text>}
-                      </Box>
-                      <Text size="sm" c="dimmed">Договоров: {g.items.length}</Text>
+                      <Group gap="16px" align="center">
+                        <Box
+                          style={{
+                            width: '40px',
+                            height: '40px',
+                            background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
+                            borderRadius: '10px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '18px'
+                          }}
+                        >
+                          🏢
+                        </Box>
+                        <Box>
+                          <Text 
+                            fw={600} 
+                            style={{ 
+                              fontSize: '16px',
+                              color: 'var(--theme-text-primary)'
+                            }}
+                          >
+                            {g.title}
+                          </Text>
+                          {g.subtitle && (
+                            <Text 
+                              size="sm" 
+                              style={{ 
+                                color: 'var(--theme-text-secondary)',
+                                marginTop: '2px'
+                              }}
+                            >
+                              {g.subtitle}
+                            </Text>
+                          )}
+                        </Box>
+                      </Group>
+                      <Badge
+                        variant="light"
+                        style={{
+                          background: 'var(--color-primary-100)',
+                          color: 'var(--color-primary-700)',
+                          fontWeight: '600',
+                          fontSize: '13px',
+                          padding: '8px 16px',
+                          borderRadius: '20px'
+                        }}
+                      >
+                        Договоров: {g.items.length}
+                      </Badge>
                     </Group>
                   </Accordion.Control>
                   <Accordion.Panel>
                     <Box>
                       {g.items.map((row) => (
-                        <Group
+                        <Box
                           key={row.id}
-                          justify="space-between"
-                          py={6}
+                          style={{
+                            background: 'var(--theme-bg-elevated)',
+                            borderRadius: '12px',
+                            padding: '16px',
+                            marginBottom: '12px',
+                            border: '1px solid var(--theme-border-primary)',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            '&:hover': {
+                              transform: 'translateY(-2px)',
+                              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)'
+                            }
+                          }}
                           onClick={() => { setSelectedView(row); viewModalHandlers.open(); }}
-                          style={{ cursor: 'pointer' }}
                         >
-                          <Group gap={12}>
-                            <Text fw={500}>{row.name}</Text>
-                            <Text size="sm" c="dimmed">№ {row.contractNumber || '-'}</Text>
-                            <Text size="sm" c="dimmed">от {row.dateContract ? dayjs(row.dateContract).format('DD.MM.YYYY') : '-'}</Text>
-                            <Text size="sm" c="dimmed">до {row.agreedTo ? dayjs(row.agreedTo).format('DD.MM.YYYY') : '-'}</Text>
+                          <Group justify="space-between" align="center">
+                            <Group gap={16}>
+                              <Box
+                                style={{
+                                  width: '32px',
+                                  height: '32px',
+                                  background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-600))',
+                                  borderRadius: '8px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '14px'
+                                }}
+                              >
+                                📄
+                              </Box>
+                              <Box>
+                                <Text 
+                                  fw={500} 
+                                  style={{ 
+                                    fontSize: '15px',
+                                    color: 'var(--theme-text-primary)',
+                                    marginBottom: '4px'
+                                  }}
+                                >
+                                  {row.name}
+                                </Text>
+                                <Group gap={16} wrap="wrap">
+                                  <Text 
+                                    size="sm" 
+                                    style={{ 
+                                      color: 'var(--theme-text-secondary)',
+                                      fontFamily: 'monospace'
+                                    }}
+                                  >
+                                    № {row.contractNumber || '-'}
+                                  </Text>
+                                  <Text 
+                                    size="sm" 
+                                    style={{ 
+                                      color: 'var(--theme-text-secondary)'
+                                    }}
+                                  >
+                                    от {row.dateContract ? dayjs(row.dateContract).format('DD.MM.YYYY') : '-'}
+                                  </Text>
+                                  <Text 
+                                    size="sm" 
+                                    style={{ 
+                                      color: 'var(--theme-text-secondary)'
+                                    }}
+                                  >
+                                    до {row.agreedTo ? dayjs(row.agreedTo).format('DD.MM.YYYY') : '-'}
+                                  </Text>
+                                </Group>
+                              </Box>
+                            </Group>
+                            <Group gap={8}>
+                              <Tooltip label="Редактировать">
+                                <ActionIcon 
+                                  size="sm" 
+                                  variant="light" 
+                                  onClick={(e) => { e.stopPropagation(); openEdit(row); }}
+                                  style={{
+                                    background: 'var(--color-blue-100)',
+                                    color: 'var(--color-blue-700)',
+                                    border: '1px solid var(--color-blue-200)',
+                                    borderRadius: '8px'
+                                  }}
+                                >
+                                  <IconPencil size={16} />
+                                </ActionIcon>
+                              </Tooltip>
+                              <Tooltip label="Удалить">
+                                <ActionIcon 
+                                  size="sm" 
+                                  color="red" 
+                                  variant="light" 
+                                  onClick={(e) => { e.stopPropagation(); handleDeleteRow(row); }}
+                                  style={{
+                                    background: 'var(--color-red-100)',
+                                    color: 'var(--color-red-700)',
+                                    border: '1px solid var(--color-red-200)',
+                                    borderRadius: '8px'
+                                  }}
+                                >
+                                  <IconTrash size={16} />
+                                </ActionIcon>
+                              </Tooltip>
+                            </Group>
                           </Group>
-                          <Group gap={6}>
-                            <Tooltip label="Редактировать"><ActionIcon size="sm" variant="light" onClick={(e) => { e.stopPropagation(); openEdit(row); }}><IconPencil size={16} /></ActionIcon></Tooltip>
-                            <Tooltip label="Удалить"><ActionIcon size="sm" color="red" variant="light" onClick={(e) => { e.stopPropagation(); handleDeleteRow(row); }}><IconTrash size={16} /></ActionIcon></Tooltip>
-                          </Group>
-                        </Group>
+                        </Box>
                       ))}
                     </Box>
                   </Accordion.Panel>
                 </Accordion.Item>
               ))}
             </Accordion>
-          </Card>
+          </Box>
         </Tabs.Panel>
       </Tabs>
 

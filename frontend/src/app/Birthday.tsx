@@ -1,9 +1,20 @@
-// Обновленный компонент React (client side)
 import { useState, useEffect } from 'react';
 import { API } from '../config/constants';
-import { Box, Title, Text, Group, LoadingOverlay, List, Badge, ThemeIcon, Avatar, ScrollArea, Alert } from '@mantine/core';
+import { 
+  Box, 
+  Text, 
+  Group, 
+  LoadingOverlay, 
+  Badge, 
+  ThemeIcon, 
+  Avatar, 
+  ScrollArea, 
+  Alert,
+  Card,
+  Stack
+} from '@mantine/core';
 import dayjs from 'dayjs';
-import { IconCalendar, IconGift, IconAlertCircle } from '@tabler/icons-react';
+import { IconCalendar, IconGift, IconAlertCircle, IconClock, IconCake } from '@tabler/icons-react';
 import { useUserContext } from '../hooks/useUserContext';
 
 type UserData = {
@@ -48,7 +59,7 @@ export default function BirthdayList() {
         setUsersData(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Неизвестная ошибка');
-        console.error('Ошибка:', err);
+        console.error('Ошибка загрузки дней рождения:', err);
       } finally {
         setLoading(false);
       }
@@ -57,106 +68,131 @@ export default function BirthdayList() {
     fetchUpcomingBirthdays();
   }, [user?.email]);
 
-  const formatBirthday = (dateString: string) => {
-    return dayjs(dateString).format('D MMMM');
-  };
-
-  const renderDaysText = (user: UserData) => {
-    if (user.isWeekendBirthday) {
-      return (
-        <Alert icon={<IconAlertCircle size="1rem" />} color="yellow" variant="light" p="xs">
-          Было в {user.weekendDayName}, не забудьте поздравить!
-        </Alert>
-      );
+  const getBirthdayStatus = (userData: UserData) => {
+    if (userData.daysUntil === 0) {
+      return { text: 'Сегодня!', color: 'red', variant: 'filled' as const };
+    } else if (userData.daysUntil === 1) {
+      return { text: 'Завтра', color: 'orange', variant: 'light' as const };
+    } else if (userData.daysUntil <= 7) {
+      return { text: `Через ${userData.daysUntil} дн.`, color: 'yellow', variant: 'light' as const };
+    } else if (userData.isWeekendBirthday) {
+      return { text: `Выходной (${userData.weekendDayName})`, color: 'blue', variant: 'light' as const };
+    } else if (userData.daysSince !== undefined && userData.daysSince > 0) {
+      return { text: `Прошло ${userData.daysSince} дн.`, color: 'gray', variant: 'light' as const };
+    } else {
+      return { text: `Через ${userData.daysUntil} дн.`, color: 'green', variant: 'light' as const };
     }
-    
-    if (user.daysUntil === 0) {
-      return <Badge variant="light" size="sm" color="green">сегодня</Badge>;
-    }
-    if (user.daysUntil === 1) {
-      return <Badge variant="light" size="sm" color="orange">завтра</Badge>;
-    }
-    return (
-      <Text c="dimmed" size="sm">
-        {`через ${user.daysUntil} ${user.daysUntil === 1 ? 'день' : user.daysUntil < 5 ? 'дня' : 'дней'}`}
-      </Text>
-    );
   };
 
   if (loading) {
-    return <LoadingOverlay visible />;
+    return (
+      <Box className="birthday-container">
+        <LoadingOverlay visible={loading} />
+      </Box>
+    );
   }
 
   if (error) {
     return (
-      <Box p="md">
-        <Text c="red">Ошибка: {error}</Text>
+      <Box className="birthday-container">
+        <Alert
+          icon={<IconAlertCircle size={16} />}
+          title="Ошибка загрузки"
+          color="red"
+          variant="light"
+        >
+          {error}
+        </Alert>
+      </Box>
+    );
+  }
+
+  if (usersData.length === 0) {
+    return (
+      <Box className="birthday-container">
+        <Card shadow="sm" radius="md" padding="md" className="birthday-empty">
+          <Stack gap="md" align="center">
+            <ThemeIcon size="xl" color="gray" variant="light">
+              <IconCake size={32} />
+            </ThemeIcon>
+            <Text size="sm" c="var(--theme-text-secondary)" ta="center">
+              Нет предстоящих дней рождения
+            </Text>
+          </Stack>
+        </Card>
       </Box>
     );
   }
 
   return (
-    <Box p="md">
-      <Group mb="md" gap="xs">
-        <ThemeIcon variant="light" color="pink" size="lg" radius="xl">
-          <IconGift size={18} />
+    <Box className="birthday-widget">
+      <Group gap="sm" mb="md">
+        <ThemeIcon size="md" color="green" variant="light">
+          <IconCalendar size={20} />
         </ThemeIcon>
-        <Title order={2}>Ближайшие дни рождения</Title>
+        <Text size="lg" fw={600}>
+          Дни рождения
+        </Text>
       </Group>
 
-      <Text c="dimmed" mb="lg">
-        {usersData.some(u => u.isWeekendBirthday) 
-          ? "В следующие 7 дней и недавние дни рождения в выходные" 
-          : "В следующие 7 дней"}
-      </Text>
+      <ScrollArea h="100%">
+        <Stack gap="md">
+          {usersData.map((userData) => {
+            const status = getBirthdayStatus(userData);
+            const isToday = userData.daysUntil === 0;
+            const isTomorrow = userData.daysUntil === 1;
 
-      {usersData.length === 0 ? (
-        <Text c="dimmed">Нет предстоящих дней рождения</Text>
-      ) : (
-        <ScrollArea.Autosize
-          mah={usersData.length > 4 ? 400 : undefined}
-          type="scroll"
-          offsetScrollbars
-        >
-          <List
-            spacing="md"
-            size="lg"
-            center
-            icon={
-              <ThemeIcon color="blue" variant="light" radius="xl" size={24}>
-                <IconCalendar size={14} />
-              </ThemeIcon>
-            }
-          >
-            {usersData.map((user, index) => (
-              <List.Item
-                key={`${user.id}-${index}`}
-                icon={
-                  <Avatar
-                    src={user.image}
-                    alt={user.fio}
-                    radius="xl"
-                    size={40}
-                  >
-                    {user.fio.charAt(0)}
-                  </Avatar>
-                }
+            return (
+              <Card
+                key={userData.id}
+                className={`birthday-card ${isToday ? 'birthday-today' : ''}`}
+                shadow="sm"
+                radius="md"
+                padding="md"
               >
-                <Box>
-                  <Text fw={500}>{user.fio}</Text>
-                  <Group gap="xs" mb={user.isWeekendBirthday ? 'xs' : 0}>
-                    <Badge variant="light" size="sm">
-                      {formatBirthday(user.birthday)}
-                    </Badge>
-                    {!user.isWeekendBirthday && renderDaysText(user)}
+                <Group justify="space-between" align="flex-start">
+                  <Group gap="sm" style={{ flex: 1 }}>
+                    <Avatar
+                      size="md"
+                      src={userData.image}
+                      name={userData.fio}
+                      radius="md"
+                    />
+                    <Box style={{ flex: 1 }}>
+                      <Text size="sm" fw={600} c="var(--theme-text-primary)" mb={4}>
+                        {userData.fio}
+                      </Text>
+                      <Text size="xs" c="var(--theme-text-secondary)" mb="xs">
+                        {dayjs(userData.birthday).format('DD MMMM')}
+                      </Text>
+                      <Group gap="xs" mb="xs">
+                        <Badge
+                          size="sm"
+                          color={status.color}
+                          variant={status.variant}
+                          leftSection={
+                            isToday ? <IconGift size={12} /> : 
+                            isTomorrow ? <IconClock size={12} /> : 
+                            <IconCalendar size={12} />
+                          }
+                        >
+                          {status.text}
+                        </Badge>
+                      </Group>
+                    </Box>
                   </Group>
-                  {user.isWeekendBirthday && renderDaysText(user)}
-                </Box>
-              </List.Item>
-            ))}
-          </List>
-        </ScrollArea.Autosize>
-      )}
+                  
+                  {isToday && (
+                    <ThemeIcon size="lg" color="red" variant="light">
+                      <IconGift size={20} />
+                    </ThemeIcon>
+                  )}
+                </Group>
+              </Card>
+            );
+          })}
+        </Stack>
+      </ScrollArea>
     </Box>
   );
 }

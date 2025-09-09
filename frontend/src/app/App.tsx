@@ -64,24 +64,55 @@ function App() {
           :
           <AppShell
             layout="alt"
-            header={{ height: 60 }}
+            header={{ height: 64 }}
             footer={{ height: 65 }}
             navbar={{
               width: navOpened ? 225 : 55,
               breakpoint: 'sm',
             }}
-            padding="md"
+            padding={0}
             id='page'
             styles={{
               header: {
-                border: 'none'
+                border: 'none',
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                zIndex: 1000
               },
               navbar: {
-                border: 'none'
+                border: 'none',
+                position: 'fixed',
+                top: '64px',
+                left: 0,
+                bottom: '65px',
+                zIndex: 999
               },
+              main: {
+                padding: '20px 0 20px 20px',
+                margin: 0,
+                marginTop: '64px',
+                marginLeft: navOpened ? '225px' : '80px',
+                marginBottom: '65px',
+                height: 'calc(100vh - 64px - 65px)',
+                overflow: 'auto',
+                transition: 'margin-left 0.2s ease',
+                position: 'relative',
+                zIndex: 1,
+                backgroundColor: 'var(--theme-bg-primary)'
+              },
+              footer: {
+                border: 'none',
+                position: 'fixed',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                zIndex: 1000
+              }
             }}
           >
-            <Header />
+            <Header navOpened={navOpened} />
             <Navigation 
               navOpened={navOpened} 
               toggleNav={toggleNav} 

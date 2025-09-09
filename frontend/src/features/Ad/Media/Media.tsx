@@ -4,14 +4,14 @@ import { useUserContext } from '../../../hooks/useUserContext';
 import { notificationSystem } from '../../../utils/Push';
 import { formatName } from '../../../utils/format';
 import { dateRange, FilterGroup } from '../../../utils/filter';
-import { Button, Title, Box, LoadingOverlay, Grid, Card, Group, ActionIcon } from '@mantine/core';
+import { Button, Title, Box, LoadingOverlay, Grid, Group, ActionIcon, Text, Badge, Avatar } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
-import { IconPencil, IconTrash } from '@tabler/icons-react';
+import { IconPencil, IconTrash, IconPlus, IconPhoto, IconVideo, IconMusic, IconFile, IconEye } from '@tabler/icons-react';
 import { ColumnDef, ColumnFiltersState, SortingState } from '@tanstack/react-table';
 import { DndProviderWrapper } from '../../../utils/dnd';
 import { DynamicFormModal } from '../../../utils/formModal';
-import { TableComponent } from '../../../utils/Table';
+import { TableComponent } from '../../../utils/table';
 
 type Updater<T> = T | ((prev: T) => T);
 const MODEL_UUID = 'dd6ec264-4e8c-477a-b2d6-c62a956422c0';
@@ -255,56 +255,194 @@ export default function MediaList() {
     },
   ], [filterOptions]);
 
+  const getMediaIcon = (typeContentName: string) => {
+    const type = typeContentName.toLowerCase();
+    if (type.includes('видео') || type.includes('video')) return IconVideo;
+    if (type.includes('аудио') || type.includes('audio') || type.includes('музыка')) return IconMusic;
+    if (type.includes('изображение') || type.includes('image') || type.includes('фото')) return IconPhoto;
+    return IconFile;
+  };
+
+  const getMediaColor = (typeContentName: string) => {
+    const type = typeContentName.toLowerCase();
+    if (type.includes('видео') || type.includes('video')) return 'var(--color-orange-500)';
+    if (type.includes('аудио') || type.includes('audio') || type.includes('музыка')) return 'var(--color-purple-500)';
+    if (type.includes('изображение') || type.includes('image') || type.includes('фото')) return 'var(--color-green-500)';
+    return 'var(--color-blue-500)';
+  };
+
   const columns = useMemo<ColumnDef<MediaWithFormattedData>[]>(() => [
     {
       accessorKey: 'name',
       header: 'Название',
       filterFn: 'includesString',
+      cell: ({ row }) => (
+        <Group gap="12px" align="center">
+          <Box
+            style={{
+              width: '32px',
+              height: '32px',
+              background: getMediaColor(row.original.typeContentName) + '20',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            {(() => {
+              const MediaIcon = getMediaIcon(row.original.typeContentName);
+              return <MediaIcon size={18} color={getMediaColor(row.original.typeContentName)} />;
+            })()}
+          </Box>
+          <Text 
+            style={{ 
+              fontWeight: '600',
+              color: 'var(--theme-text-primary)',
+              fontSize: '15px'
+            }}
+          >
+            {row.original.name || 'Без названия'}
+          </Text>
+        </Group>
+      ),
     },
     {
       accessorKey: 'typeContentName',
       header: 'Тип контента',
       filterFn: 'includesString',
+      cell: ({ row }) => (
+        <Badge
+          variant="light"
+          style={{
+            background: getMediaColor(row.original.typeContentName) + '20',
+            color: getMediaColor(row.original.typeContentName),
+            fontWeight: '500',
+            fontSize: '13px',
+            padding: '6px 12px',
+            borderRadius: '8px'
+          }}
+        >
+          {row.original.typeContentName}
+        </Badge>
+      ),
     },
     {
       accessorKey: 'userName',
       header: 'Автор',
       filterFn: 'includesString',
+      cell: ({ row }) => (
+        <Group gap="8px" align="center">
+          <Avatar
+            size="sm"
+            radius="xl"
+            style={{
+              background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
+              color: 'white',
+              fontWeight: '600'
+            }}
+          >
+            {row.original.userName.charAt(0).toUpperCase()}
+          </Avatar>
+          <Text 
+            style={{ 
+              color: 'var(--theme-text-primary)',
+              fontSize: '14px',
+              fontWeight: '500'
+            }}
+          >
+            {row.original.userName}
+          </Text>
+        </Group>
+      ),
     },
     {
       accessorKey: 'formattedCreatedAt',
       header: 'Дата создания',
       filterFn: dateRange,
       sortingFn: 'datetime',
+      cell: ({ row }) => (
+        <Text 
+          style={{ 
+            color: 'var(--theme-text-primary)',
+            fontSize: '14px',
+            fontWeight: '500'
+          }}
+        >
+          {row.original.formattedCreatedAt}
+        </Text>
+      ),
     },
     {
       accessorKey: 'formattedUpdatedAt',
       header: 'Обновлено',
       filterFn: dateRange,
       sortingFn: 'datetime',
+      cell: ({ row }) => (
+        <Text 
+          style={{ 
+            color: row.original.formattedUpdatedAt === '-' 
+              ? 'var(--theme-text-disabled)' 
+              : 'var(--theme-text-primary)',
+            fontSize: '14px',
+            fontWeight: '500'
+          }}
+        >
+          {row.original.formattedUpdatedAt}
+        </Text>
+      ),
     },
     {
       id: 'actions',
       header: 'Действия',
       cell: ({ row }) => (
-        <Group wrap="nowrap">
+        <Group gap="8px" wrap="nowrap">
           <ActionIcon
-            color="blue"
+            size="sm"
+            variant="light"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleTableAction('view', row.original);
+            }}
+            style={{
+              background: 'var(--color-blue-100)',
+              color: 'var(--color-blue-700)',
+              border: '1px solid var(--color-blue-200)',
+              borderRadius: '8px'
+            }}
+          >
+            <IconEye size={16} />
+          </ActionIcon>
+          <ActionIcon
+            size="sm"
+            variant="light"
             onClick={(e) => {
               e.stopPropagation();
               handleTableAction('edit', row.original);
             }}
+            style={{
+              background: 'var(--color-green-100)',
+              color: 'var(--color-green-700)',
+              border: '1px solid var(--color-green-200)',
+              borderRadius: '8px'
+            }}
           >
-            <IconPencil size={18} />
+            <IconPencil size={16} />
           </ActionIcon>
           <ActionIcon
-            color="red"
+            size="sm"
+            variant="light"
             onClick={(e) => {
               e.stopPropagation();
               handleTableAction('delete', row.original);
             }}
+            style={{
+              background: 'var(--color-red-100)',
+              color: 'var(--color-red-700)',
+              border: '1px solid var(--color-red-200)',
+              borderRadius: '8px'
+            }}
           >
-            <IconTrash size={18} />
+            <IconTrash size={16} />
           </ActionIcon>
         </Group>
       ),
@@ -450,36 +588,175 @@ export default function MediaList() {
 
   return (
     <DndProviderWrapper>
-      <Box p="md">
-        <Button
-          fullWidth
-          mt="xl"
-          size="md"
-          onClick={() => modals.create[1].open()}
+      <Box 
+        style={{
+          background: 'var(--theme-bg-primary)',
+          minHeight: '100vh',
+          padding: '20px'
+        }}
+      >
+        {state.loading && <LoadingOverlay visible />}
+        
+        {/* Современный заголовок */}
+        <Box
+          style={{
+            background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
+            borderRadius: '16px',
+            padding: '24px',
+            marginBottom: '24px',
+            border: '1px solid var(--theme-border-primary)',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+            position: 'relative',
+            overflow: 'hidden'
+          }}
         >
-          Добавить медиа
-        </Button>
-        <Title order={2} mt="md" mb="lg">
-          Медиа библиотека
-        </Title>
+          {/* Декоративные элементы */}
+          <Box
+            style={{
+              position: 'absolute',
+              top: '-20px',
+              right: '-20px',
+              width: '120px',
+              height: '120px',
+              background: 'rgba(255, 255, 255, 0.1)',
+              borderRadius: '50%',
+              zIndex: 1
+            }}
+          />
+          <Box
+            style={{
+              position: 'absolute',
+              bottom: '-30px',
+              left: '-30px',
+              width: '80px',
+              height: '80px',
+              background: 'rgba(255, 255, 255, 0.05)',
+              borderRadius: '50%',
+              zIndex: 1
+            }}
+          />
+          
+          <Group justify="space-between" align="center" style={{ position: 'relative', zIndex: 2 }}>
+            <Group gap="16px" align="center">
+              <Box
+                style={{
+                  width: '48px',
+                  height: '48px',
+                  background: 'rgba(255, 255, 255, 0.2)',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '24px'
+                }}
+              >
+                🎬
+              </Box>
+              <Box>
+                <Title 
+                  order={2} 
+                  style={{ 
+                    color: 'white', 
+                    margin: 0,
+                    fontSize: '28px',
+                    fontWeight: '700'
+                  }}
+                >
+                  Медиа библиотека
+                </Title>
+                <Text 
+                  style={{ 
+                    color: 'rgba(255, 255, 255, 0.8)', 
+                    fontSize: '16px',
+                    marginTop: '4px'
+                  }}
+                >
+                  Управление медиа контентом и файлами
+                </Text>
+              </Box>
+            </Group>
+            
+            <Button
+              size="lg"
+              radius="xl"
+              onClick={() => modals.create[1].open()}
+              style={{
+                background: 'rgba(255, 255, 255, 0.2)',
+                color: 'white',
+                border: '1px solid rgba(255, 255, 255, 0.3)',
+                backdropFilter: 'blur(10px)',
+                fontWeight: '600',
+                fontSize: '16px',
+                padding: '12px 24px'
+              }}
+              leftSection={<IconPlus size={20} />}
+            >
+              Добавить медиа
+            </Button>
+          </Group>
+        </Box>
         <Grid>
           <Grid.Col span={12}>
-            <FilterGroup
-              filters={filters}
-              columnFilters={state.columnFilters}
-              onColumnFiltersChange={(columnId, value) =>
-                setState(prev => ({
-                  ...prev,
-                  columnFilters: [
-                    ...prev.columnFilters.filter(f => f.id !== columnId),
-                    ...(value ? [{ id: columnId, value }] : [])
-                  ]
-                }))
-              }
-            />
+            <Box
+              style={{
+                background: 'var(--theme-bg-elevated)',
+                borderRadius: '16px',
+                padding: '20px',
+                border: '1px solid var(--theme-border-primary)',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
+                marginBottom: '20px'
+              }}
+            >
+              <Group gap="12px" align="center" style={{ marginBottom: '16px' }}>
+                <Box
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '16px'
+                  }}
+                >
+                  🔍
+                </Box>
+                <Text 
+                  style={{ 
+                    fontSize: '18px', 
+                    fontWeight: '600',
+                    color: 'var(--theme-text-primary)'
+                  }}
+                >
+                  Фильтры
+                </Text>
+              </Group>
+              <FilterGroup
+                filters={filters}
+                columnFilters={state.columnFilters}
+                onColumnFiltersChange={(columnId, value) =>
+                  setState(prev => ({
+                    ...prev,
+                    columnFilters: [
+                      ...prev.columnFilters.filter(f => f.id !== columnId),
+                      ...(value ? [{ id: columnId, value }] : [])
+                    ]
+                  }))
+                }
+              />
+            </Box>
           </Grid.Col>
           <Grid.Col span={12}>
-            <Card withBorder shadow="sm">
+            <Box
+              style={{
+                background: 'var(--theme-bg-elevated)',
+                borderRadius: '16px',
+                border: '1px solid var(--theme-border-primary)',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
+                overflow: 'hidden'
+              }}
+            >
               <TableComponent<MediaWithFormattedData>
                 data={tableData}
                 columns={columns}
@@ -490,7 +767,7 @@ export default function MediaList() {
                 filterFns={{ dateRange }}
                 onRowClick={(rowData) => handleTableAction('view', rowData)}
               />
-            </Card>
+            </Box>
           </Grid.Col>
         </Grid>
         <DynamicFormModal
