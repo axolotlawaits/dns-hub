@@ -130,11 +130,35 @@
   background: var(--theme-bg-secondary);
   border: 1px solid var(--theme-border);
   transition: var(--transition-all);
+  height: 140px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .notification-service-card:hover {
   border-color: var(--color-blue-300);
   box-shadow: var(--theme-shadow-sm);
+}
+
+/* Стили для содержимого карточек уведомлений */
+.notification-service-card .mantine-Group-root {
+  flex: 1;
+}
+
+.notification-service-card .mantine-Stack-root {
+  flex: 1;
+  justify-content: space-between;
+}
+
+/* Специальные стили для блока Email уведомлений */
+.notification-service-card:has(.mantine-Switch-root) {
+  height: 140px;
+}
+
+.notification-service-card:has(.mantine-Switch-root) .mantine-Group-root:last-child {
+  margin-top: auto;
+  align-items: center;
 }
 
 /* Кнопки уведомлений */

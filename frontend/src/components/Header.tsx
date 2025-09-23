@@ -215,17 +215,7 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
                   >
                     Личный кабинет
                   </Menu.Item>
-                  
-                  <Menu.Item 
-                    leftSection={<IconSettings size={16} />}
-                    onClick={handleSettingsClick}
-                    className="menu-item"
-                  >
-                    Настройки
-                  </Menu.Item>
-                  
-                  <Divider />
-                  
+                  <Divider /> 
                   <Menu.Item 
                     leftSection={<IconLogout size={16} />}
                     onClick={onLogout}
