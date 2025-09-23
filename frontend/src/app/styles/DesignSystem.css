@@ -49,6 +49,7 @@
   --theme-text-tertiary: var(--color-gray-500);
   --theme-text-inverse: #ffffff;
   
+  --theme-border: var(--color-gray-200);
   --theme-border-primary: var(--color-gray-200);
   --theme-border-secondary: var(--color-gray-300);
   --theme-border-focus: var(--color-primary-500);
@@ -58,6 +59,7 @@
   --theme-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
   --theme-shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
   
+  --theme-bg-hover: var(--color-gray-100);
   --theme-hover-bg: var(--color-gray-100);
   --theme-active-bg: var(--color-primary-100);
   --theme-selected-bg: var(--color-primary-500);
@@ -76,6 +78,7 @@
   --theme-text-tertiary: var(--color-gray-400);
   --theme-text-inverse: var(--color-gray-900);
   
+  --theme-border: var(--color-gray-700);
   --theme-border-primary: var(--color-gray-700);
   --theme-border-secondary: var(--color-gray-600);
   --theme-border-focus: var(--color-primary-400);
@@ -85,6 +88,7 @@
   --theme-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.4);
   --theme-shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.4), 0 8px 10px -6px rgb(0 0 0 / 0.4);
   
+  --theme-bg-hover: var(--color-gray-700);
   --theme-hover-bg: var(--color-gray-700);
   --theme-active-bg: var(--color-primary-900);
   --theme-selected-bg: var(--color-primary-500);
