@@ -137,7 +137,7 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
 };
 
 // Heartbeat от приложения устройства
-export const heartbeat = async (req: Request, res: Response) => {
+export const heartbeat = async (req: Request, res: Response): Promise<any> => {
   try {
     const { deviceId, appVersion } = req.body || {};
     if (!deviceId) {
