@@ -50,7 +50,7 @@ export default function NewsList() {
 
   const [viewModalOpened, { open: openViewModal, close: closeViewModal }] = useDisclosure(false);
   const [editModalOpened, { open: openEditModal, close: closeEditModal }] = useDisclosure(false);
-  const [createModalOpened, { close: closeCreateModal }] = useDisclosure(false);
+  const [createModalOpened, { open: openCreateModal, close: closeCreateModal }] = useDisclosure(false);
   const [deleteModalOpened, { close: closeDeleteModal }] = useDisclosure(false);
   const [allNewsModalOpened, { open: openAllNewsModal, close: closeAllNewsModal }] = useDisclosure(false);
 
@@ -187,13 +187,29 @@ export default function NewsList() {
     <Box className="news-widget">
       <LoadingOverlay visible={loading} />
       
-      <Group gap="sm" mb="md">
-        <ThemeIcon size="md" color="blue" variant="light">
-          <IconNews size={20} />
-        </ThemeIcon>
-        <Text size="lg" fw={600}>
-          Новости
-        </Text>
+      <Group gap="sm" mb="md" justify="space-between">
+        <Group gap="sm">
+          <ThemeIcon size="md" color="blue" variant="light">
+            <IconNews size={20} />
+          </ThemeIcon>
+          <Text size="lg" fw={600}>
+            Новости
+          </Text>
+        </Group>
+        {(user?.role === 'DEVELOPER' || user?.role === 'ADMINISTRATOR') && (
+          <Button
+            leftSection={<IconPlus size={16} />}
+            variant="light"
+            color="blue"
+            size="sm"
+            onClick={() => {
+              setNewsForm({ name: '', description: '', userId: user?.id || '' });
+              openCreateModal();
+            }}
+          >
+            Добавить новость
+          </Button>
+        )}
       </Group>
       
       <Flex gap="md" ref={containerRef} wrap="nowrap" style={{ overflowX: 'auto' }}>
@@ -452,7 +468,7 @@ export default function NewsList() {
                   </Text>
                 </Box>
               </Group>
-              {user?.id === selectedNews.userId && (
+              {((user?.role === 'DEVELOPER' || user?.role === 'ADMINISTRATOR') || user?.id === selectedNews.userId) && (
                 <Group gap="xs">
                   <ActionIcon
                     variant="subtle"

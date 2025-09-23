@@ -97,19 +97,6 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
         {/* Правая часть */}
         <div className="header-right">
           <Group gap="xs">
-            {/* Уведомления */}
-            <Tooltip label="Уведомления" position="bottom">
-              <ActionIcon 
-                variant="subtle" 
-                size="lg" 
-                radius="md"
-                className="header-action"
-                aria-label="Уведомления"
-              >
-                <IconBell size={20} />
-              </ActionIcon>
-            </Tooltip>
-
             {/* Переключатель темы */}
             <Tooltip 
               label={isDark ? 'Переключить на светлую тему' : 'Переключить на темную тему'} 
