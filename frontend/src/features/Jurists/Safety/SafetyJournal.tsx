@@ -342,10 +342,16 @@ export default function SafetyJournal() {
         method: 'POST',
         credentials: 'include'
       });
+      
+      console.log('Refresh token response status:', refreshResponse.status);
 
       if (refreshResponse.ok) {
         const newToken = await refreshResponse.json();
         localStorage.setItem('token', newToken);
+        console.log('Token refreshed successfully');
+        
+        // Обновляем токен в контексте
+        // Примечание: useUserContext должен автоматически обновить токен из localStorage
         
         // Повторяем запрос с новым токеном
         response = await fetch(url, {

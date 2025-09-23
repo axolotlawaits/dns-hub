@@ -494,8 +494,8 @@ export default function RocList() {
           </Group>
           
           <Tooltip label="Добавить договор">
-            <ActionIcon 
-              size="xl"
+            <Button
+              size="lg"
               radius="xl"
               onClick={openCreate}
               style={{
@@ -503,12 +503,14 @@ export default function RocList() {
                 color: 'white',
                 border: '1px solid rgba(255, 255, 255, 0.3)',
                 backdropFilter: 'blur(10px)',
-                width: '48px',
-                height: '48px'
+                fontWeight: '600',
+                fontSize: '16px',
+                padding: '12px 24px'
               }}
+              leftSection={<IconPlus size={20} />}
             >
-              <IconPlus size={24} />
-            </ActionIcon>
+              Добавить договор
+            </Button>
           </Tooltip>
         </Group>
       </Box>
@@ -1039,46 +1041,223 @@ export default function RocList() {
         }}
       />
 
-      <Drawer opened={drawerOpened} onClose={drawerHandlers.close} position="right" withOverlay={false} lockScroll={false} title="Контрагент" size={460} zIndex={2100}>
+      <Drawer 
+        opened={drawerOpened} 
+        onClose={drawerHandlers.close} 
+        position="right" 
+        withOverlay={true} 
+        lockScroll={false} 
+        title="Контрагент" 
+        size={460} 
+        zIndex={999998}
+        styles={{
+          content: {
+            background: 'var(--theme-bg-elevated)',
+            border: '1px solid var(--theme-border-primary)',
+            boxShadow: '0 32px 64px -12px rgba(0, 0, 0, 0.4)',
+            zIndex: 999998,
+          },
+          header: {
+            background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-600) 100%)',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+            color: 'white',
+            padding: '20px 24px',
+            zIndex: 999998,
+          },
+          title: {
+            color: 'white',
+            fontWeight: 700,
+            fontSize: '18px',
+          },
+          close: {
+            color: 'rgba(255, 255, 255, 0.8)',
+            background: 'rgba(255, 255, 255, 0.1)',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            borderRadius: '8px',
+            transition: 'all 0.3s ease',
+            zIndex: 999999,
+          },
+          body: {
+            padding: '24px',
+            background: 'var(--theme-bg-elevated)',
+            zIndex: 999998,
+          },
+          overlay: {
+            background: 'rgba(0, 0, 0, 0.3)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 999997,
+          }
+        }}
+      >
         {!activePartyId || !idToParty[activePartyId] ? (
-          <Text size="sm" c="dimmed">Контрагент не выбран</Text>
+          <Box style={{ textAlign: 'center', padding: '40px 20px' }}>
+            <Text size="lg" c="dimmed" fw={500}>Контрагент не выбран</Text>
+            <Text size="sm" c="dimmed" mt={8}>Выберите контрагента из списка</Text>
+          </Box>
         ) : (
-          <>
-            <Text fw={700} mb={6}>{idToParty[activePartyId].name}</Text>
-            <Text size="sm" c="dimmed" mb={8}>{idToParty[activePartyId].address}</Text>
-            <Group gap={12} wrap="wrap">
-              <Text size="sm">ИНН: {idToParty[activePartyId].inn}</Text>
-              {idToParty[activePartyId].kpp && <Text size="sm">КПП: {idToParty[activePartyId].kpp}</Text>}
-              {idToParty[activePartyId].ogrn && <Text size="sm">ОГРН: {idToParty[activePartyId].ogrn}</Text>}
-            </Group>
+          <Stack gap="lg">
+            {/* Основная информация */}
+            <Paper p="md" radius="md" style={{ background: 'var(--theme-bg-primary)', border: '1px solid var(--theme-border-secondary)' }}>
+              <Text fw={700} size="lg" mb={8} style={{ color: 'var(--theme-text-primary)' }}>
+                {idToParty[activePartyId].name}
+              </Text>
+              {idToParty[activePartyId].fullName && idToParty[activePartyId].fullName !== idToParty[activePartyId].name && (
+                <Text size="sm" c="dimmed" mb={8} style={{ fontStyle: 'italic' }}>
+                  {idToParty[activePartyId].fullName}
+                </Text>
+              )}
+              <Text size="sm" c="dimmed" mb={12}>
+                {idToParty[activePartyId].address}
+              </Text>
+              
+              <Group gap="md" wrap="wrap">
+                <Badge variant="light" color="blue" size="sm">
+                  ИНН: {idToParty[activePartyId].inn}
+                </Badge>
+                {idToParty[activePartyId].kpp && (
+                  <Badge variant="light" color="green" size="sm">
+                    КПП: {idToParty[activePartyId].kpp}
+                  </Badge>
+                )}
+                {idToParty[activePartyId].ogrn && (
+                  <Badge variant="light" color="orange" size="sm">
+                    ОГРН: {idToParty[activePartyId].ogrn}
+                  </Badge>
+                )}
+              </Group>
+            </Paper>
+
+            {/* Контактная информация */}
             {(idToParty[activePartyId].phone || idToParty[activePartyId].email) && (
-              <Group gap={12} wrap="wrap" mt={8}>
-                {idToParty[activePartyId].phone && <Text size="sm">Тел.: {idToParty[activePartyId].phone}</Text>}
-                {idToParty[activePartyId].email && <Text size="sm">Email: {idToParty[activePartyId].email}</Text>}
-              </Group>
+              <Paper p="md" radius="md" style={{ background: 'var(--theme-bg-primary)', border: '1px solid var(--theme-border-secondary)' }}>
+                <Text fw={600} size="sm" mb={12} style={{ color: 'var(--theme-text-primary)' }}>
+                  Контактная информация
+                </Text>
+                <Stack gap="xs">
+                  {idToParty[activePartyId].phone && (
+                    <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                      📞 {idToParty[activePartyId].phone}
+                    </Text>
+                  )}
+                  {idToParty[activePartyId].email && (
+                    <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                      ✉️ {idToParty[activePartyId].email}
+                    </Text>
+                  )}
+                </Stack>
+              </Paper>
             )}
-            {(idToParty[activePartyId].taxationSystem || idToParty[activePartyId].siEgrul) && (
-              <Group gap={12} wrap="wrap" mt={8}>
-                {idToParty[activePartyId].taxationSystem && <Text size="sm">СНО: {idToParty[activePartyId].taxationSystem}</Text>}
-                {idToParty[activePartyId].siEgrul && <Text size="sm">ЕГРЮЛ: {idToParty[activePartyId].siEgrul}</Text>}
-              </Group>
+
+
+            {/* Ликвидация */}
+            {idToParty[activePartyId].liquidationDate && (
+              <Paper p="md" radius="md" style={{ background: 'var(--color-red-50)', border: '1px solid var(--color-red-200)' }}>
+                <Text fw={600} size="sm" mb={8} c="red">
+                  ⚠️ Ликвидация
+                </Text>
+                <Text size="sm" c="red">
+                  {dayjs(idToParty[activePartyId].liquidationDate).isValid() 
+                    ? dayjs(idToParty[activePartyId].liquidationDate).format('DD.MM.YYYY') 
+                    : idToParty[activePartyId].liquidationDate}
+                </Text>
+              </Paper>
             )}
-            {(idToParty[activePartyId].statusCode || idToParty[activePartyId].deStatusCode) && (
-              <Group gap={12} wrap="wrap" mt={8}>
-                {typeof idToParty[activePartyId].statusCode !== 'undefined' && <Text size="sm">Код статуса: {idToParty[activePartyId].statusCode}</Text>}
-                {idToParty[activePartyId].deStatusCode && <Text size="sm">Статус: {idToParty[activePartyId].deStatusCode}</Text>}
-              </Group>
-            )}
-            {(idToParty[activePartyId].liquidationDate) && (
-              <Text size="sm" mt={8}>Ликвидация: {dayjs(idToParty[activePartyId].liquidationDate).isValid() ? dayjs(idToParty[activePartyId].liquidationDate).format('DD.MM.YYYY') : idToParty[activePartyId].liquidationDate}</Text>
-            )}
+
+            {/* Правопреемник */}
             {(idToParty[activePartyId].successorName || idToParty[activePartyId].successorINN) && (
-              <Group gap={12} wrap="wrap" mt={8}>
-                {idToParty[activePartyId].successorName && <Text size="sm">Правопреемник: {idToParty[activePartyId].successorName}</Text>}
-                {idToParty[activePartyId].successorINN && <Text size="sm">ИНН правопреемника: {idToParty[activePartyId].successorINN}</Text>}
-              </Group>
+              <Paper p="md" radius="md" style={{ background: 'var(--theme-bg-primary)', border: '1px solid var(--theme-border-secondary)' }}>
+                <Text fw={600} size="sm" mb={12} style={{ color: 'var(--theme-text-primary)' }}>
+                  Правопреемник
+                </Text>
+                <Stack gap="xs">
+                  {idToParty[activePartyId].successorName && (
+                    <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                      {idToParty[activePartyId].successorName}
+                    </Text>
+                  )}
+                  {idToParty[activePartyId].successorINN && (
+                    <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                      ИНН: {idToParty[activePartyId].successorINN}
+                    </Text>
+                  )}
+                </Stack>
+              </Paper>
             )}
-          </>
+
+            {/* Дополнительные данные из DaData */}
+            <Paper p="md" radius="md" style={{ background: 'var(--theme-bg-primary)', border: '1px solid var(--theme-border-secondary)' }}>
+              <Text fw={600} size="sm" mb={12} style={{ color: 'var(--theme-text-primary)' }}>
+                Дополнительная информация
+              </Text>
+              <Stack gap="xs">
+                {idToParty[activePartyId].typeTerm && (
+                  <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                    <strong>Тип термина:</strong> {idToParty[activePartyId].typeTerm}
+                  </Text>
+                )}
+                {idToParty[activePartyId].contractNumber && (
+                  <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                    <strong>Номер договора:</strong> {idToParty[activePartyId].contractNumber}
+                  </Text>
+                )}
+                {idToParty[activePartyId].dateContract && (
+                  <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                    <strong>Дата договора:</strong> {dayjs(idToParty[activePartyId].dateContract).format('DD.MM.YYYY')}
+                  </Text>
+                )}
+                {idToParty[activePartyId].agreedTo && (
+                  <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                    <strong>Согласовано до:</strong> {dayjs(idToParty[activePartyId].agreedTo).format('DD.MM.YYYY')}
+                  </Text>
+                )}
+                {idToParty[activePartyId].shelfLife && (
+                  <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                    <strong>Срок хранения:</strong> {idToParty[activePartyId].shelfLife} лет
+                  </Text>
+                )}
+              </Stack>
+            </Paper>
+
+            {/* Система налогообложения */}
+            {idToParty[activePartyId].taxationSystem && (
+              <Paper p="md" radius="md" style={{ background: 'var(--theme-bg-primary)', border: '1px solid var(--theme-border-secondary)' }}>
+                <Text fw={600} size="sm" mb={12} style={{ color: 'var(--theme-text-primary)' }}>
+                  Налогообложение
+                </Text>
+                <Stack gap="xs">
+                  <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                    <strong>Система налогообложения:</strong> {idToParty[activePartyId].taxationSystem}
+                  </Text>
+                  {idToParty[activePartyId].siEgrul && (
+                    <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                      <strong>ЕГРЮЛ:</strong> {idToParty[activePartyId].siEgrul}
+                    </Text>
+                  )}
+                </Stack>
+              </Paper>
+            )}
+
+            {/* Статус организации */}
+            {(idToParty[activePartyId].statusCode || idToParty[activePartyId].deStatusCode) && (
+              <Paper p="md" radius="md" style={{ background: 'var(--theme-bg-primary)', border: '1px solid var(--theme-border-secondary)' }}>
+                <Text fw={600} size="sm" mb={12} style={{ color: 'var(--theme-text-primary)' }}>
+                  Статус организации
+                </Text>
+                <Stack gap="xs">
+                  {typeof idToParty[activePartyId].statusCode !== 'undefined' && (
+                    <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                      <strong>Код статуса:</strong> {idToParty[activePartyId].statusCode}
+                    </Text>
+                  )}
+                  {idToParty[activePartyId].deStatusCode && (
+                    <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                      <strong>Статус:</strong> {idToParty[activePartyId].deStatusCode}
+                    </Text>
+                  )}
+                </Stack>
+              </Paper>
+            )}
+          </Stack>
         )}
       </Drawer>
 

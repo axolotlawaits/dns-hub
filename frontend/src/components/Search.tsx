@@ -268,7 +268,7 @@ function Search() {
                         <Badge 
                           size="sm" 
                           variant="light" 
-                          color={employee.status === 'active' || employee.status === 'работает' ? 'green' : 'red'}
+                          color={employee.status === 'active' || employee.status === 'Работает' ? 'green' : 'red'}
                           leftSection={<IconUser size={12} />}
                         >
                           {employee.status}

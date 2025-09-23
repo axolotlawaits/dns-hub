@@ -40,7 +40,7 @@ function Home() {
         gap: '20px'
       }}>
         {/* Уведомления */}
-        <div style={{ flex: 1 }}>
+        <div style={{ height: '500px', flexShrink: 0 }}>
           <Notifications />
         </div>
 
