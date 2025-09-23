@@ -1,12 +1,12 @@
-import { Button, Modal, TextInput } from '@mantine/core'
-import { IconSearch } from '@tabler/icons-react'
-import { useState } from 'react'
-import { API } from '../config/constants'
-import { useDisclosure } from '@mantine/hooks'
-import { useNavigate } from 'react-router'
-import { BranchType } from '../app/handbook/Branch'
-import { EmployeeType } from '../app/handbook/Employee'
-import { Tool } from './Tools'
+import {  Button,  Text,  Group,  Stack,  Box,  Card,  Badge,  ThemeIcon, ActionIcon, TextInput, Modal } from "@mantine/core"
+import {  IconSearch,  IconBuilding,  IconUsers,  IconTool,  IconMapPin,  IconShield, IconChevronRight, IconSparkles, IconUser } from "@tabler/icons-react"
+import { useState, useCallback } from "react"
+import { API } from "../config/constants"
+import { useDisclosure } from "@mantine/hooks"
+import { useNavigate } from "react-router"
+import { BranchType } from "../app/handbook/Branch"
+import { EmployeeType } from "../app/handbook/Employee"
+import { Tool } from "./Tools"
 
 function Search() {
   const [opened, { open, close }] = useDisclosure(false)
@@ -14,99 +14,529 @@ function Search() {
   const [employeeResult, setEmployeeResult] = useState<EmployeeType[]>([])
   const [toolResult, setToolResult] = useState<Tool[]>([])
   const navigate = useNavigate()
-  const [text, setText] = useState('')
+  const [text, setText] = useState("")
 
-  const onSearch = async (text: string) => {
+  const onSearch = useCallback(async (text: string) => {
+    if (!text.trim()) {
+      clearData()
+      return
+    }
+    
+    try {
     const response = await fetch(`${API}/search?text=${text}`)
     const json = await response.json()
     if (response.ok) {
-      setBranchResult(json.branches)
-      setEmployeeResult(json.users)
-      setToolResult(json.tools)
+        setBranchResult(json.branches || [])
+        setEmployeeResult(json.users || [])
+        setToolResult(json.tools || [])
+      }
+    } catch (error) {
+      console.error("Search error:", error)
     }
-  }
+  }, [])
 
-  const onResultClick = (link: string) => {
+  const onResultClick = useCallback((link: string) => {
     close()
     clearData()
     navigate(link)
-  }
+  }, [close, navigate])
 
-  const onSearchEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (text && e.key === 'Enter') {
-      close()
-      clearData()
-      navigate(`/search?text=${text}`)
-    }
-  }
 
-  const clearData = () => {
+  const clearData = useCallback(() => {
     setBranchResult([])
     setEmployeeResult([])
     setToolResult([])
+  }, [])
+
+
+  const renderSearchResults = () => {
+    const hasResults = branchResult.length > 0 || employeeResult.length > 0 || toolResult.length > 0
+    
+    if (!hasResults && text) {
+      return (
+        <Box p="xl" style={{ textAlign: 'center' }}>
+          <Stack gap="md" align="center">
+            <ThemeIcon
+              size="xl"
+              color="gray"
+              variant="light"
+              style={{
+                background: 'linear-gradient(135deg, var(--color-gray-100) 0%, var(--color-gray-200) 100%)',
+                boxShadow: 'var(--theme-shadow-md)'
+              }}
+            >
+              <IconSearch size={32} />
+            </ThemeIcon>
+            <Text size="lg" fw={600} style={{ color: 'var(--theme-text-primary)' }}>
+              Ничего не найдено
+            </Text>
+            <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+              Попробуйте изменить запрос или поискать в другом разделе
+            </Text>
+          </Stack>
+        </Box>
+      )
+    }
+
+    if (!text) {
+      return (
+        <Box p="xl" style={{ textAlign: 'center' }}>
+          <Stack gap="md" align="center">
+            <ThemeIcon
+              size="xl"
+              color="blue"
+              variant="light"
+              style={{
+                background: 'linear-gradient(135deg, var(--color-primary-100) 0%, var(--color-primary-200) 100%)',
+                boxShadow: 'var(--theme-shadow-md)'
+              }}
+            >
+              <IconSparkles size={32} />
+            </ThemeIcon>
+            <Text size="lg" fw={600} style={{ color: 'var(--theme-text-primary)' }}>
+              Предложенные ответы
+            </Text>
+            <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+              Начните вводить запрос, чтобы увидеть результаты поиска
+            </Text>
+          </Stack>
+        </Box>
+      )
+    }
+
+    return (
+      <Stack gap="lg">
+        {branchResult.length > 0 && (
+          <Box>
+            <Box
+              style={{
+                background: 'var(--theme-bg-elevated)',
+                borderRadius: 'var(--radius-md)',
+                padding: 'var(--space-4)',
+                marginBottom: 'var(--space-4)',
+                border: '1px solid var(--theme-border-primary)'
+              }}
+            >
+              <Group gap="md" align="center">
+                <ThemeIcon 
+                  size="lg" 
+                  color="blue" 
+                  variant="light"
+                >
+                  <IconBuilding size={20} />
+                </ThemeIcon>
+                <Text size="lg" fw={600} style={{ color: 'var(--theme-text-primary)' }}>
+                  Филиалы
+                </Text>
+                <Badge 
+                  size="lg" 
+                  variant="light" 
+                  color="blue"
+                >
+                  {branchResult.length}
+                </Badge>
+              </Group>
+            </Box>
+            <Stack gap="sm">
+              {branchResult.slice(0, 3).map(branch => (
+                <Card
+                  key={branch.uuid}
+                  radius="lg"
+                  p="lg"
+                  style={{
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    background: 'var(--theme-bg-elevated)',
+                    border: '1px solid var(--theme-border-primary)',
+                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                    position: 'relative'
+                  }}
+                  onClick={() => onResultClick(`/branch/${branch.uuid}`)}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--color-primary-300)'
+                    e.currentTarget.style.background = 'var(--color-primary-50)'
+                    e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.15)'
+                    e.currentTarget.style.transform = 'translateY(-1px)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--theme-border-primary)'
+                    e.currentTarget.style.background = 'var(--theme-bg-elevated)'
+                    e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)'
+                    e.currentTarget.style.transform = 'translateY(0)'
+                  }}
+                >
+                  <Group justify="space-between" align="center">
+                    <Box>
+                      <Text size="md" fw={600} style={{ color: 'var(--theme-text-primary)' }}>
+                        {branch.name}
+                      </Text>
+                      <Group gap="xs" mt="xs">
+                        <Badge size="sm" variant="light" color="green" leftSection={<IconMapPin size={12} />}>
+                          {branch.city}
+                        </Badge>
+                        <Badge size="sm" variant="light" color="orange">
+                          РРС: {branch.rrs}
+                        </Badge>
+                      </Group>
+                    </Box>
+                    <ActionIcon variant="subtle" color="blue">
+                      <IconChevronRight size={16} />
+                    </ActionIcon>
+                  </Group>
+                </Card>
+              ))}
+              {branchResult.length > 3 && (
+                <Text size="sm" style={{ color: 'var(--theme-text-secondary)', textAlign: 'center', fontStyle: 'italic' }}>
+                  и еще {branchResult.length - 3} филиалов...
+                </Text>
+              )}
+            </Stack>
+          </Box>
+        )}
+
+        {employeeResult.length > 0 && (
+          <Box>
+            <Box
+              style={{
+                background: 'var(--theme-bg-elevated)',
+                borderRadius: 'var(--radius-md)',
+                padding: 'var(--space-4)',
+                marginBottom: 'var(--space-4)',
+                border: '1px solid var(--theme-border-primary)'
+              }}
+            >
+              <Group gap="md" align="center">
+                <ThemeIcon 
+                  size="lg" 
+                  color="green" 
+                  variant="light"
+                >
+                  <IconUsers size={20} />
+                </ThemeIcon>
+                <Text size="lg" fw={600} style={{ color: 'var(--theme-text-primary)' }}>
+                  Сотрудники
+                </Text>
+                <Badge 
+                  size="lg" 
+                  variant="light" 
+                  color="green"
+                >
+                  {employeeResult.length}
+                </Badge>
+              </Group>
+            </Box>
+            <Stack gap="sm">
+              {employeeResult.slice(0, 3).map(employee => (
+                <Card
+                  key={employee.uuid}
+                  radius="lg"
+                  p="lg"
+                  style={{
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    background: 'var(--theme-bg-elevated)',
+                    border: '1px solid var(--theme-border-primary)',
+                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                    position: 'relative'
+                  }}
+                  onClick={() => onResultClick(`/employee/${employee.uuid}`)}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--color-green-300)'
+                    e.currentTarget.style.background = 'var(--color-green-50)'
+                    e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.15)'
+                    e.currentTarget.style.transform = 'translateY(-1px)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--theme-border-primary)'
+                    e.currentTarget.style.background = 'var(--theme-bg-elevated)'
+                    e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)'
+                    e.currentTarget.style.transform = 'translateY(0)'
+                  }}
+                >
+                  <Group justify="space-between" align="center">
+                    <Box>
+                      <Text size="md" fw={600} style={{ color: 'var(--theme-text-primary)' }}>
+                        {employee.fio}
+                      </Text>
+                      <Group gap="xs" mt="xs">
+                        <Badge size="sm" variant="light" color="blue" leftSection={<IconShield size={12} />}>
+                          {employee.position?.name || 'Не указана'}
+                        </Badge>
+                        <Badge size="sm" variant="light" color="orange" leftSection={<IconBuilding size={12} />}>
+                          {employee.branch?.name || 'Не указан'}
+                        </Badge>
+                        <Badge 
+                          size="sm" 
+                          variant="light" 
+                          color={employee.status === 'active' || employee.status === 'работает' ? 'green' : 'red'}
+                          leftSection={<IconUser size={12} />}
+                        >
+                          {employee.status}
+                        </Badge>
+                      </Group>
+                    </Box>
+                    <ActionIcon variant="subtle" color="green">
+                      <IconChevronRight size={16} />
+                    </ActionIcon>
+                  </Group>
+                </Card>
+              ))}
+              {employeeResult.length > 3 && (
+                <Text size="sm" style={{ color: 'var(--theme-text-secondary)', textAlign: 'center', fontStyle: 'italic' }}>
+                  и еще {employeeResult.length - 3} сотрудников...
+                </Text>
+              )}
+            </Stack>
+          </Box>
+        )}
+
+        {toolResult.length > 0 && (
+          <Box>
+            <Box
+              style={{
+                background: 'var(--theme-bg-elevated)',
+                borderRadius: 'var(--radius-md)',
+                padding: 'var(--space-4)',
+                marginBottom: 'var(--space-4)',
+                border: '1px solid var(--theme-border-primary)'
+              }}
+            >
+              <Group gap="md" align="center">
+                <ThemeIcon 
+                  size="lg" 
+                  color="orange" 
+                  variant="light"
+                >
+                  <IconTool size={20} />
+                </ThemeIcon>
+                <Text size="lg" fw={600} style={{ color: 'var(--theme-text-primary)' }}>
+                  Инструменты
+                </Text>
+                <Badge 
+                  size="lg" 
+                  variant="light" 
+                  color="orange"
+                >
+                  {toolResult.length}
+                </Badge>
+              </Group>
+            </Box>
+            <Stack gap="sm">
+              {toolResult.slice(0, 3).map(tool => (
+                <Card
+                  key={tool.id}
+                  radius="lg"
+                  p="lg"
+                  style={{
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    background: 'var(--theme-bg-elevated)',
+                    border: '1px solid var(--theme-border-primary)',
+                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                    position: 'relative'
+                  }}
+                  onClick={() => onResultClick(`/${tool.link}`)}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--color-orange-300)'
+                    e.currentTarget.style.background = 'var(--color-orange-50)'
+                    e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.15)'
+                    e.currentTarget.style.transform = 'translateY(-1px)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--theme-border-primary)'
+                    e.currentTarget.style.background = 'var(--theme-bg-elevated)'
+                    e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)'
+                    e.currentTarget.style.transform = 'translateY(0)'
+                  }}
+                >
+                  <Group justify="space-between" align="center">
+                    <Box>
+                      <Text size="md" fw={600} style={{ color: 'var(--theme-text-primary)' }}>
+                        {tool.name}
+                      </Text>
+                      <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }} mt="xs">
+                        Инструмент системы
+                      </Text>
+                    </Box>
+                    <ActionIcon variant="subtle" color="orange">
+                      <IconChevronRight size={16} />
+                    </ActionIcon>
+                  </Group>
+                </Card>
+              ))}
+              {toolResult.length > 3 && (
+                <Text size="sm" style={{ color: 'var(--theme-text-secondary)', textAlign: 'center', fontStyle: 'italic' }}>
+                  и еще {toolResult.length - 3} инструментов...
+                </Text>
+              )}
+            </Stack>
+          </Box>
+        )}
+      </Stack>
+    )
   }
 
   return (
     <>
-      <Modal opened={opened} onClose={() => {close(), setBranchResult([])}} title="Что будем искать?">
-        <TextInput
-          data-autofocus
-          size='md'
-          placeholder="поиск"
-          leftSection={<IconSearch size={20} />}
-          onChange={(e) => e.target.value ? (onSearch(e.target.value), setText(e.target.value)) : clearData()}
-          onKeyDown={onSearchEnter}
-        />
-        <div id='search-results'>
-          {branchResult.length > 0 && 
-            <div className='search-group'>
-              <h1 className='search-group-title'>Филиалы</h1>
-              {branchResult.map(branch => {
-                return (
-                  <div key={branch.uuid} className='search-result' onClick={() => onResultClick(`/branch/${branch.uuid}`)}>
-                    <span>{branch.name}</span>
-                  </div>
-                )
-              })}
-            </div>
+      <Modal
+        opened={opened}
+        onClose={() => { close(); clearData(); }}
+        title=""
+        size="90%"
+        radius="lg"
+        centered
+        withCloseButton
+        closeOnClickOutside
+        closeOnEscape
+        withOverlay={false}
+        styles={{
+          content: {
+            width: '100%',
+            maxWidth: '90vw',
+            zIndex: 99999
+          },
+          body: {
+            width: '100%',
+            padding: 0
+          },
+          overlay: {
+            zIndex: 99998
           }
-          {employeeResult.length > 0 &&
-            <div className='search-group'>
-              <h1 className='search-group-title'>Сотрудники</h1>
-              {employeeResult.map(employee => {
-                return (
-                  <div key={employee.uuid} className='search-result' onClick={() => onResultClick(`/employee/${employee.uuid}`)}>
-                    <span>{employee.fio}</span>
-                  </div>
-                )
-              })}
-            </div>
-          }
-          {toolResult.length > 0 &&
-            <div className='search-group'>
-              <h1 className='search-group-title'>Инструменты</h1>
-              {toolResult.map(tool => {
-                return (
-                  <div key={tool.id} className='search-result' onClick={() => onResultClick(`/${tool.link}`)}>
-                    <span>{tool.name}</span>
-                  </div>
-                )
-              })}
-            </div>
-          }
-        </div>
+        }}
+      >
+        <Box style={{ width: '100%' }}>
+            {/* Заголовок с полем ввода */}
+            <Box
+              style={{
+                background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-600) 100%)',
+                borderRadius: 'var(--radius-lg)',
+                padding: 'var(--space-6)',
+                marginBottom: 'var(--space-4)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}
+            >
+              <Group gap="md" align="center" style={{ width: '100%' }}>
+                <ThemeIcon
+                  size="xl"
+                  color="white"
+                  variant="light"
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.2)',
+                    backdropFilter: 'blur(10px)',
+                    border: '1px solid rgba(255, 255, 255, 0.3)'
+                  }}
+                >
+                  <IconSearch size={24} />
+                </ThemeIcon>
+                <Box style={{ flex: 1 }}>
+                  <Text size="xl" fw={700} style={{ color: 'white', marginBottom: 'var(--space-2)' }}>
+                    Поиск по системе
+                  </Text>
+                  <TextInput
+                    placeholder="Введите запрос для поиска..."
+                    value={text}
+                    onChange={(e) => {
+                      setText(e.target.value)
+                      onSearch(e.target.value)
+                    }}
+                    leftSection={<IconSearch size={18} />}
+                    size="md"
+                    style={{
+                      '& .mantine-Input-input': {
+                        background: 'rgba(255, 255, 255, 0.9)',
+                        border: '1px solid rgba(255, 255, 255, 0.3)',
+                        borderRadius: 'var(--radius-md)',
+                        color: 'var(--theme-text-primary)',
+                        '&:focus': {
+                          borderColor: 'rgba(255, 255, 255, 0.6)',
+                          boxShadow: '0 0 0 2px rgba(255, 255, 255, 0.2)'
+                        }
+                      }
+                    }}
+                  />
+                </Box>
+              </Group>
+              
+              {/* Декоративные элементы - убраны чтобы не перекрывать */}
+            </Box>
+
+            {/* Контейнер с результатами */}
+            <Box
+              style={{ 
+                minHeight: '400px',
+                maxHeight: '600px',
+                overflowY: 'auto',
+                background: 'var(--theme-bg-elevated)',
+                borderRadius: 'var(--radius-lg)',
+                border: '1px solid var(--theme-border-primary)',
+                padding: 'var(--space-6)',
+                boxShadow: 'var(--theme-shadow-lg)'
+              }}
+            >
+              {renderSearchResults()}
+              
+              {/* Кнопка для перехода к общей странице поиска */}
+              <Box mt="md" style={{ textAlign: 'center' }}>
+                <Button
+                  variant="outline"
+                  color="blue"
+                  size="md"
+                  onClick={() => {
+                    if (text.trim()) {
+                      navigate(`/search?text=${encodeURIComponent(text)}`);
+                      close();
+                      clearData();
+                    }
+                  }}
+                  disabled={!text.trim()}
+                  style={{
+                    borderColor: 'var(--color-primary-300)',
+                    color: 'var(--color-primary-600)',
+                    '&:hover': {
+                      backgroundColor: 'var(--color-primary-50)',
+                      borderColor: 'var(--color-primary-400)'
+                    }
+                  }}
+                >
+                  Перейти к полному поиску
+                </Button>
+              </Box>
+            </Box>
+        </Box>
       </Modal>
+      
       <Button
-        style={{ width: 200, display: 'flex', color: 'GrayText', fontWeight: '200'}}
-        size='sm'
-        variant='default'
+        style={{
+          background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-600) 100%)',
+          border: 'none',
+          borderRadius: 'var(--radius-xl)',
+          color: 'white',
+          fontWeight: 'var(--font-weight-medium)',
+          boxShadow: 'var(--theme-shadow-md)',
+          transition: 'var(--transition-all)',
+          padding: 'var(--space-3) var(--space-6)',
+          width: '200px'
+        }}
+        size="md"
         leftSection={<IconSearch size={18} />}
         onClick={open}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'translateY(-2px)'
+          e.currentTarget.style.boxShadow = 'var(--theme-shadow-lg)'
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'translateY(0)'
+          e.currentTarget.style.boxShadow = 'var(--theme-shadow-md)'
+        }}
       >
-        поиск
+        Поиск
       </Button>
     </>
   )
 }
 
 export default Search
+
+
+

@@ -1,0 +1,742 @@
+import { Request, Response } from 'express';
+import axios from 'axios';
+import FormData from 'form-data';
+import { prisma } from '../../server.js';
+
+// Базовый URL для внешнего API
+// ВАЖНО: Создайте файл .env в корне проекта и добавьте:
+// EXTERNAL_API_URL=http://10.0.128.95:8000/api/v1
+const EXTERNAL_API_URL = process.env.EXTERNAL_API_URL || 'http://10.0.128.95:8000/api/v1';
+
+// Функция для получения токена из заголовков
+const getAuthToken = (req: Request): string | null => {
+  const authHeader = req.headers?.authorization;
+  if (!authHeader) {
+    console.error('No authorization header found in request');
+    return null;
+  }
+  return authHeader.split(' ')[1] || null;
+};
+
+// Функция для создания заголовков с авторизацией
+const createAuthHeaders = (token: string | null) => {
+  return {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  };
+};
+
+// Функция для проверки доступа к jurists/safety
+const checkSafetyJournalAccess = async (userId: string, positionName: string, groupName: string): Promise<boolean> => {
+  try {
+    // Ищем инструмент jurists/safety
+    const safetyTool = await prisma.tool.findFirst({
+      where: { link: 'jurists/safety' }
+    });
+
+    if (!safetyTool) {
+      return false;
+    }
+
+    // Проверяем доступ на уровне пользователя
+    const userAccess = await prisma.userToolAccess.findFirst({
+      where: {
+        userId: userId,
+        toolId: safetyTool.id,
+        accessLevel: 'FULL'
+      }
+    });
+
+    if (userAccess) {
+      return true;
+    }
+
+    // Проверяем доступ на уровне должности
+    const position = await prisma.position.findFirst({
+      where: { name: positionName }
+    });
+
+    if (position) {
+      const positionAccess = await prisma.positionToolAccess.findFirst({
+        where: {
+          positionId: position.uuid,
+          toolId: safetyTool.id,
+          accessLevel: 'FULL'
+        }
+      });
+
+      if (positionAccess) {
+        return true;
+      }
+    }
+
+    // Проверяем доступ на уровне группы
+    if (groupName) {
+      const group = await prisma.group.findFirst({
+        where: { name: groupName }
+      });
+
+      if (group) {
+        const groupAccess = await prisma.groupToolAccess.findFirst({
+          where: {
+            groupId: group.uuid,
+            toolId: safetyTool.id,
+            accessLevel: 'FULL'
+          }
+        });
+
+        if (groupAccess) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  } catch (error) {
+    console.error('Error checking safety journal access:', error);
+    return false;
+  }
+};
+
+// Получение информации о текущем пользователе
+export const getCurrentUser = async (req: Request, res: Response) => {
+  try {
+    const { userId } = (req as any).token;
+    
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'Пользователь не найден' });
+    }
+
+    // Получаем информацию о филиале пользователя
+    const branch = await prisma.branch.findFirst({
+      where: { uuid: user.branch }
+    });
+
+    // Получаем статус пользователя из UserData
+    const userData = await prisma.userData.findFirst({
+      where: { email: user.email }
+    });
+
+    const userInfo = {
+      userId: user.id,
+      userName: user.name,
+      userCode: user.login || '',
+      email: user.email || null,
+      positionName: user.position || '',
+      positionId: user.position || '',
+      branchId: user.branch || '',
+      branchName: branch?.name || '',
+      phoneNumber: null,
+      counterpartyId: '',
+      isManager: false,
+      status: userData?.status || 'active'
+    };
+
+    res.json(userInfo);
+  } catch (error) {
+    console.error('Error getting current user:', error);
+    res.status(500).json({ message: 'Ошибка получения информации о пользователе' });
+  }
+};
+
+// Получение списка филиалов с журналами (только для текущего пользователя)
+export const getBranchesWithJournals = async (req: Request, res: Response) => {
+  try {
+    const { userId, positionName, groupName } = (req as any).token;
+    const token = getAuthToken(req);
+    
+    if (!token) {
+      return res.status(401).json({ message: 'Токен авторизации не найден' });
+    }
+    
+    // Проверяем доступ к jurists/safety (для информации, но не блокируем)
+    const hasFullAccess = await checkSafetyJournalAccess(userId, positionName, groupName);
+    console.log('User has full access to safety journal:', hasFullAccess);
+    
+    // Получаем филиалы из внешнего API
+    const branchesResponse = await axios.get(`${EXTERNAL_API_URL}/me/branches_with_journals`, {
+      headers: createAuthHeaders(token)
+    });
+
+    // Получаем все филиалы из локальной БД для дополнительной информации
+    const localBranches = await prisma.branch.findMany();
+    const localBranchesMap = new Map(localBranches.map((branch: any) => [branch.uuid, branch]));
+
+    // Объединяем данные из внешнего API с локальными данными
+    const branchesWithJournals = await Promise.all(
+      branchesResponse.data.branches.map(async (apiBranch: any) => {
+        const localBranch = localBranchesMap.get(apiBranch.branch_id);
+        
+        // Обрабатываем журналы с файлами из API
+        const journalsWithFilesCount = apiBranch.journals.map((journal: any) => {
+          const isCurrent = isJournalCurrent(journal);
+          const activeFilesCount = journal.files ? journal.files.filter((f: any) => !f.is_deleted).length : 0;
+          
+          return {
+            ...journal,
+            journal_type: determineJournalType(journal.journal_title),
+            files_count: activeFilesCount,
+            is_current: isCurrent, // Флаг актуальности журнала
+            // Используем id как branch_journal_id для загрузки файлов
+            branch_journal_id: journal.id
+          };
+        });
+        
+        return {
+          ...apiBranch,
+          branch_address: localBranch?.address || apiBranch.branch_address || '',
+          city_name: localBranch?.city || apiBranch.city_name || '',
+          journals: journalsWithFilesCount
+        };
+      })
+    );
+
+    res.json({ 
+      branches: branchesWithJournals,
+      hasFullAccess: hasFullAccess // Добавляем информацию о доступе
+    });
+  } catch (error) {
+    console.error('Error getting branches with journals:', error);
+    res.status(500).json({ message: 'Ошибка получения филиалов с журналами' });
+  }
+};
+
+// Функция для определения типа журнала по названию
+function determineJournalType(journalTitle: string): 'labor_protection' | 'fire_safety' {
+  const title = journalTitle.toLowerCase();
+  
+  // Ключевые слова для охраны труда
+  const laborProtectionKeywords = [
+    'охрана труда',
+    'инструктаж',
+    'электробезопасность',
+    'соут',
+    'инструкция'
+  ];
+  
+  // Ключевые слова для пожарной безопасности
+  const fireSafetyKeywords = [
+    'пожар',
+    'противопожарный',
+    'огнетушитель',
+    'противоаварийный',
+    'тренировка'
+  ];
+  
+  // Проверяем ключевые слова
+  for (const keyword of laborProtectionKeywords) {
+    if (title.includes(keyword)) {
+      return 'labor_protection';
+    }
+  }
+  
+  for (const keyword of fireSafetyKeywords) {
+    if (title.includes(keyword)) {
+      return 'fire_safety';
+    }
+  }
+  
+  // По умолчанию считаем охраной труда
+  return 'labor_protection';
+}
+
+// Функция для получения количества файлов журнала
+async function getJournalFilesCount(journalId: string, token: string): Promise<number> {
+  try {
+    return 0;
+  } catch (error) {
+    console.error(`Error getting files count for journal ${journalId}:`, error);
+    return 0;
+  }
+}
+
+// Функция для получения списка файлов журнала
+async function getJournalFiles(journalId: string, token: string): Promise<any[]> {
+  try {
+    const EXTERNAL_API_URL = process.env.EXTERNAL_API_URL || 'http://10.0.128.95:8000/api/v1';
+    
+    console.log(`Trying to get files for journal ${journalId}`);
+    
+    // Попробуем разные эндпоинты для получения файлов
+    const endpoints = [
+      `${EXTERNAL_API_URL}/files/?branch_journal_id=${journalId}`,
+      `${EXTERNAL_API_URL}/files/?journal_id=${journalId}`,
+      `${EXTERNAL_API_URL}/journals/${journalId}/files`,
+      `${EXTERNAL_API_URL}/branch_journals/${journalId}/files`,
+      `${EXTERNAL_API_URL}/files/`
+    ];
+    
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Trying endpoint: ${endpoint}`);
+        const response = await axios.get(endpoint, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        console.log(`Files found via ${endpoint}:`, response.data);
+        return response.data.files || response.data || [];
+      } catch (endpointError: any) {
+        console.log(`Endpoint ${endpoint} failed:`, endpointError.response?.status, endpointError.response?.data);
+      }
+    }
+    
+    // Если все эндпоинты не сработали, возвращаем пустой массив
+    console.log(`No files found for journal ${journalId} via any endpoint`);
+    return [];
+  } catch (error: any) {
+    console.error(`Error getting files for journal ${journalId}:`, error.response?.data || error.message);
+    return [];
+  }
+}
+
+// Функция для проверки актуальности журнала в текущем периоде
+function isJournalCurrent(journal: any): boolean {
+  const now = new Date();
+  const periodStart = new Date(journal.period_start);
+  const periodEnd = new Date(journal.period_end);
+  
+  // Журнал актуален, если текущая дата находится в периоде журнала
+  return now >= periodStart && now <= periodEnd;
+}
+
+// Загрузка файла
+export const uploadFile = async (req: Request, res: Response) => {
+  try {
+    const { branchJournalId } = req.body;
+    const file = req.file;
+
+    console.log('Upload file request:', {
+      branchJournalId,
+      fileName: file?.originalname,
+      fileSize: file?.size,
+      fileMimetype: file?.mimetype,
+      externalApiUrl: EXTERNAL_API_URL,
+      hasFile: !!file,
+      hasBuffer: !!file?.buffer
+    });
+
+    if (!file) {
+      return res.status(400).json({ message: 'Файл не предоставлен' });
+    }
+
+    if (!branchJournalId) {
+      return res.status(400).json({ message: 'ID журнала филиала не предоставлен' });
+    }
+
+    if (!EXTERNAL_API_URL) {
+      console.error('EXTERNAL_API_URL is not defined');
+      return res.status(500).json({ message: 'Внешний API не настроен' });
+    }
+
+    const token = getAuthToken(req);
+    console.log('Auth token:', token ? 'present' : 'missing');
+    
+    if (!token) {
+      console.error('No auth token found');
+      return res.status(401).json({ message: 'Токен авторизации не найден' });
+    }
+
+    // Создаем FormData для отправки файла
+    const formData = new FormData();
+    formData.append('branchJournalId', branchJournalId);
+    formData.append('file', file.buffer, {
+      filename: file.originalname,
+      contentType: file.mimetype
+    });
+
+    const url = `${EXTERNAL_API_URL}/files/`;
+    console.log('Sending file to:', url);
+    console.log('FormData headers:', formData.getHeaders());
+    console.log('BranchJournalId being sent:', branchJournalId);
+    console.log('FormData contents:', {
+      branchJournalId: branchJournalId,
+      file: file ? 'present' : 'missing'
+    });
+
+    const response = await axios.post(url, formData, {
+      headers: {
+        ...formData.getHeaders(),
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    console.log('File upload successful:', response.status);
+    console.log('External API response data:', response.data);
+    res.json(response.data);
+  } catch (error: any) {
+    console.error('Error uploading file:', error);
+    if (error.response) {
+      console.error('External API error:', error.response.status, error.response.data);
+      res.status(error.response.status).json(error.response.data);
+    } else {
+      console.error('Network or other error:', error.message);
+      res.status(500).json({ message: 'Ошибка загрузки файла' });
+    }
+  }
+};
+
+// Получение метаданных файла
+export const getFileMetadata = async (req: Request, res: Response) => {
+  try {
+    const { fileId } = req.params;
+
+    const response = await axios.get(`${EXTERNAL_API_URL}/files/${fileId}`, {
+      headers: createAuthHeaders(getAuthToken(req))
+    });
+
+    res.json(response.data);
+  } catch (error: any) {
+    console.error('Error getting file metadata:', error);
+    if (error.response) {
+      res.status(error.response.status).json(error.response.data);
+    } else {
+      res.status(500).json({ message: 'Ошибка получения метаданных файла' });
+    }
+  }
+};
+
+
+// Удаление файла
+export const deleteFile = async (req: Request, res: Response) => {
+  try {
+    const { fileId } = req.params;
+    const { userId, positionName, groupName } = (req as any).token;
+
+    // Проверяем доступ к jurists/safety
+    const hasAccess = await checkSafetyJournalAccess(userId, positionName, groupName);
+    if (!hasAccess) {
+      console.log('User does not have access to safety journal for file deletion');
+      return res.status(403).json({ message: 'Недостаточно прав для удаления файла' });
+    }
+
+    const response = await axios.delete(`${EXTERNAL_API_URL}/files/${fileId}`, {
+      headers: createAuthHeaders(getAuthToken(req))
+    });
+
+    res.json(response.data);
+  } catch (error: any) {
+    console.error('Error deleting file:', error);
+    if (error.response) {
+      res.status(error.response.status).json(error.response.data);
+    } else {
+      res.status(500).json({ message: 'Ошибка удаления файла' });
+    }
+  }
+};
+
+// Тестовый endpoint для проверки структуры данных от внешнего API
+export const testExternalApi = async (req: Request, res: Response) => {
+  try {
+    const token = getAuthToken(req);
+    
+    if (!token) {
+      return res.status(401).json({ message: 'Токен авторизации не найден' });
+    }
+    
+    // Получаем данные от внешнего API
+    const branchesResponse = await axios.get(`${EXTERNAL_API_URL}/me/branches_with_journals`, {
+      headers: createAuthHeaders(token)
+    });
+    
+    // Возвращаем первые несколько журналов для анализа
+    const sampleJournals = branchesResponse.data.branches
+      .flatMap((branch: any) => branch.journals)
+      .slice(0, 3)
+      .map((journal: any) => ({
+        journal_id: journal.journal_id,
+        branch_journal_id: journal.branch_journal_id,
+        journal_title: journal.journal_title,
+        allKeys: Object.keys(journal),
+        fullJournal: journal
+      }));
+    
+    res.json({ 
+      message: 'Данные от внешнего API',
+      sampleJournals,
+      totalBranches: branchesResponse.data.branches.length,
+      totalJournals: branchesResponse.data.branches.reduce((sum: number, branch: any) => sum + branch.journals.length, 0)
+    });
+  } catch (error: any) {
+    console.error('Error testing external API:', error);
+    if (error.response) {
+      res.status(error.response.status).json(error.response.data);
+    } else {
+      res.status(500).json({ message: 'Ошибка тестирования внешнего API' });
+    }
+  }
+};
+
+// Получение списка файлов для журнала
+export const getJournalFilesList = async (req: Request, res: Response) => {
+  try {
+    const { journalId } = req.params;
+    const token = getAuthToken(req);
+    
+    if (!token) {
+      return res.status(401).json({ message: 'Токен авторизации не найден' });
+    }
+    
+    if (!journalId) {
+      return res.status(400).json({ message: 'ID журнала не предоставлен' });
+    }
+    
+    const files = await getJournalFiles(journalId, token);
+    res.json({ files });
+  } catch (error: any) {
+    console.error('Error getting journal files:', error);
+    if (error.response) {
+      res.status(error.response.status).json(error.response.data);
+    } else {
+      res.status(500).json({ message: 'Ошибка получения файлов журнала' });
+    }
+  }
+};
+
+// Просмотр файла
+export const viewFile = async (req: Request, res: Response) => {
+  try {
+    const { fileId } = req.params;
+    const token = getAuthToken(req);
+    
+    if (!token) {
+      return res.status(401).json({ message: 'Токен авторизации не найден' });
+    }
+    
+    if (!fileId) {
+      return res.status(400).json({ message: 'ID файла не предоставлен' });
+    }
+    
+    console.log('Viewing file with ID:', fileId);
+    
+    const EXTERNAL_API_URL = process.env.EXTERNAL_API_URL || 'http://10.0.128.95:8000/api/v1';
+    
+    // Теперь fileId должен быть реальным ID файла
+    console.log('Viewing file with file ID:', fileId);
+    
+    const fileUrl = `${EXTERNAL_API_URL}/files/${fileId}/view`;
+    
+    console.log('Trying to view file:', fileUrl);
+    
+    // Сначала проверим, доступен ли файл (без stream)
+    try {
+      const testResponse = await axios.get(fileUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      console.log('File is accessible, content-type:', testResponse.headers['content-type']);
+    } catch (testError: any) {
+      console.error('File test failed:', testError.response?.data || testError.message);
+      throw testError;
+    }
+    
+    // Если тест прошел, получаем файл как stream
+    const response = await axios.get(fileUrl, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      responseType: 'stream'
+    });
+    
+    // Устанавливаем заголовки для просмотра файла
+    res.set({
+      'Content-Type': response.headers['content-type'] || 'application/octet-stream',
+      'Content-Disposition': response.headers['content-disposition'] || 'inline',
+      'Content-Length': response.headers['content-length']
+    });
+    
+    response.data.pipe(res);
+  } catch (error: any) {
+    console.error('Error viewing file:', error.message);
+    if (error.response) {
+      console.error('External API error response:', {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        data: error.response.data
+      });
+      
+      // Если внешний API говорит, что файл не найден или недоступен
+      if (error.response.data?.detail === 'Ошибка при просмотре файла') {
+        return res.status(404).json({ 
+          message: 'Файл не найден или недоступен для просмотра',
+          details: 'Возможно, файл был удален или у вас нет прав на его просмотр'
+        });
+      }
+      
+      const errorData = {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        message: error.response.data?.message || error.response.data?.detail || 'Ошибка внешнего API'
+      };
+      res.status(error.response.status).json(errorData);
+    } else {
+      res.status(500).json({ message: 'Ошибка просмотра файла' });
+    }
+  }
+};
+
+// Скачивание файла
+export const downloadFile = async (req: Request, res: Response) => {
+  try {
+    const { fileId } = req.params;
+    const token = getAuthToken(req);
+    
+    if (!token) {
+      return res.status(401).json({ message: 'Токен авторизации не найден' });
+    }
+    
+    if (!fileId) {
+      return res.status(400).json({ message: 'ID файла не предоставлен' });
+    }
+    
+    const EXTERNAL_API_URL = process.env.EXTERNAL_API_URL || 'http://10.0.128.95:8000/api/v1';
+    
+    // Перенаправляем запрос на внешний API
+    const response = await axios.get(`${EXTERNAL_API_URL}/files/${fileId}/download`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      responseType: 'stream'
+    });
+    
+    // Устанавливаем заголовки для скачивания файла
+    res.set({
+      'Content-Type': response.headers['content-type'] || 'application/octet-stream',
+      'Content-Disposition': response.headers['content-disposition'] || 'attachment',
+      'Content-Length': response.headers['content-length']
+    });
+    
+    response.data.pipe(res);
+  } catch (error: any) {
+    console.error('Error downloading file:', error);
+    if (error.response) {
+      // Безопасно извлекаем данные ошибки без циклических ссылок
+      const errorData = {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        message: error.response.data?.message || 'Ошибка внешнего API'
+      };
+      res.status(error.response.status).json(errorData);
+    } else {
+      res.status(500).json({ message: 'Ошибка скачивания файла' });
+    }
+  }
+};
+
+// Принятие решения по журналу филиала
+export const makeBranchJournalDecision = async (req: Request, res: Response) => {
+  try {
+    const { branchJournalId } = req.params;
+    
+    // Получаем status из req.body или из FormData
+    let status = req.body?.status;
+    if (!status && req.body && typeof req.body === 'object') {
+      // Если status не найден в req.body, попробуем найти его в других полях
+      status = req.body.status || req.body.decision;
+    }
+    
+    const { userId, positionName, groupName } = (req as any).token;
+    const token = getAuthToken(req);
+
+    console.log('Making branch journal decision:', {
+      branchJournalId,
+      status,
+      userId,
+      positionName,
+      groupName,
+      body: req.body
+    });
+
+    if (!token) {
+      return res.status(401).json({ message: 'Токен авторизации не найден' });
+    }
+
+    // Проверяем доступ к jurists/safety
+    const hasAccess = await checkSafetyJournalAccess(userId, positionName, groupName);
+    if (!hasAccess) {
+      console.log('User does not have access to safety journal');
+      return res.status(403).json({ message: 'Недостаточно прав для изменения статуса журнала' });
+    }
+
+    // Проверяем статус согласно API схеме
+    if (!status || !['approved', 'rejected', 'under_review'].includes(status)) {
+      console.log('Invalid status:', status);
+      return res.status(400).json({ message: 'Неверный статус. Допустимые значения: approved, rejected, under_review' });
+    }
+
+    // Отправляем запрос во внешний API для обновления статуса
+    try {
+      // Попробуем сначала с FormData (как в оригинальном коде)
+      const formData = new FormData();
+      formData.append('status', status);
+      formData.append('decision', status);
+      formData.append('user_id', userId);
+      formData.append('branch_journal_id', branchJournalId);
+
+      console.log('Sending FormData request to external API:', {
+        url: `${EXTERNAL_API_URL}/branch_journals/${branchJournalId}/decision`,
+        formData: {
+          status: status,
+          decision: status,
+          user_id: userId,
+          branch_journal_id: branchJournalId
+        }
+      });
+
+      const externalResponse = await axios.patch(
+        `${EXTERNAL_API_URL}/branch_journals/${branchJournalId}/decision`,
+        formData,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          }
+        }
+      );
+
+      console.log('External API response:', externalResponse.status, externalResponse.data);
+
+      res.json({ 
+        message: `Журнал ${status === 'approved' ? 'одобрен' : status === 'rejected' ? 'отклонен' : 'возвращен на рассмотрение'}`,
+        branchJournalId,
+        status,
+        updatedAt: new Date().toISOString(),
+        externalResponse: externalResponse.data
+      });
+
+    } catch (externalError: any) {
+      console.error('Error calling external API:', {
+        status: externalError.response?.status,
+        statusText: externalError.response?.statusText,
+        responseData: externalError.response?.data,
+        message: externalError.message,
+        url: externalError.config?.url,
+        method: externalError.config?.method,
+        headers: externalError.config?.headers,
+        requestData: externalError.config?.data
+      });
+      
+      // Если внешний API недоступен, возвращаем ошибку
+      return res.status(502).json({ 
+        message: 'Ошибка обновления статуса во внешней системе',
+        error: externalError.response?.data || externalError.message,
+        details: {
+          status: externalError.response?.status,
+          url: externalError.config?.url,
+          method: externalError.config?.method
+        }
+      });
+    }
+
+  } catch (error) {
+    console.error('Error making branch journal decision:', error);
+    res.status(500).json({ message: 'Ошибка принятия решения по журналу' });
+  }
+};

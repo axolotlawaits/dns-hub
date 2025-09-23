@@ -287,7 +287,7 @@ function Login() {
         localStorage.setItem(LAST_LOGIN_KEY, userData.login);
         contextLogin(json.user, json.token);
         localStorage.setItem('user', JSON.stringify(json.user));
-        localStorage.setItem('token', JSON.stringify(json.token));
+        localStorage.setItem('token', json.token);
         navigate('/');
       } else {
         setValidationErrors(json.errors || {});

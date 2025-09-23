@@ -35,7 +35,7 @@ export const Draggable = ({ item, type, children, style = {} }: DraggableProps) 
 
   return (
     <Box
-      ref={drag}
+      ref={drag as any}
       style={{
         opacity: isDragging ? 0.5 : 1,
         cursor: 'move',
@@ -67,7 +67,7 @@ export const DropZone = ({
 
   return (
     <Box
-      ref={drop}
+      ref={drop as any}
       style={{
         border: `2px dashed ${isOver ? '#228be6' : '#ddd'}`,
         borderRadius: '4px',
@@ -97,15 +97,34 @@ export const FileDropZone = ({ onFilesDrop }: { onFilesDrop: (files: File[]) => 
     }
   };
 
+  // Нативные обработчики drag and drop
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      onFilesDrop(files);
+    }
+  };
+
   return (
     <Box
-      ref={drop}
+      ref={drop as any}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
       style={{
         border: `2px dashed ${isOver ? '#228be6' : '#ddd'}`,
         borderRadius: '4px',
         padding: '16px',
         textAlign: 'center',
         cursor: 'pointer',
+        transition: 'all 0.2s ease',
       }}
       onClick={() => document.getElementById('file-input')?.click()}
     >

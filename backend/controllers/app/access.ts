@@ -91,10 +91,15 @@ export const updateGroupAccessInfo = async (req: Request, res: Response): Promis
       groupId_toolId: { groupId, toolId,}
     },
     update: { accessLevel },
-    create: { groupId, toolId, accessLevel }
+    create: { 
+      accessLevel,
+      group: { connect: { uuid: groupId } },
+      tool: { connect: { id: toolId } }
+    }
   })
   if (access) {
     res.status(200).json(access)
+    console.log(access)
   } else {
     res.status(400).json({error: 'ошибка обновления доступа'})
   }
@@ -134,7 +139,11 @@ export const updateUserAccessInfo = async (req: Request, res: Response): Promise
   const access = await prisma.userToolAccess.upsert({
     where: { userId_toolId: { userId, toolId }},
     update: { accessLevel },
-    create: { userId, toolId, accessLevel }
+    create: { 
+      accessLevel,
+      tool: { connect: { id: toolId } },
+      user: { connect: { id: userId } }
+    }
   })
   if (access) {
     res.status(200).json(access)
@@ -179,7 +188,11 @@ export const updatePositionAccessInfo = async (req: Request, res: Response): Pro
       positionId_toolId: { positionId, toolId,}
     },
     update: { accessLevel },
-    create: { positionId, toolId, accessLevel }
+    create: { 
+      accessLevel,
+      position: { connect: { uuid: positionId } },
+      tool: { connect: { id: toolId } }
+    }
   })
   if (access) {
     res.status(200).json(access)

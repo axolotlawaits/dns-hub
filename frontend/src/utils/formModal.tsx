@@ -93,6 +93,11 @@ interface DynamicFormModalProps {
   viewExtraContent?: (values: Record<string, any>) => JSX.Element;
   hideDefaultViewAttachments?: boolean;
   viewSecondaryAttachments?: Array<{ title: string; list: any[] }>;
+  submitButtonText?: string;
+  cancelButtonText?: string;
+  hideButtons?: boolean;
+  size?: string | number;
+  fullScreen?: boolean;
 }
 
 // Helper functions
@@ -282,6 +287,11 @@ export const DynamicFormModal = ({
   viewExtraContent,
   hideDefaultViewAttachments = false,
   viewSecondaryAttachments = [],
+  submitButtonText,
+  cancelButtonText,
+  hideButtons = false,
+  size = 'md',
+  fullScreen = false
 }: DynamicFormModalProps) => {
   const [previewId, setPreviewId] = useState<string | null>(null);
   const form = useForm({ initialValues });
@@ -351,7 +361,7 @@ export const DynamicFormModal = ({
   const handleFileDropFor = useCallback((fieldName: string) => (files: File[]) => {
     const newAttachments = files.map((file, idx) => ({
       id: `temp-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 8)}`,
-      userAdd: initialValues.userAdd || '',
+      userAdd: initialValues?.userAdd || '',
       source: file,
       meta: {},
     }));
@@ -362,7 +372,7 @@ export const DynamicFormModal = ({
       form.setFieldValue(fieldName, nextList);
       return next;
     });
-  }, [initialValues.userAdd, form]);
+  }, [initialValues?.userAdd, form]);
 
   const handleRemoveAttachmentFor = useCallback((fieldName: string) => (id: string | undefined) => {
     setAttachmentsMap(prev => {
@@ -413,7 +423,7 @@ export const DynamicFormModal = ({
             <MultiSelect
               key={field.name}
               label={field.label}
-              data={field.options || []}
+              data={(field.options || []).filter(option => option && option.value && option.label)}
               value={current}
               searchable={field.searchable}
               onSearchChange={(s) => field.onSearchChange?.(s)}
@@ -646,7 +656,7 @@ export const DynamicFormModal = ({
                 </Text>
                 <Text c="var(--theme-text-secondary)">
                   Вы уверены, что хотите удалить эту запись? Это действие нельзя отменить.
-                  {initialValues.ReceiptDate && ` (${dayjs(initialValues.ReceiptDate).format('DD.MM.YYYY')})`}
+                  {initialValues?.ReceiptDate && ` (${dayjs(initialValues.ReceiptDate).format('DD.MM.YYYY')})`}
                 </Text>
               </div>
             </Group>
@@ -680,14 +690,16 @@ export const DynamicFormModal = ({
                 <Stack>
                   {fields.map(renderField)}
                   {error && <Alert color="red">{error}</Alert>}
-                  <Group justify="flex-end" mt="md">
-                    <Button variant="default" onClick={() => { initializedRef.current = false; onClose(); }}>
-                      Отмена
-                    </Button>
-                    <Button type="submit">
-                      {mode === 'create' ? 'Создать' : 'Сохранить'}
-                    </Button>
-                  </Group>
+                  {!hideButtons && (
+                    <Group justify="flex-end" mt="md">
+                      <Button variant="default" onClick={() => { initializedRef.current = false; onClose(); }}>
+                        {cancelButtonText || 'Отмена'}
+                      </Button>
+                      <Button type="submit">
+                        {submitButtonText || (mode === 'create' ? 'Создать' : 'Сохранить')}
+                      </Button>
+                    </Group>
+                  )}
                 </Stack>
               </form>
               <div style={{ width: 380 }}>
@@ -705,14 +717,16 @@ export const DynamicFormModal = ({
             <Stack>
               {fields.map(renderField)}
               {error && <Alert color="red">{error}</Alert>}
-              <Group justify="flex-end" mt="md">
-                <Button variant="default" onClick={() => { initializedRef.current = false; onClose(); }}>
-                  Отмена
-                </Button>
-                <Button type="submit">
-                  {mode === 'create' ? 'Создать' : 'Сохранить'}
-                </Button>
-              </Group>
+              {!hideButtons && (
+                <Group justify="flex-end" mt="md">
+                  <Button variant="default" onClick={() => { initializedRef.current = false; onClose(); }}>
+                    {cancelButtonText || 'Отмена'}
+                  </Button>
+                  <Button type="submit">
+                    {submitButtonText || (mode === 'create' ? 'Создать' : 'Сохранить')}
+                  </Button>
+                </Group>
+              )}
             </Stack>
           </form>
         );
@@ -725,16 +739,28 @@ export const DynamicFormModal = ({
       opened={opened} 
       onClose={() => { initializedRef.current = false; onClose(); }} 
       title={title} 
-      size="xl" 
+      size={size} 
       radius="lg"
       className={`form-modal ${mode === 'delete' ? 'delete-mode' : mode === 'view' ? 'view-mode' : ''}`}
-      centered
+      centered={!fullScreen}
+      fullScreen={fullScreen}
       overlayProps={{
         backgroundOpacity: 0.5,
       }}
       withCloseButton
       closeOnClickOutside
       closeOnEscape
+      styles={fullScreen ? {
+        content: {
+          width: '100vw',
+          maxWidth: '100vw',
+          maxHeight: '90vh'
+        },
+        body: {
+          width: '100%',
+          padding: 0
+        }
+      } : undefined}
     >
       {modalContent}
     </Modal>

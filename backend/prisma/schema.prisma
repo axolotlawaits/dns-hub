@@ -100,7 +100,6 @@ model Branch {
   rk            RK[]
   supplyDocs    SupplyDocs[]   @relation("SupplyDocs_Branch")
   userData      UserData[]
-  safetyJournals SafetyJournal[] @relation("SafetyJournal_Branch")
 }
 
 model Devices {
@@ -193,10 +192,6 @@ model User {
   SupplyDocsAttachments  SupplyDocsAttachment[]
   UserSettings           UserSettings[]
   userToolAccesses       UserToolAccess[]
-  SafetyJournalAdded     SafetyJournal[]            @relation("SafetyJournal_UserAdd")
-  SafetyJournalUpdated   SafetyJournal[]            @relation("SafetyJournal_UserUpdated")
-  SafetyJournalEntryAdded SafetyJournalEntry[]      @relation("SafetyJournalEntry_UserAdd")
-  SafetyJournalAttachmentAdded SafetyJournalAttachment[] @relation("SafetyJournalAttachment_UserAdd")
 }
 
 model GroupToolAccess {
@@ -566,135 +561,3 @@ enum Activity {
   Off
 }
 
-// Журналы охраны труда и пожарной безопасности
-model SafetyJournal {
-  id                    String                @id @default(uuid())
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime?             @updatedAt
-  userAdd               User                  @relation("SafetyJournal_UserAdd", fields: [userAddId], references: [id])
-  userAddId             String
-  userUpdated           User?                 @relation("SafetyJournal_UserUpdated", fields: [userUpdatedId], references: [id])
-  userUpdatedId         String?
-  
-  // Основная информация
-  journalType           SafetyJournalType     // Тип журнала (охрана труда, пожарная безопасность)
-  title                 String                // Название журнала
-  description           String?               // Описание
-  location              String                // Место проведения (филиал/подразделение)
-  responsiblePerson     String                // Ответственное лицо
-  period                String                // Период ведения (месяц, квартал, год)
-  
-  // Даты
-  startDate             DateTime              // Дата начала ведения
-  endDate               DateTime?             // Дата окончания ведения
-  lastEntryDate         DateTime?             // Дата последней записи
-  
-  // Статус
-  status                SafetyJournalStatus   @default(ACTIVE) // Статус журнала
-  isCompleted           Boolean               @default(false)  // Завершен ли журнал
-  
-  // Связи
-  branchId              String?               // Связь с филиалом
-  branch                Branch?               @relation("SafetyJournal_Branch", fields: [branchId], references: [uuid])
-  entries               SafetyJournalEntry[]  // Записи в журнале
-  attachments           SafetyJournalAttachment[] // Вложения
-  
-  @@index([journalType])
-  @@index([status])
-  @@index([startDate])
-  @@index([userAddId])
-}
-
-model SafetyJournalEntry {
-  id                    String                @id @default(uuid())
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime?             @updatedAt
-  userAdd               User                  @relation("SafetyJournalEntry_UserAdd", fields: [userAddId], references: [id])
-  userAddId             String
-  
-  // Связь с журналом
-  journalId             String
-  journal               SafetyJournal         @relation(fields: [journalId], references: [id], onDelete: Cascade)
-  
-  // Информация о записи
-  entryDate             DateTime              // Дата записи
-  entryType             SafetyEntryType       // Тип записи (проверка, инструктаж, нарушение, устранение)
-  title                 String                // Заголовок записи
-  description           String                // Описание/содержание
-  participants          String?               // Участники (ФИО)
-  location              String?               // Место проведения
-  
-  // Результаты и действия
-  findings              String?               // Выявленные нарушения/замечания
-  actionsTaken          String?               // Принятые меры
-  responsiblePerson     String?               // Ответственное лицо за устранение
-  deadline              DateTime?             // Срок устранения
-  status                SafetyEntryStatus     @default(OPEN) // Статус записи
-  
-  // Связи
-  attachments           SafetyJournalAttachment[] @relation("SafetyJournalEntry_Attachment")
-  
-  @@index([journalId])
-  @@index([entryDate])
-  @@index([entryType])
-  @@index([status])
-}
-
-model SafetyJournalAttachment {
-  id                    String                @id @default(uuid())
-  createdAt             DateTime              @default(now())
-  userAdd               User                  @relation("SafetyJournalAttachment_UserAdd", fields: [userAddId], references: [id])
-  userAddId             String
-  
-  // Связи
-  journalId             String?
-  journal               SafetyJournal?        @relation(fields: [journalId], references: [id], onDelete: Cascade)
-  entryId               String?
-  entry                 SafetyJournalEntry?   @relation("SafetyJournalEntry_Attachment", fields: [entryId], references: [id], onDelete: Cascade)
-  
-  // Информация о файле
-  source                String                // Путь к файлу
-  fileName              String                // Имя файла
-  fileSize              Int?                  // Размер файла в байтах
-  mimeType              String?               // MIME тип файла
-  description           String?               // Описание файла
-  
-  @@index([journalId])
-  @@index([entryId])
-}
-
-// Типы журналов
-enum SafetyJournalType {
-  LABOR_SAFETY          // Охрана труда
-  FIRE_SAFETY           // Пожарная безопасность
-  ELECTRICAL_SAFETY     // Электробезопасность
-  INDUSTRIAL_SAFETY     // Промышленная безопасность
-}
-
-// Статусы журнала
-enum SafetyJournalStatus {
-  ACTIVE                // Активный
-  COMPLETED             // Завершен
-  ARCHIVED              // Архивирован
-  SUSPENDED             // Приостановлен
-}
-
-// Типы записей
-enum SafetyEntryType {
-  INSPECTION            // Проверка/инспекция
-  INSTRUCTION           // Инструктаж
-  VIOLATION             // Нарушение
-  CORRECTIVE_ACTION     // Корректирующие действия
-  TRAINING              // Обучение
-  INCIDENT              // Происшествие
-  MAINTENANCE           // Техническое обслуживание
-}
-
-// Статусы записей
-enum SafetyEntryStatus {
-  OPEN                  // Открыто
-  IN_PROGRESS           // В работе
-  COMPLETED             // Завершено
-  CANCELLED             // Отменено
-  OVERDUE               // Просрочено
-}

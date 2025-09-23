@@ -1,12 +1,43 @@
 import { useState, useMemo, useCallback } from 'react';
 import { API } from '../../../config/constants';
-import { Button, Title, Box, LoadingOverlay, Group, Select, Modal, TextInput, PasswordInput, Text, ActionIcon, Divider, Badge, Flex, Card, Stack, MultiSelect, Alert } from '@mantine/core';
+import { 
+  Button, 
+  Title, 
+  LoadingOverlay, 
+  Group, 
+  Select, 
+  TextInput, 
+  Text, 
+  ActionIcon, 
+  Badge, 
+  Stack, 
+  MultiSelect, 
+  Alert,
+  Container,
+  Paper,
+  Grid,
+  ThemeIcon,
+  Tooltip,
+  Divider,
+  ScrollArea
+} from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { notificationSystem } from '../../../utils/Push';
 import { formatPrice } from '../../../utils/format';
+// import { TableComponent } from '../../../utils/table';
+import { DynamicFormModal } from '../../../utils/formModal';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ru';
-import { IconTrash } from '@tabler/icons-react';
+import { 
+  IconTrash, 
+  IconPrinter, 
+  IconSettings, 
+  IconCalendar, 
+  IconTag, 
+  IconCheck,
+  IconAlertTriangle,
+  IconRefresh
+} from '@tabler/icons-react';
 
 dayjs.locale('ru');
 
@@ -51,6 +82,116 @@ const TEMPLATES: PriceTagTemplate[] = [
   { value: 'Standart', label: 'Стандартный ценник', numericFormat: 1 },
 ];
 
+// Компонент для отображения элемента списка
+const PrintItemCard = ({ 
+  item, 
+  index, 
+  total, 
+  onRemove, 
+  onSizeChange 
+}: { 
+  item: ItemWithSize; 
+  index: number; 
+  total: number; 
+  onRemove: (id: string) => void; 
+  onSizeChange: (id: string, size: string | null) => void; 
+}) => (
+  <Paper
+    shadow="sm"
+    radius="md"
+    p="md"
+    style={{
+      background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02))',
+      border: '1px solid rgba(255, 255, 255, 0.1)',
+      transition: 'all 0.2s ease',
+      cursor: 'default',
+    }}
+    className="print-item-card"
+    onMouseEnter={(e) => {
+      e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04))';
+      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+      e.currentTarget.style.transform = 'translateY(-1px)';
+    }}
+    onMouseLeave={(e) => {
+      e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02))';
+      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+      e.currentTarget.style.transform = 'translateY(0)';
+    }}
+  >
+    <Group justify="space-between" align="flex-start" wrap="nowrap">
+      {/* Левая часть - действия и код */}
+      <Group gap="sm" align="flex-start">
+        <Tooltip label="Удалить из списка">
+          <ActionIcon
+            onClick={() => onRemove(item.id)}
+            color="red"
+            variant="light"
+            size="md"
+            radius="md"
+          >
+            <IconTrash size="1rem" />
+          </ActionIcon>
+        </Tooltip>
+        
+        <Badge 
+          variant="gradient" 
+          gradient={{ from: 'blue', to: 'cyan' }}
+          size="lg"
+          radius="md"
+        >
+          {item.tovarCode}
+        </Badge>
+      </Group>
+
+      {/* Центральная часть - информация о товаре */}
+      <Stack gap="xs" style={{ flex: 1, minWidth: 0 }}>
+        <Text fw={600} size="md" c="white" lineClamp={2}>
+          {item.tovarName}
+        </Text>
+        
+        <Group gap="lg" wrap="wrap">
+          <Group gap="xs">
+            <Text size="sm" c="dimmed">Бренд:</Text>
+            <Text size="sm" fw={500}>{item.brand}</Text>
+          </Group>
+          
+          <Group gap="xs">
+            <Text size="sm" c="dimmed">Цена:</Text>
+            <Text fw={600} size="sm" c="green">
+              {formatPrice(item.price)}
+            </Text>
+          </Group>
+          
+          <Group gap="xs">
+            <Text size="sm" c="dimmed">Обновлено:</Text>
+            <Text size="sm" c="dimmed">
+              {dayjs(item.updatedAt).format('DD.MM.YYYY HH:mm')}
+            </Text>
+          </Group>
+        </Group>
+      </Stack>
+
+      {/* Правая часть - выбор шаблона */}
+      <Select
+        data={TEMPLATES}
+        value={item.size}
+        onChange={(value) => onSizeChange(item.id, value)}
+        size="sm"
+        style={{ minWidth: 250 }}
+        radius="md"
+      />
+    </Group>
+    
+    {index < total - 1 && (
+      <Divider 
+        my="md" 
+        color="rgba(255, 255, 255, 0.1)" 
+        variant="dashed" 
+      />
+    )}
+  </Paper>
+);
+
 const PriceTagPrinting = () => {
   const [dateFrom, setDateFrom] = useState<Date | null>(new Date());
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
@@ -75,13 +216,14 @@ const PriceTagPrinting = () => {
     return uniqueValues.map(value => ({ value: String(value), label: String(value) }));
   }, []);
 
-  const handleAuth = useCallback(async () => {
+  const handleAuth = useCallback(async (authData?: { login: string; password: string }) => {
+    const dataToUse = authData || loginData;
     try {
       setLoading(true);
       const response = await fetch(`${API}/retail/print-service/auth`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(loginData),
+        body: JSON.stringify(dataToUse),
       });
 
       if (!response.ok) {
@@ -242,116 +384,283 @@ const PriceTagPrinting = () => {
 
   if (!authTokens) {
     return (
-      <Box p="md">
-        <Title order={2} mb="xl">Печать ценников</Title>
-        <Button onClick={openModal}>Авторизация (WEB База)</Button>
+      <Container size="xl" py="xl">
+        <Paper 
+          shadow="xl" 
+          radius="xl" 
+          p="xl"
+          style={{
+            background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05))',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+          }}
+        >
+          <Stack align="center" gap="xl">
+            <ThemeIcon size={80} radius="xl" variant="gradient" gradient={{ from: 'blue', to: 'cyan' }}>
+              <IconPrinter size={40} />
+            </ThemeIcon>
+            
+            <Stack align="center" gap="md">
+              <Title order={1} ta="center" c="white">
+                Печать ценников
+              </Title>
+              <Text size="lg" c="dimmed" ta="center" maw={500}>
+                Для работы с печатью ценников необходимо авторизоваться в системе WEB База
+              </Text>
+            </Stack>
 
-        <Modal opened={modalOpened} onClose={closeModal} title="Авторизация (WEB База)">
-          <TextInput
-            label="Логин"
-            value={loginData.login}
-            onChange={(e) => setLoginData(prev => ({...prev, login: e.target.value}))}
-            mb="sm"
+            <Button 
+              size="lg" 
+              onClick={openModal}
+              leftSection={<IconSettings size={20} />}
+              variant="gradient"
+              gradient={{ from: 'blue', to: 'cyan' }}
+              radius="xl"
+            >
+              Авторизация (WEB База)
+            </Button>
+          </Stack>
+
+          <DynamicFormModal
+            opened={modalOpened}
+            onClose={closeModal}
+            title="Авторизация (WEB База)"
+            mode="create"
+            fields={[
+              {
+                name: 'login',
+                label: 'Логин',
+                type: 'text',
+                required: true,
+                placeholder: 'Введите логин',
+                leftSection: <IconSettings size={16} />
+              },
+              {
+                name: 'password',
+                label: 'Пароль',
+                type: 'text',
+                required: true,
+                placeholder: 'Введите пароль',
+                // Для пароля можно добавить маскирование
+              }
+            ]}
+            initialValues={loginData}
+            onSubmit={async (values) => {
+              const authData = {
+                login: values.login || '',
+                password: values.password || ''
+              };
+              setLoginData(authData);
+              await handleAuth(authData);
+            }}
+            error={errorMessage}
           />
-          <PasswordInput
-            label="Пароль"
-            value={loginData.password}
-            onChange={(e) => setLoginData(prev => ({...prev, password: e.target.value}))}
-            mb="md"
-          />
-          {errorMessage && <Text color="red" mb="md">{errorMessage}</Text>}
-          <Button onClick={handleAuth} loading={loading}>Войти</Button>
-        </Modal>
-      </Box>
+        </Paper>
+      </Container>
     );
   }
 
   return (
-    <Box p="md">
-        <Alert variant="light" color="red" title="Предупреждение" icon='❌'>
-          Если печать не выводиться вся или частично, проверьте включены ли всплывающие окна!
-          (Кнопка в адресной строке)
-        </Alert>
-      <Title order={2} mb="xl">Печать ценников</Title>
-      <Group align="flex-end" mb="xl">
-        <TextInput
-          type="datetime-local"
-          label="Дата и время обновления"
-          value={dateFrom ? dayjs(dateFrom).format('YYYY-MM-DDTHH:mm') : ''}
-          onChange={(e) => setDateFrom(e.target.value ? new Date(e.target.value) : null)}
-        />
-        {shouldShowBrandFilter && (
-          <MultiSelect
-            label="Бренд"
-            data={brandOptions}
-            value={brand}
-            onChange={setBrand}
-            clearable
-            placeholder="Бренд"
-            searchable
-            nothingFoundMessage="Ничего не найдено"
-          />
-        )}
-        <Button onClick={fetchPreview} loading={loading}>Сформировать</Button>
-      </Group>
-      {previewData && (
-        <Box mb="xl">
-          <Title order={4} mb="md">Список на печать</Title>
-          <Card withBorder shadow="sm" radius="md" p={0}>
-            <Flex justify="space-between" align="center" p="md">
-              <Text fw={500}>Будет напечатано: {filteredItems.length} ценников</Text>
-            </Flex>
-            <Divider />
-            <Box style={{ width: '100%', maxHeight: 800, overflowY: 'auto' }}>
-              {filteredItems.map((item, index) => (
-                <Box key={item.id} px="md" py="sm">
-                  <Flex gap="md" align="center" style={{ width: '100%' }}>
-                    <ActionIcon
-                      onClick={() => handleRemoveItem(item.id)}
-                      color="red"
-                      variant="light"
-                      size="md"
-                      title="Удалить"
-                    >
-                      <IconTrash size="1rem" />
-                    </ActionIcon>
-                    <Stack gap={4} style={{ flex: 1 }}>
-                      <Flex gap="md" align="center">
-                        <Badge variant="outline">{item.tovarCode}</Badge>
-                        <Text fw={500}>{item.tovarName}</Text>
-                      </Flex>
-                      <Flex gap="xl" wrap="wrap" align="center">
-                        <Text>Цена: {formatPrice(item.price)}</Text>
-                        <Text>Обновлено: {dayjs(item.updatedAt).format('DD.MM.YYYY HH:mm')}</Text>
-                        <Select
-                          data={TEMPLATES}
-                          value={item.size}
-                          onChange={(value) => handleSizeChange(item.id, value)}
-                          size="sm"
-                          style={{ minWidth: 250 }}
-                        />
-                      </Flex>
-                    </Stack>
-                  </Flex>
-                  {index < filteredItems.length - 1 && <Divider my="sm" />}
-                </Box>
-              ))}
-            </Box>
-          </Card>
-          <Button
-            onClick={handlePrint}
-            loading={loading}
-            mt="md"
-            color="green"
-            fullWidth
-            size="md"
+    <Container size="xl" py="xl">
+      <Stack gap="xl">
+        {/* Заголовок и предупреждение */}
+        <Paper 
+          shadow="xl" 
+          radius="xl" 
+          p="xl"
+          style={{
+            background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05))',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+          }}
+        >
+          <Stack gap="lg">
+            <Group justify="space-between" align="center">
+              <Group gap="md">
+                <ThemeIcon size={50} radius="xl" variant="gradient" gradient={{ from: 'blue', to: 'cyan' }}>
+                  <IconPrinter size={28} />
+                </ThemeIcon>
+                <div>
+                  <Title order={1} c="white">Печать ценников</Title>
+                  <Text c="dimmed">Управление печатью ценников для розничной сети</Text>
+                </div>
+              </Group>
+              
+              <Button
+                variant="gradient"
+                gradient={{ from: 'red', to: 'orange' }}
+                leftSection={<IconRefresh size={16} />}
+                onClick={fetchPreview}
+                loading={loading}
+                radius="xl"
+              >
+                Обновить данные
+              </Button>
+            </Group>
+
+            <Alert 
+              variant="light" 
+              color="red" 
+              title="Важное предупреждение" 
+              icon={<IconAlertTriangle size={20} />}
+              radius="md"
+            >
+              Если печать не выводится вся или частично, проверьте включены ли всплывающие окна! 
+              (Кнопка в адресной строке браузера)
+            </Alert>
+          </Stack>
+        </Paper>
+
+        {/* Панель управления */}
+        <Paper 
+          shadow="lg" 
+          radius="xl" 
+          p="xl"
+          style={{
+            background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03))',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+          }}
+        >
+          <Grid gutter="lg">
+            <Grid.Col span={{ base: 12, md: 4 }}>
+              <TextInput
+                type="datetime-local"
+                label="Дата и время обновления"
+                placeholder="Выберите дату"
+                value={dateFrom ? dayjs(dateFrom).format('YYYY-MM-DDTHH:mm') : ''}
+                onChange={(e) => setDateFrom(e.target.value ? new Date(e.target.value) : null)}
+                leftSection={<IconCalendar size={16} />}
+                radius="md"
+              />
+            </Grid.Col>
+            
+            {shouldShowBrandFilter && (
+              <Grid.Col span={{ base: 12, md: 4 }}>
+                <MultiSelect
+                  label="Фильтр по бренду"
+                  placeholder="Выберите бренды"
+                  data={brandOptions}
+                  value={brand}
+                  onChange={setBrand}
+                  leftSection={<IconTag size={16} />}
+                  clearable
+                  searchable
+                  nothingFoundMessage="Ничего не найдено"
+                  radius="md"
+                />
+              </Grid.Col>
+            )}
+            
+            <Grid.Col span={{ base: 12, md: 4 }}>
+              <Button 
+                onClick={fetchPreview} 
+                loading={loading}
+                leftSection={<IconRefresh size={16} />}
+                fullWidth
+                variant="gradient"
+                gradient={{ from: 'blue', to: 'cyan' }}
+                radius="md"
+                size="md"
+              >
+                Сформировать список
+              </Button>
+            </Grid.Col>
+          </Grid>
+        </Paper>
+
+        {/* Список для печати */}
+        {previewData && (
+          <Paper 
+            shadow="lg" 
+            radius="xl" 
+            p="xl"
+            style={{
+              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03))',
+              backdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+            }}
           >
-            Печать
-          </Button>
-        </Box>
-      )}
-      <LoadingOverlay visible={loading} />
-    </Box>
+            <Stack gap="lg">
+              <Group justify="space-between" align="center">
+                <Group gap="md">
+                  <ThemeIcon size={40} radius="xl" variant="gradient" gradient={{ from: 'green', to: 'teal' }}>
+                    <IconCheck size={20} />
+                  </ThemeIcon>
+                  <div>
+                    <Title order={3} c="white">Список на печать</Title>
+                    <Text c="dimmed">Настроить параметры печати для каждого товара</Text>
+                  </div>
+                </Group>
+                
+                <Badge 
+                  size="lg" 
+                  variant="gradient" 
+                  gradient={{ from: 'green', to: 'teal' }}
+                  radius="xl"
+                >
+                  {filteredItems.length} ценников
+                </Badge>
+              </Group>
+
+              <ScrollArea h={600} type="scroll">
+                <Stack gap="md">
+                  {filteredItems.map((item, index) => (
+                    <PrintItemCard
+                      key={item.id}
+                      item={item}
+                      index={index}
+                      total={filteredItems.length}
+                      onRemove={handleRemoveItem}
+                      onSizeChange={handleSizeChange}
+                    />
+                  ))}
+                  
+                  {filteredItems.length === 0 && (
+                    <Paper
+                      p="xl"
+                      radius="md"
+                      style={{
+                        background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02))',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                      }}
+                    >
+                      <Stack align="center" gap="md">
+                        <ThemeIcon size={60} radius="xl" variant="gradient" gradient={{ from: 'gray', to: 'dark' }}>
+                          <IconPrinter size={30} />
+                        </ThemeIcon>
+                        <Text size="lg" c="dimmed" ta="center">
+                          Нет товаров для печати
+                        </Text>
+                        <Text size="sm" c="dimmed" ta="center">
+                          Измените фильтры или дату для поиска товаров
+                        </Text>
+                      </Stack>
+                    </Paper>
+                  )}
+                </Stack>
+              </ScrollArea>
+
+              <Button
+                onClick={handlePrint}
+                loading={loading}
+                leftSection={<IconPrinter size={20} />}
+                fullWidth
+                size="lg"
+                variant="gradient"
+                gradient={{ from: 'green', to: 'teal' }}
+                radius="xl"
+                mt="md"
+              >
+                Начать печать
+              </Button>
+            </Stack>
+          </Paper>
+        )}
+
+        <LoadingOverlay visible={loading} />
+      </Stack>
+    </Container>
   );
 };
 

@@ -4,25 +4,42 @@
   align-items: center;
   margin-left: auto;
   height: 100%;
-  gap: 8px;
+  gap: 12px;
+  padding: 0 8px;
 }
 
 .footer-divider {
   height: 60%;
   margin: 0 8px;
   align-self: center;
-  border-color: var(--theme-border);
+  border-color: rgba(0, 0, 0, 0.1);
+  opacity: 0.5;
+}
+
+/* Темная тема для разделителя */
+[data-theme="dark"] .footer-divider {
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 /* Блок времени */
 .footer-time-option {
   padding: 8px 12px;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 12px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: transparent;
 }
 
 .footer-time-option:hover {
-  background-color: var(--footer-link-hover);
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Темная тема для времени */
+[data-theme="dark"] .footer-time-option:hover {
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .footer-time-text {
@@ -48,11 +65,21 @@
   padding: 8px 12px;
   gap: 8px;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 12px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: transparent;
 }
 
 .footer-weather-option:hover {
-  background-color: var(--footer-link-hover);
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Темная тема для погоды */
+[data-theme="dark"] .footer-weather-option:hover {
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .footer-weather-text {

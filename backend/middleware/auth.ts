@@ -6,7 +6,9 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
-  if (!token) return res.sendStatus(401);
+  if (!token) {
+    return res.sendStatus(401);
+  }
 
   try {
     const decodedToken = jwt.verify(token, accessPublicKey, { algorithms: ['RS256'] });
@@ -17,7 +19,7 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
     if (err instanceof jwt.TokenExpiredError) {
       return res.status(401).json({ message: 'Token has expired' });
     }
-    console.log(err);
+    console.log('JWT verification error:', err);
     return res.sendStatus(401);
   }
 }

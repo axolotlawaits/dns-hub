@@ -97,6 +97,7 @@ function Footer() {
   const [currentDate, setCurrentDate] = useState("");
   const [calendarOpened, setCalendarOpened] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
+  const [isScrolled, setIsScrolled] = useState(false);
 
   // Загрузка текущей температуры и прогноза
   const fetchWeatherData = useCallback(async () => {
@@ -144,6 +145,24 @@ function Footer() {
     return () => clearInterval(timer);
   }, []);
 
+  // Эффект скролла для футера
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollY = window.scrollY;
+      const windowHeight = window.innerHeight;
+      const documentHeight = document.documentElement.scrollHeight;
+      
+      // Добавляем класс при скролле вниз или когда контент больше экрана
+      const shouldShowScrolled = scrollY > 50 || documentHeight > windowHeight + 100;
+      setIsScrolled(shouldShowScrolled);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    handleScroll(); // Проверяем при загрузке
+    
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   // Загрузка прогноза при открытии попапа погоды
   const handleWeatherClick = useCallback(() => {
     const newState = !weatherOpened;
@@ -165,7 +184,7 @@ function Footer() {
   ), [forecast]);
 
   return (
-    <AppShell.Footer id="footer-wrapper">
+    <AppShell.Footer id="footer-wrapper" className={isScrolled ? 'scrolled' : ''}>
       <div id="footer">
         <div id="footer-nav">
           {/* Основные ссылки */}

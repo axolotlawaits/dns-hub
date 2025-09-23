@@ -26,7 +26,7 @@ import Settlements from '../features/Settlements/Settlements';
 import Supply from '../features/Supply/Supply';
 import Transformation from '../features/Transformation/Transformation';
 import Automation from '../features/Automation/Automation';
-import Safety from '../features/Safety/Safety';
+import Safety from '../features/Jurists/Safety/SafetyJournal';
 import { useUserContext } from '../hooks/useUserContext';
 import MeterReading from '../features/AHO/MeterReading/MeterReading';
 import Correspondence from '../features/AHO/Correspondence/Correspondence';
@@ -118,7 +118,7 @@ function App() {
               navOpened={navOpened} 
               toggleNav={toggleNav} 
             />
-            <AppShell.Main id='content'>
+            <AppShell.Main id='content' style={{ paddingBottom: '80px' }}>
               <Routes>
                 <Route path='/' element={<Home />} />
                 <Route path='/profile' element={<Profile />} />
@@ -133,7 +133,6 @@ function App() {
                 <Route path='/ad' element={<Ad />} />
                 <Route path='/aho' element={<Aho />} />
                 <Route path='/automation' element={<Automation />} />
-                <Route path='/safety' element={<Safety />} />
                 <Route path='/jurists' element={<Jurists />} />
                 <Route path='/problem-books' element={<ProblemBooks />} />
                 <Route path='/service' element={<Service />} />
@@ -156,10 +155,10 @@ function App() {
                   <Route path='/scanner' element={<Scanner />} />
                   <Route path="/accounting/supply-docs" element={<SupplyDocs />} />
                   <Route path="/accounting/contracts-register" element={<Roc />} />
+                  <Route path='/jurists/safety' element={<Safety />} />
                 </Route>
                 <Route path='/supply/loaders' element={<LoadersHome />} />
                 <Route path='/supply/loaders/route/:id' element={<RouteComponent />} />
-                <Route path='/retail/print-service' element={<PrintService />} />
                 <Route path='/retail/radio' element={<Radio />} />
               </Routes>
             </AppShell.Main>

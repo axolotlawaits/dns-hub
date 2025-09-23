@@ -1,12 +1,104 @@
-import { Modal, Image, Loader, Stack, Text, Group, Paper, Box, ActionIcon, Badge, Tooltip } from '@mantine/core';
+import { Modal, Image, Loader, Stack, Text, Group, Paper, Box, ActionIcon, Badge, Tooltip, Button } from '@mantine/core';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { API } from '../config/constants';
-import { IconFile, IconFileText, IconFileTypePdf, IconPhoto, IconMusic, IconVideo, IconDownload, IconChevronLeft, IconChevronRight, IconX } from '@tabler/icons-react';
+import { IconFile, IconFileText, IconFileTypePdf, IconPhoto, IconMusic, IconVideo, IconDownload, IconChevronLeft, IconChevronRight, IconX, IconTrash } from '@tabler/icons-react';
 import './FilePreviewModal.css';
+
+// Компонент для загрузки файлов с заголовками авторизации
+  const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: any) => {
+    const [fileBlob, setFileBlob] = useState<Blob | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
+
+    useEffect(() => {
+      if (!src) return;
+
+      console.log('AuthFileLoader: Loading file from:', src);
+
+      if (src.startsWith('http') && !src.startsWith('blob:')) {
+        // Для внешних URL добавляем заголовки авторизации
+        const token = localStorage.getItem('token');
+        const headers: HeadersInit = {};
+        
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+          console.log('AuthFileLoader: Using token for request');
+        } else {
+          console.log('AuthFileLoader: No token found in localStorage');
+        }
+
+        console.log('AuthFileLoader: Making request with headers:', headers);
+
+        fetch(src, { headers })
+          .then(response => {
+            console.log('AuthFileLoader: Response status:', response.status);
+            console.log('AuthFileLoader: Response headers:', Object.fromEntries(response.headers.entries()));
+            
+            if (!response.ok) {
+              throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
+            }
+            // Получаем MIME-тип из заголовков
+            const contentType = response.headers.get('content-type');
+            console.log('AuthFileLoader: Content-Type:', contentType);
+            if (contentType && onMimeTypeDetected) {
+              onMimeTypeDetected(contentType);
+            }
+            return response.blob();
+          })
+          .then(blob => {
+            console.log('AuthFileLoader: File loaded successfully, size:', blob.size);
+            setFileBlob(blob);
+            setLoading(false);
+            if (onLoad) onLoad();
+          })
+          .catch((error) => {
+            console.error('AuthFileLoader: Error loading file:', error);
+            setError(true);
+            setLoading(false);
+            if (onError) onError();
+          });
+      } else {
+        // Для локальных URL и blob URL используем как есть
+        console.log('AuthFileLoader: Using local/blob URL directly');
+        setFileBlob(null);
+        setLoading(false);
+        if (onLoad) onLoad();
+      }
+
+      return () => {
+        if (fileBlob) {
+          URL.revokeObjectURL(URL.createObjectURL(fileBlob));
+        }
+      };
+    }, [src, onMimeTypeDetected, onLoad, onError]);
+
+  if (loading) {
+    return <Loader size="md" />;
+  }
+
+  if (error) {
+    return <Text c="red">Ошибка загрузки файла</Text>;
+  }
+
+  return children(fileBlob ? URL.createObjectURL(fileBlob) : src);
+};
+
+// Компонент для загрузки изображений с заголовками авторизации
+const AuthImage = ({ src, alt, onMimeTypeDetected, ...props }: any) => {
+  return (
+    <AuthFileLoader src={src} onMimeTypeDetected={onMimeTypeDetected}>
+      {(blobUrl: string) => (
+        <Image src={blobUrl} alt={alt} {...props} />
+      )}
+    </AuthFileLoader>
+  );
+};
 
 interface Attachment {
   id: string;
   source: string | File;
+  name?: string;
+  mimeType?: string;
 }
 
 interface FilePreviewModalProps {
@@ -14,6 +106,7 @@ interface FilePreviewModalProps {
   onClose: () => void;
   attachments: Attachment[];
   initialIndex?: number;
+  onDeleteFile?: (fileId: string) => Promise<void>;
 }
 
 const SUPPORTED_IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
@@ -45,12 +138,15 @@ export const FilePreviewModal = ({
   onClose,
   attachments,
   initialIndex = 0,
+  onDeleteFile,
 }: FilePreviewModalProps) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [fileContent, setFileContent] = useState<string>('');
   const currentAttachment = attachments[currentIndex];
+
+  const [fileMimeType, setFileMimeType] = useState<string>('');
 
   const {
     isImage,
@@ -60,7 +156,8 @@ export const FilePreviewModal = ({
     isVideo,
     fileName,
     fileUrl,
-    fileExt
+    fileExt,
+    downloadUrl
   } = useMemo(() => {
     if (!currentAttachment) {
       return {
@@ -77,15 +174,34 @@ export const FilePreviewModal = ({
     }
 
     const source = currentAttachment.source;
-    const ext = typeof source === 'string'
+    const providedName = (currentAttachment as any).name as string | undefined;
+    const providedMime = (currentAttachment as any).mimeType as string | undefined;
+    let ext = typeof source === 'string'
       ? source.split('.').pop()?.toLowerCase() || ''
       : source.name.split('.').pop()?.toLowerCase() || '';
 
-    const isImage = SUPPORTED_IMAGE_EXTS.includes(ext);
-    const isPdf = SUPPORTED_PDF_EXTS.includes(ext);
-    const isText = SUPPORTED_TEXT_EXTS.includes(ext);
-    const isAudio = SUPPORTED_AUDIO_EXTS.includes(ext);
-    const isVideo = SUPPORTED_VIDEO_EXTS.includes(ext);
+    // Если расширение не найдено, попробуем определить по MIME-типу
+    const effectiveMime = providedMime || fileMimeType;
+    if (!ext && effectiveMime) {
+      if (effectiveMime.startsWith('image/')) ext = 'jpg';
+      else if (effectiveMime === 'application/pdf') ext = 'pdf';
+      else if (effectiveMime.startsWith('text/')) ext = 'txt';
+      else if (effectiveMime.startsWith('audio/')) ext = 'mp3';
+      else if (effectiveMime.startsWith('video/')) ext = 'mp4';
+    }
+
+    const isImage = SUPPORTED_IMAGE_EXTS.includes(ext) || (effectiveMime || '').startsWith('image/');
+    const isPdf = SUPPORTED_PDF_EXTS.includes(ext) || (effectiveMime === 'application/pdf');
+    const isText = SUPPORTED_TEXT_EXTS.includes(ext) || (effectiveMime || '').startsWith('text/');
+    const isAudio = SUPPORTED_AUDIO_EXTS.includes(ext) || (effectiveMime || '').startsWith('audio/');
+    const isVideo = SUPPORTED_VIDEO_EXTS.includes(ext) || (effectiveMime || '').startsWith('video/');
+
+    // Вычисляем URL для скачивания: меняем /view на /download, если это наш прокси
+    const computeDownloadUrl = (url: string) => {
+      if (!url) return url;
+      // Заменяем /view на /download, сохраняя query/anchor
+      return url.replace(/\/view(?=(\?|#|$))/i, '/download');
+    };
 
     return {
       ext,
@@ -94,15 +210,19 @@ export const FilePreviewModal = ({
       isText,
       isAudio,
       isVideo,
-      fileName: typeof source === 'string'
-        ? decodeURIComponent(source.split('\\').pop() || source.split('/').pop() || 'Файл')
-        : source.name,
+      fileName: providedName
+        || (typeof source === 'string'
+          ? decodeURIComponent(source.split('\\').pop() || source.split('/').pop() || 'Файл')
+          : source.name),
       fileUrl: typeof source === 'string'
-        ? `${API}/${source}`
+        ? source.startsWith('http') || source.startsWith('blob:') ? source : `${API}/${source}`
         : URL.createObjectURL(source),
-      fileExt: ext
+      fileExt: ext,
+      downloadUrl: typeof source === 'string'
+        ? computeDownloadUrl(source.startsWith('http') || source.startsWith('blob:') ? source : `${API}/${source}`)
+        : ''
     };
-  }, [currentAttachment, API]);
+  }, [currentAttachment, API, fileMimeType]);
 
   const handleNext = useCallback(() => {
     setCurrentIndex(prev => {
@@ -137,16 +257,62 @@ export const FilePreviewModal = ({
     if (!currentAttachment) return;
 
     setLoading(true);
+    // Если MIME пришел извне — используем его сразу
+    if ((currentAttachment as any).mimeType) {
+      setFileMimeType((currentAttachment as any).mimeType);
+    } else {
+      setFileMimeType('');
+    }
+
+    // Получаем MIME-тип файла для правильного определения типа, только если он не был предоставлен
+    if (!(currentAttachment as any).mimeType && typeof currentAttachment.source === 'string' && fileUrl.startsWith('http') && !fileUrl.startsWith('blob:')) {
+      const headers: HeadersInit = {};
+      const token = localStorage.getItem('token');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      // Делаем HEAD запрос для получения заголовков
+      fetch(fileUrl, { method: 'HEAD', headers })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Failed to fetch headers');
+          }
+          const contentType = response.headers.get('content-type');
+          if (contentType) {
+            setFileMimeType(contentType);
+          }
+        })
+        .catch(() => {
+          // Если не удалось получить заголовки, продолжаем без MIME-типа
+        });
+    }
 
     if (isText && typeof currentAttachment.source === 'string') {
-      fetch(fileUrl)
-        .then(response => response.text())
+      const headers: HeadersInit = {};
+      
+      // Добавляем токен авторизации для внешних URL
+      if (fileUrl.startsWith('http') && !fileUrl.startsWith('blob:')) {
+        const token = localStorage.getItem('token');
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+      }
+      
+      fetch(fileUrl, { headers })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Failed to fetch');
+          }
+          return response.text();
+        })
         .then(text => {
           setFileContent(text);
           setLoading(false);
         })
         .catch(() => {
           setError(true);
+          setLoading(false);
         });
     } else if (isText && currentAttachment.source instanceof File) {
       const reader = new FileReader();
@@ -412,10 +578,21 @@ export const FilePreviewModal = ({
             style={{ 
               color: 'var(--color-red-500)',
               fontSize: '16px',
-              fontWeight: '600'
+              fontWeight: '600',
+              textAlign: 'center'
             }}
           >
-            Не удалось открыть файл
+            Файл не найден или недоступен
+          </Text>
+          <Text 
+            style={{ 
+              color: 'var(--theme-text-secondary)',
+              fontSize: '14px',
+              marginTop: '8px',
+              textAlign: 'center'
+            }}
+          >
+            Возможно, файл был удален или у вас нет прав на его просмотр
           </Text>
         </Box>
       );
@@ -436,10 +613,11 @@ export const FilePreviewModal = ({
             overflow: 'hidden'
           }}
         >
-          <Image
+          <AuthImage
             src={fileUrl}
             alt={fileName}
             fit="contain"
+            onMimeTypeDetected={setFileMimeType}
             style={{
               maxWidth: '100%',
               maxHeight: 'calc(100vh - 300px)',
@@ -465,20 +643,27 @@ export const FilePreviewModal = ({
             overflow: 'hidden'
           }}
         >
-          <iframe
-            title="PDF Viewer"
-            src={`${fileUrl}#toolbar=0&navpanes=0`}
-            style={{
-              width: '100%',
-              height: 'calc(100vh - 350px)',
-              border: 'none',
-              minHeight: 400,
-              borderRadius: '8px',
-              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)'
-            }}
+          <AuthFileLoader 
+            src={fileUrl} 
+            onMimeTypeDetected={setFileMimeType}
             onLoad={() => setLoading(false)}
             onError={() => setError(true)}
-          />
+          >
+            {(blobUrl: string) => (
+              <iframe
+                title="PDF Viewer"
+                src={`${blobUrl}#toolbar=0&navpanes=0`}
+                style={{
+                  width: '100%',
+                  height: 'calc(100vh - 350px)',
+                  border: 'none',
+                  minHeight: 400,
+                  borderRadius: '8px',
+                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)'
+                }}
+              />
+            )}
+          </AuthFileLoader>
         </Box>
       );
     }
@@ -546,18 +731,25 @@ export const FilePreviewModal = ({
               border: '1px solid var(--theme-border-secondary)'
             }}
           >
-          <audio
-            controls
-            src={fileUrl}
-              style={{ 
-                width: '100%',
-                height: '40px'
-              }}
-            onLoadedData={() => setLoading(false)}
-            onError={() => setError(true)}
-          >
-            Ваш браузер не поддерживает элемент audio.
-          </audio>
+            <AuthFileLoader 
+              src={fileUrl} 
+              onMimeTypeDetected={setFileMimeType}
+              onLoad={() => setLoading(false)}
+              onError={() => setError(true)}
+            >
+              {(blobUrl: string) => (
+                <audio
+                  controls
+                  src={blobUrl}
+                  style={{ 
+                    width: '100%',
+                    height: '40px'
+                  }}
+                >
+                  Ваш браузер не поддерживает элемент audio.
+                </audio>
+              )}
+            </AuthFileLoader>
           </Box>
         </Box>
       );
@@ -578,20 +770,65 @@ export const FilePreviewModal = ({
             overflow: 'hidden'
           }}
         >
-          <video
-            controls
-            style={{ 
-              maxWidth: '100%', 
-              maxHeight: 'calc(100vh - 300px)',
-              borderRadius: '8px',
-              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)'
-            }}
-            src={fileUrl}
-            onLoadedData={() => setLoading(false)}
+          <AuthFileLoader 
+            src={fileUrl} 
+            onMimeTypeDetected={setFileMimeType}
+            onLoad={() => setLoading(false)}
             onError={() => setError(true)}
           >
-            Ваш браузер не поддерживает видео.
-          </video>
+            {(blobUrl: string) => (
+              <video
+                controls
+                style={{ 
+                  maxWidth: '100%', 
+                  maxHeight: 'calc(100vh - 300px)',
+                  borderRadius: '8px',
+                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)'
+                }}
+                src={blobUrl}
+              >
+                Ваш браузер не поддерживает видео.
+              </video>
+            )}
+          </AuthFileLoader>
+        </Box>
+      );
+    }
+
+    // Если файл не определен, попробуем отобразить его как iframe
+    if (typeof currentAttachment.source === 'string' && fileUrl.startsWith('http')) {
+      return (
+        <Box
+          style={{
+            background: 'var(--theme-bg-elevated)',
+            borderRadius: '16px',
+            border: '1px solid var(--theme-border-primary)',
+            padding: '20px',
+            minHeight: '400px',
+            overflow: 'hidden'
+          }}
+        >
+          <AuthFileLoader 
+            src={fileUrl} 
+            onMimeTypeDetected={setFileMimeType}
+            onLoad={() => setLoading(false)}
+            onError={() => setError(true)}
+          >
+            {(blobUrl: string) => (
+              <iframe
+                title="File Viewer"
+                src={blobUrl}
+                style={{
+                  width: '100%',
+                  height: 'calc(100vh - 350px)',
+                  border: 'none',
+                  minHeight: 400,
+                  borderRadius: '8px',
+                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)'
+                }}
+              />
+            )}
+          </AuthFileLoader>
         </Box>
       );
     }
@@ -632,7 +869,7 @@ export const FilePreviewModal = ({
             textAlign: 'center'
           }}
         >
-          Формат файла {fileExt.toUpperCase()} не поддерживает встроенный просмотр
+          Формат файла {fileExt.toUpperCase() || 'неизвестный'} не поддерживает встроенный просмотр
         </Text>
         <Text 
           style={{ 
@@ -644,6 +881,16 @@ export const FilePreviewModal = ({
         >
           Используйте кнопку "Скачать файл" для просмотра
         </Text>
+        <Button
+          variant="light"
+          color="blue"
+          mt="md"
+          onClick={() => {
+            window.open(fileUrl, '_blank');
+          }}
+        >
+          Открыть в новой вкладке
+        </Button>
       </Box>
     );
   };
@@ -754,11 +1001,37 @@ export const FilePreviewModal = ({
                 <ActionIcon
                   size="lg"
                   radius="xl"
-                  onClick={() => {
-                    const link = document.createElement('a');
-                    link.href = fileUrl;
-                    link.download = fileName;
-                    link.click();
+                  onClick={async () => {
+                    try {
+                      const url = downloadUrl || fileUrl;
+                      // Всегда предпочитаем /download вариант
+                      const finalUrl = url.replace(/\/view(?=(\?|#|$))/i, '/download');
+                      if (url.startsWith('http')) {
+                        const headers: HeadersInit = {};
+                        const token = localStorage.getItem('token');
+                        if (token) headers['Authorization'] = `Bearer ${token}`;
+                        const res = await fetch(finalUrl, { headers });
+                        if (!res.ok) throw new Error(String(res.status));
+                        const blob = await res.blob();
+                        const objectUrl = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = objectUrl;
+                        a.download = fileName || 'file';
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        URL.revokeObjectURL(objectUrl);
+                      } else {
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = fileName;
+                        link.click();
+                      }
+                    } catch (e) {
+                      // Фоллбэк — открыть в новой вкладке по /download
+                      const fallbackUrl = (downloadUrl || fileUrl).replace(/\/view(?=(\?|#|$))/i, '/download');
+                      window.open(fallbackUrl, '_blank');
+                    }
                   }}
                   style={{
                     background: 'rgba(255, 255, 255, 0.2)',
@@ -770,6 +1043,28 @@ export const FilePreviewModal = ({
                   <IconDownload size={20} />
                 </ActionIcon>
               </Tooltip>
+              
+              {onDeleteFile && (
+                <Tooltip label="Удалить файл">
+                  <ActionIcon
+                    size="lg"
+                    radius="xl"
+                    onClick={async () => {
+                      if (confirm('Вы уверены, что хотите удалить этот файл?')) {
+                        await onDeleteFile(currentAttachment.id);
+                      }
+                    }}
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.2)',
+                      color: 'white',
+                      border: '1px solid rgba(255, 255, 255, 0.3)',
+                      backdropFilter: 'blur(10px)'
+                    }}
+                  >
+                    <IconTrash size={20} />
+                  </ActionIcon>
+                </Tooltip>
+              )}
               
               <Tooltip label="Закрыть">
                 <ActionIcon

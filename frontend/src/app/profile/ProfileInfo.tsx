@@ -2,31 +2,7 @@ import { useState, useEffect } from 'react';
 import { useUserContext } from '../../hooks/useUserContext';
 import { API } from '../../config/constants';
 import { notificationSystem } from '../../utils/Push';
-import { 
-  Avatar, 
-  Card, 
-  Text, 
-  Group, 
-  Badge, 
-  Skeleton, 
-  Stack, 
-  Box, 
-  Modal, 
-  Button, 
-  PasswordInput, 
-  Image, 
-  FileButton, 
-  Loader, 
-  CopyButton, 
-  Tooltip, 
-  ActionIcon,
-  Title,
-  Divider,
-  ThemeIcon,
-  Grid,
-  Alert,
-  Switch
-} from '@mantine/core';
+import {  Avatar,  Card,  Text,  Group,  Badge,  Skeleton,  Stack,  Box,  Modal,  Button,  PasswordInput,  Image,  FileButton,  Loader,  CopyButton,  Tooltip,  ActionIcon, Title, Divider, ThemeIcon, Grid, Alert, Switch } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import QRCode from 'react-qr-code';
 import { 
@@ -374,7 +350,7 @@ const ProfileInfo = () => {
                   variant="light"
                   className="status-badge"
                 >
-                  {userData.status === 'active' ? 'Активен' : 'Неактивен'}
+                  {userData.status}
                 </Badge>
               </Group>
 

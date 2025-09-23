@@ -35,7 +35,30 @@ export const UserContextProvider = ({ children }: Props) => {
     return value ? JSON.parse(value) : null;
   });
 
-  const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
+  const [token, setToken] = useState<string | null>(() => {
+    const storedToken = localStorage.getItem('token');
+    const storedDomain = localStorage.getItem('domain');
+    const currentDomain = window.location.host;
+    
+    // Если домен изменился, очищаем все токены
+    if (storedDomain && storedDomain !== currentDomain) {
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      localStorage.removeItem('domain');
+      return null;
+    }
+    
+    // Сохраняем текущий домен
+    localStorage.setItem('domain', currentDomain);
+    
+    try {
+      // Пытаемся распарсить как JSON (для совместимости со старым форматом)
+      return storedToken ? JSON.parse(storedToken) : null;
+    } catch {
+      // Если не JSON, возвращаем как есть
+      return storedToken;
+    }
+  });
 
   const login = (user: User, token: string) => {
     setUser(user);
@@ -49,6 +72,7 @@ export const UserContextProvider = ({ children }: Props) => {
     setToken(null);
     localStorage.removeItem('user');
     localStorage.removeItem('token');
+    localStorage.removeItem('domain');
   };
 
   const refreshAccessToken = async () => {
@@ -58,9 +82,12 @@ export const UserContextProvider = ({ children }: Props) => {
     });
 
     if (response.ok) {
-      const json = await response.json();
-      setToken(json.token);
-      localStorage.setItem('token', json.token);
+      const newToken = await response.json(); // Backend возвращает токен напрямую
+      setToken(newToken);
+      localStorage.setItem('token', newToken);
+    } else {
+      // Если refresh не удался, делаем logout
+      logout();
     }
   };
 

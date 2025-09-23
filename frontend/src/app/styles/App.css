@@ -197,19 +197,107 @@ a:active {
   bottom: 0;
   left: 0;
   right: 0;
-  background-color: var(--bg);
+  background-color: var(--layer);
   border: 0px;
   z-index: 100;
   box-sizing: border-box;
 }
 
 #footer {
-  background-color: var(--layer);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   width: 100%;
   height: 100%;
   border-radius: 5px;
   padding: 5px 10px;
   box-shadow: var(--outline-shadow);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Темная тема для футера */
+[data-theme="dark"] #footer {
+  background: rgba(30, 30, 30, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Анимация появления футера */
+#footer-wrapper {
+  animation: slideUp 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Эффект при скролле */
+#footer-wrapper.scrolled {
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+}
+
+/* Дополнительный отступ для контента */
+#content {
+  min-height: calc(100vh - 80px);
+}
+
+/* Дополнительный отступ для страниц с длинным контентом */
+body {
+  padding-bottom: 0px !important;
+  margin-bottom: 0px !important;
+}
+
+/* Принудительный отступ для основного контента */
+#content {
+  padding-bottom: 80px !important;
+  margin-bottom: 0px !important;
+  min-height: calc(100vh - 80px) !important;
+}
+
+/* Адаптивные отступы для мобильных устройств */
+@media (max-width: 768px) {
+  #content {
+    padding-bottom: 100px !important;
+  }
+  
+  #footer-wrapper {
+    height: 90px;
+    padding: 0px 10px 15px 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  #content {
+    padding-bottom: 120px !important;
+  }
+  
+  #footer-wrapper {
+    height: 100px;
+    padding: 0px 5px 20px 5px;
+  }
+}
+
+#footer-wrapper.scrolled #footer {
+  box-shadow: 
+    0 12px 40px rgba(0, 0, 0, 0.15),
+    0 4px 12px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+[data-theme="dark"] #footer-wrapper.scrolled #footer {
+  box-shadow: 
+    0 12px 40px rgba(0, 0, 0, 0.4),
+    0 4px 12px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 #footer-nav {
@@ -244,28 +332,36 @@ a:active {
 .footer-nav-text {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  min-width: 0;
-  flex: 1;
-  margin-left: 5px;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  gap: 2px;
+  margin-top: 4px;
 }
 
 .footer-nav-name {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
+  line-height: 1.2;
 }
 
 .footer-nav-description {
-  font-size: 11px;
-  color: var(--font-info);
+  font-size: 9px;
+  color: var(--mantine-color-dimmed);
+  text-align: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
+  line-height: 1.2;
+  opacity: 0.8;
 }
 
 .tab {

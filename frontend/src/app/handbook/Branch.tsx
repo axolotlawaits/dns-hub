@@ -1,9 +1,22 @@
 import { useParams } from "react-router"
 import { API } from "../../config/constants"
-import { Fragment, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
 import { Map, Marker } from "pigeon-maps"
 import { Carousel } from "@mantine/carousel"
-import { Image } from "@mantine/core"
+import { 
+  Image, 
+  Card, 
+  Title, 
+  Text, 
+  Group, 
+  Stack, 
+  Box, 
+  Badge, 
+  ThemeIcon,
+  Grid,
+  Paper
+} from "@mantine/core"
+import { IconMapPin, IconBuilding, IconUsers, IconRuler } from "@tabler/icons-react"
 import { EmployeeType } from "./Employee"
 
 export type BranchType = {
@@ -43,52 +56,217 @@ function Branch() {
 
   return (
     branch &&
-    <div id="branch-page">
-      <div className="branch-main">
-        <div className="branch-card-solo">
-          <div>
-            <h1 className="branch-title-solo">{branch.name}</h1>
-          </div>
-          <div className="branch-card-main">
-            <div className="branch-card-left">
-              <div className="branch-card-block">
-                <span className="branch-card-text">Тип: {branch.type}</span>
-                {branch.tradingArea !== 0 &&
-                <span className="branch-card-text">Площадь магазина: {branch.tradingArea}</span>
+    <Box p="xl" style={{ maxWidth: '1200px', margin: '0 auto' }}>
+      <Stack gap="xl">
+        {/* Заголовок */}
+        <Paper
+          radius="lg"
+          p="xl"
+          style={{
+            background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, rgba(255, 255, 255, 0.05) 100%)',
+            border: '1px solid var(--theme-border-primary)',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)'
+          }}
+        >
+          <Group gap="md" align="center" mb="md">
+            <ThemeIcon size="xl" color="blue" variant="light">
+              <IconBuilding size={28} />
+            </ThemeIcon>
+            <Title order={1} style={{ color: 'var(--theme-text-primary)' }}>
+              {branch.name}
+            </Title>
+          </Group>
+          
+          <Grid>
+            <Grid.Col span={{ base: 12, md: 8 }}>
+              <Stack gap="md">
+                <Group gap="md">
+                  <Badge
+                    size="lg"
+                    variant="light"
+                    color="blue"
+                    leftSection={<IconBuilding size={16} />}
+                  >
+                    {branch.type}
+                  </Badge>
+                  <Badge
+                    size="lg"
+                    variant="light"
+                    color="green"
+                    leftSection={<IconMapPin size={16} />}
+                  >
+                    {branch.city}
+                  </Badge>
+                  <Badge
+                    size="lg"
+                    variant="light"
+                    color="orange"
+                  >
+                    РРС: {branch.rrs}
+                  </Badge>
+                </Group>
+                
+                <Box>
+                  <Text size="lg" fw={600} mb="xs" style={{ color: 'var(--theme-text-primary)' }}>
+                    Адрес
+                  </Text>
+                  <Text size="md" style={{ color: 'var(--theme-text-secondary)' }}>
+                    {branch.address}
+                  </Text>
+                </Box>
+                
+                {branch.tradingArea !== 0 && (
+                  <Box>
+                    <Text size="lg" fw={600} mb="xs" style={{ color: 'var(--theme-text-primary)' }}>
+                      Площадь магазина
+                    </Text>
+                    <Group gap="xs" align="center">
+                      <IconRuler size={20} style={{ color: 'var(--color-primary-500)' }} />
+                      <Text size="md" style={{ color: 'var(--theme-text-secondary)' }}>
+                        {branch.tradingArea} м²
+                      </Text>
+                    </Group>
+                  </Box>
+                )}
+              </Stack>
+            </Grid.Col>
+            
+            <Grid.Col span={{ base: 12, md: 4 }}>
+              <Card
+                radius="md"
+                style={{
+                  background: 'var(--theme-bg-elevated)',
+                  border: '1px solid var(--theme-border-primary)',
+                  height: '300px',
+                  overflow: 'hidden'
+                }}
+              >
+                <Map 
+                  height={300} 
+                  center={[branch.latitude, branch.longitude]} 
+                  zoom={13}
+                  mouseEvents={false}
+                >
+                  <Marker width={50} anchor={[branch.latitude, branch.longitude]} />
+                </Map>
+              </Card>
+            </Grid.Col>
+          </Grid>
+        </Paper>
+
+        {/* Управляющие */}
+        {branch.userData.some(user => user.position.name.includes('Управляющий')) && (
+          <Paper
+            radius="lg"
+            p="xl"
+            style={{
+              background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, rgba(255, 255, 255, 0.05) 100%)',
+              border: '1px solid var(--theme-border-primary)',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)'
+            }}
+          >
+            <Group gap="md" align="center" mb="md">
+              <ThemeIcon size="xl" color="green" variant="light">
+                <IconUsers size={28} />
+              </ThemeIcon>
+              <Title order={2} style={{ color: 'var(--theme-text-primary)' }}>
+                Руководство
+              </Title>
+            </Group>
+            
+            <Stack gap="md">
+              {branch.userData.map(user => {
+                return user.position.name.includes('Управляющий') && (
+                  <Card
+                    key={user.uuid}
+                    radius="md"
+                    p="md"
+                    style={{
+                      background: 'var(--theme-bg-primary)',
+                      border: '1px solid var(--theme-border-primary)',
+                      transition: 'var(--transition-all)'
+                    }}
+                  >
+                    <Group gap="md">
+                      <ThemeIcon size="lg" color="green" variant="light">
+                        <IconUsers size={20} />
+                      </ThemeIcon>
+                      <Box>
+                        <Text size="lg" fw={600} style={{ color: 'var(--theme-text-primary)' }}>
+                          {user.fio}
+                        </Text>
+                        <Text size="md" style={{ color: 'var(--theme-text-secondary)' }}>
+                          {user.position.name}
+                        </Text>
+                      </Box>
+                    </Group>
+                  </Card>
+                )
+              })}
+            </Stack>
+          </Paper>
+        )}
+
+        {/* Галерея */}
+        {branch.images.length > 0 && (
+          <Paper
+            radius="lg"
+            p="xl"
+            style={{
+              background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, rgba(255, 255, 255, 0.05) 100%)',
+              border: '1px solid var(--theme-border-primary)',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)'
+            }}
+          >
+            <Title order={2} mb="xl" style={{ color: 'var(--theme-text-primary)' }}>
+              Галерея
+            </Title>
+            
+            <Carousel 
+              slideSize="50%" 
+              height={500} 
+              slideGap="md"
+              withIndicators
+              styles={{
+                control: {
+                  background: 'var(--theme-bg-elevated)',
+                  border: '1px solid var(--theme-border-primary)',
+                  color: 'var(--theme-text-primary)'
+                },
+                indicator: {
+                  background: 'var(--color-primary-500)'
                 }
-                <span className="branch-card-text">Город: {branch.city}</span>
-                <span className="branch-card-text">РРС: {branch.rrs}</span>
-                <span className="branch-card-text">Адрес: {branch.address}</span>
-              </div>
-              <div className="branch-card-block">
-                {branch.userData.map(user => {
-                  return user.position.name.includes('Управляющий') &&
-                    <Fragment key={user.uuid}>
-                      <span className="branch-card-text">{user.position.name}</span>
-                      <span className="branch-card-text">{user.fio}</span>
-                    </Fragment>
-                  
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-        <Map height={300} width={500} center={[branch.latitude, branch.longitude]} zoom={13}>
-          <Marker width={50} anchor={[branch.latitude, branch.longitude]} />
-        </Map>
-      </div>
-      <div className="branch-img-wrapper">
-        <Carousel slideSize="50%" height={500} slideGap="md">
-          {branch.images.map((img: any) => {
-            return (
-              <Carousel.Slide key={img.id}>
-                <Image src={img.link} radius={'sm'} h={500} width='auto' fit="contain"/>
-              </Carousel.Slide>
-            )
-          })}
-        </Carousel>
-      </div>
-    </div>
+              }}
+            >
+              {branch.images.map((img: any) => {
+                return (
+                  <Carousel.Slide key={img.id}>
+                    <Card
+                      radius="md"
+                      style={{
+                        height: '500px',
+                        overflow: 'hidden',
+                        background: 'var(--theme-bg-primary)',
+                        border: '1px solid var(--theme-border-primary)'
+                      }}
+                    >
+                      <Image 
+                        src={img.link} 
+                        radius="md" 
+                        h={500} 
+                        width="100%" 
+                        fit="cover"
+                        style={{ objectFit: 'cover' }}
+                      />
+                    </Card>
+                  </Carousel.Slide>
+                )
+              })}
+            </Carousel>
+          </Paper>
+        )}
+      </Stack>
+    </Box>
   )
 }
 

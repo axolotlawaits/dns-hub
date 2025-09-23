@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, useMemo } from "react"
 import { API } from "../../../config/constants"
 import dayjs from "dayjs"
 import { DayType } from "./Day"
-import { Button, Stack, Table } from "@mantine/core"
+import { Button, Stack, Table, Box, Title, Text, Group, Card, Badge, Grid, Paper, Progress, Divider, ScrollArea } from "@mantine/core"
 import html2canvas from "html2canvas"
 import jsPDF from "jspdf"
-import { IconDownload } from "@tabler/icons-react"
+import { IconDownload, IconClock, IconUsers, IconFileText, IconTrendingUp, IconRoute } from "@tabler/icons-react"
 import { DatePicker } from '@mantine/dates'
 
 const today = new Date().toISOString().slice(0, 10)
@@ -84,63 +84,356 @@ function LoadersSummary() {
     pdf.save(dayjs(dayData[0].day).format('MMMM D, YYYY'));
   }
 
+  const chartData = useMemo(() => {
+    return calculateTotalHoursByContractor(dayData).map(({ contractor, hours, minutes }) => ({
+      name: contractor,
+      hours: hours + (minutes / 60),
+      fullHours: hours,
+      minutes: minutes
+    }));
+  }, [dayData]);
+
+  const totalStats = useMemo(() => {
+    const totalHours = chartData.reduce((sum, item) => sum + item.hours, 0);
+    const totalRoutes = dayData.length;
+    const activeRoutes = dayData.filter(route => calculateTotalRouteTime(route) > 0).length;
+    
+    return {
+      totalHours: Math.floor(totalHours),
+      totalMinutes: Math.round((totalHours % 1) * 60),
+      totalRoutes,
+      activeRoutes,
+      efficiency: totalRoutes > 0 ? Math.round((activeRoutes / totalRoutes) * 100) : 0
+    };
+  }, [chartData, dayData]);
+
   return (
-    <div className="loaders-summary-wrapper">
-      <Stack w='300px'>
-        <h2>Выберите день</h2>
-        <DatePicker value={date} onChange={setDate} size="md"/>
-      </Stack>
-      <div className="summary-and-download">
-        <div ref={printRef} className="day-summary-card">
-          <h2>Отчет за день</h2>
-          <Table withTableBorder>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Поставщик</Table.Th>
-                <Table.Th>Часы</Table.Th>
-                <Table.Th>Минуты</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {calculateTotalHoursByContractor(dayData).map(({ contractor, hours, minutes }) => (
-                contractor &&
-                <Table.Tr key={contractor}>
-                  <Table.Td>{contractor}</Table.Td>
-                  <Table.Td>{hours}</Table.Td>
-                  <Table.Td>{minutes}</Table.Td>
+    <Box>
+      {/* Заголовок и выбор даты */}
+      <Group justify="space-between" mb="xl">
+        <Box>
+          <Title order={2} style={{ color: 'var(--theme-text-primary)', margin: 0 }}>
+            Отчеты по грузчикам
+          </Title>
+          <Text size="sm" c="var(--theme-text-secondary)" mt={4}>
+            Аналитика работы грузчиков и маршрутов
+          </Text>
+        </Box>
+        <Group gap="md">
+          <DatePicker 
+            value={date} 
+            onChange={setDate} 
+            size="md"
+            style={{ minWidth: '200px' }}
+          />
+          <Button 
+            onClick={downloadPdf} 
+            variant="gradient"
+            gradient={{ from: 'blue', to: 'cyan' }}
+            leftSection={<IconDownload size={16} />}
+            disabled={dayData.length === 0}
+          >
+            Скачать PDF
+          </Button>
+        </Group>
+      </Group>
+
+      {dayData.length > 0 ? (
+        <Box>
+          {/* Статистика */}
+          <Grid gutter="lg" mb="xl">
+            <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+              <Card style={{
+                background: 'var(--theme-bg-elevated)',
+                borderRadius: '16px',
+                border: '1px solid var(--theme-border-primary)',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}>
+                <Box style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '4px',
+                  background: 'linear-gradient(90deg, #4facfe 0%, #00f2fe 100%)',
+                  borderRadius: '16px 16px 0 0'
+                }} />
+                <Group gap="md" mb="sm">
+                  <Box style={{
+                    background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                    borderRadius: '8px',
+                    padding: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <IconClock size={20} color="white" />
+                  </Box>
+                  <Text size="sm" fw={600} c="var(--theme-text-primary)">Общее время</Text>
+                </Group>
+                <Text size="xl" fw={700} c="var(--theme-text-primary)">
+                  {totalStats.totalHours}ч {totalStats.totalMinutes}м
+                </Text>
+                <Text size="xs" c="var(--theme-text-secondary)">
+                  Отработано за день
+                </Text>
+              </Card>
+            </Grid.Col>
+
+            <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+              <Card style={{
+                background: 'var(--theme-bg-elevated)',
+                borderRadius: '16px',
+                border: '1px solid var(--theme-border-primary)',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}>
+                <Box style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '4px',
+                  background: 'linear-gradient(90deg, #fa709a 0%, #fee140 100%)',
+                  borderRadius: '16px 16px 0 0'
+                }} />
+                <Group gap="md" mb="sm">
+                  <Box style={{
+                    background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+                    borderRadius: '8px',
+                    padding: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <IconRoute size={20} color="white" />
+                  </Box>
+                  <Text size="sm" fw={600} c="var(--theme-text-primary)">Маршруты</Text>
+                </Group>
+                <Text size="xl" fw={700} c="var(--theme-text-primary)">
+                  {totalStats.activeRoutes}/{totalStats.totalRoutes}
+                </Text>
+                <Text size="xs" c="var(--theme-text-secondary)">
+                  Активных из общего
+                </Text>
+              </Card>
+            </Grid.Col>
+
+            <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+              <Card style={{
+                background: 'var(--theme-bg-elevated)',
+                borderRadius: '16px',
+                border: '1px solid var(--theme-border-primary)',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}>
+                <Box style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '4px',
+                  background: 'linear-gradient(90deg, #a8edea 0%, #fed6e3 100%)',
+                  borderRadius: '16px 16px 0 0'
+                }} />
+                <Group gap="md" mb="sm">
+                  <Box style={{
+                    background: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+                    borderRadius: '8px',
+                    padding: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <IconTrendingUp size={20} color="white" />
+                  </Box>
+                  <Text size="sm" fw={600} c="var(--theme-text-primary)">Эффективность</Text>
+                </Group>
+                <Text size="xl" fw={700} c="var(--theme-text-primary)">
+                  {totalStats.efficiency}%
+                </Text>
+                <Progress 
+                  value={totalStats.efficiency} 
+                  size="sm" 
+                  color="green" 
+                  style={{ marginTop: '8px' }}
+                />
+              </Card>
+            </Grid.Col>
+
+            <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+              <Card style={{
+                background: 'var(--theme-bg-elevated)',
+                borderRadius: '16px',
+                border: '1px solid var(--theme-border-primary)',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}>
+                <Box style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '4px',
+                  background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
+                  borderRadius: '16px 16px 0 0'
+                }} />
+                <Group gap="md" mb="sm">
+                  <Box style={{
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    borderRadius: '8px',
+                    padding: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <IconUsers size={20} color="white" />
+                  </Box>
+                  <Text size="sm" fw={600} c="var(--theme-text-primary)">Подрядчики</Text>
+                </Group>
+                <Text size="xl" fw={700} c="var(--theme-text-primary)">
+                  {chartData.length}
+                </Text>
+                <Text size="xs" c="var(--theme-text-secondary)">
+                  Участвовало
+                </Text>
+              </Card>
+            </Grid.Col>
+          </Grid>
+
+          {/* Детальная таблица */}
+          <Card style={{
+            background: 'var(--theme-bg-elevated)',
+            borderRadius: '16px',
+            border: '1px solid var(--theme-border-primary)',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+            position: 'relative',
+            overflow: 'hidden'
+          }} ref={printRef}>
+            <Box style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '4px',
+              background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
+              borderRadius: '16px 16px 0 0'
+            }} />
+            <Group gap="md" mb="lg">
+              <Box style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                borderRadius: '8px',
+                padding: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <IconFileText size={20} color="white" />
+              </Box>
+              <Box>
+                <Title order={3} style={{ color: 'var(--theme-text-primary)', margin: 0 }}>
+                  Отчет за {dayjs(date).format('DD MMMM YYYY')}
+                </Title>
+                <Text size="sm" c="var(--theme-text-secondary)" mt={4}>
+                  Детальная статистика по подрядчикам
+                </Text>
+              </Box>
+            </Group>
+
+            <Table withTableBorder>
+              <Table.Thead>
+                <Table.Tr style={{ background: 'var(--theme-bg-secondary)' }}>
+                  <Table.Th style={{ color: 'var(--theme-text-primary)', fontWeight: 600 }}>Подрядчик</Table.Th>
+                  <Table.Th style={{ color: 'var(--theme-text-primary)', fontWeight: 600 }}>Часы</Table.Th>
+                  <Table.Th style={{ color: 'var(--theme-text-primary)', fontWeight: 600 }}>Минуты</Table.Th>
+                  <Table.Th style={{ color: 'var(--theme-text-primary)', fontWeight: 600 }}>Всего часов</Table.Th>
                 </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-          <h3>Детально по маршрутам</h3>
-          <div className="summary-routes-wrapper">
-            {dayData.length > 0 && dayData.map((routeDay: DayType) => {
-              return (
-                <>
-                  {calculateTotalRouteTime(routeDay) !== 0 &&
-                    <div key={routeDay.id} className="summary-route-card">
-                      <p>Маршрут: {routeDay.route.name}</p>
-                      <p>Поставщик: {routeDay.route.contractor}</p>
-                      <p id="test">
-                        {`Общее время работы: часы: ${Math.floor(calculateTotalRouteTime(routeDay) / 60)} 
-                        минуты: ${calculateTotalRouteTime(routeDay) % 60}`}
-                      </p>
-                    </div>
-                  }
-                </>
-              )
-            })}
-          </div>
-        </div>
-        <Button 
-          onClick={downloadPdf} 
-          variant="light" 
-          rightSection={<IconDownload size={18} />} 
-        >
-          Скачать PDF
-        </Button>
-      </div>
-    </div>
+              </Table.Thead>
+              <Table.Tbody>
+                {calculateTotalHoursByContractor(dayData).map(({ contractor, hours, minutes }) => (
+                  contractor && (
+                    <Table.Tr key={contractor}>
+                      <Table.Td style={{ color: 'var(--theme-text-primary)' }}>{contractor}</Table.Td>
+                      <Table.Td style={{ color: 'var(--theme-text-primary)' }}>{hours}</Table.Td>
+                      <Table.Td style={{ color: 'var(--theme-text-primary)' }}>{minutes}</Table.Td>
+                      <Table.Td style={{ color: 'var(--theme-text-primary)', fontWeight: 600 }}>
+                        {(hours + minutes / 60).toFixed(1)} ч
+                      </Table.Td>
+                    </Table.Tr>
+                  )
+                ))}
+              </Table.Tbody>
+            </Table>
+
+            <Divider my="lg" />
+
+            <Title order={4} style={{ color: 'var(--theme-text-primary)', marginBottom: '16px' }}>
+              Детально по маршрутам
+            </Title>
+            <ScrollArea style={{ maxHeight: '400px' }}>
+              <Stack gap="md">
+                {dayData.length > 0 && dayData.map((routeDay: DayType) => {
+                  const totalTime = calculateTotalRouteTime(routeDay);
+                  if (totalTime === 0) return null;
+                  
+                  return (
+                    <Paper key={routeDay.id} style={{
+                      background: 'var(--theme-bg-primary)',
+                      borderRadius: '12px',
+                      padding: '16px',
+                      border: '1px solid var(--theme-border-secondary)'
+                    }}>
+                      <Group justify="space-between" mb="sm">
+                        <Text fw={600} c="var(--theme-text-primary)">
+                          {routeDay.route.name}
+                        </Text>
+                        <Badge color="blue" variant="light">
+                          {routeDay.route.contractor}
+                        </Badge>
+                      </Group>
+                      <Text size="sm" c="var(--theme-text-secondary)">
+                        Общее время работы: {Math.floor(totalTime / 60)}ч {totalTime % 60}м
+                      </Text>
+                    </Paper>
+                  );
+                })}
+              </Stack>
+            </ScrollArea>
+          </Card>
+        </Box>
+      ) : (
+        <Paper style={{
+          background: 'var(--theme-bg-elevated)',
+          borderRadius: '16px',
+          padding: '48px 24px',
+          textAlign: 'center',
+          border: '2px dashed var(--theme-border-secondary)'
+        }}>
+          <Box style={{
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            borderRadius: '50%',
+            padding: '16px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: '16px'
+          }}>
+            <IconFileText size={32} color="white" />
+          </Box>
+          <Title order={3} style={{ color: 'var(--theme-text-primary)', marginBottom: '8px' }}>
+            Нет данных за выбранную дату
+          </Title>
+          <Text size="sm" c="var(--theme-text-secondary)" mb="md">
+            Выберите другую дату для просмотра отчета
+          </Text>
+        </Paper>
+      )}
+    </Box>
   )
 }
 

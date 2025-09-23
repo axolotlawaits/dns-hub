@@ -27,9 +27,9 @@ import rkRouter from './routes/add/rk.js'
 import sliderRouter from './routes/add/slider.js'
 import printServiceRouter from './routes/retail/printService.js'
 import scannerRouter from './routes/scanner/scanner.js'
-import safetyJournalRouter from './routes/safety/safetyJournal.js'
 import adminRouter from './routes/admin.js'
 import telegramRouter  from './routes/app/telegram.js'
+import safetyJournalRouter from './routes/jurists/safetyJournal.js'
 import fs from 'fs'
 import cookieParser from 'cookie-parser'
 import { refreshToken } from './middleware/auth.js';
@@ -51,7 +51,7 @@ export const accessPublicKey = fs.readFileSync(path.join(__dirname, 'keys/access
 export const refreshPrivateKey = fs.readFileSync(path.join(__dirname, 'keys/refresh_private.pem'), 'utf8');
 export const refreshPublicKey = fs.readFileSync(path.join(__dirname, 'keys/refresh_public.pem'), 'utf8');
 
-const allowedOrigins = process.env.NODE_ENV === 'production'  ? ['https://dns-zs.partner.ru', 'http://10.11.145.196']  : ['http://localhost:5173', 'http://10.11.145.196'];
+const allowedOrigins = process.env.NODE_ENV === 'production'  ? ['https://dns-zs.partner.ru', 'http://10.11.145.196']  : ['http://localhost:5173', 'http://10.11.145.196:5173'];
 export const API = process.env.NODE_ENV === 'production' ? `https://dns-zs.partner.ru/hub-api` : 'http://localhost:2000/hub-api';
 export const APIWebSocket = process.env.NODE_ENV === 'production' ? `https://dns-zs.partner.ru/ws` : 'http://localhost:2000/ws';
 
@@ -107,7 +107,7 @@ app.use('/hub-api/navigation', navigationRouter);
 app.use('/hub-api/type', typeRouter);
 app.use('/hub-api/retail/print-service', printServiceRouter);
 app.use('/hub-api/scanner', scannerRouter);
-app.use('/hub-api/safety/journal', safetyJournalRouter);
+app.use('/hub-api/jurists/safety', safetyJournalRouter);
 /* loader (mb fix later) */
 app.use('/hub-api/loaders/route', routeRouter)
 app.use('/hub-api/loaders/routeDay', routeDayRouter)

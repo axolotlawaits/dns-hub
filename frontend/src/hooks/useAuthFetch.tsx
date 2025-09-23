@@ -23,10 +23,10 @@ const useAuthFetch = () => {
       })
 
       if (refreshResponse.ok) {
-        const json = await refreshResponse.json()
-        localStorage.setItem('token', json)
+        const newToken = await refreshResponse.json()
+        localStorage.setItem('token', newToken)
 
-        headers.set('Authorization', `Bearer ${json}`)
+        headers.set('Authorization', `Bearer ${newToken}`)
         options.headers = headers
 
         response = await fetch(url, options)

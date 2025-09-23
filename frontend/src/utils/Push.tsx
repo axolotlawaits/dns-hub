@@ -54,8 +54,28 @@ class NotificationSystem implements INotificationSystem {
     showNotification({
       title,
       message,
-      color: type === 'error' ? 'red' : 'blue',
+      color: type === 'error' ? 'red' : type === 'success' ? 'green' : type === 'warning' ? 'yellow' : 'blue',
       icon: <IconBell size="1.1rem" />,
+      styles: {
+        root: {
+          zIndex: 99999,
+          position: 'fixed',
+          bottom: '80px', // Изменяем на bottom чтобы уведомления были снизу справа
+          right: '20px',
+          background: 'var(--theme-bg-primary)',
+          border: '1px solid var(--mantine-color-gray-3)',
+          borderRadius: '12px',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
+          backdropFilter: 'blur(10px)',
+        },
+        title: {
+          color: 'var(--theme-text-primary)',
+          fontWeight: 600,
+        },
+        description: {
+          color: 'var(--theme-text-secondary)',
+        }
+      }
     });
     
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator && 'Notification' in window) {

@@ -76,7 +76,16 @@ export default function BirthdayList() {
     } else if (userData.daysUntil <= 7) {
       return { text: `Через ${userData.daysUntil} дн.`, color: 'yellow', variant: 'light' as const };
     } else if (userData.isWeekendBirthday) {
-      return { text: `Выходной (${userData.weekendDayName})`, color: 'blue', variant: 'light' as const };
+      // Для дней рождения в выходные показываем напоминание о поздравлении
+      if (userData.daysSince !== undefined && userData.daysSince <= 3) {
+        return { 
+          text: `Не забудьте поздравить! Было в ${userData.weekendDayName}`, 
+          color: 'blue', 
+          variant: 'light' as const 
+        };
+      } else {
+        return { text: `Выходной (${userData.weekendDayName})`, color: 'blue', variant: 'light' as const };
+      }
     } else if (userData.daysSince !== undefined && userData.daysSince > 0) {
       return { text: `Прошло ${userData.daysSince} дн.`, color: 'gray', variant: 'light' as const };
     } else {
