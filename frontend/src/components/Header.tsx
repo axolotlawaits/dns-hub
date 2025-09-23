@@ -11,15 +11,7 @@ import {
   Transition,
   Box
 } from '@mantine/core';
-import { 
-  IconBrightnessDown, 
-  IconLogin, 
-  IconLogout, 
-  IconMoon, 
-  IconUser,
-  IconSettings,
-  IconBell
-} from '@tabler/icons-react';
+import {  IconBrightnessDown,  IconLogin,  IconLogout,  IconMoon,  IconUser } from '@tabler/icons-react';
 import { useNavigate } from 'react-router';
 import { useUserContext } from '../hooks/useUserContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -48,10 +40,6 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
 
   const handleProfileClick = () => {
     navigate('/profile');
-  };
-
-  const handleSettingsClick = () => {
-    navigate('/settings');
   };
 
   return (

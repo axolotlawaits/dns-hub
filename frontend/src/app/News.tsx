@@ -196,7 +196,7 @@ export default function NewsList() {
             Новости
           </Text>
         </Group>
-        {(user?.role === 'DEVELOPER' || user?.role === 'ADMINISTRATOR') && (
+        {(user?.role === 'DEVELOPER' || user?.role === 'ADMIN') && (
           <Button
             leftSection={<IconPlus size={16} />}
             variant="light"
@@ -468,7 +468,7 @@ export default function NewsList() {
                   </Text>
                 </Box>
               </Group>
-              {((user?.role === 'DEVELOPER' || user?.role === 'ADMINISTRATOR') || user?.id === selectedNews.userId) && (
+              {((user?.role === 'DEVELOPER' || user?.role === 'ADMIN') || user?.id === selectedNews.userId) && (
                 <Group gap="xs">
                   <ActionIcon
                     variant="subtle"
