@@ -307,10 +307,22 @@ export default function BookmarksList() {
                   />
                 ) : (
                   <div className="bookmark-gradient">
-                    <ThemeIcon size="xl" color="blue" variant="light">
-                      <IconBookmark size={32} />
-                    </ThemeIcon>
-                              </div>
+                    <Text 
+                      size="lg" 
+                      fw={600} 
+                      c="white" 
+                      ta="center"
+                      style={{ 
+                        textShadow: '1px 1px 2px rgba(0, 0, 0, 0.5)',
+                        lineHeight: 1.2,
+                        maxWidth: '100%',
+                        wordBreak: 'break-word',
+                        padding: 'var(--space-4)'
+                      }}
+                    >
+                      {bookmark.name}
+                    </Text>
+                  </div>
                 )}
                           </div>
 

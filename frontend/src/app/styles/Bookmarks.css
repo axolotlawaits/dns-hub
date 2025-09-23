@@ -38,15 +38,17 @@
 .bookmark-gradient {
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, var(--color-blue-500), var(--color-blue-600));
+  background: linear-gradient(135deg, var(--color-gray-600), var(--color-gray-700));
   display: flex;
   align-items: center;
   justify-content: center;
   transition: var(--transition-all);
+  padding: var(--space-4);
+  text-align: center;
 }
 
 .bookmark-card:hover .bookmark-gradient {
-  background: linear-gradient(135deg, var(--color-blue-600), var(--color-blue-700));
+  background: linear-gradient(135deg, var(--color-gray-500), var(--color-gray-600));
 }
 
 .bookmark-overlay {
