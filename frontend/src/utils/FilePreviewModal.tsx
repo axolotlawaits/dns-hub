@@ -902,6 +902,7 @@ export const FilePreviewModal = ({
       fullScreen
       zIndex={9999999}
       className="file-preview-modal"
+      withCloseButton={false}
       styles={{
         body: { 
           padding: '0',
@@ -1072,10 +1073,12 @@ export const FilePreviewModal = ({
                   radius="xl"
                   onClick={onClose}
                   style={{
-                    background: 'rgba(255, 255, 255, 0.2)',
+                    background: 'rgba(239, 68, 68, 0.8)',
                     color: 'white',
-                    border: '1px solid rgba(255, 255, 255, 0.3)',
-                    backdropFilter: 'blur(10px)'
+                    border: '2px solid rgba(239, 68, 68, 0.9)',
+                    backdropFilter: 'blur(10px)',
+                    boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)',
+                    transform: 'scale(1.05)'
                   }}
                 >
                   <IconX size={20} />

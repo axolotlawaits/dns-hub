@@ -7,7 +7,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { FilialType } from './Day';
 import dayjs from 'dayjs';
 import RouteEdit from './RouteEdit';
-import { IconPlus, IconTrash, IconRoute, IconBuilding, IconCalendar, IconMapPin, IconChevronRight } from '@tabler/icons-react';
+import { IconPlus, IconTrash, IconRoute, IconChevronRight } from '@tabler/icons-react';
 import useAuthFetch from '../../../hooks/useAuthFetch';
 import { useUserContext } from '../../../hooks/useUserContext';
 import { DynamicFormModal } from '../../../utils/formModal';
@@ -89,7 +89,6 @@ function LoadersRoutes() {
       route.id === updatedRoute.id ? updatedRoute : route
     ))
   }
-
 
   const getRouteStatus = (route: RouteType) => {
     const daysDiff = dayjs().diff(route.createdAt, 'day');
@@ -219,7 +218,9 @@ function LoadersRoutes() {
                     cursor: 'pointer',
                     height: '100%',
                     position: 'relative',
-                    overflow: 'hidden'
+                    overflow: 'hidden',
+                    display: 'flex',
+                    flexDirection: 'column'
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.transform = 'translateY(-2px)';
@@ -241,7 +242,9 @@ function LoadersRoutes() {
                     borderRadius: '16px 16px 0 0'
                   }} />
 
-                  {/* Заголовок маршрута */}
+                  {/* Основной контент карточки */}
+                  <Box style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                    {/* Заголовок маршрута */}
                   <Group justify="space-between" align="flex-start" mb="md">
                     <Box style={{ flex: 1 }}>
                       <Link 
@@ -276,88 +279,46 @@ function LoadersRoutes() {
                     </Badge>
                   </Group>
 
-                  {/* Информация о маршруте */}
-                  <Stack gap="sm" mb="md">
-                    <Group gap="sm">
-                      <Box style={{
-                        background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-                        borderRadius: '6px',
-                        padding: '4px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}>
-                        <IconMapPin size={12} color="white" />
-                      </Box>
-                      <Text size="sm" c="var(--theme-text-secondary)">
-                        РРС: {route.rrs}
+                    {/* Список филиалов */}
+                    <Box mb="md" style={{ flex: 1 }}>
+                      <Text size="sm" fw={500} c="var(--theme-text-primary)" mb="xs">
+                        Филиалы в маршруте:
                       </Text>
-                    </Group>
-                    
-                    <Group gap="sm">
-                      <Box style={{
-                        background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-                        borderRadius: '6px',
-                        padding: '4px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}>
-                        <IconBuilding size={12} color="white" />
-                      </Box>
-                      <Text size="sm" c="var(--theme-text-secondary)">
-                        Филиалов: {route.filials.length}
-                      </Text>
-                    </Group>
-
-                    <Group gap="sm">
-                      <Box style={{
-                        background: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
-                        borderRadius: '6px',
-                        padding: '4px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}>
-                        <IconCalendar size={12} color="white" />
-                      </Box>
-                      <Text size="sm" c="var(--theme-text-secondary)">
-                        {dayjs(route.createdAt).format('DD.MM.YYYY')}
-                      </Text>
-                    </Group>
-        </Stack>
-
-                  {/* Список филиалов */}
-                  <Box mb="md">
-                    <Text size="sm" fw={500} c="var(--theme-text-primary)" mb="xs">
-                      Филиалы в маршруте:
-                    </Text>
-                    <ScrollArea style={{ height: '80px' }} scrollbarSize={6}>
-                      <Stack gap="xs">
-                        {route.filials.slice(0, 5).map(filial => (
-                          <Group key={filial.id} gap="xs">
-                            <Box style={{
-                              width: '4px',
-                              height: '4px',
-                              borderRadius: '50%',
-                              background: 'var(--theme-text-secondary)'
-                            }} />
-                            <Text size="xs" c="var(--theme-text-secondary)" style={{ lineHeight: 1.4 }}>
-                              {filial.name}
+                      <ScrollArea style={{ height: '80px' }} scrollbarSize={6}>
+                        <Stack gap="xs">
+                          {route.filials.slice(0, 5).map(filial => (
+                            <Group key={filial.id} gap="xs">
+                              <Box style={{
+                                width: '4px',
+                                height: '4px',
+                                borderRadius: '50%',
+                                background: 'var(--theme-text-secondary)'
+                              }} />
+                              <Text size="xs" c="var(--theme-text-secondary)" style={{ lineHeight: 1.4 }}>
+                                {filial.name}
+                              </Text>
+                            </Group>
+                          ))}
+                          {route.filials.length > 5 && (
+                            <Text size="xs" c="var(--theme-text-secondary)" style={{ fontStyle: 'italic' }}>
+                              и еще {route.filials.length - 5} филиалов...
                             </Text>
-                          </Group>
-                        ))}
-                        {route.filials.length > 5 && (
-                          <Text size="xs" c="var(--theme-text-secondary)" style={{ fontStyle: 'italic' }}>
-                            и еще {route.filials.length - 5} филиалов...
-                          </Text>
-                        )}
-                  </Stack>
-                </ScrollArea>
+                          )}
+                        </Stack>
+                      </ScrollArea>
+                    </Box>
                   </Box>
 
-                  {/* Футер с действиями */}
-                  <Group justify="space-between" align="center">
+                  {/* Футер с действиями - всегда внизу */}
+                  <Group 
+                    justify="space-between" 
+                    align="center"
+                    style={{
+                      marginTop: 'auto',
+                      paddingTop: '16px',
+                      borderTop: '1px solid var(--theme-border-primary)'
+                    }}
+                  >
                     <Group gap="xs">
                       {(dayjs().diff(route.createdAt, 'day') >= 5 && user?.role === 'EMPLOYEE') ? null : (
                         <RouteEdit 

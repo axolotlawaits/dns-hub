@@ -125,7 +125,7 @@
 .login-input .mantine-TextInput-input,
 .password-input .mantine-PasswordInput-input {
   background: var(--theme-bg-secondary);
-  border: none;
+  border: 1px solid var(--theme-border);
   border-radius: var(--radius-lg);
   transition: var(--transition-all);
   font-size: var(--font-size-md);
@@ -136,10 +136,36 @@
 
 .login-input .mantine-TextInput-input:focus,
 .password-input .mantine-PasswordInput-input:focus {
-  border: none;
-  box-shadow: none;
+  border: 1px solid var(--color-blue-500);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
   background: var(--theme-bg-primary);
   outline: none;
+}
+
+/* Дополнительные стили для поля пароля при фокусе */
+.password-input .mantine-PasswordInput-input:focus {
+  border: 1px solid var(--color-blue-500) !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
+  background: var(--theme-bg-primary) !important;
+  outline: none !important;
+}
+
+/* Более агрессивные стили для поля пароля */
+.password-input .mantine-PasswordInput-input:focus,
+.password-input .mantine-PasswordInput-input:focus-visible,
+.password-input .mantine-PasswordInput-input:focus-within {
+  border: 1px solid var(--color-blue-500) !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
+  background: var(--theme-bg-primary) !important;
+  outline: none !important;
+}
+
+/* Стили для всего контейнера поля пароля при фокусе */
+.password-input:focus-within .mantine-PasswordInput-input {
+  border: 1px solid var(--color-blue-500) !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
+  background: var(--theme-bg-primary) !important;
+  outline: none !important;
 }
 
 .login-input .mantine-TextInput-label,
@@ -157,9 +183,36 @@
   pointer-events: none;
 }
 
+/* Иконка показать/скрыть пароль должна быть кликабельной */
+.password-input .mantine-PasswordInput-section[data-position="right"] {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
 .login-input .mantine-TextInput-section[data-position="left"],
 .password-input .mantine-PasswordInput-section[data-position="left"] {
   margin-right: var(--space-2);
+}
+
+/* Применяем стили от пароля к логину */
+.login-input .mantine-TextInput-label {
+  color: var(--theme-text-primary);
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-sm);
+  margin-left: var(--space-2);
+  padding-left: var(--space-2);
+}
+
+/* Исправляем позиционирование иконки и текста в поле логина */
+.login-input .mantine-TextInput-section[data-position="left"] {
+  margin-right: var(--space-2);
+  padding-left: var(--space-1);
+}
+
+/* Убираем отступ слева у placeholder текста в поле логина */
+.login-input .mantine-TextInput-input {
+  padding-left: calc(var(--space-5) + 20px + var(--space-2));
 }
 
 /* Стили для кнопок */

@@ -82,6 +82,7 @@
   background: #0f172a;
 }
 
+
 [data-mantine-color-scheme="dark"] .form-modal .mantine-Modal-content {
   background: #0f172a;
   border: 1px solid #334155;
@@ -136,15 +137,66 @@
 
 /* Стили для карточек файлов */
 .form-modal .file-card {
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 12px;
-  margin-bottom: 8px;
-  background: #f9f9f9;
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin-bottom: var(--space-2);
+  background: var(--theme-bg-secondary);
+  transition: var(--transition-all);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Обеспечиваем полную ширину для контейнера приложений */
+.form-modal .mantine-Stack-root {
+  width: 100%;
+}
+
+.form-modal .mantine-Stack-root .mantine-Stack-root {
+  width: 100%;
 }
 
 .form-modal .file-card:hover {
-  background: #f0f0f0;
+  background: var(--theme-bg-hover);
+  border-color: var(--color-blue-300);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.form-modal .file-card .file-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-blue-100);
+  border-radius: var(--radius-sm);
+  color: var(--color-blue-600);
+}
+
+.form-modal .file-card .file-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.form-modal .file-card .file-name {
+  font-weight: 500;
+  color: var(--theme-text-primary);
+  font-size: 14px;
+  margin-bottom: 2px;
+  word-break: break-all;
+}
+
+.form-modal .file-card .file-size {
+  font-size: 12px;
+  color: var(--theme-text-secondary);
+}
+
+.form-modal .file-card .file-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: var(--space-2);
 }
 
 /* Стили для полей просмотра */
@@ -163,27 +215,47 @@
   padding: 8px;
   background: #f5f5f5;
   border-radius: 4px;
+  border: 1px solid #e0e0e0;
+}
+
+/* Стили для полей просмотра в режиме view */
+.form-modal.view-mode .view-field-label {
+  font-weight: 600;
+  color: var(--theme-text-primary);
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.form-modal.view-mode .view-field-value {
+  color: var(--theme-text-primary);
+  padding: 12px;
+  background: var(--theme-bg-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--theme-border);
+  font-size: 14px;
+  min-height: 20px;
 }
 
 /* Стили для режима удаления */
 .form-modal.delete-mode .mantine-Modal-header {
-  background: #ffebee;
-  border-bottom-color: #ffcdd2;
+  background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%) !important;
+  border-bottom-color: #ffcdd2 !important;
 }
 
 .form-modal.delete-mode .mantine-Modal-title {
-  color: #c62828;
+  color: #c62828 !important;
 }
 
-/* Стили для режима просмотра */
-.form-modal.view-mode .mantine-Modal-header {
-  background: #e3f2fd;
-  border-bottom-color: #bbdefb;
+[data-mantine-color-scheme="dark"] .form-modal.delete-mode .mantine-Modal-header {
+  background: linear-gradient(135deg, #4a1a1a 0%, #6b2c2c 100%) !important;
+  border-bottom-color: #8b3a3a !important;
 }
 
-.form-modal.view-mode .mantine-Modal-title {
-  color: #1565c0;
+[data-mantine-color-scheme="dark"] .form-modal.delete-mode .mantine-Modal-title {
+  color: #ff6b6b !important;
 }
+
+/* Стили для режима просмотра - используем стандартные стили */
 
 /* Темная тема для полей формы */
 [data-mantine-color-scheme="dark"] .form-modal .mantine-TextInput-input,
@@ -242,6 +314,16 @@
 
 [data-mantine-color-scheme="dark"] .form-modal .view-field-label {
   color: #e2e8f0;
+}
+
+[data-mantine-color-scheme="dark"] .form-modal.view-mode .view-field-label {
+  color: var(--theme-text-primary);
+}
+
+[data-mantine-color-scheme="dark"] .form-modal.view-mode .view-field-value {
+  background: var(--theme-bg-secondary);
+  color: var(--theme-text-primary);
+  border-color: var(--theme-border);
 }
 
 /* Стили для селектов в fileFields - универсальный подход */
@@ -354,4 +436,41 @@
 /* Стили для всех элементов в портале */
 [data-mantine-portal] * {
   z-index: 9999999 !important;
+}
+
+/* Темная тема для карточек файлов */
+[data-mantine-color-scheme="dark"] .form-modal .file-card {
+  background: var(--theme-bg-secondary);
+  border-color: var(--theme-border);
+}
+
+[data-mantine-color-scheme="dark"] .form-modal .file-card:hover {
+  background: var(--theme-bg-hover);
+  border-color: var(--color-blue-400);
+}
+
+[data-mantine-color-scheme="dark"] .form-modal .file-card .file-icon {
+  background: var(--color-blue-900);
+  color: var(--color-blue-300);
+}
+
+[data-mantine-color-scheme="dark"] .form-modal .file-card .file-name {
+  color: var(--theme-text-primary);
+}
+
+[data-mantine-color-scheme="dark"] .form-modal .file-card .file-size {
+  color: var(--theme-text-secondary);
+}
+
+/* Стили для календаря */
+.form-modal .calendar-event-card:hover {
+  background: var(--theme-bg-hover) !important;
+  border-color: var(--color-blue-300) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+[data-mantine-color-scheme="dark"] .form-modal .calendar-event-card:hover {
+  background: var(--theme-bg-hover) !important;
+  border-color: var(--color-blue-400) !important;
 }

@@ -1,0 +1,128 @@
+/* ========================================
+   CUSTOM MODAL - СТИЛИ КАК У FORM MODAL
+   ======================================== */
+
+.custom-modal {
+  z-index: 999999 !important;
+}
+
+.custom-modal .mantine-Modal-overlay {
+  z-index: 999998 !important;
+}
+
+.custom-modal .mantine-Modal-content {
+  z-index: 999999 !important;
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+}
+
+.custom-modal .mantine-Modal-header {
+  padding: 24px 24px 16px 24px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #e2e8f0;
+  border-radius: 16px 16px 0 0;
+}
+
+.custom-modal .mantine-Modal-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+
+.custom-modal .mantine-Modal-close {
+  color: #64748b;
+  background: transparent;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.custom-modal .mantine-Modal-close:hover {
+  color: #1e293b;
+  background-color: #e2e8f0;
+  transform: scale(1.05);
+}
+
+.custom-modal .mantine-Modal-body {
+  padding: 24px;
+  background: #ffffff;
+  border-radius: 0 0 16px 16px;
+}
+
+/* Темная тема для модальных окон */
+[data-mantine-color-scheme="dark"] .custom-modal .mantine-Modal-header {
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%) !important;
+  border-bottom-color: #475569 !important;
+}
+
+[data-mantine-color-scheme="dark"] .custom-modal .mantine-Modal-title {
+  color: #f1f5f9;
+}
+
+[data-mantine-color-scheme="dark"] .custom-modal .mantine-Modal-close {
+  color: #94a3b8;
+}
+
+[data-mantine-color-scheme="dark"] .custom-modal .mantine-Modal-close:hover {
+  color: #f1f5f9;
+  background-color: #475569;
+}
+
+[data-mantine-color-scheme="dark"] .custom-modal .mantine-Modal-body {
+  background: #0f172a;
+}
+
+[data-mantine-color-scheme="dark"] .custom-modal .mantine-Modal-content {
+  background: #0f172a;
+  border: 1px solid #334155;
+}
+
+/* Дополнительные стили для темной темы */
+[data-mantine-color-scheme="dark"] .custom-modal .mantine-Modal-header {
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%) !important;
+  border-bottom: 1px solid #475569 !important;
+}
+
+[data-mantine-color-scheme="dark"] .custom-modal .mantine-Modal-title {
+  color: #f1f5f9 !important;
+}
+
+[data-mantine-color-scheme="dark"] .custom-modal .mantine-Modal-header .mantine-Group-root .mantine-Text-root {
+  color: #f1f5f9 !important;
+}
+
+/* Дополнительные стили для правильного отображения */
+.custom-modal .mantine-Modal-root {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  z-index: 999999 !important;
+}
+
+.custom-modal .mantine-Modal-inner {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  z-index: 999999 !important;
+}
+
+/* Стили для календаря */
+.custom-modal .calendar-event-card:hover {
+  background: var(--theme-bg-hover) !important;
+  border-color: var(--color-blue-300) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+[data-mantine-color-scheme="dark"] .custom-modal .calendar-event-card:hover {
+  background: var(--theme-bg-hover) !important;
+  border-color: var(--color-blue-400) !important;
+}

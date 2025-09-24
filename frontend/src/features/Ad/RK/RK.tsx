@@ -2,8 +2,8 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { API } from '../../../config/constants';
 import { useUserContext } from '../../../hooks/useUserContext';
 import { notificationSystem } from '../../../utils/Push';
-import { Button, Title, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Paper, Modal, Badge, Image, Avatar } from '@mantine/core';
-import RKCalendarModal from './RKCalendar';
+import { Button, Title, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Paper, Badge, Image, Avatar } from '@mantine/core';
+import RKCalendarModal from './RKCalendarNew';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
 import { IconPencil, IconTrash, IconUpload, IconDownload, IconPlus, IconCalendar, IconArchive, IconEye } from '@tabler/icons-react';
@@ -29,6 +29,9 @@ interface RKAttachment {
   typeStructure?: { id: string; name: string; colorHex?: string };
   approvalStatus?: { id: string; name: string; colorHex?: string };
   typeAttachment?: string;
+  parentAttachmentId?: string;
+  parentAttachment?: RKAttachment;
+  childAttachments?: RKAttachment[];
 }
 
 const AttachmentCard = React.memo(function AttachmentCard({
@@ -1305,13 +1308,28 @@ return (
                     {/* Правая часть - вложения в два ряда */}
                     <Stack gap="lg" style={{ minWidth: '400px', maxWidth: '500px' }}>
                         {Array.isArray(rk.rkAttachment) && rk.rkAttachment.length > 0 && (() => {
+                          // Группируем вложения по конструкциям
                           const constructions = rk.rkAttachment.filter((a: any) => a.typeAttachment !== 'DOCUMENT');
                           const documents = rk.rkAttachment.filter((a: any) => a.typeAttachment === 'DOCUMENT');
+                          
+                          // Создаем группы: каждая конструкция + её документы через childAttachments
+                          const constructionGroups = constructions.map(construction => {
+                            const relatedDocuments = construction.childAttachments || [];
+                            return {
+                              construction,
+                              documents: relatedDocuments
+                            };
+                          });
+                          
+                          // Документы без привязки к конструкции (не имеют parentAttachmentId)
+                          const unassignedDocuments = documents.filter((doc: any) => !doc.parentAttachmentId);
+                          
                           return (
                             <>
-                              {/* Конструкции */}
-                              {constructions.length > 0 && (
-                                <Box>
+                              {/* Группы конструкций с их документами */}
+                              {constructionGroups.map((group, groupIndex) => (
+                                <Box key={groupIndex}>
+                                  {/* Заголовок конструкции */}
                                   <Group gap="12px" align="center" style={{ marginBottom: '12px' }}>
                                     <Box
                                       style={{
@@ -1328,28 +1346,104 @@ return (
                                       🏗️
                                     </Box>
                                     <Text size="lg" fw={700} style={{ color: 'var(--theme-text-primary)' }}>
-                                      Конструкции ({constructions.length})
+                                      {group.construction.typeStructure?.name || 'Конструкция'} 
+                                      {group.documents.length > 0 && ` (${group.documents.length} документов)`}
                                     </Text>
                                   </Group>
-                                  <Group gap="12px" wrap="wrap">
-                                    {constructions.slice(0, 4).map((att: any) => (
-                                      <AttachmentCard
-                                        key={att.id}
-                                        att={att as any}
-                                        apiBase={API}
-                                        onOpenFilePreview={openFilePreview}
-                                      />
-                                    ))}
-                                    {constructions.length > 4 && (
-                                      <Text size="sm" style={{ color: 'var(--theme-text-secondary)', padding: '8px' }}>
-                                        +{constructions.length - 4} еще
-                                      </Text>
-                                    )}
+                                  
+                                  {/* Конструкция */}
+                                  <Group gap="12px" wrap="wrap" style={{ marginBottom: '12px' }}>
+                                    <AttachmentCard
+                                      key={group.construction.id}
+                                      att={group.construction as any}
+                                      apiBase={API}
+                                      onOpenFilePreview={openFilePreview}
+                                    />
                                   </Group>
+                                  
+                                  {/* Документы этой конструкции */}
+                                  {group.documents.length > 0 && (
+                                    <Box style={{ marginLeft: '20px', marginBottom: '16px' }}>
+                                      <Text size="sm" fw={600} style={{ color: 'var(--theme-text-secondary)', marginBottom: '8px' }}>
+                                        Документы:
+                                      </Text>
+                                      <Group gap="8px" wrap="wrap">
+                                        {group.documents.slice(0, 3).map((doc: any, docIndex: number) => {
+                                          const sourcePath = String(doc.source || '');
+                                          const normalizedPath = sourcePath
+                                            .replace(/\\/g, '/')
+                                            .replace(/\/+/g, '/')
+                                            .replace(/^\/+/, '');
+                                          const fileUrl = `${API}/${normalizedPath}`;
+                                          return (
+                                            <Box
+                                              key={docIndex}
+                                              style={{
+                                                width: '80px',
+                                                height: '60px',
+                                                borderRadius: '8px',
+                                                overflow: 'hidden',
+                                                border: '1px solid var(--theme-border-secondary)',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s ease',
+                                                position: 'relative'
+                                              }}
+                                              onMouseEnter={(e) => {
+                                                e.currentTarget.style.transform = 'scale(1.05)';
+                                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.1)';
+                                                e.currentTarget.style.borderColor = 'var(--color-blue-300)';
+                                              }}
+                                              onMouseLeave={(e) => {
+                                                e.currentTarget.style.transform = 'scale(1)';
+                                                e.currentTarget.style.boxShadow = 'none';
+                                                e.currentTarget.style.borderColor = 'var(--theme-border-secondary)';
+                                              }}
+                                              onClick={() => openFilePreview([fileUrl], 0)}
+                                            >
+                                              <img
+                                                src={fileUrl}
+                                                alt={doc.source?.split('/').pop() || 'Документ'}
+                                                style={{
+                                                  width: '100%',
+                                                  height: '100%',
+                                                  objectFit: 'cover'
+                                                }}
+                                                onError={(e) => {
+                                                  e.currentTarget.style.display = 'none';
+                                                  e.currentTarget.parentElement!.innerHTML = `
+                                                    <div style="
+                                                      width: 100%; 
+                                                      height: 100%; 
+                                                      display: flex; 
+                                                      align-items: center; 
+                                                      justify-content: center; 
+                                                      background: var(--color-blue-100); 
+                                                      color: var(--color-blue-600);
+                                                      font-size: 12px;
+                                                      text-align: center;
+                                                      padding: 4px;
+                                                    ">
+                                                      📄
+                                                    </div>
+                                                  `;
+                                                }}
+                                              />
+                                            </Box>
+                                          );
+                                        })}
+                                        {group.documents.length > 3 && (
+                                          <Text size="xs" style={{ color: 'var(--theme-text-secondary)', padding: '8px' }}>
+                                            +{group.documents.length - 3}
+                                          </Text>
+                                        )}
+                                      </Group>
+                                    </Box>
+                                  )}
                                 </Box>
-                              )}
-                              {/* Документы */}
-                              {documents.length > 0 && (
+                              ))}
+                              
+                              {/* Непривязанные документы */}
+                              {unassignedDocuments.length > 0 && (
                                 <Box>
                                   <Group gap="12px" align="center" style={{ marginBottom: '12px' }}>
                                     <Box
@@ -1367,11 +1461,11 @@ return (
                                       📄
                                     </Box>
                                     <Text size="lg" fw={700} style={{ color: 'var(--theme-text-primary)' }}>
-                                      Документы ({documents.length})
+                                      Другие документы ({unassignedDocuments.length})
                                     </Text>
                                   </Group>
                                   <Group gap="12px" wrap="wrap">
-                                    {documents.slice(0, 4).map((att: any, index: number) => {
+                                    {unassignedDocuments.slice(0, 4).map((att: any, index: number) => {
                                       const sourcePath = String(att.source || '');
                                       const normalizedPath = sourcePath
                                         .replace(/\\/g, '/')
@@ -1443,9 +1537,9 @@ return (
                                         </Box>
                                       );
                                     })}
-                                    {documents.length > 4 && (
+                                    {unassignedDocuments.length > 4 && (
                                       <Text size="sm" style={{ color: 'var(--theme-text-secondary)', padding: '8px' }}>
-                                        +{documents.length - 4} еще
+                                        +{unassignedDocuments.length - 4} еще
                                       </Text>
                                     )}
                                   </Group>
@@ -1557,38 +1651,32 @@ return (
           { label: 'Дата согласования', value: (item) => dayjs(item?.agreedTo).format('DD.MM.YYYY HH:mm') },
         ]}
       />
-      <Modal
+      <DynamicFormModal
         opened={modals.delete[0]}
         onClose={() => modals.delete[1].close()}
         title="Подтверждение удаления"
-        centered
-      >
-        <Text mb="md">Вы уверены, что хотите удалить эту конструкцию?</Text>
-        <Group justify="flex-end">
-          <Button variant="outline" onClick={() => modals.delete[1].close()}>
-            Отмена
-          </Button>
-          <Button color="red" onClick={handleDeleteConfirm} loading={fileUploading}>
-            Удалить
-          </Button>
-        </Group>
-      </Modal>
-      <Modal
+        mode="delete"
+        initialValues={selectedRK || {}}
+        onConfirm={handleDeleteConfirm}
+      />
+      <DynamicFormModal
         opened={imagePreviewOpened}
         onClose={() => {
           setImagePreviewSrc(null);
           imagePreviewHandlers.close();
         }}
         title="Просмотр изображения"
-        size="90vw"
-        centered
-      >
-        {imagePreviewSrc ? (
-          <Image src={imagePreviewSrc} radius="sm" h={window.innerHeight ? Math.floor(window.innerHeight * 0.75) : 700} fit="contain" alt="attachment" />
-        ) : (
-          <Text size="sm" c="dimmed">Нет изображения</Text>
+        mode="view"
+        initialValues={{}}
+        viewExtraContent={() => (
+          imagePreviewSrc ? (
+            <Image src={imagePreviewSrc} radius="sm" h={window.innerHeight ? Math.floor(window.innerHeight * 0.75) : 700} fit="contain" alt="attachment" />
+          ) : (
+            <Text size="sm" c="dimmed">Нет изображения</Text>
+          )
         )}
-      </Modal>
+        size="90vw"
+      />
       <RKCalendarModal opened={calendarOpened} onClose={calendarHandlers.close} rkList={rkData} />
       <FilePreviewModal
         opened={filePreviewOpened}

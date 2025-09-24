@@ -1,5 +1,5 @@
 import {  Button,  Text,  Group,  Stack,  Box,  Card,  Badge,  ThemeIcon, ActionIcon, TextInput, Modal } from "@mantine/core"
-import {  IconSearch,  IconBuilding,  IconUsers,  IconTool,  IconMapPin,  IconShield, IconChevronRight, IconSparkles, IconUser } from "@tabler/icons-react"
+import {  IconSearch,  IconBuilding,  IconUsers,  IconTool,  IconMapPin,  IconShield, IconChevronRight, IconSparkles, IconUser, IconX } from "@tabler/icons-react"
 import { useState, useCallback } from "react"
 import { API } from "../config/constants"
 import { useDisclosure } from "@mantine/hooks"
@@ -380,12 +380,12 @@ function Search() {
     <>
       <Modal
         opened={opened}
-        onClose={() => { close(); clearData(); }}
+        onClose={() => { close(); clearData(); setText(''); }}
         title=""
         size="90%"
         radius="lg"
         centered
-        withCloseButton
+        withCloseButton={false}
         closeOnClickOutside
         closeOnEscape
         withOverlay={false}
@@ -409,9 +409,8 @@ function Search() {
             <Box
               style={{
                 background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-600) 100%)',
-                borderRadius: 'var(--radius-lg)',
+                borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0',
                 padding: 'var(--space-6)',
-                marginBottom: 'var(--space-4)',
                 position: 'relative',
                 overflow: 'hidden'
               }}
@@ -430,15 +429,41 @@ function Search() {
                   <IconSearch size={24} />
                 </ThemeIcon>
                 <Box style={{ flex: 1 }}>
-                  <Text size="xl" fw={700} style={{ color: 'white', marginBottom: 'var(--space-2)' }}>
-                    Поиск по системе
-                  </Text>
+                  <Group justify="space-between" align="center" mb="sm">
+                    <Text size="xl" fw={700} style={{ color: 'white' }}>
+                      Поиск по системе
+                    </Text>
+                    <ActionIcon
+                      size="lg"
+                      variant="subtle"
+                      color="white"
+                      onClick={() => { close(); clearData(); setText(''); }}
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.2)',
+                        backdropFilter: 'blur(10px)',
+                        border: '1px solid rgba(255, 255, 255, 0.3)',
+                        '&:hover': {
+                          background: 'rgba(255, 255, 255, 0.3)'
+                        }
+                      }}
+                    >
+                      <IconX size={20} />
+                    </ActionIcon>
+                  </Group>
                   <TextInput
                     placeholder="Введите запрос для поиска..."
                     value={text}
                     onChange={(e) => {
                       setText(e.target.value)
                       onSearch(e.target.value)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && text.trim()) {
+                        navigate(`/search?text=${encodeURIComponent(text)}`);
+                        close();
+                        clearData();
+                        setText('');
+                      }
                     }}
                     leftSection={<IconSearch size={18} />}
                     size="md"
@@ -468,7 +493,7 @@ function Search() {
                 maxHeight: '600px',
                 overflowY: 'auto',
                 background: 'var(--theme-bg-elevated)',
-                borderRadius: 'var(--radius-lg)',
+                borderRadius: '0 0 var(--radius-lg) var(--radius-lg)',
                 border: '1px solid var(--theme-border-primary)',
                 padding: 'var(--space-6)',
                 boxShadow: 'var(--theme-shadow-lg)'
@@ -476,32 +501,35 @@ function Search() {
             >
               {renderSearchResults()}
               
-              {/* Кнопка для перехода к общей странице поиска */}
-              <Box mt="md" style={{ textAlign: 'center' }}>
-                <Button
-                  variant="outline"
-                  color="blue"
-                  size="md"
-                  onClick={() => {
-                    if (text.trim()) {
-                      navigate(`/search?text=${encodeURIComponent(text)}`);
-                      close();
-                      clearData();
-                    }
-                  }}
-                  disabled={!text.trim()}
-                  style={{
-                    borderColor: 'var(--color-primary-300)',
-                    color: 'var(--color-primary-600)',
-                    '&:hover': {
-                      backgroundColor: 'var(--color-primary-50)',
-                      borderColor: 'var(--color-primary-400)'
-                    }
-                  }}
-                >
-                  Перейти к полному поиску
-                </Button>
-              </Box>
+              {/* Кнопка для перехода к общей странице поиска - показываем только если есть результаты */}
+              {(branchResult.length > 0 || employeeResult.length > 0 || toolResult.length > 0) && (
+                <Box mt="md" style={{ textAlign: 'center' }}>
+                  <Button
+                    variant="outline"
+                    color="blue"
+                    size="md"
+                    onClick={() => {
+                      if (text.trim()) {
+                        navigate(`/search?text=${encodeURIComponent(text)}`);
+                        close();
+                        clearData();
+                        setText('');
+                      }
+                    }}
+                    disabled={!text.trim()}
+                    style={{
+                      borderColor: 'var(--color-primary-300)',
+                      color: 'var(--color-primary-600)',
+                      '&:hover': {
+                        backgroundColor: 'var(--color-primary-50)',
+                        borderColor: 'var(--color-primary-400)'
+                      }
+                    }}
+                  >
+                    Перейти к полному поиску
+                  </Button>
+                </Box>
+              )}
             </Box>
         </Box>
       </Modal>

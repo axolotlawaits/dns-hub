@@ -41,6 +41,7 @@ const RKAttachmentSchema = z.object({
   typeStructureId: z.string().optional(),
   approvalStatusId: z.string().optional(),
   agreedTo: z.date().optional(),
+  parentAttachmentId: z.string().optional(),
 });
 
 const validateBranchExists = async (branchId: string) => {
@@ -68,12 +69,16 @@ const processRKAttachments = async (
   files: Express.Multer.File[],
   rkId: string,
   userAddId: string,
-  attachmentsMeta: Array<{ typeAttachment?: 'CONSTRUCTION' | 'DOCUMENT'; sizeXY?: string; clarification?: string; typeStructureId?: string; approvalStatusId?: string; agreedTo?: string }>,
+  attachmentsMeta: Array<{ typeAttachment?: 'CONSTRUCTION' | 'DOCUMENT'; sizeXY?: string; clarification?: string; typeStructureId?: string; approvalStatusId?: string; agreedTo?: string; parentAttachmentId?: string }>,
   defaults: { typeStructureId?: string; approvalStatusId?: string } = {}
 ) => {
   if (!files || !Array.isArray(files)) return;
   
-  const attachmentsData = files.map((file, index) => {
+  // Сначала создаем конструкции
+  const constructions = [];
+  const documents = [];
+  
+  files.forEach((file, index) => {
     const agreedToStr = attachmentsMeta[index]?.agreedTo;
     const agreedToDate = agreedToStr ? new Date(agreedToStr.split('T')[0]) : undefined;
     const incomingType = attachmentsMeta[index]?.typeAttachment;
@@ -82,6 +87,7 @@ const processRKAttachments = async (
       : agreedToDate
         ? 'CONSTRUCTION'
         : 'DOCUMENT';
+    
     const attachment = {
       userAddId,
       source: file.path,
@@ -97,12 +103,39 @@ const processRKAttachments = async (
         ? (attachmentsMeta[index]?.approvalStatusId || defaults.approvalStatusId || undefined)
         : undefined,
       agreedTo: agreedToDate,
+      parentAttachmentId: attachmentsMeta[index]?.parentAttachmentId || undefined,
     };
+    
     RKAttachmentSchema.parse(attachment);
-    return attachment;
+    
+    if (typeAttachment === 'CONSTRUCTION') {
+      constructions.push(attachment);
+    } else {
+      documents.push(attachment);
+    }
   });
 
-  await prisma.rKAttachment.createMany({ data: attachmentsData });
+  // Создаем конструкции первыми
+  const createdConstructions = [];
+  if (constructions.length > 0) {
+    for (const construction of constructions) {
+      const created = await prisma.rKAttachment.create({ data: construction });
+      createdConstructions.push(created);
+    }
+  }
+  
+  // Создаем документы после конструкций, связывая их с родительскими конструкциями
+  if (documents.length > 0) {
+    for (const document of documents) {
+      // Если указан parentAttachmentId, используем его
+      // Иначе связываем с последней созданной конструкцией
+      if (!document.parentAttachmentId && createdConstructions.length > 0) {
+        document.parentAttachmentId = createdConstructions[createdConstructions.length - 1].id;
+      }
+      
+      await prisma.rKAttachment.create({ data: document });
+    }
+  }
 };
 
 const deleteRKAttachments = async (attachmentIds: string[], rkId: string) => {
@@ -145,6 +178,18 @@ export const getRKList = async (req: Request, res: Response, next: NextFunction)
           include: {
             typeStructure: { select: { id: true, name: true, colorHex: true } },
             approvalStatus: { select: { id: true, name: true, colorHex: true } },
+            parentAttachment: {
+              include: {
+                typeStructure: { select: { id: true, name: true, colorHex: true } },
+                approvalStatus: { select: { id: true, name: true, colorHex: true } },
+              }
+            },
+            childAttachments: {
+              include: {
+                typeStructure: { select: { id: true, name: true, colorHex: true } },
+                approvalStatus: { select: { id: true, name: true, colorHex: true } },
+              }
+            },
           },
         },
       },
@@ -181,6 +226,18 @@ export const getRKById = async (req: Request, res: Response, next: NextFunction)
           include: {
             typeStructure: { select: { id: true, name: true, colorHex: true } },
             approvalStatus: { select: { id: true, name: true, colorHex: true } },
+            parentAttachment: {
+              include: {
+                typeStructure: { select: { id: true, name: true, colorHex: true } },
+                approvalStatus: { select: { id: true, name: true, colorHex: true } },
+              }
+            },
+            childAttachments: {
+              include: {
+                typeStructure: { select: { id: true, name: true, colorHex: true } },
+                approvalStatus: { select: { id: true, name: true, colorHex: true } },
+              }
+            },
           },
         },
       },
@@ -281,6 +338,18 @@ export const createRK = async (req: Request, res: Response, next: NextFunction) 
           include: {
             typeStructure: { select: { id: true, name: true, colorHex: true } },
             approvalStatus: { select: { id: true, name: true, colorHex: true } },
+            parentAttachment: {
+              include: {
+                typeStructure: { select: { id: true, name: true, colorHex: true } },
+                approvalStatus: { select: { id: true, name: true, colorHex: true } },
+              }
+            },
+            childAttachments: {
+              include: {
+                typeStructure: { select: { id: true, name: true, colorHex: true } },
+                approvalStatus: { select: { id: true, name: true, colorHex: true } },
+              }
+            },
           },
         },
       }
@@ -394,6 +463,18 @@ export const updateRK = async (req: Request, res: Response, next: NextFunction) 
           include: {
             typeStructure: { select: { id: true, name: true, colorHex: true } },
             approvalStatus: { select: { id: true, name: true, colorHex: true } },
+            parentAttachment: {
+              include: {
+                typeStructure: { select: { id: true, name: true, colorHex: true } },
+                approvalStatus: { select: { id: true, name: true, colorHex: true } },
+              }
+            },
+            childAttachments: {
+              include: {
+                typeStructure: { select: { id: true, name: true, colorHex: true } },
+                approvalStatus: { select: { id: true, name: true, colorHex: true } },
+              }
+            },
           },
         },
       },

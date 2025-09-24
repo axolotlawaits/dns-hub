@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { useUserContext } from '../../hooks/useUserContext';
 import { API } from '../../config/constants';
 import { notificationSystem } from '../../utils/Push';
-import {  Avatar,  Card,  Text,  Group,  Badge,  Skeleton,  Stack,  Box,  Modal,  Button,  PasswordInput,  Image,  FileButton,  Loader,  CopyButton,  Tooltip,  ActionIcon, Title, Divider, ThemeIcon, Grid, Alert, Switch } from '@mantine/core';
+import {  Avatar,  Card,  Text,  Group,  Badge,  Skeleton,  Stack,  Box,  Modal,  Button,  Loader,  CopyButton,  Tooltip,  ActionIcon, Title, Divider, ThemeIcon, Grid, Alert, Switch, SegmentedControl } from '@mantine/core';
+import { DynamicFormModal, FormField } from '../../utils/formModal';
 import { useDisclosure } from '@mantine/hooks';
+import { DndProviderWrapper } from '../../utils/dnd';
 import QRCode from 'react-qr-code';
 import { 
   IconBrandTelegram, 
@@ -17,9 +19,9 @@ import {
   IconMail as IconMailSolid,
   IconEdit,
   IconCamera,
-  IconShield,
   IconBell,
-  IconQrcode
+  IconQrcode,
+  IconBookmark
 } from '@tabler/icons-react';
 
 interface UserData {
@@ -45,7 +47,6 @@ const ProfileInfo = () => {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [password, setPassword] = useState('');
   const [newPhoto, setNewPhoto] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -55,9 +56,34 @@ const ProfileInfo = () => {
   const [telegramUserName, setTelegramUserName] = useState('');
   const [telegramLoading, setTelegramLoading] = useState(true);
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(true);
+  const [bookmarksCardsPerRow, setBookmarksCardsPerRow] = useState<3 | 6 | 9>(6);
   const [photoModalOpened, { open: openPhotoModal, close: closePhotoModal }] = useDisclosure(false);
   const [passwordModalOpened, { open: openPasswordModal, close: closePasswordModal }] = useDisclosure(false);
   const [telegramModalOpened, { open: openTelegramModal, close: closeTelegramModal }] = useDisclosure(false);
+  const [photoForm, setPhotoForm] = useState({ password: '' });
+
+  // Конфигурация полей для формы фото
+  const photoFields: FormField[] = [
+    {
+      name: 'password',
+      label: 'Пароль',
+      type: 'text',
+      required: true,
+      placeholder: 'Введите пароль для подтверждения'
+    }
+  ];
+
+  // Конфигурация полей для выбора фото
+  const photoSelectFields: FormField[] = [
+    {
+      name: 'photo',
+      label: 'Выберите фото',
+      type: 'file',
+      required: true,
+      accept: 'image/*',
+      withDnd: true
+    }
+  ];
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -184,6 +210,82 @@ const ProfileInfo = () => {
     }
   };
 
+  // Функции для работы с настройками закладок
+  const saveBookmarksSetting = async (parameter: string, value: string) => {
+    if (!user?.id) return;
+
+    try {
+      const response = await fetch(`${API}/user/settings`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          parameter: parameter,
+          value: value
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Ошибка сохранения настройки');
+      }
+    } catch (err) {
+      console.error('Error saving bookmarks setting:', err);
+      notificationSystem.addNotification(
+        'Ошибка',
+        'Не удалось сохранить настройку закладок',
+        'error'
+      );
+    }
+  };
+
+  const loadBookmarksSetting = async (parameter: string) => {
+    if (!user?.id) return null;
+
+    try {
+      const response = await fetch(`${API}/user/settings/${user.id}/${parameter}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (!response.ok) {
+        return null;
+      }
+      const data = await response.json();
+      return data.value;
+    } catch (err) {
+      console.error('Error loading bookmarks setting:', err);
+      return null;
+    }
+  };
+
+  const handleBookmarksCardsPerRowChange = async (value: string) => {
+    const newCardsPerRow = parseInt(value) as 3 | 6 | 9;
+    setBookmarksCardsPerRow(newCardsPerRow);
+    await saveBookmarksSetting('bookmarks_cards_per_row', value);
+    notificationSystem.addNotification(
+      'Успех',
+      `Настройка закладок обновлена: ${newCardsPerRow} карточек в ряд`,
+      'success'
+    );
+  };
+
+  // Загрузка сохраненной настройки количества карточек
+  useEffect(() => {
+    const loadCardsPerRowSetting = async () => {
+      const savedSetting = await loadBookmarksSetting('bookmarks_cards_per_row');
+      if (savedSetting && ['3', '6', '9'].includes(savedSetting)) {
+        setBookmarksCardsPerRow(parseInt(savedSetting) as 3 | 6 | 9);
+      }
+    };
+
+    if (user?.id) {
+      loadCardsPerRowSetting();
+    }
+  }, [user?.id]);
+
   const generateTelegramLink = async () => {
     setIsGeneratingLink(true);
     try {
@@ -230,21 +332,25 @@ const ProfileInfo = () => {
     }
   };
 
-  const handleFileSelect = (file: File | null) => {
-    if (!file) return;
+
+  const handlePhotoSelect = async (values: Record<string, any>) => {
+    const file = values.photo;
+    if (!file || !(file instanceof File)) return;
+    
     setFile(file);
     const reader = new FileReader();
-    reader.onloadend = () => setNewPhoto(reader.result as string);
+    reader.onloadend = () => {
+      setNewPhoto(reader.result as string);
+      closePhotoModal();
+      setPhotoForm({ password: '' });
+      openPasswordModal();
+    };
     reader.readAsDataURL(file);
   };
 
-  const handleSavePhoto = () => {
-    closePhotoModal();
-    openPasswordModal();
-  };
 
-  const updatePhoto = async () => {
-    if (!file || !newPhoto || !password || !user?.login || isUpdating) return;
+  const updatePhoto = async (values: Record<string, any>) => {
+    if (!file || !newPhoto || !user?.login || isUpdating) return;
     setIsUpdating(true);
     try {
       const base64String = newPhoto.split(',')[1];
@@ -257,7 +363,7 @@ const ProfileInfo = () => {
         body: JSON.stringify({
           login: user.login,
           photo: base64String,
-          password: password
+          password: values.password
         })
       });
       if (!response.ok) {
@@ -267,9 +373,9 @@ const ProfileInfo = () => {
       }
       setUser((prevUser: any) => prevUser ? { ...prevUser, image: base64String } : null);
       closePasswordModal();
-      setPassword('');
       setNewPhoto(null);
       setFile(null);
+      setPhotoForm({ password: '' });
       notificationSystem.addNotification('Успех', 'Фото профиля успешно обновлено', 'success');
     } catch (err) {
       notificationSystem.addNotification(
@@ -297,9 +403,21 @@ const ProfileInfo = () => {
   if (!userData) return <Text>Нет данных пользователя</Text>;
 
   return (
-    <Stack gap="lg">
+    <DndProviderWrapper>
+      <Stack gap="lg">
       {/* Основная информация о пользователе */}
-      <Card shadow="lg" padding="xl" radius="lg" className="profile-main-card">
+      <Card 
+        shadow="lg" 
+        padding="xl" 
+        radius="lg" 
+        className="profile-main-card"
+        style={{
+          background: 'var(--theme-bg-elevated)',
+          border: '1px solid var(--theme-border)',
+          transition: 'var(--transition-all)',
+          marginBottom: 'var(--space-4)'
+        }}
+      >
         <Grid gutter="lg">
           <Grid.Col span={{ base: 12, md: 4 }}>
             <Stack align="center" gap="md">
@@ -337,10 +455,25 @@ const ProfileInfo = () => {
             <Stack gap="md">
               <Group justify="space-between" align="flex-start">
                 <Box>
-                  <Title order={2} c="var(--theme-text-primary)" mb="xs">
+                  <Title 
+                    order={2} 
+                    mb="xs"
+                    style={{ 
+                      color: 'var(--theme-text-primary)',
+                      fontWeight: 'var(--font-weight-bold)',
+                      fontSize: 'var(--font-size-2xl)'
+                    }}
+                  >
                     {userData.fio}
                   </Title>
-                  <Text size="md" c="var(--theme-text-secondary)" mb="sm">
+                  <Text 
+                    size="md" 
+                    mb="sm"
+                    style={{ 
+                      color: 'var(--theme-text-secondary)',
+                      fontSize: 'var(--font-size-base)'
+                    }}
+                  >
                     {userData.position.name || 'Должность не указана'}
                   </Text>
                 </Box>
@@ -361,10 +494,23 @@ const ProfileInfo = () => {
                       <IconBuilding size={16} />
                     </ThemeIcon>
                     <Box>
-                      <Text size="sm" c="var(--theme-text-tertiary)" fw={500}>
+                      <Text 
+                        size="sm" 
+                        fw={500}
+                        style={{ 
+                          color: 'var(--theme-text-tertiary)',
+                          fontSize: 'var(--font-size-sm)'
+                        }}
+                      >
                         РРС
                       </Text>
-                      <Text size="md" c="var(--theme-text-primary)">
+                      <Text 
+                        size="md"
+                        style={{ 
+                          color: 'var(--theme-text-primary)',
+                          fontSize: 'var(--font-size-base)'
+                        }}
+                      >
                         {userData.branch.rrs || 'Не указано'}
                       </Text>
                     </Box>
@@ -375,10 +521,23 @@ const ProfileInfo = () => {
                       <IconBuilding size={16} />
                     </ThemeIcon>
                     <Box>
-                      <Text size="sm" c="var(--theme-text-tertiary)" fw={500}>
+                      <Text 
+                        size="sm" 
+                        fw={500}
+                        style={{ 
+                          color: 'var(--theme-text-tertiary)',
+                          fontSize: 'var(--font-size-sm)'
+                        }}
+                      >
                         Отдел
                       </Text>
-                      <Text size="md" c="var(--theme-text-primary)">
+                      <Text 
+                        size="md"
+                        style={{ 
+                          color: 'var(--theme-text-primary)',
+                          fontSize: 'var(--font-size-base)'
+                        }}
+                      >
                         {userData.branch.name || 'Не указано'}
                       </Text>
                     </Box>
@@ -391,10 +550,23 @@ const ProfileInfo = () => {
                       <IconCalendar size={16} />
                     </ThemeIcon>
                     <Box>
-                      <Text size="sm" c="var(--theme-text-tertiary)" fw={500}>
+                      <Text 
+                        size="sm" 
+                        fw={500}
+                        style={{ 
+                          color: 'var(--theme-text-tertiary)',
+                          fontSize: 'var(--font-size-sm)'
+                        }}
+                      >
                         Дата рождения
                       </Text>
-                      <Text size="md" c="var(--theme-text-primary)">
+                      <Text 
+                        size="md"
+                        style={{ 
+                          color: 'var(--theme-text-primary)',
+                          fontSize: 'var(--font-size-base)'
+                        }}
+                      >
                         {new Date(userData.birthday).toLocaleDateString()}
                       </Text>
                     </Box>
@@ -405,10 +577,23 @@ const ProfileInfo = () => {
                       <IconMailSolid size={16} />
                     </ThemeIcon>
                     <Box>
-                      <Text size="sm" c="var(--theme-text-tertiary)" fw={500}>
+                      <Text 
+                        size="sm" 
+                        fw={500}
+                        style={{ 
+                          color: 'var(--theme-text-tertiary)',
+                          fontSize: 'var(--font-size-sm)'
+                        }}
+                      >
                         Email
                       </Text>
-                      <Text size="md" c="var(--theme-text-primary)">
+                      <Text 
+                        size="md"
+                        style={{ 
+                          color: 'var(--theme-text-primary)',
+                          fontSize: 'var(--font-size-base)'
+                        }}
+                      >
                         {userData.email}
                       </Text>
                     </Box>
@@ -421,25 +606,59 @@ const ProfileInfo = () => {
       </Card>
 
       {/* Настройки уведомлений */}
-      <Card shadow="lg" padding="xl" radius="lg" className="notifications-card">
+      <Card 
+        shadow="lg" 
+        padding="xl" 
+        radius="lg" 
+        className="notifications-card"
+        style={{
+          background: 'var(--theme-bg-elevated)',
+          border: '1px solid var(--theme-border)',
+          transition: 'var(--transition-all)',
+          marginBottom: 'var(--space-4)'
+        }}
+      >
         <Group mb="md" align="center">
           <ThemeIcon size="md" color="blue" variant="light">
             <IconBell size={18} />
           </ThemeIcon>
-          <Title order={4} c="var(--theme-text-primary)">
+          <Title 
+            order={4}
+            style={{ 
+              color: 'var(--theme-text-primary)',
+              fontWeight: 'var(--font-weight-semibold)',
+              fontSize: 'var(--font-size-lg)'
+            }}
+          >
             Настройки уведомлений
           </Title>
         </Group>
 
         <Grid gutter="lg">
           <Grid.Col span={{ base: 12, md: 6 }}>
-            <Card padding="md" radius="md" className="notification-service-card">
+            <Card 
+              padding="md" 
+              radius="md" 
+              className="notification-service-card"
+              style={{
+                background: 'var(--theme-bg-secondary)',
+                border: '1px solid var(--theme-border)',
+                transition: 'var(--transition-all)',
+                height: '140px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between'
+              }}
+            >
               <Group justify="space-between" mb="sm">
                 <Group gap="sm">
                   <ThemeIcon size="sm" color="blue" variant="light">
                     <IconBrandTelegram size={16} />
                   </ThemeIcon>
-                  <Text fw={600} c="var(--theme-text-primary)">
+                  <Text 
+                    fw={600}
+                    style={{ color: 'var(--theme-text-primary)' }}
+                  >
                     Telegram
                   </Text>
                 </Group>
@@ -461,7 +680,10 @@ const ProfileInfo = () => {
                   {isTelegramConnected ? (
                     <Stack gap="md">
                       {telegramUserName && (
-                        <Text size="sm" c="var(--theme-text-secondary)">
+                        <Text 
+                          size="sm"
+                          style={{ color: 'var(--theme-text-secondary)' }}
+                        >
                           @{telegramUserName}
                         </Text>
                       )}
@@ -495,13 +717,29 @@ const ProfileInfo = () => {
           </Grid.Col>
           
           <Grid.Col span={{ base: 12, md: 6 }}>
-            <Card padding="md" radius="md" className="notification-service-card">
+            <Card 
+              padding="md" 
+              radius="md" 
+              className="notification-service-card"
+              style={{
+                background: 'var(--theme-bg-secondary)',
+                border: '1px solid var(--theme-border)',
+                transition: 'var(--transition-all)',
+                height: '140px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between'
+              }}
+            >
               <Group justify="space-between" mb="sm">
                 <Group gap="sm">
                   <ThemeIcon size="sm" color="green" variant="light">
                     <IconMail size={16} />
                   </ThemeIcon>
-                  <Text fw={600} c="var(--theme-text-primary)">
+                  <Text 
+                    fw={600}
+                    style={{ color: 'var(--theme-text-primary)' }}
+                  >
                     Email уведомления
                   </Text>
                 </Group>
@@ -515,7 +753,10 @@ const ProfileInfo = () => {
               </Group>
               
               <Group justify="space-between" align="center">
-                <Text size="sm" c="var(--theme-text-secondary)">
+                <Text 
+                  size="sm"
+                  style={{ color: 'var(--theme-text-secondary)' }}
+                >
                   Получать уведомления по почте
                 </Text>
                 <Switch
@@ -529,6 +770,148 @@ const ProfileInfo = () => {
           </Grid.Col>
         </Grid>
       </Card>
+
+      {/* Настройки закладок */}
+      <Card 
+        shadow="lg" 
+        padding="xl" 
+        radius="lg" 
+        className="notifications-card"
+        style={{
+          background: 'var(--theme-bg-elevated)',
+          border: '1px solid var(--theme-border)',
+          transition: 'var(--transition-all)',
+          marginBottom: 'var(--space-4)'
+        }}
+      >
+        <Group mb="md" align="center">
+          <ThemeIcon size="md" color="green" variant="light">
+            <IconBookmark size={18} />
+          </ThemeIcon>
+          <Title 
+            order={4} 
+            style={{ 
+              color: 'var(--theme-text-primary)',
+              fontWeight: 'var(--font-weight-semibold)',
+              fontSize: 'var(--font-size-lg)'
+            }}
+          >
+            Настройки закладок
+          </Title>
+        </Group>
+
+        <Grid gutter="lg">
+          <Grid.Col span={{ base: 12, md: 6 }}>
+            <Card 
+              padding="md" 
+              radius="md" 
+              className="notification-service-card"
+              style={{
+                background: 'var(--theme-bg-secondary)',
+                border: '1px solid var(--theme-border)',
+                transition: 'var(--transition-all)',
+                height: '140px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between'
+              }}
+            >
+              <Group justify="space-between" mb="sm">
+                <Group gap="sm">
+                  <ThemeIcon size="sm" color="green" variant="light">
+                    <IconBookmark size={16} />
+                  </ThemeIcon>
+                  <Text 
+                    fw={600} 
+                    style={{ color: 'var(--theme-text-primary)' }}
+                  >
+                    Количество карточек в ряд
+                  </Text>
+                </Group>
+                <Badge 
+                  color="green" 
+                  variant="light"
+                  size="sm"
+                >
+                  {bookmarksCardsPerRow} карточек
+                </Badge>
+              </Group>
+              
+              <Stack gap="sm">
+                <Text 
+                  size="sm" 
+                  style={{ color: 'var(--theme-text-secondary)' }}
+                >
+                  Выберите количество закладок, отображаемых в одном ряду
+                </Text>
+                <SegmentedControl
+                  value={bookmarksCardsPerRow.toString()}
+                  onChange={handleBookmarksCardsPerRowChange}
+                  data={[
+                    { label: '3', value: '3' },
+                    { label: '6', value: '6' },
+                    { label: '9', value: '9' }
+                  ]}
+                  size="sm"
+                  color="green"
+                  fullWidth
+                />
+              </Stack>
+            </Card>
+          </Grid.Col>
+          
+          <Grid.Col span={{ base: 12, md: 6 }}>
+            <Card 
+              padding="md" 
+              radius="md" 
+              className="notification-service-card"
+              style={{
+                background: 'var(--theme-bg-secondary)',
+                border: '1px solid var(--theme-border)',
+                transition: 'var(--transition-all)',
+                height: '140px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between'
+              }}
+            >
+              <Group gap="sm" mb="sm">
+                <ThemeIcon size="sm" color="blue" variant="light">
+                  <IconBookmark size={16} />
+                </ThemeIcon>
+                <Text 
+                  fw={600} 
+                  style={{ color: 'var(--theme-text-primary)' }}
+                >
+                  Информация
+                </Text>
+              </Group>
+              
+              <Stack gap="xs">
+                <Text 
+                  size="sm" 
+                  style={{ color: 'var(--theme-text-secondary)' }}
+                >
+                  • Максимум 2 ряда отображается на главной странице
+                </Text>
+                <Text 
+                  size="sm" 
+                  style={{ color: 'var(--theme-text-secondary)' }}
+                >
+                  • Остальные закладки доступны в модальном окне
+                </Text>
+                <Text 
+                  size="sm" 
+                  style={{ color: 'var(--theme-text-secondary)' }}
+                >
+                  • Настройка сохраняется автоматически
+                </Text>
+              </Stack>
+            </Card>
+          </Grid.Col>
+        </Grid>
+      </Card>
+
       <Modal
         opened={telegramModalOpened}
         onClose={closeTelegramModal}
@@ -618,149 +1001,28 @@ const ProfileInfo = () => {
           </Alert>
         </Stack>
       </Modal>
-      <Modal 
-        opened={photoModalOpened} 
-        onClose={closePhotoModal} 
-        title={
-          <Group gap="sm">
-            <ThemeIcon size="md" color="blue" variant="light">
-              <IconCamera size={18} />
-            </ThemeIcon>
-            <Text fw={600}>
-              {user?.image ? 'Смена фото профиля' : 'Добавление фото профиля'}
-            </Text>
-          </Group>
-        } 
-        centered
-        size="md"
-        className="photo-modal"
-      >
-        <Stack gap="md">
-          <Group justify="center" gap="md">
-            {user?.image && (
-              <Card padding="sm" radius="md" className="photo-preview-card">
-                <Stack align="center" gap="xs">
-                  <Text size="sm" fw={500} c="var(--theme-text-primary)">
-                    Текущее фото
-                  </Text>
-                  <Image
-                    src={`data:image/jpeg;base64,${user.image}`}
-                    width={100}
-                    height={100}
-                    radius="md"
-                    className="photo-preview"
-                  />
-                </Stack>
-              </Card>
-            )}
-            {newPhoto && (
-              <Card padding="sm" radius="md" className="photo-preview-card">
-                <Stack align="center" gap="xs">
-                  <Text size="sm" fw={500} c="var(--theme-text-primary)">
-                    Новое фото
-                  </Text>
-                  <Image
-                    src={newPhoto}
-                    width={100}
-                    height={100}
-                    radius="md"
-                    className="photo-preview"
-                  />
-                </Stack>
-              </Card>
-            )}
-          </Group>
-          
-          <FileButton onChange={handleFileSelect} accept="image/*">
-            {(props) => (
-              <Button 
-                {...props} 
-                fullWidth 
-                size="sm"
-                leftSection={<IconCamera size={16} />}
-                className="select-photo-button"
-              >
-                {newPhoto ? 'Выбрать другое фото' : 'Выбрать фото'}
-              </Button>
-            )}
-          </FileButton>
-          
-          {newPhoto && (
-            <Button 
-              fullWidth 
-              size="sm"
-              onClick={handleSavePhoto}
-              leftSection={<IconCheck size={16} />}
-              className="save-photo-button"
-            >
-              Сохранить фото
-            </Button>
-          )}
-        </Stack>
-      </Modal>
-      <Modal 
-        opened={passwordModalOpened} 
-        onClose={closePasswordModal} 
-        title={
-          <Group gap="sm">
-            <ThemeIcon size="md" color="orange" variant="light">
-              <IconShield size={18} />
-            </ThemeIcon>
-            <Text fw={600}>Подтвердите смену фото</Text>
-          </Group>
-        } 
-        centered
-        size="sm"
-        className="password-modal"
-      >
-        <Stack gap="xs">
-          <Alert 
-            icon={<IconShield size={16} />} 
-            color="orange" 
-            variant="light"
-            className="password-alert"
-            mb="xs"
-          >
-            <Text size="sm">
-              Для изменения фото профиля необходимо подтвердить пароль
-            </Text>
-          </Alert>
-          
-          <PasswordInput
-            label="Введите ваш пароль"
-            value={password}
-            onChange={(e) => setPassword(e.currentTarget.value)}
-            placeholder="Пароль"
-            required
-            size="sm"
-            leftSection={<IconShield size={16} />}
-            className="password-input"
-            mb="xs"
-          />
-          
-          <Group justify="flex-end" gap="xs" mt="xs">
-            <Button 
-              variant="outline" 
-              onClick={closePasswordModal} 
-              disabled={isUpdating}
-              className="cancel-button"
-              size="sm"
-            >
-              Отмена
-            </Button>
-            <Button 
-              onClick={updatePhoto} 
-              loading={isUpdating}
-              leftSection={<IconCheck size={16} />}
-              className="confirm-button"
-              size="sm"
-            >
-              Подтвердить
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
-    </Stack>
+      <DynamicFormModal
+        opened={photoModalOpened}
+        onClose={closePhotoModal}
+        title={user?.image ? 'Смена фото профиля' : 'Добавление фото профиля'}
+        mode="create"
+        fields={photoSelectFields}
+        initialValues={{ photo: null }}
+        onSubmit={handlePhotoSelect}
+        submitButtonText="Выбрать фото"
+      />
+      <DynamicFormModal
+        opened={passwordModalOpened}
+        onClose={closePasswordModal}
+        title="Подтвердите смену фото"
+        mode="create"
+        fields={photoFields}
+        initialValues={photoForm}
+        onSubmit={updatePhoto}
+        submitButtonText="Подтвердить"
+      />
+      </Stack>
+    </DndProviderWrapper>
   );
 };
 

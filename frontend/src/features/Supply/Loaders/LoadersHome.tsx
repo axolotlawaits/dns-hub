@@ -1,19 +1,11 @@
-import { Tabs, Box, Title, Text, Group, Button, Card } from "@mantine/core"
-import { useState, useMemo } from "react"
-import { IconTruck, IconChartBar, IconPlus, IconUsers, IconRoute, IconClock } from "@tabler/icons-react"
+import { Tabs, Box, Title, Text, Group, Card } from "@mantine/core"
+import { useState } from "react"
+import { IconTruck, IconChartBar, IconRoute} from "@tabler/icons-react"
 import LoadersRoutes from "./LoadersRoutes"
 import LoadersSummary from "./LoadersSummary"
 
 function LoadersHome() {
   const [activeTab, setActiveTab] = useState<string | null>('routes')
-  
-  // Моковые данные для статистики
-  const stats = useMemo(() => ({
-    totalRoutes: 12,
-    activeLoaders: 8,
-    completedToday: 15,
-    totalHours: 120
-  }), [])
   
   return (
     <Box p="md" style={{ background: 'var(--theme-bg-primary)', minHeight: '100vh' }}>
@@ -46,140 +38,9 @@ function LoadersHome() {
               </Text>
             </Box>
           </Group>
-          <Button
-            size="md"
-            variant="gradient"
-            gradient={{ from: 'blue', to: 'cyan' }}
-            leftSection={<IconPlus size={16} />}
-          >
-            Создать маршрут
-          </Button>
-        </Group>
-
-        {/* Статистика */}
-        <Group gap="lg" mb="md">
-          <Card style={{
-            background: 'var(--theme-bg-primary)',
-            borderRadius: '12px',
-            padding: '16px',
-            border: '1px solid var(--theme-border-secondary)',
-            textAlign: 'center',
-            minWidth: '120px',
-            flex: 1
-          }}>
-            <Group gap="sm" justify="center" mb="sm">
-              <Box style={{
-                background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-                borderRadius: '8px',
-                padding: '6px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <IconRoute size={16} color="white" />
-              </Box>
-              <Text size="sm" fw={600} c="var(--theme-text-primary)">Маршруты</Text>
-            </Group>
-            <Text size="xl" fw={700} c="var(--theme-text-primary)">
-              {stats.totalRoutes}
-            </Text>
-            <Text size="xs" c="var(--theme-text-secondary)">
-              Всего маршрутов
-            </Text>
-          </Card>
-
-          <Card style={{
-            background: 'var(--theme-bg-primary)',
-            borderRadius: '12px',
-            padding: '16px',
-            border: '1px solid var(--theme-border-secondary)',
-            textAlign: 'center',
-            minWidth: '120px',
-            flex: 1
-          }}>
-            <Group gap="sm" justify="center" mb="sm">
-              <Box style={{
-                background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-                borderRadius: '8px',
-                padding: '6px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <IconUsers size={16} color="white" />
-              </Box>
-              <Text size="sm" fw={600} c="var(--theme-text-primary)">Грузчики</Text>
-            </Group>
-            <Text size="xl" fw={700} c="var(--theme-text-primary)">
-              {stats.activeLoaders}
-            </Text>
-            <Text size="xs" c="var(--theme-text-secondary)">
-              Активных
-            </Text>
-          </Card>
-
-          <Card style={{
-            background: 'var(--theme-bg-primary)',
-            borderRadius: '12px',
-            padding: '16px',
-            border: '1px solid var(--theme-border-secondary)',
-            textAlign: 'center',
-            minWidth: '120px',
-            flex: 1
-          }}>
-            <Group gap="sm" justify="center" mb="sm">
-              <Box style={{
-                background: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
-                borderRadius: '8px',
-                padding: '6px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <IconChartBar size={16} color="white" />
-              </Box>
-              <Text size="sm" fw={600} c="var(--theme-text-primary)">Выполнено</Text>
-            </Group>
-            <Text size="xl" fw={700} c="var(--theme-text-primary)">
-              {stats.completedToday}
-            </Text>
-            <Text size="xs" c="var(--theme-text-secondary)">
-              Сегодня
-            </Text>
-          </Card>
-
-          <Card style={{
-            background: 'var(--theme-bg-primary)',
-            borderRadius: '12px',
-            padding: '16px',
-            border: '1px solid var(--theme-border-secondary)',
-            textAlign: 'center',
-            minWidth: '120px',
-            flex: 1
-          }}>
-            <Group gap="sm" justify="center" mb="sm">
-              <Box style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                borderRadius: '8px',
-                padding: '6px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <IconClock size={16} color="white" />
-              </Box>
-              <Text size="sm" fw={600} c="var(--theme-text-primary)">Часы</Text>
-            </Group>
-            <Text size="xl" fw={700} c="var(--theme-text-primary)">
-              {stats.totalHours}
-            </Text>
-            <Text size="xs" c="var(--theme-text-secondary)">
-              Отработано
-            </Text>
-          </Card>
         </Group>
       </Box>
-
+      
       {/* Основной контент */}
       <Card style={{
         background: 'var(--theme-bg-elevated)',
@@ -239,4 +100,4 @@ function LoadersHome() {
   )
 }
 
-export default LoadersHome
+export default LoadersHome  

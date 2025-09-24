@@ -2,10 +2,10 @@ import { useEffect, useRef, useState, useMemo } from "react"
 import { API } from "../../../config/constants"
 import dayjs from "dayjs"
 import { DayType } from "./Day"
-import { Button, Stack, Table, Box, Title, Text, Group, Card, Badge, Grid, Paper, Progress, Divider, ScrollArea } from "@mantine/core"
+import { Button, Stack, Table, Box, Title, Text, Group, Card, Badge, Paper, Divider, ScrollArea } from "@mantine/core"
 import html2canvas from "html2canvas"
 import jsPDF from "jspdf"
-import { IconDownload, IconClock, IconUsers, IconFileText, IconTrendingUp, IconRoute } from "@tabler/icons-react"
+import { IconDownload, IconFileText } from "@tabler/icons-react"
 import { DatePicker } from '@mantine/dates'
 
 const today = new Date().toISOString().slice(0, 10)
@@ -84,28 +84,6 @@ function LoadersSummary() {
     pdf.save(dayjs(dayData[0].day).format('MMMM D, YYYY'));
   }
 
-  const chartData = useMemo(() => {
-    return calculateTotalHoursByContractor(dayData).map(({ contractor, hours, minutes }) => ({
-      name: contractor,
-      hours: hours + (minutes / 60),
-      fullHours: hours,
-      minutes: minutes
-    }));
-  }, [dayData]);
-
-  const totalStats = useMemo(() => {
-    const totalHours = chartData.reduce((sum, item) => sum + item.hours, 0);
-    const totalRoutes = dayData.length;
-    const activeRoutes = dayData.filter(route => calculateTotalRouteTime(route) > 0).length;
-    
-    return {
-      totalHours: Math.floor(totalHours),
-      totalMinutes: Math.round((totalHours % 1) * 60),
-      totalRoutes,
-      activeRoutes,
-      efficiency: totalRoutes > 0 ? Math.round((activeRoutes / totalRoutes) * 100) : 0
-    };
-  }, [chartData, dayData]);
 
   return (
     <Box>
@@ -140,172 +118,6 @@ function LoadersSummary() {
 
       {dayData.length > 0 ? (
         <Box>
-          {/* Статистика */}
-          <Grid gutter="lg" mb="xl">
-            <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-              <Card style={{
-                background: 'var(--theme-bg-elevated)',
-                borderRadius: '16px',
-                border: '1px solid var(--theme-border-primary)',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-                position: 'relative',
-                overflow: 'hidden'
-              }}>
-                <Box style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: '4px',
-                  background: 'linear-gradient(90deg, #4facfe 0%, #00f2fe 100%)',
-                  borderRadius: '16px 16px 0 0'
-                }} />
-                <Group gap="md" mb="sm">
-                  <Box style={{
-                    background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-                    borderRadius: '8px',
-                    padding: '8px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    <IconClock size={20} color="white" />
-                  </Box>
-                  <Text size="sm" fw={600} c="var(--theme-text-primary)">Общее время</Text>
-                </Group>
-                <Text size="xl" fw={700} c="var(--theme-text-primary)">
-                  {totalStats.totalHours}ч {totalStats.totalMinutes}м
-                </Text>
-                <Text size="xs" c="var(--theme-text-secondary)">
-                  Отработано за день
-                </Text>
-              </Card>
-            </Grid.Col>
-
-            <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-              <Card style={{
-                background: 'var(--theme-bg-elevated)',
-                borderRadius: '16px',
-                border: '1px solid var(--theme-border-primary)',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-                position: 'relative',
-                overflow: 'hidden'
-              }}>
-                <Box style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: '4px',
-                  background: 'linear-gradient(90deg, #fa709a 0%, #fee140 100%)',
-                  borderRadius: '16px 16px 0 0'
-                }} />
-                <Group gap="md" mb="sm">
-                  <Box style={{
-                    background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-                    borderRadius: '8px',
-                    padding: '8px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    <IconRoute size={20} color="white" />
-                  </Box>
-                  <Text size="sm" fw={600} c="var(--theme-text-primary)">Маршруты</Text>
-                </Group>
-                <Text size="xl" fw={700} c="var(--theme-text-primary)">
-                  {totalStats.activeRoutes}/{totalStats.totalRoutes}
-                </Text>
-                <Text size="xs" c="var(--theme-text-secondary)">
-                  Активных из общего
-                </Text>
-              </Card>
-            </Grid.Col>
-
-            <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-              <Card style={{
-                background: 'var(--theme-bg-elevated)',
-                borderRadius: '16px',
-                border: '1px solid var(--theme-border-primary)',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-                position: 'relative',
-                overflow: 'hidden'
-              }}>
-                <Box style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: '4px',
-                  background: 'linear-gradient(90deg, #a8edea 0%, #fed6e3 100%)',
-                  borderRadius: '16px 16px 0 0'
-                }} />
-                <Group gap="md" mb="sm">
-                  <Box style={{
-                    background: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
-                    borderRadius: '8px',
-                    padding: '8px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    <IconTrendingUp size={20} color="white" />
-                  </Box>
-                  <Text size="sm" fw={600} c="var(--theme-text-primary)">Эффективность</Text>
-                </Group>
-                <Text size="xl" fw={700} c="var(--theme-text-primary)">
-                  {totalStats.efficiency}%
-                </Text>
-                <Progress 
-                  value={totalStats.efficiency} 
-                  size="sm" 
-                  color="green" 
-                  style={{ marginTop: '8px' }}
-                />
-              </Card>
-            </Grid.Col>
-
-            <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-              <Card style={{
-                background: 'var(--theme-bg-elevated)',
-                borderRadius: '16px',
-                border: '1px solid var(--theme-border-primary)',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-                position: 'relative',
-                overflow: 'hidden'
-              }}>
-                <Box style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: '4px',
-                  background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
-                  borderRadius: '16px 16px 0 0'
-                }} />
-                <Group gap="md" mb="sm">
-                  <Box style={{
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                    borderRadius: '8px',
-                    padding: '8px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    <IconUsers size={20} color="white" />
-                  </Box>
-                  <Text size="sm" fw={600} c="var(--theme-text-primary)">Подрядчики</Text>
-                </Group>
-                <Text size="xl" fw={700} c="var(--theme-text-primary)">
-                  {chartData.length}
-                </Text>
-                <Text size="xs" c="var(--theme-text-secondary)">
-                  Участвовало
-                </Text>
-              </Card>
-            </Grid.Col>
-          </Grid>
-
           {/* Детальная таблица */}
           <Card style={{
             background: 'var(--theme-bg-elevated)',

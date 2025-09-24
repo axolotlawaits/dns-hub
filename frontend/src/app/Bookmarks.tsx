@@ -1,28 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { API } from '../config/constants';
-import { 
-  Box, 
-  Text, 
-  Group, 
-  LoadingOverlay, 
-  ActionIcon, 
-  Modal, 
-  ThemeIcon, 
-  Card, 
-  Alert, 
-  Badge,
-  Grid,
-  Tooltip
-} from '@mantine/core';
-import { 
-  IconBookmark, 
-  IconTrash, 
-  IconExternalLink, 
-  IconPlus, 
-  IconX, 
-  IconEdit, 
-  IconGripVertical
-} from '@tabler/icons-react';
+import {  Box,  Text,  Group,  LoadingOverlay,  ActionIcon,  Modal,  ThemeIcon,  Card,  Alert,  Badge, Grid, Tooltip } from '@mantine/core';
+import {  IconBookmark,  IconTrash,  IconExternalLink,  IconPlus,  IconX,  IconEdit,  IconGripVertical } from '@tabler/icons-react';
 import { useUserContext } from '../hooks/useUserContext';
 import { useDisclosure } from '@mantine/hooks';
 import { normalizeUrl, isValidUrl } from '../utils/url';
@@ -54,6 +33,7 @@ export default function BookmarksList() {
   const [selectedBookmark, setSelectedBookmark] = useState<Bookmark | null>(null);
   const [newBookmark, setNewBookmark] = useState(DEFAULT_BOOKMARK);
   const [notification, setNotification] = useState<{ message: string; color: string } | null>(null);
+  const [cardsPerRow, setCardsPerRow] = useState<3 | 6 | 9>(6);
 
 
   // Конфигурация полей для модальных окон
@@ -81,6 +61,7 @@ export default function BookmarksList() {
   }, []);
 
 
+
   const fetchBookmarks = useCallback(async () => {
     if (!user?.id) return;
 
@@ -103,6 +84,31 @@ export default function BookmarksList() {
   useEffect(() => {
     fetchBookmarks();
   }, [fetchBookmarks]);
+
+  // Загрузка сохраненной настройки количества карточек
+  useEffect(() => {
+    const loadCardsPerRowSetting = async () => {
+      if (!user?.id) return;
+
+      try {
+        const response = await fetch(`${API}/user/settings/${user.id}/bookmarks_cards_per_row`);
+        if (!response.ok) {
+          return;
+        }
+        const data = await response.json();
+        const savedSetting = data.value;
+        if (savedSetting && ['3', '6', '9'].includes(savedSetting)) {
+          setCardsPerRow(parseInt(savedSetting) as 3 | 6 | 9);
+        }
+      } catch (err) {
+        console.error('Error loading bookmarks setting:', err);
+      }
+    };
+
+    if (user?.id) {
+      loadCardsPerRowSetting();
+    }
+  }, [user?.id]);
 
   const handleAddBookmark = async (values: Record<string, any>) => {
     if (!user?.id) return;
@@ -240,7 +246,17 @@ export default function BookmarksList() {
     openAddModal();
   };
 
-  const visibleBookmarks = bookmarks.slice(0, 6);
+
+  const maxVisibleBookmarks = cardsPerRow * 2; // Максимум 2 ряда
+  const visibleBookmarks = bookmarks.slice(0, maxVisibleBookmarks);
+  const getSpanValue = () => {
+    switch (cardsPerRow) {
+      case 3: return 4; // 12/3 = 4
+      case 6: return 2; // 12/6 = 2  
+      case 9: return 1.33; // 12/9 ≈ 1.33
+      default: return 2;
+    }
+  };
 
   if (loading) {
     return (
@@ -289,7 +305,7 @@ export default function BookmarksList() {
 
       <Grid gutter="md">
         {visibleBookmarks.map((bookmark) => (
-          <Grid.Col key={bookmark.id} span={4}>
+          <Grid.Col key={bookmark.id} span={getSpanValue()}>
             <Card
               className="bookmark-card"
               shadow="sm"
@@ -387,7 +403,7 @@ export default function BookmarksList() {
         ))}
         
         {/* Кнопка добавления */}
-        <Grid.Col span={4}>
+        <Grid.Col span={getSpanValue()}>
           <Card
             className="bookmark-add-card"
             shadow="sm"
@@ -408,7 +424,7 @@ export default function BookmarksList() {
         </Grid.Col>
 
         {/* Показать все закладки */}
-        {bookmarks.length > 6 && (
+        {bookmarks.length > maxVisibleBookmarks && (
           <Grid.Col span={12}>
             <Card
               className="bookmark-show-all"
@@ -425,7 +441,7 @@ export default function BookmarksList() {
                   Показать все закладки
                 </Text>
                 <Text size="xs" c="var(--theme-text-secondary)">
-                  +{bookmarks.length - 6}
+                  +{bookmarks.length - maxVisibleBookmarks}
                 </Text>
               </Group>
             </Card>
@@ -458,7 +474,7 @@ export default function BookmarksList() {
                 {bookmarks.map((bookmark, index) => (
                     <Draggable key={bookmark.id} draggableId={bookmark.id} index={index}>
                       {(provided, snapshot) => (
-                        <Grid.Col span={4}>
+                        <Grid.Col span={getSpanValue()}>
                           <Card
                         ref={provided.innerRef}
                         {...provided.draggableProps}

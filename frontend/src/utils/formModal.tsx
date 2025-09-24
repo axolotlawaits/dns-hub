@@ -537,33 +537,56 @@ export const DynamicFormModal = ({
     const fileId = attachment.id || `temp-${fileName}-${Math.random().toString(36).slice(2, 11)}`;
     return (
       <Card key={fileId} p="sm" withBorder className="file-card">
-        <Group justify="space-between">
-          <Group gap="xs" onClick={() => setPreviewId(fileId)} style={{ cursor: 'pointer' }}>
+        <Group justify="space-between" align="center">
+          <Group gap="md" onClick={() => setPreviewId(fileId)} style={{ cursor: 'pointer', flex: 1 }}>
             {isImage ? (
               <img 
                 src={fileUrl} 
                 alt={fileName} 
                 className="file-preview"
-                style={{ height: 42, width: 64, objectFit: 'cover' }} 
+                style={{ 
+                  height: 48, 
+                  width: 64, 
+                  objectFit: 'cover',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--theme-border)'
+                }} 
               />
             ) : (
-              <div className="file-icon">
+              <div className="file-icon" style={{
+                width: 48,
+                height: 48,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'var(--color-blue-100)',
+                borderRadius: 'var(--radius-sm)',
+                color: 'var(--color-blue-600)'
+              }}>
                 {getFileIcon(fileName)}
               </div>
             )}
-            <Text size="sm" c="var(--theme-text-primary)">{fileName}</Text>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Text size="sm" fw={500} c="var(--theme-text-primary)" style={{ 
+                wordBreak: 'break-all',
+                lineHeight: 1.4
+              }}>
+                {fileName}
+              </Text>
+            </div>
           </Group>
-          <Text
-            size="sm"
-            c="blue"
-            style={{ cursor: 'pointer' }}
+          <Button
+            size="xs"
+            variant="light"
+            color="blue"
             onClick={(e) => {
               e.stopPropagation();
               window.open(fileUrl, '_blank');
             }}
+            style={{ flexShrink: 0 }}
           >
             Скачать
-          </Text>
+          </Button>
         </Group>
         {/* FilePreviewModal expects Attachment[] with required id:string. Map gently. */}
         <FilePreviewModal
@@ -619,9 +642,9 @@ export const DynamicFormModal = ({
             </Stack>
             
             {!hideDefaultViewAttachments && (((initialValues as any).attachments?.length || (initialValues as any).rkAttachment?.length || (initialValues as any).rocAttachment?.length) > 0) && (
-              <div>
+              <div style={{ width: '100%' }}>
                 <Text fw={500} mb="sm" c="var(--theme-text-primary)">Приложения</Text>
-                <Stack gap="xs">
+                <Stack gap="xs" style={{ width: '100%' }}>
                   {(((initialValues as any).attachments
                     || (initialValues as any).rkAttachment
                     || (initialValues as any).rocAttachment

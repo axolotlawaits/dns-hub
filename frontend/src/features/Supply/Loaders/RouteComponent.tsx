@@ -65,32 +65,6 @@ function RouteComponent() {
     return days[0]?.route
   }, [days])
 
-  const statistics = useMemo(() => {
-    const totalDays = days.length
-    const totalFilials = days.reduce((acc, day) => acc + day.filials.length, 0)
-    const totalLoaders = days.reduce((acc, day) => 
-      acc + day.filials.reduce((filialAcc, filial) => filialAcc + filial.loaders.length, 0), 0
-    )
-    
-    // Подсчет рабочих часов
-    const totalWorkHours = days.reduce((acc, day) => {
-      return acc + day.filials.reduce((filialAcc, filial) => {
-        return filialAcc + filial.loaders.reduce((loaderAcc, loader) => {
-          const startTime = dayjs(loader.startTime)
-          const endTime = dayjs(loader.endTime)
-          return loaderAcc + endTime.diff(startTime, 'hours', true)
-        }, 0)
-      }, 0)
-    }, 0)
-
-    return {
-      totalDays,
-      totalFilials,
-      totalLoaders,
-      totalWorkHours: Math.round(totalWorkHours * 10) / 10
-    }
-  }, [days])
-
   const filteredDays = useMemo(() => {
     if (!searchDay) return days
     return days.filter(day => 
@@ -139,71 +113,6 @@ function RouteComponent() {
             К маршрутам
           </Button>
         </Group>
-
-        {/* Статистика */}
-        <Group gap="lg" mb="md">
-          <Box style={{
-            background: 'var(--theme-bg-primary)',
-            borderRadius: '12px',
-            padding: '16px',
-            border: '1px solid var(--theme-border-secondary)',
-            textAlign: 'center',
-            minWidth: '120px'
-          }}>
-            <Text size="xl" fw={700} c="var(--theme-text-primary)">
-              {statistics.totalDays}
-            </Text>
-            <Text size="sm" c="var(--theme-text-secondary)">
-              Дней в маршруте
-            </Text>
-          </Box>
-          <Box style={{
-            background: 'var(--theme-bg-primary)',
-            borderRadius: '12px',
-            padding: '16px',
-            border: '1px solid var(--theme-border-secondary)',
-            textAlign: 'center',
-            minWidth: '120px'
-          }}>
-            <Text size="xl" fw={700} c="var(--theme-text-primary)">
-              {statistics.totalFilials}
-            </Text>
-            <Text size="sm" c="var(--theme-text-secondary)">
-              Филиалов
-            </Text>
-          </Box>
-          <Box style={{
-            background: 'var(--theme-bg-primary)',
-            borderRadius: '12px',
-            padding: '16px',
-            border: '1px solid var(--theme-border-secondary)',
-            textAlign: 'center',
-            minWidth: '120px'
-          }}>
-            <Text size="xl" fw={700} c="var(--theme-text-primary)">
-              {statistics.totalLoaders}
-            </Text>
-            <Text size="sm" c="var(--theme-text-secondary)">
-              Погрузчиков
-            </Text>
-          </Box>
-          <Box style={{
-            background: 'var(--theme-bg-primary)',
-            borderRadius: '12px',
-            padding: '16px',
-            border: '1px solid var(--theme-border-secondary)',
-            textAlign: 'center',
-            minWidth: '120px'
-          }}>
-            <Text size="xl" fw={700} c="var(--theme-text-primary)">
-              {statistics.totalWorkHours}ч
-            </Text>
-            <Text size="sm" c="var(--theme-text-secondary)">
-              Рабочих часов
-            </Text>
-          </Box>
-        </Group>
-
         {/* Поиск и фильтры */}
         <Box style={{
           background: 'var(--theme-bg-primary)',
