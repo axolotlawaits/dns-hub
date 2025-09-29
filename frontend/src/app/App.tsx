@@ -9,6 +9,7 @@ import '@mantine/carousel/styles.css'
 import './styles/App.css';
 import './styles/Components.css';
 import './styles/Handbook.css';
+import { PageHeaderProvider } from '../contexts/PageHeaderContext';
 import Home from './Home';
 import Finance from '../features/Finance/Finance';
 import Login from './Login';
@@ -58,8 +59,9 @@ function App() {
 
   return (
     <BrowserRouter>
-      <Notifications />
-      <Routes>
+      <PageHeaderProvider>
+        <Notifications />
+        <Routes>
         <Route path='/*' element={!user ?
           <Navigate to='/login' />
           :
@@ -166,7 +168,8 @@ function App() {
           </AppShell>
         } />
         <Route path="/login" element={<Login />} />
-      </Routes>
+        </Routes>
+      </PageHeaderProvider>
     </BrowserRouter>
   );
 }

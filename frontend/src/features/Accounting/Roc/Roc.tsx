@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Box, Grid, Group, LoadingOverlay, Text, Title, Drawer, ActionIcon, Tooltip, Tabs, Accordion, Stack, Button, Paper, Badge } from '@mantine/core';
+import { Box, Grid, Group, LoadingOverlay, Text, Drawer, ActionIcon, Tooltip, Tabs, Accordion, Stack, Button, Paper, Badge } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
 import { API } from '../../../config/constants';
@@ -8,9 +8,11 @@ import { FilterGroup } from '../../../utils/filter';
 import { DynamicFormModal, type FormConfig } from '../../../utils/formModal';
 import { FilePreviewModal } from '../../../utils/FilePreviewModal';
 import { useUserContext } from '../../../hooks/useUserContext';
+import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { TableComponent } from '../../../utils/table';
 import { IconPlus, IconPencil, IconTrash, IconDownload } from '@tabler/icons-react';
 import { DndProviderWrapper } from '../../../utils/dnd';
+import FloatingActionButton from '../../../components/FloatingActionButton';
 
 interface TypeOption { value: string; label: string; colorHex?: string | null }
 
@@ -31,6 +33,41 @@ interface DocDirectory {
   liquidationDate: string;
   successorName: string;
   successorINN: string;
+}
+
+interface DaDataInfo {
+  inn: string;
+  kpp?: string;
+  ogrn?: string;
+  name: string;
+  shortName?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  taxationSystem?: string;
+  siEgrul?: string;
+  statusCode?: number;
+  deStatusCode?: string;
+  liquidationDate?: string;
+  successorName?: string;
+  successorINN?: string;
+  // Расширенные поля
+  phones?: string[];
+  emails?: string[];
+  managerName?: string;
+  managerPost?: string;
+  capital?: number;
+  revenue?: number;
+  expenses?: number;
+  licenses?: string[];
+  courtDecisions?: string[];
+  taxViolations?: string[];
+  isReliable?: boolean;
+  founders?: Array<{
+    name: string;
+    inn: string;
+    share: number;
+  }>;
 }
 
 interface RocData {
@@ -72,6 +109,7 @@ const DEFAULT_FORM: any = {
 
 export default function RocList() {
   const { user } = useUserContext();
+  const { setHeader, clearHeader } = usePageHeader();
   const [data, setData] = useState<RocData[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<RocData | null>(null);
@@ -81,7 +119,45 @@ export default function RocList() {
   const [filters, setFilters] = useState({ column: [] as any[], sorting: [{ id: 'createdAt', desc: true }] });
   const [activeTab, setActiveTab] = useState<'list' | 'byDoc'>('list');
 
+  // Modal handlers
+  const [modalOpened, modalHandlers] = useDisclosure(false);
+  const [drawerOpened, drawerHandlers] = useDisclosure(false);
+  const [viewModalOpened, viewModalHandlers] = useDisclosure(false);
+
   // local modal handled via Mantine Modal below
+
+  const openCreate = useCallback(() => {
+    setFormValues({
+      ...DEFAULT_FORM,
+      userAddId: user?.id || '',
+      userUpdatedId: user?.id || '',
+      attachments: [],
+      additionalAttachments: [],
+    });
+    setSelected(null);
+    setSelectedPartyId(null);
+    setNameOptions([]);
+    setInnOptions([]);
+    setIdToParty({});
+    setActivePartyId(null);
+    modalHandlers.open();
+    drawerHandlers.open();
+  }, [user?.id, modalHandlers, drawerHandlers]);
+
+  // Устанавливаем заголовок страницы
+  useEffect(() => {
+    setHeader({
+      title: 'Реестр договоров',
+      subtitle: 'Управление договорами и контрагентами',
+      actionButton: {
+        text: 'Добавить договор',
+        onClick: openCreate,
+        icon: <IconPlus size={18} />
+      }
+    });
+
+    return () => clearHeader();
+  }, [setHeader, clearHeader]);
 
   const fetchJson = useCallback(async <T,>(url: string, options?: RequestInit): Promise<T | null> => {
     const resp = await fetch(url, {
@@ -137,6 +213,8 @@ export default function RocList() {
   const [innOptions, setInnOptions] = useState<{ value: string; label: string }[]>([]);
   const [idToParty, setIdToParty] = useState<Record<string, any>>({});
   const [activePartyId, setActivePartyId] = useState<string | null>(null);
+  const [dadataInfo, setDadataInfo] = useState<DaDataInfo | null>(null);
+  const [loadingDadata, setLoadingDadata] = useState(false);
 
   const enrichByInn = useCallback(async (id: string) => {
     const p = idToParty[id];
@@ -151,6 +229,24 @@ export default function RocList() {
     } catch {}
     return p;
   }, [API, fetchJson, idToParty]);
+
+  // Функция для получения расширенных данных DaData
+  const fetchDadataInfo = useCallback(async (inn: string) => {
+    if (!inn) return;
+    setLoadingDadata(true);
+    try {
+      const response = await fetch(`${API}/accounting/roc/dadata/info?inn=${encodeURIComponent(inn)}`);
+      if (response.ok) {
+        const data = await response.json();
+        setDadataInfo(data);
+      }
+    } catch (error) {
+      console.error('Ошибка получения данных DaData:', error);
+    } finally {
+      setLoadingDadata(false);
+    }
+  }, []);
+
   const fetchSuggestions = useCallback(async (q: string) => {
     if (!q || q.length < 3) { return; }
     try {
@@ -205,6 +301,10 @@ export default function RocList() {
             const party = await enrichByInn(id);
             if (party && setFieldValue) {
               setFieldValue('roc.selectedByInn', id);
+              // Получаем расширенные данные DaData
+              if (party.inn) {
+                fetchDadataInfo(party.inn);
+              }
               setFieldValue('name', party.name || party.shortName || '');
             }
           },
@@ -225,17 +325,61 @@ export default function RocList() {
             const party = await enrichByInn(id);
             if (party && setFieldValue) {
               setFieldValue('roc.selectedByName', id);
+              // Получаем расширенные данные DaData
+              if (party.inn) {
+                fetchDadataInfo(party.inn);
+              }
               setFieldValue('name', party.name || party.shortName || '');
             }
           },
           placeholder: 'Начните вводить ИНН…',
         },
-        { name: 'typeContractId', label: 'Тип договора', type: 'select', options: types, placeholder: 'Выберите тип' },
-        { name: 'statusContractId', label: 'Статус', type: 'select', options: statuses, placeholder: 'Выберите статус' },
-        { name: 'contractNumber', label: 'Номер договора', type: 'text' },
-        { name: 'dateContract', label: 'Дата договора', type: 'date' },
-        { name: 'agreedTo', label: 'Срок действия до', type: 'date' },
-        { name: 'shelfLife', label: 'Срок (мес.)', type: 'number' },
+        { 
+          name: 'contractNumber', 
+          label: 'Номер договора', 
+          type: 'text',
+          groupWith: ['typeContractId', 'statusContractId'],
+          groupSize: 3
+        },
+        { 
+          name: 'typeContractId', 
+          label: 'Тип договора', 
+          type: 'select', 
+          options: types, 
+          placeholder: 'Выберите тип',
+          groupWith: ['contractNumber', 'statusContractId'],
+          groupSize: 3
+        },
+        { 
+          name: 'statusContractId', 
+          label: 'Статус', 
+          type: 'select', 
+          options: statuses, 
+          placeholder: 'Выберите статус',
+          groupWith: ['contractNumber', 'typeContractId'],
+          groupSize: 3
+        },
+        { 
+          name: 'dateContract', 
+          label: 'Дата договора', 
+          type: 'date',
+          groupWith: ['agreedTo', 'shelfLife'],
+          groupSize: 3
+        },
+        { 
+          name: 'agreedTo', 
+          label: 'Срок действия до', 
+          type: 'date',
+          groupWith: ['dateContract', 'shelfLife'],
+          groupSize: 3
+        },
+        { 
+          name: 'shelfLife', 
+          label: 'Срок (мес.)', 
+          type: 'number',
+          groupWith: ['dateContract', 'agreedTo'],
+          groupSize: 3
+        },
         { name: 'terminationLetter', label: 'Есть письмо о расторжении', type: 'boolean' },
         { name: 'terminationСonditions', label: 'Условия расторжения', type: 'textarea' },
         { name: 'peculiarities', label: 'Особенности', type: 'textarea' },
@@ -271,9 +415,6 @@ export default function RocList() {
     await loadList();
   }, [fetchJson, loadList]);
 
-  const [modalOpened, modalHandlers] = useDisclosure(false);
-  const [drawerOpened, drawerHandlers] = useDisclosure(false);
-  const [viewModalOpened, viewModalHandlers] = useDisclosure(false);
   const [selectedView, setSelectedView] = useState<RocData | null>(null);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const addAdditionalFiles = useCallback(async (rocId: string) => {
@@ -326,23 +467,6 @@ export default function RocList() {
     return groups;
   }, [data]);
 
-  const openCreate = () => {
-    setFormValues({
-      ...DEFAULT_FORM,
-      userAddId: user?.id || '',
-      userUpdatedId: user?.id || '',
-      attachments: [],
-      additionalAttachments: [],
-    });
-    setSelected(null);
-    setSelectedPartyId(null);
-    setNameOptions([]);
-    setInnOptions([]);
-    setIdToParty({});
-    setActivePartyId(null);
-    modalHandlers.open();
-    drawerHandlers.open();
-  };
   const openEdit = (row: RocData) => {
     setSelected(row);
     setFormValues({
@@ -414,106 +538,6 @@ export default function RocList() {
     >
       {loading && <LoadingOverlay visible />}
       
-      {/* Современный заголовок */}
-      <Box
-        style={{
-          background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
-          borderRadius: '16px',
-          padding: '24px',
-          marginBottom: '24px',
-          border: '1px solid var(--theme-border-primary)',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-          position: 'relative',
-          overflow: 'hidden'
-        }}
-      >
-        {/* Декоративные элементы */}
-        <Box
-          style={{
-            position: 'absolute',
-            top: '-20px',
-            right: '-20px',
-            width: '120px',
-            height: '120px',
-            background: 'rgba(255, 255, 255, 0.1)',
-            borderRadius: '50%',
-            zIndex: 1
-          }}
-        />
-        <Box
-          style={{
-            position: 'absolute',
-            bottom: '-30px',
-            left: '-30px',
-            width: '80px',
-            height: '80px',
-            background: 'rgba(255, 255, 255, 0.05)',
-            borderRadius: '50%',
-            zIndex: 1
-          }}
-        />
-        
-        <Group justify="space-between" align="center" style={{ position: 'relative', zIndex: 2 }}>
-          <Group gap="16px" align="center">
-            <Box
-              style={{
-                width: '48px',
-                height: '48px',
-                background: 'rgba(255, 255, 255, 0.2)',
-                borderRadius: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '24px'
-              }}
-            >
-              📋
-            </Box>
-            <Box>
-              <Title 
-                order={2} 
-                style={{ 
-                  color: 'white', 
-                  margin: 0,
-                  fontSize: '28px',
-                  fontWeight: '700'
-                }}
-              >
-                Реестр договоров
-              </Title>
-              <Text 
-                style={{ 
-                  color: 'rgba(255, 255, 255, 0.8)', 
-                  fontSize: '16px',
-                  marginTop: '4px'
-                }}
-              >
-                Управление договорами и контрагентами
-              </Text>
-            </Box>
-          </Group>
-          
-          <Tooltip label="Добавить договор">
-            <Button
-              size="lg"
-              radius="xl"
-              onClick={openCreate}
-              style={{
-                background: 'rgba(255, 255, 255, 0.2)',
-                color: 'white',
-                border: '1px solid rgba(255, 255, 255, 0.3)',
-                backdropFilter: 'blur(10px)',
-                fontWeight: '600',
-                fontSize: '16px',
-                padding: '12px 24px'
-              }}
-              leftSection={<IconPlus size={20} />}
-            >
-              Добавить договор
-            </Button>
-          </Tooltip>
-        </Group>
-      </Box>
       <Tabs 
         value={activeTab} 
         onChange={(v) => setActiveTab((v as any) || 'list')}
@@ -577,31 +601,6 @@ export default function RocList() {
                   marginBottom: '20px'
                 }}
               >
-                <Group gap="12px" align="center" style={{ marginBottom: '16px' }}>
-                  <Box
-                    style={{
-                      width: '32px',
-                      height: '32px',
-                      background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
-                      borderRadius: '8px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '16px'
-                    }}
-                  >
-                    🔍
-                  </Box>
-                  <Text 
-                    style={{ 
-                      fontSize: '18px', 
-                      fontWeight: '600',
-                      color: 'var(--theme-text-primary)'
-                    }}
-                  >
-                    Фильтры
-                  </Text>
-                </Group>
                 <FilterGroup
                   filters={filtersConfig}
                   columnFilters={filters.column}
@@ -996,7 +995,7 @@ export default function RocList() {
       <DynamicFormModal
         opened={modalOpened}
         onClose={() => { modalHandlers.close(); drawerHandlers.close(); }}
-        title={selected ? 'Редактирование ROC' : 'Создание ROC'}
+        title={selected ? 'Редактирование договора' : 'Добавление договора'}
         mode={selected ? 'edit' : 'create'}
         fields={formConfig.fields}
         initialValues={formValues}
@@ -1045,24 +1044,24 @@ export default function RocList() {
         opened={drawerOpened} 
         onClose={drawerHandlers.close} 
         position="right" 
-        withOverlay={true} 
+        withOverlay={false} 
         lockScroll={false} 
         title="Контрагент" 
         size={460} 
-        zIndex={999998}
+        zIndex={1000}
         styles={{
           content: {
             background: 'var(--theme-bg-elevated)',
             border: '1px solid var(--theme-border-primary)',
-            boxShadow: '0 32px 64px -12px rgba(0, 0, 0, 0.4)',
-            zIndex: 999998,
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(0, 0, 0, 0.1)',
+            borderRadius: '12px 0 0 12px',
           },
           header: {
             background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-600) 100%)',
             borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
             color: 'white',
             padding: '20px 24px',
-            zIndex: 999998,
+            borderRadius: '12px 0 0 0',
           },
           title: {
             color: 'white',
@@ -1075,17 +1074,10 @@ export default function RocList() {
             border: '1px solid rgba(255, 255, 255, 0.2)',
             borderRadius: '8px',
             transition: 'all 0.3s ease',
-            zIndex: 999999,
           },
           body: {
             padding: '24px',
             background: 'var(--theme-bg-elevated)',
-            zIndex: 999998,
-          },
-          overlay: {
-            background: 'rgba(0, 0, 0, 0.3)',
-            backdropFilter: 'blur(4px)',
-            zIndex: 999997,
           }
         }}
       >
@@ -1257,6 +1249,144 @@ export default function RocList() {
                 </Stack>
               </Paper>
             )}
+
+            {/* Расширенные данные DaData */}
+            {loadingDadata && (
+              <Paper p="md" radius="md" style={{ background: 'var(--theme-bg-primary)', border: '1px solid var(--theme-border-secondary)' }}>
+                <Text fw={600} size="sm" mb={12} style={{ color: 'var(--theme-text-primary)' }}>
+                  📊 Загрузка расширенных данных...
+                </Text>
+                <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                  Получаем дополнительную информацию из DaData
+                </Text>
+              </Paper>
+            )}
+
+            {dadataInfo && (
+              <>
+                {/* Руководство */}
+                {(dadataInfo.managerName || dadataInfo.managerPost) && (
+                  <Paper p="md" radius="md" style={{ background: 'var(--theme-bg-primary)', border: '1px solid var(--theme-border-secondary)' }}>
+                    <Text fw={600} size="sm" mb={12} style={{ color: 'var(--theme-text-primary)' }}>
+                      👥 Руководство
+                    </Text>
+                    <Stack gap="xs">
+                      {dadataInfo.managerName && (
+                        <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                          <strong>Руководитель:</strong> {dadataInfo.managerName}
+                        </Text>
+                      )}
+                      {dadataInfo.managerPost && (
+                        <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                          <strong>Должность:</strong> {dadataInfo.managerPost}
+                        </Text>
+                      )}
+                    </Stack>
+                  </Paper>
+                )}
+
+                {/* Финансовая информация */}
+                {(dadataInfo.capital || dadataInfo.revenue || dadataInfo.expenses) && (
+                  <Paper p="md" radius="md" style={{ background: 'var(--theme-bg-primary)', border: '1px solid var(--theme-border-secondary)' }}>
+                    <Text fw={600} size="sm" mb={12} style={{ color: 'var(--theme-text-primary)' }}>
+                      💰 Финансовая информация
+                    </Text>
+                    <Stack gap="xs">
+                      {dadataInfo.capital && (
+                        <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                          <strong>Уставный капитал:</strong> {dadataInfo.capital.toLocaleString()} ₽
+                        </Text>
+                      )}
+                      {dadataInfo.revenue && (
+                        <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                          <strong>Выручка:</strong> {dadataInfo.revenue.toLocaleString()} ₽
+                        </Text>
+                      )}
+                      {dadataInfo.expenses && (
+                        <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                          <strong>Расходы:</strong> {dadataInfo.expenses.toLocaleString()} ₽
+                        </Text>
+                      )}
+                    </Stack>
+                  </Paper>
+                )}
+
+                {/* Дополнительные контакты */}
+                {((dadataInfo.phones?.length || 0) > 0 || (dadataInfo.emails?.length || 0) > 0) && (
+                  <Paper p="md" radius="md" style={{ background: 'var(--theme-bg-primary)', border: '1px solid var(--theme-border-secondary)' }}>
+                    <Text fw={600} size="sm" mb={12} style={{ color: 'var(--theme-text-primary)' }}>
+                      📞 Дополнительные контакты
+                    </Text>
+                    <Stack gap="xs">
+                      {dadataInfo.phones?.map((phone, index) => (
+                        <Text key={index} size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                          📞 {phone}
+                        </Text>
+                      ))}
+                      {dadataInfo.emails?.map((email, index) => (
+                        <Text key={index} size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                          ✉️ {email}
+                        </Text>
+                      ))}
+                    </Stack>
+                  </Paper>
+                )}
+
+                {/* Лицензии */}
+                {(dadataInfo.licenses?.length || 0) > 0 && (
+                  <Paper p="md" radius="md" style={{ background: 'var(--theme-bg-primary)', border: '1px solid var(--theme-border-secondary)' }}>
+                    <Text fw={600} size="sm" mb={12} style={{ color: 'var(--theme-text-primary)' }}>
+                      📋 Лицензии
+                    </Text>
+                    <Stack gap="xs">
+                      {dadataInfo.licenses?.map((license, index) => (
+                        <Text key={index} size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                          • {license}
+                        </Text>
+                      ))}
+                    </Stack>
+                  </Paper>
+                )}
+
+                {/* Проверки надежности */}
+                <Paper p="md" radius="md" style={{ 
+                  background: dadataInfo.isReliable ? 'var(--color-green-50)' : 'var(--color-red-50)', 
+                  border: `1px solid ${dadataInfo.isReliable ? 'var(--color-green-200)' : 'var(--color-red-200)'}` 
+                }}>
+                  <Text fw={600} size="sm" mb={12} style={{ color: dadataInfo.isReliable ? 'var(--color-green-700)' : 'var(--color-red-700)' }}>
+                    {dadataInfo.isReliable ? '✅ Надежная организация' : '⚠️ Недостоверные данные'}
+                  </Text>
+                  <Stack gap="xs">
+                    {(dadataInfo.courtDecisions?.length || 0) > 0 && (
+                      <Text size="sm" style={{ color: 'var(--color-red-600)' }}>
+                        <strong>Судебные решения:</strong> {dadataInfo.courtDecisions?.length || 0}
+                      </Text>
+                    )}
+                    {(dadataInfo.taxViolations?.length || 0) > 0 && (
+                      <Text size="sm" style={{ color: 'var(--color-red-600)' }}>
+                        <strong>Налоговые нарушения:</strong> {dadataInfo.taxViolations?.length || 0}
+                      </Text>
+                    )}
+                  </Stack>
+                </Paper>
+
+                {/* Учредители */}
+                {(dadataInfo.founders?.length || 0) > 0 && (
+                  <Paper p="md" radius="md" style={{ background: 'var(--theme-bg-primary)', border: '1px solid var(--theme-border-secondary)' }}>
+                    <Text fw={600} size="sm" mb={12} style={{ color: 'var(--theme-text-primary)' }}>
+                      👥 Учредители
+                    </Text>
+                    <Stack gap="xs">
+                      {dadataInfo.founders?.map((founder, index) => (
+                        <Text key={index} size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                          <strong>{founder.name}</strong> (ИНН: {founder.inn}, доля: {founder.share}%)
+                        </Text>
+                      ))}
+                    </Stack>
+                  </Paper>
+                )}
+              </>
+            )}
           </Stack>
         )}
       </Drawer>
@@ -1377,6 +1507,7 @@ export default function RocList() {
           return all.findIndex((att: any) => att.id === previewId);
         })()}
       />
+      <FloatingActionButton />
     </Box>
     </DndProviderWrapper>
   );

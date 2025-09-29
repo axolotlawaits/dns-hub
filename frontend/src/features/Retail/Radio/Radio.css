@@ -1,0 +1,219 @@
+/* ========================================
+   DEVICE MODAL - СТИЛИЗАЦИЯ В СООТВЕТСТВИИ С СИСТЕМОЙ
+   ======================================== */
+
+.device-modal-content {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  max-width: 95vw !important;
+  max-height: 90vh !important;
+  width: 900px !important;
+  min-width: 700px !important;
+  height: auto !important;
+  border-radius: 16px !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+  background: var(--theme-bg-elevated) !important;
+  border: 1px solid var(--theme-border) !important;
+}
+
+.device-modal-header {
+  padding: 24px 24px 16px 24px !important;
+  background: linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%) !important;
+  border-bottom: 1px solid var(--theme-border) !important;
+  border-radius: 16px 16px 0 0 !important;
+}
+
+.device-modal-title {
+  font-size: 20px !important;
+  font-weight: 700 !important;
+  color: var(--theme-text-primary) !important;
+  margin: 0 !important;
+}
+
+.device-modal-body {
+  padding: 24px !important;
+  max-height: 70vh !important;
+  overflow-y: auto !important;
+  background: var(--theme-bg-elevated) !important;
+}
+
+/* Стилизация Paper компонентов */
+.device-modal-body .mantine-Paper-root {
+  background: var(--theme-bg-elevated) !important;
+  border: 1px solid var(--theme-border) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+  transition: all 0.2s ease !important;
+}
+
+.device-modal-body .mantine-Paper-root:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Стилизация текста */
+.device-modal-body .mantine-Text-root {
+  color: var(--theme-text-primary) !important;
+}
+
+.device-modal-body .mantine-Text-root[data-fw="500"] {
+  color: var(--theme-text-primary) !important;
+  font-weight: 600 !important;
+}
+
+/* Стилизация кнопок */
+.device-modal-body .mantine-Button-root {
+  border-radius: 8px !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+.device-modal-body .mantine-Button-root:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+.device-modal-body .mantine-Button-root[data-variant="light"] {
+  background: var(--theme-bg-secondary) !important;
+  color: var(--theme-text-primary) !important;
+  border: 1px solid var(--theme-border) !important;
+}
+
+.device-modal-body .mantine-Button-root[data-variant="light"]:hover {
+  background: var(--theme-bg-tertiary) !important;
+  border-color: var(--theme-accent) !important;
+}
+
+.device-modal-body .mantine-Button-root[data-color="blue"] {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
+  color: white !important;
+  border: none !important;
+}
+
+.device-modal-body .mantine-Button-root[data-color="red"] {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+  color: white !important;
+  border: none !important;
+}
+
+/* Стилизация полей ввода */
+.device-modal-body .mantine-TextInput-root {
+  border-radius: 8px !important;
+  border: 1px solid var(--theme-border) !important;
+  background: var(--theme-bg-elevated) !important;
+  transition: all 0.2s ease !important;
+}
+
+.device-modal-body .mantine-TextInput-root:focus-within {
+  border-color: var(--theme-accent) !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+.device-modal-body .mantine-TextInput-input {
+  color: var(--theme-text-primary) !important;
+  background: transparent !important;
+}
+
+.device-modal-body .mantine-TextInput-label {
+  color: var(--theme-text-secondary) !important;
+  font-weight: 500 !important;
+  margin-bottom: 6px !important;
+}
+
+/* Стилизация TimeInput */
+.device-modal-body .mantine-TimeInput-root {
+  border-radius: 8px !important;
+  border: 1px solid var(--theme-border) !important;
+  background: var(--theme-bg-elevated) !important;
+  transition: all 0.2s ease !important;
+}
+
+.device-modal-body .mantine-TimeInput-root:focus-within {
+  border-color: var(--theme-accent) !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+.device-modal-body .mantine-TimeInput-input {
+  color: var(--theme-text-primary) !important;
+  background: transparent !important;
+}
+
+.device-modal-body .mantine-TimeInput-label {
+  color: var(--theme-text-secondary) !important;
+  font-weight: 500 !important;
+  margin-bottom: 6px !important;
+}
+
+/* Стилизация иконок */
+.device-modal-body .mantine-Button-leftSection {
+  color: inherit !important;
+}
+
+.device-modal-body .mantine-Button-leftSection svg {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+/* Стилизация групп */
+.device-modal-body .mantine-Group-root {
+  gap: 12px !important;
+}
+
+.device-modal-body .mantine-Stack-root {
+  gap: 16px !important;
+}
+
+/* Стилизация скроллбара */
+.device-modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.device-modal-body::-webkit-scrollbar-track {
+  background: var(--theme-bg-secondary);
+  border-radius: 3px;
+}
+
+.device-modal-body::-webkit-scrollbar-thumb {
+  background: var(--theme-border);
+  border-radius: 3px;
+}
+
+.device-modal-body::-webkit-scrollbar-thumb:hover {
+  background: var(--theme-text-secondary);
+}
+
+/* Анимации */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.device-modal-body .mantine-Paper-root {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .device-modal-content {
+    width: 95vw !important;
+    min-width: 320px !important;
+    max-height: 85vh !important;
+  }
+  
+  .device-modal-body {
+    padding: 16px !important;
+  }
+  
+  .device-modal-header {
+    padding: 16px 16px 12px 16px !important;
+  }
+}

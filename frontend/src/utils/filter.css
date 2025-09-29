@@ -1,0 +1,339 @@
+/* ========================================
+   FILTER COMPONENT - СОВРЕМЕННЫЙ ДИЗАЙН
+   ======================================== */
+
+/* Стили для группы фильтров */
+.filter-group {  
+  padding: 16px;
+  background: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border-primary);
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+/* Стили для заголовка группы фильтров */
+.filter-group-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--theme-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-group-title::before {
+  content: '🔍';
+  width: 24px;
+  height: 24px;
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600));
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+/* Стили для отдельных фильтров */
+.filter-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 200px;
+  flex: 1 1 200px;
+  max-width: 300px;
+}
+
+/* Стили для лейблов фильтров */
+.filter-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--theme-text-secondary);
+  margin-bottom: 6px;
+  padding: 4px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Стили для полей ввода */
+.filter-input {
+  background: var(--theme-bg-secondary);
+  border: 1px solid var(--theme-border-primary);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+  color: var(--theme-text-primary);
+  transition: all 0.2s ease;
+}
+
+.filter-input:focus {
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.1);
+  outline: none;
+}
+
+.filter-input:hover {
+  border-color: var(--color-primary-300);
+}
+
+/* Полностью сбрасываем все стили Mantine для полей дат */
+.filter-date-item .mantine-TextInput-root {
+  all: unset !important;
+  display: block !important;
+}
+
+.filter-date-item .mantine-TextInput-input {
+  all: unset !important;
+  display: block !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  border: 1px solid var(--theme-border-primary) !important;
+  background: var(--theme-bg-secondary) !important;
+  border-radius: 8px !important;
+  padding: 8px 12px !important;
+  font-size: 14px !important;
+  color: var(--theme-text-primary) !important;
+  transition: all 0.2s ease !important;
+  box-shadow: none !important;
+  outline: none !important;
+  margin: 0 !important;
+}
+
+.filter-date-item .mantine-TextInput-input:focus {
+  border-color: var(--color-primary-500) !important;
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.1) !important;
+  outline: none !important;
+}
+
+.filter-date-item .mantine-TextInput-input:hover {
+  border-color: var(--color-primary-300) !important;
+}
+
+.filter-date-item .mantine-TextInput-section {
+  display: none !important;
+}
+
+/* Убираем все лишние отступы */
+.filter-date-item {
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Стили для селектов */
+.filter-select {
+  background: var(--theme-bg-secondary);
+  border: 1px solid var(--theme-border-primary);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.filter-select:hover {
+  border-color: var(--color-primary-300);
+}
+
+.filter-select:focus-within {
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.1);
+}
+
+/* Стили для выпадающих списков */
+.filter-dropdown {
+  background: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border-primary);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+}
+
+/* Стили для опций в выпадающем списке */
+.filter-option {
+  padding: 8px 12px;
+  font-size: 14px;
+  color: var(--theme-text-primary);
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border-radius: 6px;
+  margin: 2px;
+}
+
+.filter-option:hover {
+  background: var(--color-primary-50);
+  color: var(--color-primary-700);
+}
+
+.filter-option[data-selected="true"] {
+  background: var(--color-primary-100);
+  color: var(--color-primary-800);
+  font-weight: 600;
+}
+
+/* Стили для кнопки очистки */
+.filter-clear {
+  background: var(--color-gray-100);
+  border: 1px solid var(--theme-border-primary);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.filter-clear:hover {
+  background: var(--color-gray-200);
+  color: var(--theme-text-primary);
+}
+
+/* Стили для даты */
+.filter-date-group {
+  display: flex !important;
+  flex-direction: row !important;
+  gap: 12px;
+  align-items: flex-end;
+  width: 100%;
+}
+
+.filter-date-item {
+  flex: 1;
+  min-width: 200px;
+  max-width: 50%;
+}
+
+/* Адаптивность для большого количества фильтров */
+@media (max-width: 1200px) {
+  .filter-item {
+    min-width: 180px;
+    flex: 1 1 180px;
+  }
+}
+
+@media (max-width: 768px) {
+  .filter-item {
+    min-width: 100%;
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .filter-group {
+    padding: 12px;
+  }
+  
+  .filter-item {
+    min-width: 100%;
+  }
+  
+  .filter-date-group {
+    flex-direction: column !important;
+    gap: 8px;
+  }
+  
+  .filter-date-item {
+    min-width: 100%;
+    max-width: 100%;
+  }
+}
+
+/* Темная тема - стили наследуются автоматически */
+
+[data-mantine-color-scheme="dark"] .filter-input {
+  background: var(--theme-bg-secondary);
+  border-color: var(--theme-border-primary);
+  color: var(--theme-text-primary);
+}
+
+[data-mantine-color-scheme="dark"] .filter-input:focus {
+  border-color: var(--color-primary-400);
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.2);
+}
+
+[data-mantine-color-scheme="dark"] .filter-select {
+  background: var(--theme-bg-secondary);
+  border-color: var(--theme-border-primary);
+}
+
+[data-mantine-color-scheme="dark"] .filter-select:hover {
+  border-color: var(--color-primary-400);
+}
+
+[data-mantine-color-scheme="dark"] .filter-select:focus-within {
+  border-color: var(--color-primary-400);
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.2);
+}
+
+[data-mantine-color-scheme="dark"] .filter-dropdown {
+  background: var(--theme-bg-elevated);
+  border-color: var(--theme-border-primary);
+}
+
+[data-mantine-color-scheme="dark"] .filter-option:hover {
+  background: var(--color-primary-900);
+  color: var(--color-primary-100);
+}
+
+[data-mantine-color-scheme="dark"] .filter-option[data-selected="true"] {
+  background: var(--color-primary-800);
+  color: var(--color-primary-50);
+}
+
+[data-mantine-color-scheme="dark"] .filter-clear {
+  background: var(--color-gray-800);
+  border-color: var(--theme-border-primary);
+  color: var(--theme-text-secondary);
+}
+
+[data-mantine-color-scheme="dark"] .filter-clear:hover {
+  background: var(--color-gray-700);
+  color: var(--theme-text-primary);
+}
+
+/* Анимации */
+@keyframes filterFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.filter-group {
+  animation: filterFadeIn 0.3s ease-out;
+}
+
+/* Стили для активных фильтров */
+.filter-active {
+  position: relative;
+}
+
+.filter-active::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  background: var(--color-primary-500);
+  border-radius: 50%;
+  border: 2px solid var(--theme-bg-elevated);
+}
+
+/* Стили для пустого состояния */
+.filter-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--theme-text-tertiary);
+  font-style: italic;
+}
+
+.filter-empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}

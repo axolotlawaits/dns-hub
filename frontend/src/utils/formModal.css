@@ -2,16 +2,8 @@
    FORM MODAL - ИЗНАЧАЛЬНЫЙ ДИЗАЙН
    ======================================== */
 
-.form-modal {
-  z-index: 999999 !important;
-}
-
-.form-modal .mantine-Modal-overlay {
-  z-index: 999998 !important;
-}
-
 .form-modal .mantine-Modal-content {
-  z-index: 999999 !important;
+
   position: fixed !important;
   top: 50% !important;
   left: 50% !important;
@@ -95,7 +87,6 @@
   left: 0 !important;
   right: 0 !important;
   bottom: 0 !important;
-  z-index: 999999 !important;
 }
 
 .form-modal .mantine-Modal-inner {
@@ -104,7 +95,6 @@
   left: 0 !important;
   right: 0 !important;
   bottom: 0 !important;
-  z-index: 999999 !important;
 }
 
 /* Стили для полей формы */
@@ -329,42 +319,9 @@
 /* Стили для селектов в fileFields - универсальный подход */
 .form-modal .file-fields .mantine-Select-root {
   position: relative;
-  z-index: 10000 !important;
 }
 
-/* Универсальные стили для всех выпадающих списков в модальном окне */
-.form-modal [data-mantine-combobox-dropdown],
-.form-modal [data-mantine-select-dropdown],
-.form-modal .mantine-Select-dropdown,
-.form-modal .mantine-Combobox-dropdown,
-.form-modal .mantine-Popover-dropdown {
-  z-index: 10001 !important;
-  position: fixed !important;
-}
-
-.form-modal [data-mantine-combobox-option],
-.form-modal [data-mantine-select-option],
-.form-modal .mantine-Select-option,
-.form-modal .mantine-Combobox-option,
-.form-modal .mantine-Popover-option {
-  z-index: 10001 !important;
-}
-
-/* Дополнительные стили для порталов */
-[data-mantine-portal] {
-  z-index: 10001 !important;
-}
-
-/* Стили для всех элементов с высоким z-index в модальном окне */
-.form-modal *[style*="z-index"] {
-  z-index: 10001 !important;
-}
-
-/* Специальные стили для селекта в fileFields */
-.form-modal .file-field-select {
-  position: relative !important;
-  z-index: 10000 !important;
-}
+/* Позволяем Mantine управлять z-index естественным образом */
 
 .form-modal .file-field-select .mantine-Select-input {
   cursor: pointer !important;
@@ -375,68 +332,7 @@
   pointer-events: auto !important;
 }
 
-/* Стили для открытого выпадающего списка */
-.form-modal .file-field-select[data-expanded="true"] .mantine-Select-dropdown,
-.form-modal .file-field-select[data-expanded="true"] [data-mantine-combobox-dropdown] {
-  z-index: 10001 !important;
-  position: fixed !important;
-}
-
-/* Дополнительные стили для принудительного отображения */
-.form-modal .file-field-select .mantine-Select-dropdown,
-.form-modal .file-field-select [data-mantine-combobox-dropdown] {
-  z-index: 10001 !important;
-  position: fixed !important;
-  pointer-events: auto !important;
-}
-
-/* Стили для всех возможных выпадающих списков */
-.form-modal [data-mantine-portal] {
-  z-index: 10001 !important;
-}
-
-.form-modal [data-mantine-portal] * {
-  z-index: 10001 !important;
-}
-
-/* КРИТИЧЕСКИ ВАЖНО: Правильные z-index для выпадающих списков */
-/* Эти стили должны иметь максимальный приоритет */
-.mantine-Select-dropdown,
-.mantine-Combobox-dropdown,
-[data-mantine-combobox-dropdown],
-[data-mantine-select-dropdown],
-[data-mantine-portal] .mantine-Select-dropdown,
-[data-mantine-portal] .mantine-Combobox-dropdown {
-  z-index: 9999999 !important;
-  position: fixed !important;
-  pointer-events: auto !important;
-}
-
-/* Стили для опций */
-.mantine-Select-option,
-.mantine-Combobox-option,
-[data-mantine-combobox-option],
-[data-mantine-select-option],
-[data-mantine-portal] .mantine-Select-option,
-[data-mantine-portal] .mantine-Combobox-option {
-  z-index: 9999999 !important;
-  pointer-events: auto !important;
-}
-
-/* Стили для портала */
-[data-mantine-portal] {
-  z-index: 9999999 !important;
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  bottom: 0 !important;
-}
-
-/* Стили для всех элементов в портале */
-[data-mantine-portal] * {
-  z-index: 9999999 !important;
-}
+/* Позволяем Mantine управлять всеми z-index естественным образом */
 
 /* Темная тема для карточек файлов */
 [data-mantine-color-scheme="dark"] .form-modal .file-card {
@@ -473,4 +369,788 @@
 [data-mantine-color-scheme="dark"] .form-modal .calendar-event-card:hover {
   background: var(--theme-bg-hover) !important;
   border-color: var(--color-blue-400) !important;
+}
+
+/* Адаптивная сетка для полей конструкции */
+.construction-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .construction-fields-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Красивые стили для карточек конструкций */
+.construction-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(10px);
+}
+
+.construction-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(59, 130, 246, 0.1);
+}
+
+.attachment-item {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.attachment-item:hover {
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: var(--color-blue-300) !important;
+}
+
+/* Анимация для кнопок */
+.construction-card button {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.construction-card button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Градиентные границы */
+.construction-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, var(--color-blue-500), var(--color-blue-600), var(--color-cyan-500));
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.construction-card:hover::before {
+  opacity: 1;
+}
+
+/* Темная тема */
+[data-mantine-color-scheme="dark"] .construction-card {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(51, 65, 85, 0.6) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+[data-mantine-color-scheme="dark"] .construction-card:hover {
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(59, 130, 246, 0.3);
+}
+
+[data-mantine-color-scheme="dark"] .attachment-item:hover {
+  border-color: var(--color-blue-400) !important;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+}
+
+/* Стили для полей в карточках конструкций */
+.construction-card .mantine-TextInput-input,
+.construction-card .mantine-Select-input,
+.construction-card .mantine-NumberInput-input {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  border: 1px solid var(--theme-border) !important;
+  background: var(--theme-bg-elevated) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+.construction-card .mantine-TextInput-input:focus,
+.construction-card .mantine-Select-input:focus,
+.construction-card .mantine-NumberInput-input:focus {
+  border-color: var(--color-blue-500) !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2), 0 4px 8px rgba(0, 0, 0, 0.15) !important;
+  transform: translateY(-1px) !important;
+}
+
+.construction-card .mantine-TextInput-label,
+.construction-card .mantine-Select-label,
+.construction-card .mantine-NumberInput-label {
+  font-weight: 600 !important;
+  color: var(--theme-text-primary) !important;
+  margin-bottom: 8px !important;
+}
+
+/* Анимация появления карточки */
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.construction-card {
+  animation: slideInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Красивые стили для превью файлов */
+.file-preview-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(10px);
+}
+
+.file-preview-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(34, 197, 94, 0.1);
+}
+
+.file-preview-card .remove-button {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.file-preview-card .remove-button:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4) !important;
+}
+
+/* Анимация появления превью */
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.file-preview-card {
+  animation: fadeInScale 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Стили для превью изображения */
+.file-preview-card img {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.file-preview-card:hover img {
+  transform: scale(1.02);
+}
+
+/* Темная тема для превью */
+[data-mantine-color-scheme="dark"] .file-preview-card {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(51, 65, 85, 0.6) 100%);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+[data-mantine-color-scheme="dark"] .file-preview-card:hover {
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(34, 197, 94, 0.3);
+}
+
+/* Убираем overflow только там, где нужно */
+.construction-card {
+  overflow: visible !important;
+}
+
+.form-modal .mantine-Modal-body {
+  overflow: visible !important;
+  padding: 0 !important;
+}
+
+/* Отступы для контента модального окна теперь задаются через inline стили */
+
+/* Стили для футера модального окна */
+.modal-footer {
+  border-top: 1px solid var(--theme-border) !important;
+  background: var(--theme-bg-elevated) !important;
+  padding: var(--space-lg) var(--space-md) !important;
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: var(--space-md) !important;
+  flex-shrink: 0 !important;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg) !important;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Стили для кнопок в футере */
+.modal-footer .mantine-Button-root {
+  min-width: 120px !important;
+  height: 44px !important;
+  font-weight: 500 !important;
+  border-radius: var(--radius-md) !important;
+  transition: all 0.2s ease !important;
+  padding: 0 24px !important;
+  font-size: 14px !important;
+  margin:10px;
+}
+
+.modal-footer .mantine-Button-root:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Темная тема для футера */
+[data-mantine-color-scheme="dark"] .modal-footer {
+  border-top-color: var(--theme-border) !important;
+  background: var(--theme-bg-elevated) !important;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* === СОВРЕМЕННЫЕ СТИЛИ ДЛЯ КАЛЕНДАРЯ === */
+.mantine-DatePicker-dropdown {
+  background: var(--theme-bg-elevated) !important;
+  border: 1px solid var(--theme-border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--theme-shadow-lg) !important;
+  backdrop-filter: blur(8px) !important;
+  padding: var(--space-3) !important;
+  margin-top: var(--space-1) !important;
+}
+
+.mantine-DatePicker-calendar {
+  background: transparent !important;
+  border: none !important;
+}
+
+.mantine-DatePicker-calendarHeader {
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600)) !important;
+  border-radius: var(--radius-md) !important;
+  padding: var(--space-3) !important;
+  margin-bottom: var(--space-2) !important;
+}
+
+.mantine-DatePicker-calendarHeaderLabel {
+  color: white !important;
+  font-weight: 600 !important;
+  font-size: var(--font-size-lg) !important;
+}
+
+.mantine-DatePicker-calendarHeaderControl {
+  background: rgba(255, 255, 255, 0.2) !important;
+  border: none !important;
+  border-radius: var(--radius-sm) !important;
+  color: white !important;
+  width: 32px !important;
+  height: 32px !important;
+  transition: all 0.2s ease !important;
+}
+
+.mantine-DatePicker-calendarHeaderControl:hover {
+  background: rgba(255, 255, 255, 0.3) !important;
+  transform: scale(1.05) !important;
+}
+
+.mantine-DatePicker-weekday {
+  color: var(--theme-text-secondary) !important;
+  font-weight: 600 !important;
+  font-size: var(--font-size-sm) !important;
+  padding: var(--space-2) !important;
+}
+
+.mantine-DatePicker-day {
+  background: transparent !important;
+  border: none !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--theme-text-primary) !important;
+  font-weight: 500 !important;
+  width: 36px !important;
+  height: 36px !important;
+  transition: all 0.2s ease !important;
+  position: relative !important;
+}
+
+.mantine-DatePicker-day:hover {
+  background: var(--theme-hover-bg) !important;
+  color: var(--theme-text-primary) !important;
+  transform: scale(1.05) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+}
+
+.mantine-DatePicker-day[data-selected="true"] {
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600)) !important;
+  color: white !important;
+  font-weight: 600 !important;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3) !important;
+}
+
+.mantine-DatePicker-day[data-selected="true"]:hover {
+  background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700)) !important;
+  transform: scale(1.05) !important;
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4) !important;
+}
+
+.mantine-DatePicker-day[data-outside="true"] {
+  color: var(--theme-text-disabled) !important;
+}
+
+.mantine-DatePicker-day[data-outside="true"]:hover {
+  background: var(--theme-hover-bg) !important;
+  color: var(--theme-text-secondary) !important;
+}
+
+/* Стили для навигации по месяцам */
+.mantine-DatePicker-calendarHeaderControl[data-direction="previous"],
+.mantine-DatePicker-calendarHeaderControl[data-direction="next"] {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+.mantine-DatePicker-calendarHeaderControl[data-direction="previous"]:hover,
+.mantine-DatePicker-calendarHeaderControl[data-direction="next"]:hover {
+  background: rgba(255, 255, 255, 0.2) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Темная тема для календаря */
+[data-mantine-color-scheme="dark"] .mantine-DatePicker-dropdown {
+  background: var(--theme-bg-elevated) !important;
+  border-color: var(--theme-border) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-DatePicker-day {
+  color: var(--theme-text-primary) !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-DatePicker-day:hover {
+  background: var(--theme-hover-bg) !important;
+  color: var(--theme-text-primary) !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-DatePicker-day[data-selected="true"] {
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600)) !important;
+  color: white !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-DatePicker-day[data-outside="true"] {
+  color: var(--theme-text-disabled) !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-DatePicker-weekday {
+  color: var(--theme-text-secondary) !important;
+}
+
+/* === СОВРЕМЕННЫЕ СТИЛИ ДЛЯ ПОЛЯ ДАТЫ === */
+.mantine-TextInput-input[type="date"],
+.mantine-TextInput-input[type="datetime-local"] {
+  background: var(--theme-bg-elevated) !important;
+  border: 1px solid var(--theme-border) !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--theme-text-primary) !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease !important;
+  position: relative !important;
+}
+
+.mantine-TextInput-input[type="date"]:focus,
+.mantine-TextInput-input[type="datetime-local"]:focus {
+  border-color: var(--color-primary-500) !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
+  background: var(--theme-bg-elevated) !important;
+  transform: translateY(-1px) !important;
+}
+
+.mantine-TextInput-input[type="date"]:hover,
+.mantine-TextInput-input[type="datetime-local"]:hover {
+  border-color: var(--color-primary-400) !important;
+  background: var(--theme-bg-elevated) !important;
+}
+
+/* Стили для иконки календаря в поле даты */
+.mantine-TextInput-input[type="date"]::-webkit-calendar-picker-indicator,
+.mantine-TextInput-input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600)) !important;
+  border-radius: var(--radius-sm) !important;
+  padding: 4px !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  filter: brightness(1.1) !important;
+}
+
+.mantine-TextInput-input[type="date"]::-webkit-calendar-picker-indicator:hover,
+.mantine-TextInput-input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+  background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700)) !important;
+  transform: scale(1.05) !important;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3) !important;
+}
+
+/* Стили для placeholder в поле даты */
+.mantine-TextInput-input[type="date"]::placeholder,
+.mantine-TextInput-input[type="datetime-local"]::placeholder {
+  color: var(--theme-text-disabled) !important;
+  font-style: italic !important;
+}
+
+/* Темная тема для поля даты */
+[data-mantine-color-scheme="dark"] .mantine-TextInput-input[type="date"],
+[data-mantine-color-scheme="dark"] .mantine-TextInput-input[type="datetime-local"] {
+  background: var(--theme-bg-elevated) !important;
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text-primary) !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-TextInput-input[type="date"]:focus,
+[data-mantine-color-scheme="dark"] .mantine-TextInput-input[type="datetime-local"]:focus {
+  border-color: var(--color-primary-400) !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3) !important;
+  background: var(--theme-bg-elevated) !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-TextInput-input[type="date"]:hover,
+[data-mantine-color-scheme="dark"] .mantine-TextInput-input[type="datetime-local"]:hover {
+  border-color: var(--color-primary-300) !important;
+  background: var(--theme-bg-elevated) !important;
+}
+
+/* Стили для лейбла поля даты */
+.mantine-TextInput-label {
+  color: var(--theme-text-primary) !important;
+  font-weight: 600 !important;
+  font-size: var(--font-size-sm) !important;
+  margin-bottom: var(--space-2) !important;
+  transition: all 0.2s ease !important;
+}
+
+.mantine-TextInput-label:hover {
+  color: var(--color-primary-600) !important;
+}
+
+/* Стили для описания поля даты */
+.mantine-TextInput-description {
+  color: var(--theme-text-secondary) !important;
+  font-size: var(--font-size-xs) !important;
+  margin-top: var(--space-1) !important;
+}
+
+/* Стили для ошибки поля даты */
+.mantine-TextInput-error {
+  color: var(--color-red-500) !important;
+  font-size: var(--font-size-xs) !important;
+  font-weight: 500 !important;
+  margin-top: var(--space-1) !important;
+}
+
+/* === СОВРЕМЕННЫЕ СТИЛИ ДЛЯ ВЫПАДАЮЩЕГО КАЛЕНДАРЯ === */
+.mantine-DateInput-popover {
+  background: var(--theme-bg-elevated) !important;
+  border: 1px solid var(--theme-border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--theme-shadow-lg) !important;
+  backdrop-filter: blur(8px) !important;
+  padding: var(--space-3) !important;
+  margin-top: var(--space-1) !important;
+}
+
+.mantine-DateInput-calendar {
+  background: transparent !important;
+  border: none !important;
+}
+
+.mantine-DateInput-calendarHeader {
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600)) !important;
+  border-radius: var(--radius-md) !important;
+  padding: var(--space-3) !important;
+  margin-bottom: var(--space-2) !important;
+}
+
+.mantine-DateInput-calendarHeaderLabel {
+  color: white !important;
+  font-weight: 600 !important;
+  font-size: var(--font-size-lg) !important;
+}
+
+.mantine-DateInput-calendarHeaderControl {
+  background: rgba(255, 255, 255, 0.2) !important;
+  border: none !important;
+  border-radius: var(--radius-sm) !important;
+  color: white !important;
+  width: 32px !important;
+  height: 32px !important;
+  transition: all 0.2s ease !important;
+}
+
+.mantine-DateInput-calendarHeaderControl:hover {
+  background: rgba(255, 255, 255, 0.3) !important;
+  transform: scale(1.05) !important;
+}
+
+.mantine-DateInput-weekday {
+  color: var(--theme-text-secondary) !important;
+  font-weight: 600 !important;
+  font-size: var(--font-size-sm) !important;
+  padding: var(--space-2) !important;
+}
+
+.mantine-DateInput-day {
+  background: transparent !important;
+  border: none !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--theme-text-primary) !important;
+  font-weight: 500 !important;
+  width: 36px !important;
+  height: 36px !important;
+  transition: all 0.2s ease !important;
+  position: relative !important;
+}
+
+.mantine-DateInput-day:hover {
+  background: var(--theme-hover-bg) !important;
+  color: var(--theme-text-primary) !important;
+  transform: scale(1.05) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+}
+
+.mantine-DateInput-day[data-selected="true"] {
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600)) !important;
+  color: white !important;
+  font-weight: 600 !important;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3) !important;
+}
+
+.mantine-DateInput-day[data-selected="true"]:hover {
+  background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700)) !important;
+  transform: scale(1.05) !important;
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4) !important;
+}
+
+.mantine-DateInput-day[data-outside="true"] {
+  color: var(--theme-text-disabled) !important;
+}
+
+.mantine-DateInput-day[data-outside="true"]:hover {
+  background: var(--theme-hover-bg) !important;
+  color: var(--theme-text-secondary) !important;
+}
+
+/* Стили для навигации по месяцам */
+.mantine-DateInput-calendarHeaderControl[data-direction="previous"],
+.mantine-DateInput-calendarHeaderControl[data-direction="next"] {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+.mantine-DateInput-calendarHeaderControl[data-direction="previous"]:hover,
+.mantine-DateInput-calendarHeaderControl[data-direction="next"]:hover {
+  background: rgba(255, 255, 255, 0.2) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Стили для кнопок в футере календаря */
+.mantine-DateInput-calendarFooter {
+  display: flex !important;
+  justify-content: space-between !important;
+  margin-top: var(--space-3) !important;
+  padding-top: var(--space-2) !important;
+  border-top: 1px solid var(--theme-border) !important;
+}
+
+.mantine-DateInput-calendarFooterButton {
+  background: transparent !important;
+  border: 1px solid var(--theme-border) !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--theme-text-primary) !important;
+  font-weight: 500 !important;
+  padding: var(--space-2) var(--space-3) !important;
+  transition: all 0.2s ease !important;
+}
+
+.mantine-DateInput-calendarFooterButton:hover {
+  background: var(--theme-hover-bg) !important;
+  border-color: var(--color-primary-400) !important;
+  color: var(--color-primary-600) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Темная тема для выпадающего календаря */
+[data-mantine-color-scheme="dark"] .mantine-DateInput-popover {
+  background: var(--theme-bg-elevated) !important;
+  border-color: var(--theme-border) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-DateInput-day {
+  color: var(--theme-text-primary) !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-DateInput-day:hover {
+  background: var(--theme-hover-bg) !important;
+  color: var(--theme-text-primary) !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-DateInput-day[data-selected="true"] {
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600)) !important;
+  color: white !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-DateInput-day[data-outside="true"] {
+  color: var(--theme-text-disabled) !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-DateInput-weekday {
+  color: var(--theme-text-secondary) !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-DateInput-calendarFooterButton {
+  border-color: var(--theme-border) !important;
+  color: var(--theme-text-primary) !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-DateInput-calendarFooterButton:hover {
+  background: var(--theme-hover-bg) !important;
+  border-color: var(--color-primary-300) !important;
+  color: var(--color-primary-400) !important;
+}
+
+/* === СТИЛИ ДЛЯ ГРУППИРОВКИ ПОЛЕЙ === */
+.form-modal .field-group {
+  display: flex;
+  gap: 20px; /* Фиксированный отступ между полями */
+  margin-bottom: 16px;
+  align-items: stretch; /* Равная высота для всех полей в группе */
+}
+
+.form-modal .field-group .field-item {
+  flex: 1;
+  min-width: 0; /* Позволяет полям сжиматься */
+  display: flex;
+  flex-direction: column;
+}
+
+/* Выравнивание лейблов в группах */
+.form-modal .field-group .field-item .mantine-TextInput-label,
+.form-modal .field-group .field-item .mantine-Select-label,
+.form-modal .field-group .field-item .mantine-NumberInput-label {
+  margin-bottom: 6px;
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--theme-text-primary);
+  min-height: 20px; /* Минимальная высота для лейблов */
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  overflow: visible; /* Показываем полный текст */
+  text-overflow: unset;
+}
+
+/* Выравнивание инпутов в группах */
+.form-modal .field-group .field-item .mantine-TextInput-input,
+.form-modal .field-group .field-item .mantine-Select-input,
+.form-modal .field-group .field-item .mantine-NumberInput-input {
+  height: 40px; /* Увеличиваем высоту для лучшего выравнивания */
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  margin-right: 6px;
+  width: 100%; /* Полная ширина контейнера */
+  box-sizing: border-box;
+}
+
+.form-modal .field-group .field-item:last-child .mantine-TextInput-input,
+.form-modal .field-group .field-item:last-child .mantine-Select-input,
+.form-modal .field-group .field-item:last-child .mantine-NumberInput-input {
+  margin-right: 0; /* Убираем отступ у последнего поля */
+}
+
+/* Выравнивание селектов */
+.form-modal .field-group .field-item .mantine-Select-root {
+  height: 40px;
+  width: 100%;
+}
+
+.form-modal .field-group .field-item .mantine-Select-input {
+  height: 40px;
+  line-height: 40px;
+  width: 100%;
+}
+
+/* Выравнивание иконок в полях даты */
+.form-modal .field-group .field-item .mantine-TextInput-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  margin-left: 4px;
+}
+
+.form-modal .field-group .field-item .mantine-TextInput-section[data-position="right"] {
+  padding-right: 4px;
+  margin-right: 4px;
+}
+
+/* Убираем отступы у полей в группах */
+.form-modal .field-group .field-item .mantine-TextInput-root,
+.form-modal .field-group .field-item .mantine-Select-root,
+.form-modal .field-group .field-item .mantine-NumberInput-root {
+  margin-bottom: 0;
+  width: 100%;
+  height: auto; /* Убираем фиксированную высоту */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start; /* Выравниваем по верху */
+}
+
+/* Выравнивание текста в инпутах */
+.form-modal .field-group .field-item .mantine-TextInput-input,
+.form-modal .field-group .field-item .mantine-Select-input,
+.form-modal .field-group .field-item .mantine-NumberInput-input {
+  line-height: 1.2;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  padding-left: 12px;
+  padding-right: 12px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+/* Адаптивность для групп полей */
+@media (max-width: 768px) {
+  .form-modal .field-group {
+    flex-direction: column;
+    gap: 0;
+  }
+  
+  .form-modal .field-group .field-item {
+    margin-bottom: 16px;
+    margin-right: 0;
+  }
+}
+
+/* Стили для групп из 2 полей */
+.form-modal .field-group-2 .field-item {
+  flex: 1 1 0; /* Равномерное распределение пространства */
+  min-width: 0;
+  margin-right: 8px;
+}
+
+.form-modal .field-group-2 .field-item:last-child {
+  margin-right: 0;
+}
+
+/* Стили для групп из 3 полей */
+.form-modal .field-group-3 .field-item {
+  flex: 1 1 0; /* Равномерное распределение пространства */
+  min-width: 0;
+  margin-right: 8px;
+}
+
+.form-modal .field-group-3 .field-item:last-child {
+  margin-right: 0;
+}
+
+@media (max-width: 1024px) {
+  .form-modal .field-group-3 {
+    flex-wrap: wrap;
+  }
+  
+  .form-modal .field-group-3 .field-item {
+    flex: 1 1 calc(50% - var(--space-sm));
+  }
+}
+
+@media (max-width: 768px) {
+  .form-modal .field-group-3 .field-item {
+    flex: 1 1 100%;
+  }
 }

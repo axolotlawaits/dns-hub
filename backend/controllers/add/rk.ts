@@ -75,8 +75,8 @@ const processRKAttachments = async (
   if (!files || !Array.isArray(files)) return;
   
   // Сначала создаем конструкции
-  const constructions = [];
-  const documents = [];
+  const constructions: any[] = [];
+  const documents: any[] = [];
   
   files.forEach((file, index) => {
     const agreedToStr = attachmentsMeta[index]?.agreedTo;
@@ -190,7 +190,7 @@ export const getRKList = async (req: Request, res: Response, next: NextFunction)
                 approvalStatus: { select: { id: true, name: true, colorHex: true } },
               }
             },
-          },
+          } as any,
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -238,7 +238,7 @@ export const getRKById = async (req: Request, res: Response, next: NextFunction)
                 approvalStatus: { select: { id: true, name: true, colorHex: true } },
               }
             },
-          },
+          } as any,
         },
       },
     });
@@ -280,10 +280,14 @@ export const createRK = async (req: Request, res: Response, next: NextFunction) 
       
       console.log('Parsed attachments meta:', attachmentsMeta);
       
-      if (req.files && req.files.length !== attachmentsMeta.length) {
+      // Проверяем, что количество файлов с метаданными совпадает с количеством метаданных
+      // Файлы без метаданных (документы) будут обработаны отдельно
+      const filesWithMeta = req.files ? Math.min((req.files as Express.Multer.File[]).length, attachmentsMeta.length) : 0;
+      if (req.files && filesWithMeta !== attachmentsMeta.length) {
         return res.status(400).json({
-          error: 'Mismatch between files and metadata count',
+          error: 'Mismatch between files with metadata and metadata count',
           filesCount: req.files.length,
+          filesWithMetaCount: filesWithMeta,
           metaCount: attachmentsMeta.length
         });
       }
@@ -317,13 +321,54 @@ export const createRK = async (req: Request, res: Response, next: NextFunction) 
     // Обработка вложений
     if (Array.isArray(req.files) && req.files.length > 0) {
       console.log('Creating attachments with meta:', attachmentsMeta);
-      await processRKAttachments(
-        req.files as Express.Multer.File[],
-        newRK.id,
-        req.body.userAddId,
-        attachmentsMeta,
-        {}
-      );
+      
+      // Разделяем файлы на те, что имеют метаданные (конструкции) и те, что не имеют (документы)
+      const filesWithMeta = req.files.slice(0, attachmentsMeta.length);
+      const filesWithoutMeta = req.files.slice(attachmentsMeta.length);
+      
+      // Создаем конструкции с метаданными
+      if (filesWithMeta.length > 0) {
+        await processRKAttachments(
+          filesWithMeta as Express.Multer.File[],
+          newRK.id,
+          req.body.userAddId,
+          attachmentsMeta,
+          {}
+        );
+      }
+      
+      // Создаем документы без метаданных (они будут связаны с последней созданной конструкцией)
+      if (filesWithoutMeta.length > 0) {
+        // Сначала получаем ID последней созданной конструкции
+        const lastConstruction = await prisma.rKAttachment.findFirst({
+          where: { 
+            recordId: newRK.id,
+            typeAttachment: 'CONSTRUCTION'
+          },
+          orderBy: { createdAt: 'desc' }
+        });
+        
+        if (lastConstruction) {
+          // Создаем документы, связанные с последней конструкцией
+          for (const file of filesWithoutMeta) {
+            await prisma.rKAttachment.create({
+              data: {
+                userAddId: req.body.userAddId,
+                source: file.path,
+                type: file.mimetype,
+                typeAttachment: 'DOCUMENT',
+                sizeXY: '',
+                clarification: '',
+                recordId: newRK.id,
+                typeStructureId: undefined,
+                approvalStatusId: undefined,
+                agreedTo: undefined,
+                parentAttachmentId: lastConstruction.id,
+              } as any
+            });
+          }
+        }
+      }
     }
     // Если файлов нет, но есть метаданные с agreedTo — ничего не пишем, т.к. дата хранится на уровне файла
 
@@ -350,7 +395,7 @@ export const createRK = async (req: Request, res: Response, next: NextFunction) 
                 approvalStatus: { select: { id: true, name: true, colorHex: true } },
               }
             },
-          },
+          } as any,
         },
       }
     });
@@ -475,7 +520,7 @@ export const updateRK = async (req: Request, res: Response, next: NextFunction) 
                 approvalStatus: { select: { id: true, name: true, colorHex: true } },
               }
             },
-          },
+          } as any,
         },
       },
     });

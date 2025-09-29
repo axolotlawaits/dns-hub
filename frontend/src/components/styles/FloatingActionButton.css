@@ -1,0 +1,84 @@
+.floating-action-button {
+  position: fixed;
+  bottom: 80px; /* Выше футера (footer height: 65px + margin) */
+  right: 20px;
+  z-index: 1000;
+  pointer-events: auto;
+}
+
+.fab-button {
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600)) !important;
+  color: white !important;
+  border: none !important;
+  font-weight: 600 !important;
+  box-shadow: 0 8px 32px rgba(14, 165, 233, 0.3) !important;
+  transition: all 0.3s ease !important;
+  min-width: 160px !important;
+  height: 56px !important;
+  border-radius: 28px !important;
+  font-size: 16px !important;
+  padding: 0 24px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+}
+
+.fab-button:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 12px 40px rgba(14, 165, 233, 0.4) !important;
+  background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700)) !important;
+}
+
+.fab-button:active {
+  transform: translateY(0) !important;
+  box-shadow: 0 6px 24px rgba(14, 165, 233, 0.3) !important;
+}
+
+.fab-button:disabled {
+  opacity: 0.6 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .floating-action-button {
+    bottom: 70px;
+    right: 16px;
+  }
+  
+  .fab-button {
+    min-width: 140px !important;
+    height: 48px !important;
+    border-radius: 24px !important;
+    font-size: 14px !important;
+    padding: 0 20px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .floating-action-button {
+    bottom: 65px;
+    right: 12px;
+  }
+  
+  .fab-button {
+    min-width: 120px !important;
+    height: 44px !important;
+    border-radius: 22px !important;
+    font-size: 13px !important;
+    padding: 0 16px !important;
+  }
+}
+
+/* Темная тема */
+[data-mantine-color-scheme="dark"] .fab-button {
+  background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700)) !important;
+  box-shadow: 0 8px 32px rgba(14, 165, 233, 0.4) !important;
+}
+
+[data-mantine-color-scheme="dark"] .fab-button:hover {
+  background: linear-gradient(135deg, var(--color-primary-700), var(--color-primary-800)) !important;
+  box-shadow: 0 12px 40px rgba(14, 165, 233, 0.5) !important;
+}

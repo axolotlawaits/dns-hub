@@ -13,6 +13,22 @@
   transition: var(--transition-all);
 }
 
+/* Позволяем Mantine управлять z-index для tooltips в хедере */
+
+/* Предотвращаем создание нового контекста наложения для tooltips */
+.modern-header {
+  isolation: auto;
+}
+
+/* Убеждаемся, что tooltips рендерятся в правильном контексте */
+.modern-header * {
+  position: relative;
+}
+
+.modern-header .mantine-Tooltip-root {
+  position: static;
+}
+
 .header-content {
   display: flex;
   align-items: center;
@@ -66,8 +82,32 @@
   align-items: center;
   justify-content: center;
   flex: 1;
-  max-width: 600px;
   margin: 0 var(--space-8);
+}
+
+/* Заголовок страницы */
+.page-header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.page-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  flex: 0 0 auto;
+  padding-left: 15px;
+}
+
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+  padding-right: 15px;
 }
 
 /* Правая часть */
@@ -179,8 +219,21 @@
     max-width: 400px;
   }
   
-  .header-title {
-    font-size: var(--font-size-lg);
+  .page-header-content {
+    flex-direction: column;
+    gap: var(--space-2);
+    align-items: flex-start;
+  }
+  
+  .page-header-text {
+    flex: none;
+    max-width: 100%;
+  }
+  
+  .page-header-actions {
+    width: 100%;
+    justify-content: flex-end;
+    gap: var(--space-3);
   }
 }
 

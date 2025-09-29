@@ -2,16 +2,8 @@
    CUSTOM MODAL - СТИЛИ КАК У FORM MODAL
    ======================================== */
 
-.custom-modal {
-  z-index: 999999 !important;
-}
-
-.custom-modal .mantine-Modal-overlay {
-  z-index: 999998 !important;
-}
-
+/* Позволяем Mantine управлять z-index */
 .custom-modal .mantine-Modal-content {
-  z-index: 999999 !important;
   position: fixed !important;
   top: 50% !important;
   left: 50% !important;
@@ -102,7 +94,6 @@
   left: 0 !important;
   right: 0 !important;
   bottom: 0 !important;
-  z-index: 999999 !important;
 }
 
 .custom-modal .mantine-Modal-inner {
@@ -111,7 +102,6 @@
   left: 0 !important;
   right: 0 !important;
   bottom: 0 !important;
-  z-index: 999999 !important;
 }
 
 /* Стили для календаря */

@@ -14,40 +14,42 @@ const getCurrentMonthFolder = (): string => {
   const currentDate = new Date();
   const month = String(currentDate.getMonth() + 1).padStart(2, '0');
   const year = currentDate.getFullYear();
-  return `01-${month}-${year}`;
+  return `${month}-${year}`;
 };
 
-// Утилита для создания папки радио
-const ensureRadioFolder = (folderName?: string): string => {
+// Утилита для создания папки музыки
+const ensureMusicFolder = (folderName?: string): string => {
   const folder = folderName || getCurrentMonthFolder();
-  const radioPath = `./public/retail/radio/${folder}`;
-  const baseRadioPath = './public/retail/radio';
+  const musicPath = `./public/retail/radio/music/${folder}`;
+  const baseMusicPath = './public/retail/radio/music';
   
-  if (!fs.existsSync(baseRadioPath)) {
-    fs.mkdirSync(baseRadioPath, { recursive: true });
+  if (!fs.existsSync(baseMusicPath)) {
+    fs.mkdirSync(baseMusicPath, { recursive: true });
   }
-  if (!fs.existsSync(radioPath)) {
-    fs.mkdirSync(radioPath, { recursive: true });
+  if (!fs.existsSync(musicPath)) {
+    fs.mkdirSync(musicPath, { recursive: true });
   }
   
-  return radioPath;
+  return musicPath;
 };
 
-// Создание папки для радио с текущей датой
-export const createRadioFolder = async (req: Request, res: Response): Promise<any> => {
+// Утилита для создания папки дополнительных роликов
+
+// Создание папки для музыки с текущей датой
+export const createMusicFolder = async (req: Request, res: Response): Promise<any> => {
   try {
     const folderName = getCurrentMonthFolder();
-    const radioPath = ensureRadioFolder(folderName);
+    const musicPath = ensureMusicFolder(folderName);
     
     return res.status(200).json({ 
       success: true, 
-      message: 'Папка для радио создана успешно', 
+      message: 'Папка для музыки создана успешно', 
       folderName, 
-      path: radioPath 
+      path: musicPath 
     });
   } catch (error) {
-    console.error('Error creating radio folder:', error);
-    return res.status(500).json({ error: 'Ошибка при создании папки для радио' });
+    console.error('Error creating music folder:', error);
+    return res.status(500).json({ error: 'Ошибка при создании папки для музыки' });
   }
 };
 
@@ -58,17 +60,17 @@ export const uploadMusic = async (req: Request, res: Response): Promise<any> => 
     }
     
     const folderName = getCurrentMonthFolder();
-    const radioPath = ensureRadioFolder(folderName);
+    const musicPath = ensureMusicFolder(folderName);
     
     const fileName = req.file.originalname;
-    const filePath = path.join(radioPath, fileName);
+    const filePath = path.join(musicPath, fileName);
     
     if (fs.existsSync(filePath)) {
       const timestamp = Date.now();
       const nameWithoutExt = path.parse(fileName).name;
       const ext = path.parse(fileName).ext;
       const newFileName = `${nameWithoutExt}_${timestamp}${ext}`;
-      const newFilePath = path.join(radioPath, newFileName);
+      const newFilePath = path.join(musicPath, newFileName);
       fs.renameSync(req.file.path, newFilePath);
       return res.status(200).json({ 
         success: true, 
@@ -93,22 +95,29 @@ export const uploadMusic = async (req: Request, res: Response): Promise<any> => 
   }
 };
 
-// Асинхронная функция для получения папок радио
-const getRadioFoldersAsync = (): Promise<any[]> => {
+// Асинхронная функция для получения папок музыки
+const getMusicFoldersAsync = (): Promise<any[]> => {
   return new Promise((resolve) => {
     setImmediate(() => {
       try {
-        const radioPath = './public/retail/radio';
-        if (!fs.existsSync(radioPath)) {
+        const musicPath = './public/retail/radio/music';
+        console.log('Getting music folders from:', musicPath);
+        console.log('Music path exists:', fs.existsSync(musicPath));
+        
+        if (!fs.existsSync(musicPath)) {
+          console.log('Music path does not exist, creating...');
+          fs.mkdirSync(musicPath, { recursive: true });
           resolve([]);
           return;
         }
         
-        const items = fs.readdirSync(radioPath, { withFileTypes: true });
+        const items = fs.readdirSync(musicPath, { withFileTypes: true });
+        console.log('All items in music path:', items.map(i => ({ name: i.name, isDirectory: i.isDirectory() })));
+        
         const folders = items
           .filter(i => i.isDirectory())
           .map(dirent => {
-            const folderPath = path.join(radioPath, dirent.name);
+            const folderPath = path.join(musicPath, dirent.name);
             const stats = fs.statSync(folderPath);
             return {
               name: dirent.name,
@@ -118,22 +127,23 @@ const getRadioFoldersAsync = (): Promise<any[]> => {
           })
           .sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime());
         
+        console.log('Found music folders:', folders);
         resolve(folders);
       } catch (error) {
-        console.error('Error getting radio folders:', error);
+        console.error('Error getting music folders:', error);
         resolve([]);
       }
     });
   });
 };
 
-export const getRadioFolders = async (req: Request, res: Response): Promise<any> => {
+export const getMusicFolders = async (req: Request, res: Response): Promise<any> => {
   try {
-    const folders = await getRadioFoldersAsync();
+    const folders = await getMusicFoldersAsync();
     return res.status(200).json({ success: true, folders });
   } catch (error) {
-    console.error('Error getting radio folders:', error);
-    return res.status(500).json({ error: 'Ошибка при получении списка папок радио' });
+    console.error('Error getting music folders:', error);
+    return res.status(500).json({ error: 'Ошибка при получении списка папок музыки' });
   }
 };
 
@@ -143,7 +153,7 @@ export const getMusicInFolder = async (req: Request, res: Response): Promise<any
     if (!folderName) {
       return res.status(400).json({ error: 'Название папки обязательно' });
     }
-    const folderPath = `./public/retail/radio/${folderName}`;
+    const folderPath = `./public/retail/radio/music/${folderName}`;
     if (!fs.existsSync(folderPath)) {
       return res.status(404).json({ error: 'Папка не найдена' });
     }
@@ -152,7 +162,7 @@ export const getMusicInFolder = async (req: Request, res: Response): Promise<any
       .map(file => {
         const filePath = path.join(folderPath, file);
         const stats = fs.statSync(filePath);
-        return { name: file, size: stats.size, created: stats.birthtime, modified: stats.mtime, path: `/retail/radio/${folderName}/${file}` };
+        return { name: file, size: stats.size, created: stats.birthtime, modified: stats.mtime, path: `/retail/radio/music/${folderName}/${file}` };
       })
       .sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime());
     return res.status(200).json({ success: true, folderName, files });
@@ -162,17 +172,17 @@ export const getMusicInFolder = async (req: Request, res: Response): Promise<any
   }
 };
 
-export const deleteRadioFolder = async (req: Request, res: Response): Promise<any> => {
+export const deleteMusicFolder = async (req: Request, res: Response): Promise<any> => {
   try {
     const { folderName } = req.params;
     if (!folderName) return res.status(400).json({ error: 'Название папки обязательно' });
-    const folderPath = `./public/retail/radio/${folderName}`;
+    const folderPath = `./public/retail/radio/music/${folderName}`;
     if (!fs.existsSync(folderPath)) return res.status(404).json({ error: 'Папка не найдена' });
     fs.rmSync(folderPath, { recursive: true, force: true });
-    return res.status(200).json({ success: true, message: 'Папка радио удалена успешно', folderName });
+    return res.status(200).json({ success: true, message: 'Папка музыки удалена успешно', folderName });
   } catch (error) {
-    console.error('Error deleting radio folder:', error);
-    return res.status(500).json({ error: 'Ошибка при удалении папки радио' });
+    console.error('Error deleting music folder:', error);
+    return res.status(500).json({ error: 'Ошибка при удалении папки музыки' });
   }
 };
 
@@ -318,23 +328,34 @@ const countMusicFilesAsync = (): Promise<number> => {
   return new Promise((resolve) => {
     setImmediate(() => {
       try {
-        const radioPath = './public/retail/radio';
-        if (!fs.existsSync(radioPath)) {
+        const musicPath = './public/retail/radio/music';
+        console.log('Checking music path:', musicPath);
+        console.log('Music path exists:', fs.existsSync(musicPath));
+        
+        if (!fs.existsSync(musicPath)) {
+          console.log('Music path does not exist, creating...');
+          fs.mkdirSync(musicPath, { recursive: true });
           resolve(0);
           return;
         }
         
-        const folders = fs.readdirSync(radioPath, { withFileTypes: true })
+        const folders = fs.readdirSync(musicPath, { withFileTypes: true })
           .filter(dirent => dirent.isDirectory())
           .map(dirent => dirent.name);
         
+        console.log('Found music folders:', folders);
+        
         let totalFiles = 0;
         for (const folder of folders) {
-          const folderPath = path.join(radioPath, folder);
+          const folderPath = path.join(musicPath, folder);
+          console.log('Checking folder:', folderPath);
           const files = fs.readdirSync(folderPath)
             .filter(file => ['.mp3', '.wav', '.ogg', '.m4a', '.flac'].includes(path.extname(file).toLowerCase()));
+          console.log(`Files in ${folder}:`, files);
           totalFiles += files.length;
         }
+        
+        console.log('Total music files found:', totalFiles);
         resolve(totalFiles);
       } catch (error) {
         console.error('Error counting music files:', error);
@@ -588,15 +609,16 @@ export const actionUpdateApp = async (req: Request, res: Response) => {
 
 
 
+
 export const cleanupOldMusicFolders = async () => {
   try {
     console.log('🧹 Запуск очистки старых папок с музыкой...');
     
-    const radioPath = './public/retail/radio';
+    const musicPath = './public/retail/radio/music';
     
     // Проверяем существование папки
-    if (!fs.existsSync(radioPath)) {
-      console.log('📁 Папка retail/radio не существует, пропускаем очистку');
+    if (!fs.existsSync(musicPath)) {
+      console.log('📁 Папка retail/radio/music не существует, пропускаем очистку');
       return;
     }
     
@@ -615,8 +637,8 @@ export const cleanupOldMusicFolders = async () => {
     }
     
     // Формируем название папки за прошлый месяц
-    const lastMonthFolder = `01-${String(lastMonth).padStart(2, '0')}-${lastYear}`;
-    const folderPath = path.join(radioPath, lastMonthFolder);
+    const lastMonthFolder = `${String(lastMonth).padStart(2, '0')}-${lastYear}`;
+    const folderPath = path.join(musicPath, lastMonthFolder);
     
     console.log(`🗑️ Удаляем папку: ${lastMonthFolder}`);
     
@@ -630,7 +652,7 @@ export const cleanupOldMusicFolders = async () => {
     }
     
     // Дополнительно: удаляем папки старше 3 месяцев
-    await cleanupVeryOldFolders(radioPath);
+    await cleanupVeryOldFolders(musicPath);
     
   } catch (error) {
     console.error('❌ Ошибка при очистке папок с музыкой:', error);
@@ -640,9 +662,9 @@ export const cleanupOldMusicFolders = async () => {
 /**
  * Удаляет папки старше 3 месяцев
  */
-const cleanupVeryOldFolders = async (radioPath: string) => {
+const cleanupVeryOldFolders = async (musicPath: string) => {
   try {
-    const items = fs.readdirSync(radioPath, { withFileTypes: true });
+    const items = fs.readdirSync(musicPath, { withFileTypes: true });
     const folders = items.filter(item => item.isDirectory());
     
     const now = new Date();
@@ -651,8 +673,8 @@ const cleanupVeryOldFolders = async (radioPath: string) => {
     for (const folder of folders) {
       const folderName = folder.name;
       
-      // Проверяем формат папки (01-MM-YYYY)
-      const match = folderName.match(/^01-(\d{2})-(\d{4})$/);
+      // Проверяем формат папки (MM-YYYY)
+      const match = folderName.match(/^(\d{2})-(\d{4})$/);
       if (!match) {
         console.log(`⚠️ Пропускаем папку с неверным форматом: ${folderName}`);
         continue;
@@ -663,7 +685,7 @@ const cleanupVeryOldFolders = async (radioPath: string) => {
       
       // Если папка старше 3 месяцев, удаляем её
       if (folderDate < threeMonthsAgo) {
-        const folderPath = path.join(radioPath, folderName);
+        const folderPath = path.join(musicPath, folderName);
         console.log(`🗑️ Удаляем старую папку: ${folderName}`);
         fs.rmSync(folderPath, { recursive: true, force: true });
         console.log(`✅ Старая папка ${folderName} удалена`);
@@ -671,5 +693,166 @@ const cleanupVeryOldFolders = async (radioPath: string) => {
     }
   } catch (error) {
     console.error('❌ Ошибка при удалении старых папок:', error);
+  }
+};
+
+// ===== Radio Streams Functions =====
+
+// Создание папки для радио потоков
+const ensureStreamFolder = (): string => {
+  const streamPath = './public/retail/radio/stream';
+  
+  if (!fs.existsSync(streamPath)) {
+    fs.mkdirSync(streamPath, { recursive: true });
+  }
+  
+  return streamPath;
+};
+
+// Получение всех радио потоков
+export const getRadioStreams = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const streams = await prisma.radioStream.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return res.status(200).json({ success: true, data: streams });
+  } catch (error) {
+    console.error('Error getting radio streams:', error);
+    return res.status(500).json({ error: 'Ошибка при получении радио потоков' });
+  }
+};
+
+// Создание нового радио потока
+export const createRadioStream = async (req: Request, res: Response): Promise<any> => {
+  try {
+    console.log('Creating radio stream with data:', req.body);
+    const { name, branchTypeOfDist, frequencySongs, fadeInDuration, volumeLevel, startDate, endDate } = req.body;
+
+    console.log('Parsed data:', {
+      name,
+      branchTypeOfDist,
+      frequencySongs,
+      fadeInDuration,
+      volumeLevel,
+      startDate,
+      endDate
+    });
+
+    const stream = await prisma.radioStream.create({
+      data: {
+        name,
+        branchTypeOfDist,
+        frequencySongs: frequencySongs || 5,
+        fadeInDuration: fadeInDuration || 2,
+        volumeLevel: volumeLevel || 80,
+        startDate: new Date(startDate),
+        endDate: endDate ? new Date(endDate) : null
+      }
+    });
+
+    console.log('Created stream:', stream);
+    return res.status(201).json({ success: true, data: stream });
+  } catch (error) {
+    console.error('Error creating radio stream:', error);
+    console.error('Error details:', error.message);
+    console.error('Error stack:', error.stack);
+    return res.status(500).json({ error: 'Ошибка при создании радио потока', details: error.message });
+  }
+};
+
+// Загрузка файла ролика для радио потока
+export const uploadStreamRoll = async (req: Request, res: Response): Promise<any> => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Файл не загружен' });
+    }
+
+    const { streamId } = req.body;
+    if (!streamId) {
+      return res.status(400).json({ error: 'ID потока обязателен' });
+    }
+
+    // Создаем папку для потоков
+    const streamPath = ensureStreamFolder();
+
+    const fileName = req.file.originalname;
+    const filePath = path.join(streamPath, fileName);
+
+    // Перемещаем файл из временной папки в папку потоков
+    fs.renameSync(req.file.path, filePath);
+
+    // Обновляем запись в базе данных - записываем название файла
+    const stream = await prisma.radioStream.update({
+      where: { id: streamId },
+      data: { attachment: fileName }
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Ролик загружен успешно',
+      fileName,
+      streamId,
+      path: filePath
+    });
+  } catch (error) {
+    console.error('Error uploading stream roll:', error);
+    return res.status(500).json({ error: 'Ошибка при загрузке ролика' });
+  }
+};
+
+// Обновление радио потока
+export const updateRadioStream = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { id } = req.params;
+    const { name, branchTypeOfDist, frequencySongs, fadeInDuration, volumeLevel, startDate, endDate, isActive } = req.body;
+
+    const stream = await prisma.radioStream.update({
+      where: { id },
+      data: {
+        name,
+        branchTypeOfDist,
+        frequencySongs,
+        fadeInDuration,
+        volumeLevel,
+        startDate: startDate ? new Date(startDate) : undefined,
+        endDate: endDate ? new Date(endDate) : undefined,
+        isActive
+      }
+    });
+
+    return res.status(200).json({ success: true, data: stream });
+  } catch (error) {
+    console.error('Error updating radio stream:', error);
+    return res.status(500).json({ error: 'Ошибка при обновлении радио потока' });
+  }
+};
+
+// Удаление радио потока
+export const deleteRadioStream = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { id } = req.params;
+
+    // Получаем информацию о потоке перед удалением
+    const stream = await prisma.radioStream.findUnique({
+      where: { id }
+    });
+
+    if (stream && stream.attachment) {
+      // Удаляем файл ролика
+      const filePath = path.join('./public/retail/stream', stream.attachment);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+
+    await prisma.radioStream.delete({
+      where: { id }
+    });
+
+    return res.status(200).json({ success: true, message: 'Радио поток удален' });
+  } catch (error) {
+    console.error('Error deleting radio stream:', error);
+    return res.status(500).json({ error: 'Ошибка при удалении радио потока' });
   }
 };

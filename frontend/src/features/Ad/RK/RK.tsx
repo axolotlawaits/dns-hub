@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { API } from '../../../config/constants';
 import { useUserContext } from '../../../hooks/useUserContext';
+import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { notificationSystem } from '../../../utils/Push';
-import { Button, Title, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Paper, Badge, Image, Avatar } from '@mantine/core';
+import { Button, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Paper, Badge, Image, Avatar } from '@mantine/core';
 import RKCalendarModal from './RKCalendarNew';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
-import { IconPencil, IconTrash, IconUpload, IconDownload, IconPlus, IconCalendar, IconArchive, IconEye } from '@tabler/icons-react';
+import { IconPencil, IconTrash, IconUpload, IconDownload, IconPlus, IconEye } from '@tabler/icons-react';
 import { DynamicFormModal, type FormConfig } from '../../../utils/formModal';
 import { FilePreviewModal } from '../../../utils/FilePreviewModal';
 import { DndProviderWrapper } from '../../../utils/dnd';
 import { FilterGroup } from '../../../utils/filter';
+import FloatingActionButton from '../../../components/FloatingActionButton';
 import type { ColumnFiltersState } from '@tanstack/react-table';
 
 interface User {
@@ -51,6 +53,47 @@ const AttachmentCard = React.memo(function AttachmentCard({
   const fileUrl = `${apiBase}/${normalizedPath}`;
   const isDocument = att.typeAttachment === 'DOCUMENT';
 
+  // Функция для определения типа файла и получения иконки
+  const getFileIcon = (fileName: string) => {
+    const extension = fileName.split('.').pop()?.toLowerCase() || '';
+    
+    // Изображения - показываем превью
+    if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'].includes(extension)) {
+      return null; // Будем показывать Image компонент
+    }
+    
+    // PDF файлы
+    if (extension === 'pdf') {
+      return '📄';
+    }
+    
+    // Документы Word
+    if (['doc', 'docx'].includes(extension)) {
+      return '📝';
+    }
+    
+    // Excel файлы
+    if (['xls', 'xlsx'].includes(extension)) {
+      return '📊';
+    }
+    
+    // Текстовые файлы
+    if (['txt', 'rtf'].includes(extension)) {
+      return '📄';
+    }
+    
+    // Архивы
+    if (['zip', 'rar', '7z', 'tar', 'gz'].includes(extension)) {
+      return '📦';
+    }
+    
+    // По умолчанию - общая иконка документа
+    return '📄';
+  };
+
+  const fileIcon = getFileIcon(fileName);
+  const isImageFile = !fileIcon;
+
   return (
     <Paper
       withBorder
@@ -74,38 +117,124 @@ const AttachmentCard = React.memo(function AttachmentCard({
       </ActionIcon>
       <Group justify="flex-start" align="center">
         <Group gap={12} align="center">
-          <Image 
-            src={fileUrl} 
-            h={70} 
-            w={100} 
-            fit="contain" 
-            radius="sm" 
-            alt={fileName}
-            onError={(e) => {
-              console.error('Ошибка загрузки изображения в AttachmentCard:', fileUrl);
-              console.error('Исходный путь:', att.source);
-              console.error('Нормализованный путь:', normalizedPath);
-              // Заменяем на placeholder при ошибке
-              e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjcwIiB2aWV3Qm94PSIwIDAgMTAwIDcwIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHdpZHRoPSIxMDAiIGhlaWdodD0iNzAiIGZpbGw9IiNmNWY1ZjUiLz48dGV4dCB4PSI1MCIgeT0iNDAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzk5OTk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+0JjQt9C+0LHRgNCw0LbQsCDRgdC+0LfQtNCwPC90ZXh0Pjwvc3ZnPg==';
-            }}
-          />
+          {isImageFile ? (
+            <Image 
+              src={fileUrl} 
+              h={70} 
+              w={100} 
+              fit="contain" 
+              radius="sm" 
+              alt={fileName}
+              onError={(e) => {
+                console.error('Ошибка загрузки изображения в AttachmentCard:', fileUrl);
+                console.error('Исходный путь:', att.source);
+                console.error('Нормализованный путь:', normalizedPath);
+                // Заменяем на placeholder при ошибке
+                e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjcwIiB2aWV3Qm94PSIwIDAgMTAwIDcwIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHdpZHRoPSIxMDAiIGhlaWdodD0iNzAiIGZpbGw9IiNmNWY1ZjUiLz48dGV4dCB4PSI1MCIgeT0iNDAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzk5OTk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+0JjQt9C+0LHRgNCw0LbQsCDRgdC+0LfQtNCwPC90ZXh0Pjwvc3ZnPg==';
+              }}
+            />
+          ) : (
+            <Box
+              style={{
+                width: '100px',
+                height: '70px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.1) 100%)',
+                borderRadius: '8px',
+                border: '2px solid rgba(59, 130, 246, 0.2)',
+                fontSize: '24px',
+                color: 'var(--color-blue-600)',
+                boxShadow: '0 2px 8px rgba(59, 130, 246, 0.15)',
+                padding: '8px'
+              }}
+            >
+              <Text style={{ fontSize: '24px', marginBottom: '4px' }}>{fileIcon}</Text>
+              <Text 
+                size="xs" 
+                style={{ 
+                  color: 'var(--color-blue-700)', 
+                  textAlign: 'center',
+                  lineHeight: 1.2,
+                  wordBreak: 'break-word',
+                  maxWidth: '90px'
+                }}
+              >
+                {fileName.length > 12 ? fileName.substring(0, 12) + '...' : fileName}
+              </Text>
+            </Box>
+          )}
         </Group>
       </Group>
       <Group gap="sm" mt={6} wrap="wrap" align="center">
         {att.sizeXY && <Text size="xs" c="dimmed">Размер: {att.sizeXY}</Text>}
         {att.clarification && <Text size="xs" c="dimmed">{att.clarification}</Text>}
         {isDocument && (
-          <Badge color="gray" variant="light" style={{ textTransform: 'none' }}>
+          <Badge 
+            color="blue" 
+            variant="light" 
+            style={{ 
+              textTransform: 'none',
+              fontWeight: '500',
+              borderRadius: '8px',
+              padding: '4px 12px'
+            }}
+          >
             Документ
           </Badge>
         )}
         {!isDocument && att.typeStructure?.name && (
-          <Badge color={att.typeStructure?.colorHex || 'blue'} variant="outline" style={{ textTransform: 'none' }}>
+          <Badge 
+            color={(() => {
+              const typeName = att.typeStructure?.name?.toLowerCase() || '';
+              if (typeName.includes('баннер')) return 'blue';
+              if (typeName.includes('лайтбокс')) return 'yellow';
+              if (typeName.includes('объемные световые элементы')) return 'purple';
+              if (typeName.includes('объемные буквы')) return 'green';
+              if (typeName.includes('пневмофигура')) return 'pink';
+              if (typeName.includes('другое')) return 'gray';
+              return 'blue';
+            })()} 
+            variant="outline" 
+            style={{ 
+              textTransform: 'none',
+              fontWeight: '500',
+              borderRadius: '8px',
+              padding: '4px 12px',
+              borderWidth: '1px'
+            }}
+          >
             {att.typeStructure.name}
           </Badge>
         )}
         {!isDocument && att.approvalStatus?.name && (
-          <Badge color={att.approvalStatus?.colorHex || 'gray'} variant="light" style={{ textTransform: 'none' }}>
+          <Badge 
+            color={(() => {
+              const statusName = att.approvalStatus?.name?.toLowerCase() || '';
+              if (statusName.includes('согласован') || statusName.includes('одобрен') || statusName.includes('утвержден')) {
+                return 'green';
+              }
+              if (statusName.includes('отклонен') || statusName.includes('отказ')) {
+                return 'red';
+              }
+              if (statusName.includes('ожидает') || statusName.includes('проверка') || statusName.includes('рассмотрение')) {
+                return 'yellow';
+              }
+              if (statusName.includes('черновик') || statusName.includes('в работе')) {
+                return 'blue';
+              }
+              return 'gray';
+            })()} 
+            variant="light" 
+            style={{ 
+              textTransform: 'none',
+              fontWeight: '500',
+              borderRadius: '8px',
+              padding: '4px 12px'
+            }}
+          >
             {att.approvalStatus.name}
           </Badge>
         )}
@@ -192,6 +321,7 @@ const DEFAULT_RK_FORM: RKFormValues = {
 
 const RKList: React.FC = () => {
   const { user } = useUserContext();
+  const { setHeader, clearHeader } = usePageHeader();
   const [rkData, setRkData] = useState<RKData[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -202,7 +332,6 @@ const RKList: React.FC = () => {
   const [branchOptions, setBranchOptions] = useState<SelectOption[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [fileUploading, setFileUploading] = useState(false);
-  const [showArchive, setShowArchive] = useState(false);
   const [calendarOpened, calendarHandlers] = useDisclosure(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
@@ -217,6 +346,8 @@ const RKList: React.FC = () => {
   const [imagePreviewOpened, imagePreviewHandlers] = useDisclosure(false);
   const [filePreviewOpened, filePreviewHandlers] = useDisclosure(false);
   const [filePreviewData, setFilePreviewData] = useState<{ files: string[], currentIndex: number } | null>(null);
+  const [constructionDocuments, setConstructionDocuments] = useState<Record<string, File[]>>({});
+  const [existingDocuments, setExistingDocuments] = useState<Record<string, any[]>>({});
 
   const maskSizeXY = useCallback((raw: string) => {
     const input = String(raw || '').toLowerCase();
@@ -403,30 +534,13 @@ const RKList: React.FC = () => {
         leftSection: <IconUpload size={18} />,
          fileFields: [
           {
-            name: 'typeAttachment',
-            label: 'Тип вложения',
-            type: 'select',
-            required: true,
-            options: [
-              { value: 'CONSTRUCTION', label: 'Конструкция' },
-              { value: 'DOCUMENT', label: 'Документ' },
-            ],
-            placeholder: 'Выберите тип',
-            searchable: false,
-            clearable: false,
-            allowDeselect: false,
-            onChange: (value: any) => {
-              console.log('Type attachment changed:', value);
-            }
-          },
-          {
             name: 'sizeXY',
             label: 'Размер',
             type: 'text',
-            required: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION',
+            required: true,
             placeholder: '35 | 35x35 | 35x35x35',
             mask: maskSizeXY,
-            visible: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION'
+            visible: () => true
           },
           {
             name: 'clarification',
@@ -434,33 +548,33 @@ const RKList: React.FC = () => {
             type: 'text',
             required: false,
             placeholder: 'Описание файла',
-            visible: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION'
+            visible: () => true
           },
           {
             name: 'typeStructureId',
             label: 'Тип конструкции (для файла)',
             type: 'select',
-            required: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION',
+            required: true,
             options: typeOptions,
-            visible: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION',
+            visible: () => true,
             placeholder: 'Выберите тип конструкции'
           },
           {
             name: 'approvalStatusId',
             label: 'Статус утверждения (для файла)',
             type: 'select',
-            required: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION',
+            required: true,
             options: approvalOptions,
-            visible: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION',
+            visible: () => true,
             placeholder: 'Выберите статус'
           },
           {
             name: 'agreedTo',
             label: 'Дата согласования (для файла)',
             type: 'date',
-            required: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION',
-            visible: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION'
-          }
+            required: true,
+            visible: () => true
+          },
         ],
       },
     ],
@@ -497,30 +611,13 @@ const RKList: React.FC = () => {
         leftSection: <IconUpload size={18} />,
          fileFields: [
           {
-            name: 'typeAttachment',
-            label: 'Тип вложения',
-            type: 'select',
-            required: true,
-            options: [
-              { value: 'CONSTRUCTION', label: 'Конструкция' },
-              { value: 'DOCUMENT', label: 'Документ' },
-            ],
-            placeholder: 'Выберите тип',
-            searchable: false,
-            clearable: false,
-            allowDeselect: false,
-            onChange: (value: any) => {
-              console.log('Type attachment changed:', value);
-            }
-          },
-          {
             name: 'sizeXY',
             label: 'Размер',
             type: 'text',
-            required: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION',
+            required: true,
             placeholder: '35 | 35x35 | 35x35x35',
             mask: maskSizeXY,
-            visible: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION'
+            visible: () => true
           },
           {
             name: 'clarification',
@@ -528,30 +625,30 @@ const RKList: React.FC = () => {
             type: 'text',
             required: false,
             placeholder: 'Описание файла',
-            visible: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION'
+            visible: () => true
           },
           {
             name: 'typeStructureId',
             label: 'Тип конструкции (для файла)',
             type: 'select',
-            required: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION',
+            required: true,
             options: typeOptions,
-            visible: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION'
+            visible: () => true
           },
           {
             name: 'approvalStatusId',
             label: 'Статус утверждения (для файла)',
             type: 'select',
-            required: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION',
+            required: true,
             options: approvalOptions,
-            visible: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION'
+            visible: () => true
           },
           {
             name: 'agreedTo',
             label: 'Дата согласования (для файла)',
             type: 'date',
-            required: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION',
-            visible: (meta: any) => meta?.typeAttachment === 'CONSTRUCTION'
+            required: true,
+            visible: () => true
           }
         ],
       },
@@ -564,20 +661,73 @@ const RKList: React.FC = () => {
     modals.create[1].open();
   }, [modals.create]);
 
+  // Устанавливаем заголовок страницы
+  useEffect(() => {
+    setHeader({
+      title: 'Реестр конструкций',
+      subtitle: 'Управление рекламными конструкциями',
+      actionButton: {
+        text: 'Добавить конструкцию',
+        onClick: openCreateModal,
+        icon: <IconPlus size={18} />
+      }
+    });
+
+    return () => clearHeader();
+  }, [setHeader, clearHeader]);
+
   const openEditModal = useCallback((rk: RKData) => {
     setSelectedRK(rk);
+    
+    // Инициализируем constructionDocuments на основе существующих данных
+    const existingAttachments = (rk as any).attachments || (rk as any).rkAttachment || [];
+    console.log('🔍 Existing attachments:', existingAttachments);
+    const constructionDocuments: Record<string, File[]> = {};
+    const existingDocumentsMap: Record<string, any[]> = {};
+    
+    // Группируем документы по родительским конструкциям
+    existingAttachments.forEach((attachment: any) => {
+      if (attachment.typeAttachment === 'CONSTRUCTION') {
+        // Это конструкция - создаем пустой массив для документов
+        constructionDocuments[attachment.id] = [];
+        existingDocumentsMap[attachment.id] = [];
+        
+        // Добавляем дочерние документы, если они есть
+        if (attachment.childAttachments && attachment.childAttachments.length > 0) {
+          console.log(`🔍 Construction ${attachment.id} has ${attachment.childAttachments.length} child attachments:`, attachment.childAttachments);
+          existingDocumentsMap[attachment.id] = attachment.childAttachments;
+        }
+      } else if (attachment.parentAttachmentId) {
+        // Это документ - добавляем к родительской конструкции
+        if (!constructionDocuments[attachment.parentAttachmentId]) {
+          constructionDocuments[attachment.parentAttachmentId] = [];
+        }
+        if (!existingDocumentsMap[attachment.parentAttachmentId]) {
+          existingDocumentsMap[attachment.parentAttachmentId] = [];
+        }
+        // Добавляем существующий документ
+        existingDocumentsMap[attachment.parentAttachmentId].push(attachment);
+      }
+    });
+    
+    // Сохраняем существующие документы в состоянии для передачи в форму
+    console.log('🔍 Final constructionDocuments:', constructionDocuments);
+    console.log('🔍 Final existingDocumentsMap:', existingDocumentsMap);
+    setConstructionDocuments(constructionDocuments);
+    setExistingDocuments(existingDocumentsMap);
+    
     setRkForm({
       userAddId: rk.userAddId,
       userUpdatedId: rk.userUpdatedId,
       rrs: rk.branch?.rrs || '',
       branchId: rk.branchId,
       agreedTo: dayjs(rk.agreedTo).format('YYYY-MM-DDTHH:mm'),
-      attachments: ((rk as any).attachments || (rk as any).rkAttachment || []).map((a: any) => ({
+      attachments: existingAttachments.filter((a: any) => a.typeAttachment === 'CONSTRUCTION').map((a: any) => ({
         id: a.id,
         source: a.source,
         meta: {
-        typeAttachment: a.typeAttachment,
-        sizeXY: a.sizeXY,
+          typeAttachment: 'CONSTRUCTION',
+          sizeXY: a.sizeXY,
           clarification: a.clarification,
           typeStructureId: a.typeStructureId,
           approvalStatusId: a.approvalStatusId,
@@ -625,13 +775,26 @@ const RKList: React.FC = () => {
       const attachmentsMeta = values.attachments
         .filter(att => att.source instanceof File)
         .map(att => ({
-          typeAttachment: att.meta?.typeAttachment || 'DOCUMENT',
-          sizeXY: att.meta?.typeAttachment === 'CONSTRUCTION' ? (att.meta?.sizeXY ?? '') : '',
+          sizeXY: att.meta?.sizeXY ?? '',
           clarification: att.meta?.clarification ?? '',
-          typeStructureId: att.meta?.typeAttachment === 'CONSTRUCTION' ? (att.meta?.typeStructureId || '') : '',
-          approvalStatusId: att.meta?.typeAttachment === 'CONSTRUCTION' ? (att.meta?.approvalStatusId || '') : '',
+          typeStructureId: att.meta?.typeStructureId || '',
+          approvalStatusId: att.meta?.approvalStatusId || '',
           agreedTo: att.meta?.agreedTo || '',
         }));
+
+      // Add construction files first (with metadata)
+      values.attachments.forEach(attachment => {
+        if (attachment.source instanceof File) {
+          formData.append('files', attachment.source);
+        }
+      });
+
+      // Add document files after construction files (without metadata)
+      Object.entries(constructionDocuments).forEach(([, documents]) => {
+        documents.forEach((doc) => {
+          formData.append('files', doc);
+        });
+      });
 
       // For create vs edit, backend expects different field names
       if (mode === 'create') {
@@ -645,11 +808,10 @@ const RKList: React.FC = () => {
           .filter(att => !(att.source instanceof File) && att.id)
           .map(att => ({
             id: att.id as string,
-            typeAttachment: att.meta?.typeAttachment || (att.meta?.agreedTo ? 'CONSTRUCTION' : 'DOCUMENT'),
-            sizeXY: att.meta?.typeAttachment === 'CONSTRUCTION' ? (att.meta?.sizeXY ?? undefined) : undefined,
+            sizeXY: att.meta?.sizeXY ?? undefined,
             clarification: att.meta?.clarification ?? undefined,
-            typeStructureId: att.meta?.typeAttachment === 'CONSTRUCTION' ? (att.meta?.typeStructureId ?? undefined) : undefined,
-            approvalStatusId: att.meta?.typeAttachment === 'CONSTRUCTION' ? (att.meta?.approvalStatusId ?? undefined) : undefined,
+            typeStructureId: att.meta?.typeStructureId ?? undefined,
+            approvalStatusId: att.meta?.approvalStatusId ?? undefined,
             agreedTo: att.meta?.agreedTo ?? undefined,
           }));
         if (existingAttachmentsMeta.length > 0) {
@@ -694,6 +856,7 @@ const RKList: React.FC = () => {
       }
 
       setRkForm(DEFAULT_RK_FORM);
+      setConstructionDocuments({});
       modals[mode][1].close();
       showNotification('success', mode === 'create' ? 'Запись успешно добавлена' : 'Запись успешно обновлена');
     } catch (error) {
@@ -713,8 +876,8 @@ const RKList: React.FC = () => {
   };
 
   const baseList = useMemo(() => {
-    // Активные по умолчанию, Архив при включенном флаге
-    let list = (rkData || []).filter(rk => showArchive ? isArchivedBranch(rk) : !isArchivedBranch(rk));
+    // Показываем только активные записи
+    let list = (rkData || []).filter(rk => !isArchivedBranch(rk));
 
     // Применяем дополнительные фильтры: rrs, branch, city, dates, statuses, types
     const getFilter = (id: string) => columnFilters.find(f => f.id === id)?.value as any;
@@ -754,7 +917,7 @@ const RKList: React.FC = () => {
     }
 
     return list;
-  }, [rkData, showArchive, columnFilters]);
+  }, [rkData, columnFilters]);
 
   const filteredData = useMemo(() => {
     const startIdx = (currentPage - 1) * DEFAULT_PAGE_SIZE;
@@ -901,141 +1064,6 @@ return (
     >
       {loading && <LoadingOverlay visible />}
       
-      {/* Современный заголовок */}
-      <Box
-        style={{
-          background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
-          borderRadius: '16px',
-          padding: '24px',
-          marginBottom: '24px',
-          border: '1px solid var(--theme-border-primary)',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-          position: 'relative',
-          overflow: 'hidden'
-        }}
-      >
-        {/* Декоративные элементы */}
-        <Box
-          style={{
-            position: 'absolute',
-            top: '-20px',
-            right: '-20px',
-            width: '120px',
-            height: '120px',
-            background: 'rgba(255, 255, 255, 0.1)',
-            borderRadius: '50%',
-            zIndex: 1
-          }}
-        />
-        <Box
-          style={{
-            position: 'absolute',
-            bottom: '-30px',
-            left: '-30px',
-            width: '80px',
-            height: '80px',
-            background: 'rgba(255, 255, 255, 0.05)',
-            borderRadius: '50%',
-            zIndex: 1
-          }}
-        />
-        
-        <Group justify="space-between" align="center" style={{ position: 'relative', zIndex: 2 }}>
-          <Group gap="16px" align="center">
-            <Box
-              style={{
-                width: '48px',
-                height: '48px',
-                background: 'rgba(255, 255, 255, 0.2)',
-                borderRadius: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '24px'
-              }}
-            >
-              🏗️
-            </Box>
-            <Box>
-              <Title 
-                order={2} 
-                style={{ 
-                  color: 'white', 
-                  margin: 0,
-                  fontSize: '28px',
-                  fontWeight: '700'
-                }}
-              >
-                Реестр конструкций
-              </Title>
-              <Text 
-                style={{ 
-                  color: 'rgba(255, 255, 255, 0.8)', 
-                  fontSize: '16px',
-                  marginTop: '4px'
-                }}
-              >
-                Управление конструкциями и документацией
-              </Text>
-            </Box>
-          </Group>
-          
-          <Group gap="12px">
-            <Button
-              size="md"
-              radius="xl"
-              variant={showArchive ? 'filled' : 'outline'}
-              onClick={() => { setCurrentPage(1); setShowArchive(v => !v); }}
-              style={{
-                background: showArchive 
-                  ? 'rgba(255, 255, 255, 0.3)' 
-                  : 'rgba(255, 255, 255, 0.1)',
-                color: 'white',
-                border: '1px solid rgba(255, 255, 255, 0.3)',
-                backdropFilter: 'blur(10px)',
-                fontWeight: '600'
-              }}
-              leftSection={<IconArchive size={18} />}
-            >
-              Архив
-            </Button>
-            <Button
-              size="md"
-              radius="xl"
-              variant="outline"
-              onClick={calendarHandlers.open}
-              style={{
-                background: 'rgba(255, 255, 255, 0.1)',
-                color: 'white',
-                border: '1px solid rgba(255, 255, 255, 0.3)',
-                backdropFilter: 'blur(10px)',
-                fontWeight: '600'
-              }}
-              leftSection={<IconCalendar size={18} />}
-            >
-              Календарь
-            </Button>
-            <Button
-              size="lg"
-              radius="xl"
-              onClick={openCreateModal}
-              loading={fileUploading}
-              style={{
-                background: 'rgba(255, 255, 255, 0.2)',
-                color: 'white',
-                border: '1px solid rgba(255, 255, 255, 0.3)',
-                backdropFilter: 'blur(10px)',
-                fontWeight: '600',
-                fontSize: '16px',
-                padding: '12px 24px'
-              }}
-              leftSection={<IconPlus size={20} />}
-            >
-              Добавить конструкцию
-            </Button>
-          </Group>
-        </Group>
-      </Box>
       {/* Фильтры */}
       {rkData.length > 0 && (
         <Box
@@ -1048,31 +1076,6 @@ return (
             marginBottom: '20px'
           }}
         >
-          <Group gap="12px" align="center" style={{ marginBottom: '16px' }}>
-            <Box
-              style={{
-                width: '32px',
-                height: '32px',
-                background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
-                borderRadius: '8px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '16px'
-              }}
-            >
-              🔍
-            </Box>
-            <Text 
-              style={{ 
-                fontSize: '18px', 
-                fontWeight: '600',
-                color: 'var(--theme-text-primary)'
-              }}
-            >
-              Фильтры
-            </Text>
-          </Group>
           <FilterGroup
             filters={[
               {
@@ -1309,12 +1312,13 @@ return (
                     <Stack gap="lg" style={{ minWidth: '400px', maxWidth: '500px' }}>
                         {Array.isArray(rk.rkAttachment) && rk.rkAttachment.length > 0 && (() => {
                           // Группируем вложения по конструкциям
-                          const constructions = rk.rkAttachment.filter((a: any) => a.typeAttachment !== 'DOCUMENT');
+                          const constructions = rk.rkAttachment.filter((a: any) => a.typeAttachment === 'CONSTRUCTION');
                           const documents = rk.rkAttachment.filter((a: any) => a.typeAttachment === 'DOCUMENT');
                           
-                          // Создаем группы: каждая конструкция + её документы через childAttachments
+                          // Создаем группы: каждая конструкция + её документы через parentAttachmentId
                           const constructionGroups = constructions.map(construction => {
-                            const relatedDocuments = construction.childAttachments || [];
+                            // Находим документы, которые привязаны к этой конструкции
+                            const relatedDocuments = documents.filter((doc: any) => doc.parentAttachmentId === construction.id);
                             return {
                               construction,
                               documents: relatedDocuments
@@ -1328,47 +1332,168 @@ return (
                             <>
                               {/* Группы конструкций с их документами */}
                               {constructionGroups.map((group, groupIndex) => (
-                                <Box key={groupIndex}>
+                                <Box 
+                                  key={groupIndex}
+                                  style={{
+                                    background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
+                                    borderRadius: '20px',
+                                    padding: '24px',
+                                    border: '1px solid var(--theme-border)',
+                                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+                                    marginBottom: '24px',
+                                    position: 'relative',
+                                    backdropFilter: 'blur(10px)',
+                                    WebkitBackdropFilter: 'blur(10px)',
+                                    overflow: 'hidden'
+                                  }}
+                                >
+                                  {/* Декоративная полоса сверху */}
+                                  <Box
+                                    style={{
+                                      position: 'absolute',
+                                      top: 0,
+                                      left: 0,
+                                      right: 0,
+                                      height: '3px',
+                                      background: (() => {
+                                        const typeName = group.construction.typeStructure?.name || '';
+                                        if (typeName.includes('Баннер')) return 'linear-gradient(90deg, #3b82f6, #1d4ed8, #1e40af)';
+                                        if (typeName.includes('Другое')) return 'linear-gradient(90deg, #6b7280, #4b5563, #374151)';
+                                        if (typeName.includes('Лайтбокс')) return 'linear-gradient(90deg, #eab308, #ca8a04, #a16207)';
+                                        if (typeName.includes('Объемные световые элементы')) return 'linear-gradient(90deg, #9333ea, #7c3aed, #6d28d9)';
+                                        if (typeName.includes('Объемные буквы')) return 'linear-gradient(90deg, #22c55e, #16a34a, #15803d)';
+                                        if (typeName.includes('Пневмофигура')) return 'linear-gradient(90deg, #ec4899, #db2777, #be185d)';
+                                        return 'linear-gradient(90deg, #f97316, #ea580c, #dc2626)';
+                                      })(),
+                                      borderRadius: '20px 20px 0 0'
+                                    }}
+                                  />
                                   {/* Заголовок конструкции */}
-                                  <Group gap="12px" align="center" style={{ marginBottom: '12px' }}>
+                                  <Group gap="16px" align="center" style={{ marginBottom: '20px', marginTop: '8px' }}>
                                     <Box
                                       style={{
-                                        width: '28px',
-                                        height: '28px',
-                                        background: 'linear-gradient(135deg, var(--color-orange-500), var(--color-orange-600))',
-                                        borderRadius: '8px',
+                                        width: '40px',
+                                        height: '40px',
+                                        background: (() => {
+                                          const typeName = group.construction.typeStructure?.name || '';
+                                          if (typeName.includes('Баннер')) return 'linear-gradient(135deg, #3b82f6, #1d4ed8)';
+                                          if (typeName.includes('Другое')) return 'linear-gradient(135deg, #6b7280, #4b5563)';
+                                          if (typeName.includes('Лайтбокс')) return 'linear-gradient(135deg, #eab308, #ca8a04)';
+                                          if (typeName.includes('Объемные световые элементы')) return 'linear-gradient(135deg, #9333ea, #7c3aed)';
+                                          if (typeName.includes('Объемные буквы')) return 'linear-gradient(135deg, #22c55e, #16a34a)';
+                                          if (typeName.includes('Пневмофигура')) return 'linear-gradient(135deg, #ec4899, #db2777)';
+                                          return 'linear-gradient(135deg, #f97316, #ea580c)';
+                                        })(),
+                                        borderRadius: '12px',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        fontSize: '16px'
+                                        fontSize: '20px',
+                                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                                        border: '2px solid rgba(255, 255, 255, 0.2)'
                                       }}
                                     >
-                                      🏗️
+                                      {(() => {
+                                        const typeName = group.construction.typeStructure?.name || '';
+                                        if (typeName.includes('Баннер')) return '📢';
+                                        if (typeName.includes('Другое')) return '📋';
+                                        if (typeName.includes('Лайтбокс')) return '💡';
+                                        if (typeName.includes('Объемные световые элементы')) return '✨';
+                                        if (typeName.includes('Объемные буквы')) return '🔤';
+                                        if (typeName.includes('Пневмофигура')) return '🎈';
+                                        return '🏗️';
+                                      })()}
                                     </Box>
-                                    <Text size="lg" fw={700} style={{ color: 'var(--theme-text-primary)' }}>
-                                      {group.construction.typeStructure?.name || 'Конструкция'} 
-                                      {group.documents.length > 0 && ` (${group.documents.length} документов)`}
-                                    </Text>
+                                    <Box style={{ flex: 1 }}>
+                                      <Text size="xl" fw={700} style={{ color: 'var(--theme-text-primary)', marginBottom: '4px' }}>
+                                        {group.construction.typeStructure?.name || 'Конструкция'}
+                                      </Text>
+                                    </Box>
                                   </Group>
                                   
                                   {/* Конструкция */}
-                                  <Group gap="12px" wrap="wrap" style={{ marginBottom: '12px' }}>
+                                  <Box style={{ marginBottom: '16px' }}>
                                     <AttachmentCard
                                       key={group.construction.id}
                                       att={group.construction as any}
                                       apiBase={API}
                                       onOpenFilePreview={openFilePreview}
                                     />
-                                  </Group>
+                                  </Box>
                                   
                                   {/* Документы этой конструкции */}
                                   {group.documents.length > 0 && (
-                                    <Box style={{ marginLeft: '20px', marginBottom: '16px' }}>
-                                      <Text size="sm" fw={600} style={{ color: 'var(--theme-text-secondary)', marginBottom: '8px' }}>
-                                        Документы:
-                                      </Text>
+                                    <Box 
+                                      style={{ 
+                                        marginTop: '20px',
+                                        padding: '20px',
+                                        background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(37, 99, 235, 0.05) 100%)',
+                                        borderRadius: '16px',
+                                        border: '1px solid rgba(59, 130, 246, 0.2)',
+                                        position: 'relative',
+                                        backdropFilter: 'blur(5px)',
+                                        WebkitBackdropFilter: 'blur(5px)',
+                                        boxShadow: '0 4px 12px rgba(59, 130, 246, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
+                                      }}
+                                    >
+                                      {/* Визуальная связь */}
+                                      <Box
+                                        style={{
+                                          position: 'absolute',
+                                          top: '-8px',
+                                          left: '20px',
+                                          width: '2px',
+                                          height: '8px',
+                                          background: (() => {
+                                            const typeName = group.construction.typeStructure?.name || '';
+                                            if (typeName.includes('Баннер')) return 'linear-gradient(180deg, var(--color-blue-400), var(--color-blue-500))';
+                                            if (typeName.includes('Другое')) return 'linear-gradient(180deg, var(--color-gray-400), var(--color-gray-500))';
+                                            if (typeName.includes('Лайтбокс')) return 'linear-gradient(180deg, var(--color-yellow-400), var(--color-yellow-500))';
+                                            if (typeName.includes('Объемные световые элементы')) return 'linear-gradient(180deg, var(--color-purple-400), var(--color-purple-500))';
+                                            if (typeName.includes('Объемные буквы')) return 'linear-gradient(180deg, var(--color-green-400), var(--color-green-500))';
+                                            if (typeName.includes('Пневмофигура')) return 'linear-gradient(180deg, var(--color-pink-400), var(--color-pink-500))';
+                                            return 'linear-gradient(180deg, var(--color-orange-400), var(--color-blue-400))'; // По умолчанию
+                                          })(),
+                                          borderRadius: '1px'
+                                        }}
+                                      />
+                                      
+                                      <Group gap="12px" align="center" style={{ marginBottom: '16px' }}>
+                                        <Box
+                                          style={{
+                                            width: '24px',
+                                            height: '24px',
+                                            background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+                                            borderRadius: '8px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            fontSize: '14px',
+                                            boxShadow: '0 2px 8px rgba(59, 130, 246, 0.3)',
+                                            border: '1px solid rgba(255, 255, 255, 0.2)'
+                                          }}
+                                        >
+                                          📄
+                                        </Box>
+                                        <Text size="md" fw={600} style={{ color: 'var(--theme-text-primary)' }}>
+                                          Документы к конструкции:
+                                        </Text>
+                                        <Box
+                                          style={{
+                                            background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(37, 99, 235, 0.1))',
+                                            borderRadius: '16px',
+                                            padding: '4px 12px',
+                                            border: '1px solid rgba(59, 130, 246, 0.2)'
+                                          }}
+                                        >
+                                          <Text size="xs" fw={600} style={{ color: 'var(--color-blue-600)' }}>
+                                            {group.documents.length} файлов
+                                          </Text>
+                                        </Box>
+                                      </Group>
+                                      
                                       <Group gap="8px" wrap="wrap">
-                                        {group.documents.slice(0, 3).map((doc: any, docIndex: number) => {
+                                        {group.documents.slice(0, 4).map((doc: any, docIndex: number) => {
                                           const sourcePath = String(doc.source || '');
                                           const normalizedPath = sourcePath
                                             .replace(/\\/g, '/')
@@ -1379,24 +1504,30 @@ return (
                                             <Box
                                               key={docIndex}
                                               style={{
-                                                width: '80px',
-                                                height: '60px',
-                                                borderRadius: '8px',
+                                                width: '100px',
+                                                height: '80px',
+                                                borderRadius: '12px',
                                                 overflow: 'hidden',
-                                                border: '1px solid var(--theme-border-secondary)',
+                                                border: '2px solid rgba(59, 130, 246, 0.3)',
                                                 cursor: 'pointer',
-                                                transition: 'all 0.2s ease',
-                                                position: 'relative'
+                                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                position: 'relative',
+                                                background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.7))',
+                                                boxShadow: '0 4px 12px rgba(59, 130, 246, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+                                                backdropFilter: 'blur(5px)',
+                                                WebkitBackdropFilter: 'blur(5px)'
                                               }}
                                               onMouseEnter={(e) => {
-                                                e.currentTarget.style.transform = 'scale(1.05)';
-                                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.1)';
-                                                e.currentTarget.style.borderColor = 'var(--color-blue-300)';
+                                                e.currentTarget.style.transform = 'scale(1.05) translateY(-3px)';
+                                                e.currentTarget.style.boxShadow = '0 8px 24px rgba(59, 130, 246, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.3)';
+                                                e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.5)';
+                                                e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.8))';
                                               }}
                                               onMouseLeave={(e) => {
-                                                e.currentTarget.style.transform = 'scale(1)';
-                                                e.currentTarget.style.boxShadow = 'none';
-                                                e.currentTarget.style.borderColor = 'var(--theme-border-secondary)';
+                                                e.currentTarget.style.transform = 'scale(1) translateY(0)';
+                                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.2)';
+                                                e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.3)';
+                                                e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.7))';
                                               }}
                                               onClick={() => openFilePreview([fileUrl], 0)}
                                             >
@@ -1417,24 +1548,70 @@ return (
                                                       display: flex; 
                                                       align-items: center; 
                                                       justify-content: center; 
-                                                      background: var(--color-blue-100); 
+                                                      background: linear-gradient(135deg, var(--color-blue-100), var(--color-blue-200)); 
                                                       color: var(--color-blue-600);
-                                                      font-size: 12px;
+                                                      font-size: 14px;
                                                       text-align: center;
-                                                      padding: 4px;
+                                                      padding: 8px;
                                                     ">
                                                       📄
                                                     </div>
                                                   `;
                                                 }}
                                               />
+                                              {/* Индикатор связи */}
+                                              <Box
+                                                style={{
+                                                  position: 'absolute',
+                                                  top: '-2px',
+                                                  right: '-2px',
+                                                  width: '12px',
+                                                  height: '12px',
+                                                  background: (() => {
+                                                    const typeName = group.construction.typeStructure?.name || '';
+                                                    if (typeName.includes('Баннер')) return 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-600))';
+                                                    if (typeName.includes('Другое')) return 'linear-gradient(135deg, var(--color-gray-500), var(--color-gray-600))';
+                                                    if (typeName.includes('Лайтбокс')) return 'linear-gradient(135deg, var(--color-yellow-500), var(--color-yellow-600))';
+                                                    if (typeName.includes('Объемные световые элементы')) return 'linear-gradient(135deg, var(--color-purple-500), var(--color-purple-600))';
+                                                    if (typeName.includes('Объемные буквы')) return 'linear-gradient(135deg, var(--color-green-500), var(--color-green-600))';
+                                                    if (typeName.includes('Пневмофигура')) return 'linear-gradient(135deg, var(--color-pink-500), var(--color-pink-600))';
+                                                    return 'linear-gradient(135deg, var(--color-orange-500), var(--color-orange-600))'; // По умолчанию
+                                                  })(),
+                                                  borderRadius: '50%',
+                                                  border: '2px solid white',
+                                                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+                                                }}
+                                              />
                                             </Box>
                                           );
                                         })}
-                                        {group.documents.length > 3 && (
-                                          <Text size="xs" style={{ color: 'var(--theme-text-secondary)', padding: '8px' }}>
-                                            +{group.documents.length - 3}
-                                          </Text>
+                                        {group.documents.length > 4 && (
+                                          <Box
+                                            style={{
+                                              width: '90px',
+                                              height: '70px',
+                                              borderRadius: '10px',
+                                              border: '2px dashed var(--color-blue-300)',
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              justifyContent: 'center',
+                                              background: 'linear-gradient(135deg, var(--color-blue-50), var(--color-indigo-50))',
+                                              cursor: 'pointer',
+                                              transition: 'all 0.2s ease'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                              e.currentTarget.style.borderColor = 'var(--color-blue-500)';
+                                              e.currentTarget.style.background = 'linear-gradient(135deg, var(--color-blue-100), var(--color-indigo-100))';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                              e.currentTarget.style.borderColor = 'var(--color-blue-300)';
+                                              e.currentTarget.style.background = 'linear-gradient(135deg, var(--color-blue-50), var(--color-indigo-50))';
+                                            }}
+                                          >
+                                            <Text size="sm" fw={600} style={{ color: 'var(--color-blue-600)' }}>
+                                              +{group.documents.length - 4}
+                                            </Text>
+                                          </Box>
                                         )}
                                       </Group>
                                     </Box>
@@ -1444,25 +1621,53 @@ return (
                               
                               {/* Непривязанные документы */}
                               {unassignedDocuments.length > 0 && (
-                                <Box>
-                                  <Group gap="12px" align="center" style={{ marginBottom: '12px' }}>
+                                <Box
+                                  style={{
+                                    background: 'var(--theme-bg-elevated)',
+                                    borderRadius: '16px',
+                                    padding: '20px',
+                                    border: '2px solid var(--color-gray-300)',
+                                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
+                                    marginBottom: '20px',
+                                    position: 'relative'
+                                  }}
+                                >
+                                  <Group gap="12px" align="center" style={{ marginBottom: '16px' }}>
                                     <Box
                                       style={{
-                                        width: '28px',
-                                        height: '28px',
-                                        background: 'linear-gradient(135deg, var(--color-blue-500), var(--color-blue-600))',
-                                        borderRadius: '8px',
+                                        width: '32px',
+                                        height: '32px',
+                                        background: 'linear-gradient(135deg, var(--color-gray-500), var(--color-gray-600))',
+                                        borderRadius: '10px',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        fontSize: '16px'
+                                        fontSize: '18px',
+                                        boxShadow: '0 4px 8px rgba(107, 114, 128, 0.3)'
                                       }}
                                     >
                                       📄
                                     </Box>
-                                    <Text size="lg" fw={700} style={{ color: 'var(--theme-text-primary)' }}>
-                                      Другие документы ({unassignedDocuments.length})
-                                    </Text>
+                                    <Box style={{ flex: 1 }}>
+                                      <Text size="xl" fw={700} style={{ color: 'var(--theme-text-primary)' }}>
+                                        Другие документы
+                                      </Text>
+                                      <Text size="sm" style={{ color: 'var(--theme-text-secondary)', marginTop: '4px' }}>
+                                        📎 {unassignedDocuments.length} документов без привязки к конструкции
+                                      </Text>
+                                    </Box>
+                                    <Box
+                                      style={{
+                                        background: 'linear-gradient(135deg, var(--color-gray-100), var(--color-gray-200))',
+                                        borderRadius: '20px',
+                                        padding: '6px 12px',
+                                        border: '1px solid var(--color-gray-300)'
+                                      }}
+                                    >
+                                      <Text size="xs" fw={600} style={{ color: 'var(--color-gray-700)' }}>
+                                        {unassignedDocuments.length} файлов
+                                      </Text>
+                                    </Box>
                                   </Group>
                                   <Group gap="12px" wrap="wrap">
                                     {unassignedDocuments.slice(0, 4).map((att: any, index: number) => {
@@ -1476,27 +1681,29 @@ return (
                                         <Box
                                           key={index}
                                           style={{
-                                            width: '120px',
-                                            height: '90px',
+                                            width: '100px',
+                                            height: '80px',
                                             borderRadius: '12px',
                                             overflow: 'hidden',
-                                            border: '2px solid var(--theme-border-secondary)',
+                                            border: '2px solid var(--color-gray-300)',
                                             cursor: 'pointer',
-                                            transition: 'all 0.2s ease',
-                                            position: 'relative'
+                                            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                            position: 'relative',
+                                            background: 'white',
+                                            boxShadow: '0 2px 8px rgba(107, 114, 128, 0.1)'
                                           }}
                                           onMouseEnter={(e) => {
-                                            e.currentTarget.style.transform = 'scale(1.05)';
-                                            e.currentTarget.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.15)';
-                                            e.currentTarget.style.borderColor = 'var(--color-primary-300)';
+                                            e.currentTarget.style.transform = 'scale(1.08) translateY(-2px)';
+                                            e.currentTarget.style.boxShadow = '0 8px 24px rgba(107, 114, 128, 0.2)';
+                                            e.currentTarget.style.borderColor = 'var(--color-gray-500)';
                                           }}
                                           onMouseLeave={(e) => {
-                                            e.currentTarget.style.transform = 'scale(1)';
-                                            e.currentTarget.style.boxShadow = 'none';
-                                            e.currentTarget.style.borderColor = 'var(--theme-border-secondary)';
+                                            e.currentTarget.style.transform = 'scale(1) translateY(0)';
+                                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(107, 114, 128, 0.1)';
+                                            e.currentTarget.style.borderColor = 'var(--color-gray-300)';
                                           }}
                                           onClick={() => {
-                                            const fileUrls = documents.map((a: any) => {
+                                            const fileUrls = unassignedDocuments.map((a: any) => {
                                               const sourcePath = String(a.source || '');
                                               const normalizedPath = sourcePath
                                                 .replace(/\\/g, '/')
@@ -1516,31 +1723,69 @@ return (
                                               objectFit: 'cover'
                                             }}
                                             onError={(e) => {
-                                              console.error('Ошибка загрузки изображения в документах:', fileUrl);
-                                              e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwIiBoZWlnaHQ9IjkwIiB2aWV3Qm94PSIwIDAgMTIwIDkwIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHdpZHRoPSIxMjAiIGhlaWdodD0iOTAiIGZpbGw9IiNmNWY1ZjUiLz48dGV4dCB4PSI2MCIgeT0iNTAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OTk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+0JjQt9C+0LHRgNCw0LbQsCDRgdC+0LfQtNCwPC90ZXh0Pjwvc3ZnPg==';
+                                              e.currentTarget.style.display = 'none';
+                                              e.currentTarget.parentElement!.innerHTML = `
+                                                <div style="
+                                                  width: 100%; 
+                                                  height: 100%; 
+                                                  display: flex; 
+                                                  align-items: center; 
+                                                  justify-content: center; 
+                                                  background: linear-gradient(135deg, var(--color-gray-100), var(--color-gray-200)); 
+                                                  color: var(--color-gray-600);
+                                                  font-size: 14px;
+                                                  text-align: center;
+                                                  padding: 8px;
+                                                ">
+                                                  📄
+                                                </div>
+                                              `;
                                             }}
                                           />
+                                          {/* Индикатор непривязанного документа */}
                                           <Box
                                             style={{
                                               position: 'absolute',
-                                              top: '4px',
-                                              right: '4px',
-                                              background: 'rgba(0, 0, 0, 0.7)',
-                                              borderRadius: '6px',
-                                              padding: '2px 6px'
+                                              top: '-2px',
+                                              right: '-2px',
+                                              width: '12px',
+                                              height: '12px',
+                                              background: 'linear-gradient(135deg, var(--color-gray-500), var(--color-gray-600))',
+                                              borderRadius: '50%',
+                                              border: '2px solid white',
+                                              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
                                             }}
-                                          >
-                                            <Text size="xs" style={{ color: 'white', fontWeight: '600' }}>
-                                              {index + 1}
-                                            </Text>
-                                          </Box>
+                                          />
                                         </Box>
                                       );
                                     })}
                                     {unassignedDocuments.length > 4 && (
-                                      <Text size="sm" style={{ color: 'var(--theme-text-secondary)', padding: '8px' }}>
-                                        +{unassignedDocuments.length - 4} еще
-                                      </Text>
+                                      <Box
+                                        style={{
+                                          width: '100px',
+                                          height: '80px',
+                                          borderRadius: '12px',
+                                          border: '2px dashed var(--color-gray-300)',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          background: 'linear-gradient(135deg, var(--color-gray-50), var(--color-gray-100))',
+                                          cursor: 'pointer',
+                                          transition: 'all 0.2s ease'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                          e.currentTarget.style.borderColor = 'var(--color-gray-500)';
+                                          e.currentTarget.style.background = 'linear-gradient(135deg, var(--color-gray-100), var(--color-gray-200))';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                          e.currentTarget.style.borderColor = 'var(--color-gray-300)';
+                                          e.currentTarget.style.background = 'linear-gradient(135deg, var(--color-gray-50), var(--color-gray-100))';
+                                        }}
+                                      >
+                                        <Text size="sm" fw={600} style={{ color: 'var(--color-gray-600)' }}>
+                                          +{unassignedDocuments.length - 4}
+                                        </Text>
+                                      </Box>
                                     )}
                                   </Group>
                                 </Box>
@@ -1611,6 +1856,7 @@ return (
         opened={modals.create[0]}
         onClose={() => {
           setRkForm(DEFAULT_RK_FORM);
+          setConstructionDocuments({});
           modals.create[1].close();
         }}
         title="Добавить конструкцию"
@@ -1618,11 +1864,24 @@ return (
         fields={formConfigCreate.fields}
         initialValues={rkForm}
         onSubmit={(values) => handleFormSubmit(values as RKFormValues, 'create')}
+        fileAttachments={constructionDocuments}
+        onFileAttachmentsChange={(fileId, documents) => {
+          setConstructionDocuments(prev => ({
+            ...prev,
+            [fileId]: documents
+          }));
+        }}
+        attachmentLabel="📎 Документы к конструкциям"
+        attachmentAccept=".pdf,.doc,.docx,.xls,.xlsx,.txt"
+        fileCardTitle="Конструкция"
+        size="95vw"
       />
       <DynamicFormModal
         opened={modals.edit[0]}
         onClose={() => {
           setRkForm(DEFAULT_RK_FORM);
+          setConstructionDocuments({});
+          setExistingDocuments({});
           modals.edit[1].close();
         }}
         title="Редактировать конструкцию"
@@ -1630,6 +1889,18 @@ return (
         fields={formConfigEdit.fields}
         initialValues={rkForm}
         onSubmit={(values) => handleFormSubmit(values as RKFormValues, 'edit')}
+        fileAttachments={constructionDocuments}
+        onFileAttachmentsChange={(fileId, documents) => {
+          setConstructionDocuments(prev => ({
+            ...prev,
+            [fileId]: documents
+          }));
+        }}
+        attachmentLabel="📎 Документы к конструкциям"
+        attachmentAccept=".pdf,.doc,.docx,.xls,.xlsx,.txt"
+        existingDocuments={existingDocuments}
+        fileCardTitle="Конструкция"
+        size="95vw"
       />
       <DynamicFormModal
         opened={modals.view[0]}
@@ -1694,6 +1965,7 @@ return (
         })) || []}
         initialIndex={filePreviewData?.currentIndex || 0}
       />
+      <FloatingActionButton />
     </Box>
   </DndProviderWrapper>
 );

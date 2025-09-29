@@ -171,6 +171,214 @@
   --z-toast: 1080;
 }
 
+/* Позволяем Mantine управлять z-index для tooltips и popover */
+
+/* === СОВРЕМЕННЫЕ СТИЛИ ДЛЯ SELECT DROPDOWN === */
+.mantine-Select-dropdown {
+  background: var(--theme-bg-elevated) !important;
+  border: 1px solid var(--theme-border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--theme-shadow-lg) !important;
+  backdrop-filter: blur(8px) !important;
+  padding: var(--space-2) !important;
+  margin-top: var(--space-1) !important;
+}
+
+.mantine-Select-option {
+  background: transparent !important;
+  border-radius: var(--radius-md) !important;
+  padding: var(--space-3) var(--space-4) !important;
+  margin: var(--space-1) 0 !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  color: var(--theme-text-primary) !important;
+  font-weight: 500 !important;
+  font-size: var(--font-size-sm) !important;
+}
+
+.mantine-Select-option:hover {
+  background: var(--theme-hover-bg) !important;
+  color: var(--theme-text-primary) !important;
+  transform: translateX(4px) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+}
+
+.mantine-Select-option[data-selected="true"] {
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600)) !important;
+  color: white !important;
+  font-weight: 600 !important;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3) !important;
+}
+
+.mantine-Select-option[data-selected="true"]:hover {
+  background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700)) !important;
+  transform: translateX(4px) !important;
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4) !important;
+}
+
+/* Стили для Combobox (MultiSelect) */
+.mantine-Combobox-dropdown {
+  background: var(--theme-bg-elevated) !important;
+  border: 1px solid var(--theme-border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--theme-shadow-lg) !important;
+  backdrop-filter: blur(8px) !important;
+  padding: var(--space-2) !important;
+  margin-top: var(--space-1) !important;
+}
+
+.mantine-Combobox-option {
+  background: transparent !important;
+  border-radius: var(--radius-md) !important;
+  padding: var(--space-3) var(--space-4) !important;
+  margin: var(--space-1) 0 !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  color: var(--theme-text-primary) !important;
+  font-weight: 500 !important;
+  font-size: var(--font-size-sm) !important;
+}
+
+.mantine-Combobox-option:hover {
+  background: var(--theme-hover-bg) !important;
+  color: var(--theme-text-primary) !important;
+  transform: translateX(4px) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+}
+
+.mantine-Combobox-option[data-selected="true"] {
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600)) !important;
+  color: white !important;
+  font-weight: 600 !important;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3) !important;
+}
+
+.mantine-Combobox-option[data-selected="true"]:hover {
+  background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700)) !important;
+  transform: translateX(4px) !important;
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4) !important;
+}
+
+/* Темная тема для dropdown */
+[data-mantine-color-scheme="dark"] .mantine-Select-dropdown,
+[data-mantine-color-scheme="dark"] .mantine-Combobox-dropdown {
+  background: var(--theme-bg-elevated) !important;
+  border-color: var(--theme-border) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-Select-option,
+[data-mantine-color-scheme="dark"] .mantine-Combobox-option {
+  color: var(--theme-text-primary) !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-Select-option:hover,
+[data-mantine-color-scheme="dark"] .mantine-Combobox-option:hover {
+  background: var(--theme-hover-bg) !important;
+  color: var(--theme-text-primary) !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-Select-option[data-selected="true"],
+[data-mantine-color-scheme="dark"] .mantine-Combobox-option[data-selected="true"] {
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600)) !important;
+  color: white !important;
+}
+
+/* Стили для Popover dropdown */
+.mantine-Popover-dropdown {
+  background: var(--theme-bg-elevated) !important;
+  border: 1px solid var(--theme-border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--theme-shadow-lg) !important;
+  backdrop-filter: blur(8px) !important;
+  padding: var(--space-3) !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-Popover-dropdown {
+  background: var(--theme-bg-elevated) !important;
+  border-color: var(--theme-border) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Стили для Tooltip */
+.mantine-Tooltip-tooltip {
+  background: var(--theme-bg-elevated) !important;
+  border: 1px solid var(--theme-border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--theme-shadow-md) !important;
+  backdrop-filter: blur(8px) !important;
+  padding: var(--space-2) var(--space-3) !important;
+  font-size: var(--font-size-sm) !important;
+  font-weight: 500 !important;
+  color: var(--theme-text-primary) !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-Tooltip-tooltip {
+  background: var(--theme-bg-elevated) !important;
+  border-color: var(--theme-border) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3) !important;
+  color: var(--theme-text-primary) !important;
+}
+
+/* Стили для Menu dropdown */
+.mantine-Menu-dropdown {
+  background: var(--theme-bg-elevated) !important;
+  border: 1px solid var(--theme-border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--theme-shadow-lg) !important;
+  backdrop-filter: blur(8px) !important;
+  padding: var(--space-2) !important;
+}
+
+.mantine-Menu-item {
+  background: transparent !important;
+  border-radius: var(--radius-md) !important;
+  padding: var(--space-3) var(--space-4) !important;
+  margin: var(--space-1) 0 !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  color: var(--theme-text-primary) !important;
+  font-weight: 500 !important;
+  font-size: var(--font-size-sm) !important;
+}
+
+.mantine-Menu-item:hover {
+  background: var(--theme-hover-bg) !important;
+  color: var(--theme-text-primary) !important;
+  transform: translateX(4px) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+}
+
+.mantine-Menu-item[data-selected="true"] {
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600)) !important;
+  color: white !important;
+  font-weight: 600 !important;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3) !important;
+}
+
+.mantine-Menu-item[data-selected="true"]:hover {
+  background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700)) !important;
+  transform: translateX(4px) !important;
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4) !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-Menu-dropdown {
+  background: var(--theme-bg-elevated) !important;
+  border-color: var(--theme-border) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-Menu-item {
+  color: var(--theme-text-primary) !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-Menu-item:hover {
+  background: var(--theme-hover-bg) !important;
+  color: var(--theme-text-primary) !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-Menu-item[data-selected="true"] {
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600)) !important;
+  color: white !important;
+}
+
 /* === БАЗОВЫЕ СТИЛИ === */
 * {
   box-sizing: border-box;
@@ -305,4 +513,234 @@ body {
 
 .animate-pulse {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* === СОВРЕМЕННЫЕ СТИЛИ ДЛЯ REACT DATE PICKER === */
+.react-datepicker {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.7) 100%) !important;
+  backdrop-filter: blur(25px) !important;
+  -webkit-backdrop-filter: blur(25px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  border-radius: 16px !important;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.1),
+    0 2px 8px rgba(0, 0, 0, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+  font-family: inherit !important;
+  font-size: var(--font-size-sm) !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.react-datepicker::before {
+  content: '' !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: 2px !important;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 50%, #f093fb 100%) !important;
+  border-radius: 16px 16px 0 0 !important;
+  z-index: 1 !important;
+}
+
+.react-datepicker__header {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.9) 0%, rgba(118, 75, 162, 0.8) 100%) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  border-bottom: none !important;
+  border-radius: 14px 14px 0 0 !important;
+  padding: var(--space-3) !important;
+  position: relative !important;
+  z-index: 2 !important;
+}
+
+.react-datepicker__current-month {
+  color: white !important;
+  font-weight: 600 !important;
+  font-size: var(--font-size-lg) !important;
+  margin-bottom: var(--space-2) !important;
+}
+
+.react-datepicker__navigation {
+  background: rgba(255, 255, 255, 0.15) !important;
+  backdrop-filter: blur(5px) !important;
+  -webkit-backdrop-filter: blur(5px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 8px !important;
+  width: 32px !important;
+  height: 32px !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+}
+
+.react-datepicker__navigation:hover {
+  background: rgba(255, 255, 255, 0.25) !important;
+  transform: scale(1.05) translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+.react-datepicker__navigation--previous {
+  left: var(--space-3) !important;
+}
+
+.react-datepicker__navigation--next {
+  right: var(--space-3) !important;
+}
+
+.react-datepicker__navigation-icon::before {
+  border-color: white !important;
+  border-width: 2px 2px 0 0 !important;
+}
+
+.react-datepicker__day-names {
+  margin-bottom: var(--space-1) !important;
+}
+
+.react-datepicker__day-name {
+  color: var(--theme-text-secondary) !important;
+  font-weight: 600 !important;
+  font-size: var(--font-size-sm) !important;
+  width: 36px !important;
+  line-height: 36px !important;
+}
+
+.react-datepicker__day {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 8px !important;
+  color: var(--theme-text-primary) !important;
+  font-weight: 500 !important;
+  width: 36px !important;
+  height: 36px !important;
+  line-height: 36px !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  position: relative !important;
+  backdrop-filter: blur(2px) !important;
+  -webkit-backdrop-filter: blur(2px) !important;
+}
+
+.react-datepicker__day:hover {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%) !important;
+  color: var(--theme-text-primary) !important;
+  transform: scale(1.05) translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2) !important;
+  border: 1px solid rgba(102, 126, 234, 0.2) !important;
+}
+
+.react-datepicker__day--selected {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  color: white !important;
+  font-weight: 600 !important;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  backdrop-filter: blur(5px) !important;
+  -webkit-backdrop-filter: blur(5px) !important;
+}
+
+.react-datepicker__day--selected:hover {
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%) !important;
+  transform: scale(1.05) translateY(-1px) !important;
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5) !important;
+}
+
+.react-datepicker__day--outside-month {
+  color: var(--theme-text-disabled) !important;
+}
+
+.react-datepicker__day--outside-month:hover {
+  background: var(--theme-hover-bg) !important;
+  color: var(--theme-text-secondary) !important;
+}
+
+.react-datepicker__day--today {
+  background: var(--theme-bg-secondary) !important;
+  color: var(--theme-text-primary) !important;
+  font-weight: 600 !important;
+}
+
+.react-datepicker__day--today:hover {
+  background: var(--theme-hover-bg) !important;
+  transform: scale(1.05) !important;
+}
+
+/* Стили для кнопок в футере */
+.react-datepicker__footer {
+  display: flex !important;
+  justify-content: space-between !important;
+  margin-top: var(--space-3) !important;
+  padding: var(--space-2) var(--space-3) !important;
+  border-top: 1px solid var(--theme-border) !important;
+}
+
+.react-datepicker__footer button {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 8px !important;
+  color: var(--theme-text-primary) !important;
+  font-weight: 500 !important;
+  padding: var(--space-2) var(--space-3) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  cursor: pointer !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+}
+
+.react-datepicker__footer button:hover {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%) !important;
+  border-color: rgba(102, 126, 234, 0.3) !important;
+  color: #667eea !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2) !important;
+}
+
+/* Темная тема для React Date Picker */
+[data-theme="dark"] .react-datepicker {
+  background: linear-gradient(135deg, rgba(30, 30, 30, 0.95) 0%, rgba(20, 20, 20, 0.85) 100%) !important;
+  backdrop-filter: blur(25px) !important;
+  -webkit-backdrop-filter: blur(25px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    0 2px 8px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+[data-theme="dark"] .react-datepicker::before {
+  background: linear-gradient(90deg, #4facfe 0%, #00f2fe 50%, #43e97b 100%) !important;
+}
+
+[data-theme="dark"] .react-datepicker__day {
+  color: var(--theme-text-primary) !important;
+}
+
+[data-theme="dark"] .react-datepicker__day:hover {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%) !important;
+  color: var(--theme-text-primary) !important;
+}
+
+[data-theme="dark"] .react-datepicker__day--selected {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  color: white !important;
+}
+
+[data-theme="dark"] .react-datepicker__day--outside-month {
+  color: var(--theme-text-disabled) !important;
+}
+
+[data-theme="dark"] .react-datepicker__day-name {
+  color: var(--theme-text-secondary) !important;
+}
+
+[data-theme="dark"] .react-datepicker__footer button {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: var(--theme-text-primary) !important;
+}
+
+[data-theme="dark"] .react-datepicker__footer button:hover {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%) !important;
+  border-color: rgba(102, 126, 234, 0.3) !important;
+  color: #667eea !important;
 }

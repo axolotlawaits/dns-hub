@@ -13,8 +13,6 @@ import './FilePreviewModal.css';
     useEffect(() => {
       if (!src) return;
 
-      console.log('AuthFileLoader: Loading file from:', src);
-
       if (src.startsWith('http') && !src.startsWith('blob:')) {
         // Для внешних URL добавляем заголовки авторизации
         const token = localStorage.getItem('token');
@@ -22,31 +20,26 @@ import './FilePreviewModal.css';
         
         if (token) {
           headers['Authorization'] = `Bearer ${token}`;
-          console.log('AuthFileLoader: Using token for request');
         } else {
-          console.log('AuthFileLoader: No token found in localStorage');
-        }
 
-        console.log('AuthFileLoader: Making request with headers:', headers);
+        }
 
         fetch(src, { headers })
           .then(response => {
-            console.log('AuthFileLoader: Response status:', response.status);
-            console.log('AuthFileLoader: Response headers:', Object.fromEntries(response.headers.entries()));
             
             if (!response.ok) {
               throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
             }
             // Получаем MIME-тип из заголовков
             const contentType = response.headers.get('content-type');
-            console.log('AuthFileLoader: Content-Type:', contentType);
+
             if (contentType && onMimeTypeDetected) {
               onMimeTypeDetected(contentType);
             }
             return response.blob();
           })
           .then(blob => {
-            console.log('AuthFileLoader: File loaded successfully, size:', blob.size);
+
             setFileBlob(blob);
             setLoading(false);
             if (onLoad) onLoad();
@@ -59,7 +52,6 @@ import './FilePreviewModal.css';
           });
       } else {
         // Для локальных URL и blob URL используем как есть
-        console.log('AuthFileLoader: Using local/blob URL directly');
         setFileBlob(null);
         setLoading(false);
         if (onLoad) onLoad();
@@ -333,10 +325,9 @@ export const FilePreviewModal = ({
     };
   }, [currentAttachment, fileUrl, isText]);
 
-  if (!opened || attachments.length === 0) return null;
 
   const FileNavigation = () => (
-    <Group justify="space-between" align="center">
+    <Group justify="space-between" align="center" className="file-navigation">
       <ActionIcon
         size="xl"
         radius="xl"
@@ -395,7 +386,7 @@ export const FilePreviewModal = ({
   );
 
   const FileSelector = () => (
-    <Box>
+    <Box className="file-selector">
       <Text 
         style={{ 
           fontSize: '16px', 
@@ -601,6 +592,7 @@ export const FilePreviewModal = ({
     if (isImage) {
       return (
         <Box
+          className="image-container"
           style={{
             background: 'var(--theme-bg-elevated)',
             borderRadius: '16px',
@@ -609,8 +601,11 @@ export const FilePreviewModal = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            minHeight: '400px',
-            overflow: 'hidden'
+            height: '100%',
+            width: '100%',
+            overflow: 'hidden',
+            position: 'relative',
+            minHeight: '400px'
           }}
         >
           <AuthImage
@@ -620,9 +615,15 @@ export const FilePreviewModal = ({
             onMimeTypeDetected={setFileMimeType}
             style={{
               maxWidth: '100%',
-              maxHeight: 'calc(100vh - 300px)',
+              maxHeight: '100%',
+              width: 'auto',
+              height: 'auto',
               borderRadius: '8px',
-              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)'
+              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)',
+              objectFit: 'contain',
+              objectPosition: 'center',
+              display: 'block',
+              margin: '0 auto'
             }}
             onLoad={() => setLoading(false)}
             onError={() => setError(true)}
@@ -894,13 +895,13 @@ export const FilePreviewModal = ({
       </Box>
     );
   };
-
+  
   return (
     <Modal
       opened={opened}
       onClose={onClose}
       fullScreen
-      zIndex={9999999}
+      zIndex={1000}
       className="file-preview-modal"
       withCloseButton={false}
       styles={{
@@ -915,11 +916,7 @@ export const FilePreviewModal = ({
           border: 'none'
         },
         content: {
-          background: 'var(--theme-bg-primary)',
-          zIndex: '9999999 !important'
-        },
-        overlay: {
-          zIndex: '9999998 !important'
+          background: 'var(--theme-bg-primary)'
         }
       }}
     >

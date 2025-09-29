@@ -9,6 +9,7 @@ import {
   getRocStatuses,
   dadataPartyByInn,
   dadataSuggestParty,
+  getDaDataInfo,
   addRocAttachments,
   deleteRocAttachment,
 } from '../../controllers/accounting/roc.js';
@@ -26,6 +27,7 @@ router.get('/dict/statuses', getRocStatuses);
 
 router.get('/dadata/party', dadataPartyByInn);
 router.get('/dadata/suggest', dadataSuggestParty);
+router.get('/dadata/info', getDaDataInfo);
 
 // Attachments
 router.post('/:id/attachments', ...addRocAttachments);

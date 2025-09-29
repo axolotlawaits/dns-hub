@@ -1,20 +1,11 @@
 import React from 'react';
-import { 
-  ActionIcon, 
-  AppShell, 
-  Avatar, 
-  Menu, 
-  Divider, 
-  Group, 
-  Text, 
-  Tooltip,
-  Transition,
-  Box
-} from '@mantine/core';
-import {  IconBrightnessDown,  IconLogin,  IconLogout,  IconMoon,  IconUser } from '@tabler/icons-react';
+import {  ActionIcon,  AppShell,  Avatar,  Menu,  Divider,  Group,  Text,  Tooltip, Transition, Box, Button } from '@mantine/core';
+import {  IconBrightnessDown,  IconLogin,  IconLogout,  IconMoon,  IconUser, IconSearch } from '@tabler/icons-react';
 import { useNavigate } from 'react-router';
 import { useUserContext } from '../hooks/useUserContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { usePageHeader } from '../contexts/PageHeaderContext';
+import { useDisclosure } from '@mantine/hooks';
 import Search from './Search';
 import logoMiniDark from '../assets/images/logo-dark-mini.svg';
 import logoFullDark from '../assets/images/logo-dark.svg';
@@ -30,6 +21,11 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
   const navigate = useNavigate();
   const { user, logout } = useUserContext();
   const { isDark, toggleTheme } = useTheme();
+  const { header } = usePageHeader();
+  const [searchOpened, { open: openSearch, close: closeSearch }] = useDisclosure(false);
+
+  // Отладка
+  console.log('Header render - header:', header);
 
   const onLogout = () => {
     localStorage.removeItem('user');
@@ -77,9 +73,56 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
           </Group>
         </div>
 
-        {/* Центральная часть - поиск */}
+        {/* Центральная часть - заголовок страницы или поиск */}
         <div className="header-center">
-          <Search />
+          {header.title ? (
+            <div className="page-header-content">
+              <div className="page-header-text">
+                <Text size="xl" fw={700} c="var(--theme-text-primary)">
+                  {header.title}
+                </Text>
+                {header.subtitle && (
+                  <Text size="sm" c="var(--theme-text-secondary)">
+                    {header.subtitle}
+                  </Text>
+                )}
+              </div>
+              <div className="page-header-actions">
+                <ActionIcon
+                  size="lg"
+                  variant="filled"
+                  color="blue"
+                  radius="xl"
+                  onClick={openSearch}
+                  style={{
+                    background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
+                    color: 'white',
+                    border: 'none',
+                    fontWeight: '600'
+                  }}
+                >
+                  <IconSearch size={18} />
+                </ActionIcon>
+              </div>
+            </div>
+          ) : (
+            <Button
+              size="md"
+              variant="filled"
+              color="blue"
+              radius="xl"
+              onClick={openSearch}
+              leftSection={<IconSearch size={16} />}
+              style={{
+                background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
+                color: 'white',
+                border: 'none',
+                fontWeight: '600'
+              }}
+            >
+              Поиск
+            </Button>
+          )}
         </div>
 
         {/* Правая часть */}
@@ -218,6 +261,9 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
           </Group>
         </div>
       </div>
+      
+      {/* Модальное окно поиска для кнопки в заголовке */}
+      <Search opened={searchOpened} onClose={closeSearch} showButton={false} />
     </AppShell.Header>
   );
 };

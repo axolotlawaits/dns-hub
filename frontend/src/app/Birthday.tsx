@@ -1,18 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { API } from '../config/constants';
-import { 
-  Box, 
-  Text, 
-  Group, 
-  LoadingOverlay, 
-  Badge, 
-  ThemeIcon, 
-  Avatar, 
-  ScrollArea, 
-  Alert,
-  Card,
-  Stack
-} from '@mantine/core';
+import { Box, Text, Group, LoadingOverlay, Badge, ThemeIcon, Avatar, ScrollArea, Alert,Card,Stack } from '@mantine/core';
 import dayjs from 'dayjs';
 import { IconCalendar, IconGift, IconAlertCircle, IconClock, IconCake } from '@tabler/icons-react';
 import { useUserContext } from '../hooks/useUserContext';
@@ -48,6 +36,7 @@ export default function BirthdayList() {
       }
       try {
         setLoading(true);
+        setError(null);
         console.log('Текущий пользователь:', user);
         
         const response = await fetch(`${API}/birthday/upcoming-birthdays/${user.email}`);
@@ -66,9 +55,9 @@ export default function BirthdayList() {
     };
 
     fetchUpcomingBirthdays();
-  }, [user?.email]);
+  }, [user?.email, user?.id]);
 
-  const getBirthdayStatus = (userData: UserData) => {
+  const getBirthdayStatus = useCallback((userData: UserData) => {
     if (userData.daysUntil === 0) {
       return { text: 'Сегодня!', color: 'red', variant: 'filled' as const };
     } else if (userData.daysUntil === 1) {
@@ -91,7 +80,7 @@ export default function BirthdayList() {
     } else {
       return { text: `Через ${userData.daysUntil} дн.`, color: 'green', variant: 'light' as const };
     }
-  };
+  }, []);
 
   if (loading) {
     return (
@@ -146,14 +135,14 @@ export default function BirthdayList() {
 
       <ScrollArea h="100%">
         <Stack gap="md">
-          {usersData.map((userData) => {
+          {usersData.map((userData, index) => {
             const status = getBirthdayStatus(userData);
             const isToday = userData.daysUntil === 0;
             const isTomorrow = userData.daysUntil === 1;
 
             return (
               <Card
-                key={userData.id}
+                key={userData.id || `birthday-${index}`}
                 className={`birthday-card ${isToday ? 'birthday-today' : ''}`}
                 shadow="sm"
                 radius="md"

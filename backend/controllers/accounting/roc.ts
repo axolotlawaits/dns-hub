@@ -43,9 +43,47 @@ const RocSchema = z.object({
       liquidationDate: z.string().datetime().optional(),
       successorName: z.string().optional(),
       successorINN: z.string().optional(),
+      // Расширенные поля DaData
+      phones: z.array(z.string()).optional(),
+      emails: z.array(z.string()).optional(),
+      managerName: z.string().optional(),
+      managerPost: z.string().optional(),
+      capital: z.number().optional(),
+      revenue: z.number().optional(),
+      expenses: z.number().optional(),
+      licenses: z.array(z.string()).optional(),
+      courtDecisions: z.array(z.string()).optional(),
+      taxViolations: z.array(z.string()).optional(),
+      isReliable: z.boolean().optional(),
+      founders: z.array(z.object({
+        name: z.string(),
+        inn: z.string(),
+        share: z.number()
+      })).optional(),
     })
     .optional(),
 });
+
+// Новый endpoint для получения расширенных данных DaData
+export const getDaDataInfo = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const inn = String(req.query.inn || '');
+    if (!inn) { 
+      res.status(400).json({ error: 'inn required' }); 
+      return; 
+    }
+    
+    const dadataInfo = await findPartyByInn(inn);
+    if (!dadataInfo) {
+      res.status(404).json({ error: 'Organization not found' });
+      return;
+    }
+    
+    res.status(200).json(dadataInfo);
+  } catch (e) {
+    next(e);
+  }
+};
 
 export const getRocList = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {

@@ -1,12 +1,71 @@
-import { Modal, TextInput, Select, Button, Alert, Stack, Textarea, Text, Group, Card, Paper, ActionIcon, NumberInput, MultiSelect } from '@mantine/core';
+import { Modal, TextInput, Select, Button, Alert, Stack, Textarea, Text, Group, Card, Paper, ActionIcon, MultiSelect, Badge } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { useState, useEffect, useCallback, useMemo, useRef, JSX } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, JSX, memo } from 'react';
 import dayjs from 'dayjs';
 import { API } from '../config/constants';
 import { FileDropZone } from './dnd';
-import { IconFile, IconFileTypePdf, IconFileTypeDoc, IconFileTypeXls, IconFileTypePpt, IconFileTypeZip, IconPhoto, IconFileTypeJs, IconFileTypeHtml, IconFileTypeCss, IconFileTypeTxt, IconFileTypeCsv, IconX } from '@tabler/icons-react';
+import { IconFile, IconFileTypePdf, IconFileTypeDoc, IconFileTypeXls, IconFileTypePpt, IconFileTypeZip, IconPhoto, IconFileTypeJs, IconFileTypeHtml, IconFileTypeCss, IconFileTypeTxt, IconFileTypeCsv, IconX, IconUpload } from '@tabler/icons-react';
 import { FilePreviewModal } from './FilePreviewModal';
 import './formModal.css';
+
+// Constants for optimization
+const FILE_ICON_MAP = {
+  jpg: IconPhoto,
+  jpeg: IconPhoto,
+  png: IconPhoto,
+  gif: IconPhoto,
+  pdf: IconFileTypePdf,
+  doc: IconFileTypeDoc,
+  docx: IconFileTypeDoc,
+  xls: IconFileTypeXls,
+  xlsx: IconFileTypeXls,
+  zip: IconFileTypeZip,
+  rar: IconFileTypeZip,
+  tar: IconFileTypeZip,
+  gz: IconFileTypeZip,
+  ppt: IconFileTypePpt,
+  pptx: IconFileTypePpt,
+  js: IconFileTypeJs,
+  html: IconFileTypeHtml,
+  css: IconFileTypeCss,
+  txt: IconFileTypeTxt,
+  csv: IconFileTypeCsv,
+} as const;
+
+const ICON_SIZE = 20;
+const KNOWN_ATTACHMENT_KEYS = new Set([
+  'id', 'userAdd', 'userAddId', 'source', 'type', 'recordId', 'createdAt', 'updatedAt',
+]);
+
+const COMMON_FIELD_PROPS = {
+  size: 'sm' as const,
+  radius: 'md' as const,
+  style: {
+    '--input-bd': 'var(--theme-border)',
+    '--input-bg': 'var(--theme-bg-elevated)',
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+  }
+};
+
+// Мемоизированные стили для оптимизации
+const CARD_STYLES = {
+  background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
+  border: '1px solid var(--theme-border)',
+  position: 'relative' as const,
+  overflow: 'visible' as const
+};
+
+const DECORATIVE_STYLES = {
+  position: 'absolute' as const,
+  top: 0,
+  right: 0,
+  width: '100px',
+  height: '100px',
+  background: 'linear-gradient(135deg, var(--color-blue-500) 0%, var(--color-blue-600) 100%)',
+  borderRadius: '0 0 0 100px',
+  opacity: 0.1
+};
 
 // Types and interfaces
 export type FieldType = 'text' | 'number' | 'select' | 'selectSearch' | 'date' | 'datetime' | 'textarea' | 'file' | 'boolean';
@@ -42,6 +101,10 @@ export interface FormField {
   searchable?: boolean;
   onSearchChange?: (search: string) => void;
   disabled?: boolean;
+  // Группировка полей в ряд
+  groupWith?: string[]; // Массив имен полей для группировки в ряд
+  groupSize?: 1 | 2 | 3; // Размер группы (1, 2 или 3 поля в ряд)
+  // Дополнительные свойства для полей
   loading?: boolean;
   leftSection?: JSX.Element;
   multiple?: boolean;
@@ -50,6 +113,7 @@ export interface FormField {
   renderFileList?: (values: any, setFieldValue: (path: string, val: any) => void) => JSX.Element;
   mask?: (value: string) => string;
   placeholder?: string;
+  mb?: string | number; // Отступ снизу для поля
 }
 
 export interface ViewFieldConfig {
@@ -98,106 +162,30 @@ interface DynamicFormModalProps {
   hideButtons?: boolean;
   size?: string | number;
   fullScreen?: boolean;
+  // Универсальная поддержка дополнительных вложений к файлам
+  fileAttachments?: Record<string, File[]>;
+  onFileAttachmentsChange?: (fileId: string, attachments: File[]) => void;
+  attachmentLabel?: string;
+  attachmentAccept?: string;
+  existingDocuments?: Record<string, any[]>;
+  // Настройка заголовка карточки файла
+  fileCardTitle?: string;
 }
 
 // Helper functions
 const getFileIcon = (fileName: string): JSX.Element => {
   const extension = fileName.split('.').pop()?.toLowerCase();
-  const iconSize = 20;
-  const iconMap: Record<string, JSX.Element> = {
-    jpg: <IconPhoto size={iconSize} />,
-    jpeg: <IconPhoto size={iconSize} />,
-    png: <IconPhoto size={iconSize} />,
-    gif: <IconPhoto size={iconSize} />,
-    pdf: <IconFileTypePdf size={iconSize} />,
-    doc: <IconFileTypeDoc size={iconSize} />,
-    docx: <IconFileTypeDoc size={iconSize} />,
-    xls: <IconFileTypeXls size={iconSize} />,
-    xlsx: <IconFileTypeXls size={iconSize} />,
-    zip: <IconFileTypeZip size={iconSize} />,
-    rar: <IconFileTypeZip size={iconSize} />,
-    tar: <IconFileTypeZip size={iconSize} />,
-    gz: <IconFileTypeZip size={iconSize} />,
-    ppt: <IconFileTypePpt size={iconSize} />,
-    pptx: <IconFileTypePpt size={iconSize} />,
-    js: <IconFileTypeJs size={iconSize} />,
-    html: <IconFileTypeHtml size={iconSize} />,
-    css: <IconFileTypeCss size={iconSize} />,
-    txt: <IconFileTypeTxt size={iconSize} />,
-    csv: <IconFileTypeCsv size={iconSize} />,
-  };
-  return iconMap[extension as string] || <IconFile size={iconSize} />;
+  const IconComponent = FILE_ICON_MAP[extension as keyof typeof FILE_ICON_MAP];
+  return IconComponent ? <IconComponent size={ICON_SIZE} /> : <IconFile size={ICON_SIZE} />;
 };
 
-const FileUploadComponent = ({ 
+const FileUploadComponent = memo(({ 
   onFilesDrop, 
   attachments, 
   onRemoveAttachment, 
   withDnd = false,
-  fileFields = [],
-  onMetaChange
-}: FileUploadProps) => {
-  const renderField = (field: FileFieldConfig, attachment: FileAttachment) => {
-    const value = attachment.meta?.[field.name] || '';
-
-    const commonProps = {
-      value,
-      onChange: (e: any) => {
-        let nextValue = e.target?.value ?? e;
-        if (typeof nextValue === 'string' && typeof field.mask === 'function') {
-          nextValue = field.mask(nextValue);
-        }
-        const newMeta = {
-          ...attachment.meta,
-          [field.name]: nextValue
-        };
-        onMetaChange(attachment.id, newMeta);
-        // Вызываем onChange из конфигурации поля, если он есть
-        if (field.onChange) {
-          field.onChange(nextValue);
-        }
-      },
-      required: typeof field.required === 'function' ? field.required(attachment.meta || {}) : !!field.required,
-      style: { width: '150px' },
-      placeholder: field.placeholder,
-    } as any;
-
-    switch (field.type) {
-      case 'text':
-        return <TextInput {...commonProps} label={field.label} />;
-      case 'number':
-        return <NumberInput {...commonProps} label={field.label} />;
-      case 'select':
-        return (
-          <Select
-            {...commonProps}
-            label={field.label}
-            data={field.options || []}
-            placeholder={field.placeholder}
-            searchable={field.searchable}
-            clearable={field.clearable}
-            allowDeselect={field.allowDeselect}
-            withinPortal={true}
-            zIndex={9999999}
-            comboboxProps={{ withinPortal: true, zIndex: 9999999 }}
-            className="file-field-select"
-            onClick={(e) => {
-              console.log('Select clicked:', e);
-              e.stopPropagation();
-            }}
-            onFocus={(e) => {
-              console.log('Select focused:', e);
-            }}
-          />
-        );
-      case 'date':
-        return <TextInput {...commonProps} label={field.label} type="date" />;
-      case 'datetime':
-        return <TextInput {...commonProps} label={field.label} type="datetime-local" />;
-      default:
-        return null;
-    }
-  };
+  hidePreview = false
+}: FileUploadProps & { hidePreview?: boolean }) => {
 
   const renderAttachment = (attachment: FileAttachment) => {
     const originalName = typeof attachment.source === 'string'
@@ -208,36 +196,118 @@ const FileUploadComponent = ({
       : '';
     const previewUrl = typeof attachment.source === 'string' ? `${API}/${normalizedPath}` : '';
 
-    const visibleFields = (fileFields || []).filter((f) =>
-      typeof f.visible === 'function' ? f.visible(attachment.meta || {}) : true
-    );
 
     return (
-      <Paper key={attachment.id || originalName} p="sm" withBorder>
-        <Group justify="space-between" align="center" wrap="wrap">
-          <Group gap="sm" align="center">
+      <Paper 
+        key={attachment.id || originalName} 
+        p="lg" 
+        withBorder 
+        radius="lg"
+        className="file-preview-card"
+        style={{
+          background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
+          border: '1px solid var(--theme-border)',
+          position: 'relative',
+          overflow: 'hidden',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+        }}
+      >
+        {/* Декоративный элемент */}
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          width: '60px',
+          height: '60px',
+          background: 'linear-gradient(135deg, var(--color-green-500) 0%, var(--color-green-600) 100%)',
+          borderRadius: '0 0 0 60px',
+          opacity: 0.1,
+        }} />
+        
+        <Group justify="space-between" align="center" wrap="wrap" style={{ position: 'relative' }}>
+          <Group gap="md" align="center">
+            {/* Красивая рамка для превью */}
+            <div style={{
+              position: 'relative',
+              borderRadius: '12px',
+              overflow: 'hidden',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              border: '2px solid var(--theme-border)',
+              background: 'var(--theme-bg-elevated)',
+              padding: '8px'
+            }}>
             {typeof attachment.source === 'string' ? (
-              <img src={previewUrl} alt={originalName} style={{ height: 60, width: 100, objectFit: 'contain', borderRadius: 6 }} />
-            ) : (
-              <img src={URL.createObjectURL(attachment.source as File)} alt={originalName} style={{ height: 60, width: 100, objectFit: 'contain', borderRadius: 6 }} />
-            )}
-            <Text size="sm" c="dimmed">Предпросмотр</Text>
-          </Group>
-
-          <Group gap="sm" align="flex-end" className="file-fields">
-            {visibleFields.map(field => (
-              <div key={`${attachment.id}-${field.name}`}>
-                {renderField(field, attachment)}
+                <img 
+                  src={previewUrl} 
+                  alt={originalName} 
+                  style={{ 
+                    height: 60, 
+                    width: 100, 
+                    objectFit: 'contain', 
+                    borderRadius: '8px',
+                    display: 'block'
+                  }} 
+                />
+              ) : (
+                <img 
+                  src={URL.createObjectURL(attachment.source as File)} 
+                  alt={originalName} 
+                  style={{ 
+                    height: 60, 
+                    width: 100, 
+                    objectFit: 'contain', 
+                    borderRadius: '8px',
+                    display: 'block'
+                  }} 
+                />
+              )}
+              {/* Индикатор успеха */}
+              <div style={{
+                position: 'absolute',
+                top: '4px',
+                right: '4px',
+                width: '16px',
+                height: '16px',
+                background: 'linear-gradient(135deg, var(--color-green-500) 0%, var(--color-green-600) 100%)',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
+              }}>
+                <div style={{
+                  width: '8px',
+                  height: '8px',
+                  background: 'white',
+                  borderRadius: '50%'
+                }} />
               </div>
-            ))}
+            </div>
+            
+            <Stack gap="xs">
+              <Text size="sm" fw={600} c="var(--theme-text-primary)">
+                Предпросмотр
+              </Text>
+              <Text size="xs" c="dimmed" fw={500}>
+                {originalName}
+              </Text>
+            </Stack>
+          </Group>
             
             <ActionIcon
+            size="lg"
+            variant="light"
               color="red"
+            radius="md"
               onClick={() => onRemoveAttachment(attachment.id)}
+            style={{
+              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+              boxShadow: '0 2px 4px rgba(239, 68, 68, 0.3)'
+            }}
+            className="remove-button"
             >
-              <IconX size={16} />
+            <IconX size={18} />
             </ActionIcon>
-          </Group>
         </Group>
       </Paper>
     );
@@ -248,9 +318,11 @@ const FileUploadComponent = ({
       return (
         <>
           <FileDropZone onFilesDrop={onFilesDrop} />
+          {!hidePreview && (
           <Stack mt="md">
             {attachments.map(renderAttachment)}
           </Stack>
+          )}
         </>
       );
     } catch (e) {
@@ -265,12 +337,482 @@ const FileUploadComponent = ({
         multiple
         onChange={(e) => e.target.files && onFilesDrop(Array.from(e.target.files))}
       />
+      {!hidePreview && (
       <Stack mt="md">
         {attachments.map(renderAttachment)}
       </Stack>
+      )}
     </>
   );
-};
+});
+
+
+// Компонент для отображения полей файла в карточке с документами
+const FileFieldsCard = memo(({ 
+  file, 
+  index, 
+  fileFields, 
+  form, 
+  setFieldValue,
+  fileAttachments,
+  onFileAttachmentsChange,
+  attachmentLabel,
+  attachmentAccept,
+  existingDocuments,
+  fileCardTitle = "Конструкция"
+}: { 
+  file: any; 
+  index: number; 
+  fileFields: FileFieldConfig[]; 
+  form: any; 
+  setFieldValue: (path: string, val: any) => void;
+  fileAttachments?: Record<string, File[]>;
+  onFileAttachmentsChange?: (fileId: string, attachments: File[]) => void;
+  attachmentLabel?: string;
+  attachmentAccept?: string;
+  existingDocuments?: any[];
+  fileCardTitle?: string;
+}) => {
+  const renderFileField = (field: FileFieldConfig) => {
+    const fieldPath = `attachments.${index}.meta.${field.name}`;
+    const fieldValue = form.values.attachments?.[index]?.meta?.[field.name] || '';
+
+    const handleChange = (value: any) => {
+      setFieldValue(fieldPath, value);
+      field.onChange?.(value);
+    };
+
+    const isRequired = typeof field.required === 'function' ? field.required(file.meta || {}) : !!field.required;
+    const isVisible = typeof field.visible === 'function' ? field.visible(file.meta || {}) : true;
+
+    if (!isVisible) return null;
+
+    const commonProps = {
+      size: 'sm' as const,
+      radius: 'md' as const,
+      style: { 
+        '--input-bd': 'var(--theme-border)',
+        '--input-bg': 'var(--theme-bg-elevated)',
+        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+      }
+    };
+
+    switch (field.type) {
+      case 'text':
+        return (
+          <TextInput
+            key={field.name}
+            label={field.label}
+            value={fieldValue}
+            onChange={(e) => {
+              const raw = e.target.value;
+              const masked = typeof field.mask === 'function' ? field.mask(raw) : raw;
+              handleChange(masked);
+            }}
+            placeholder={field.placeholder}
+            required={isRequired}
+            {...commonProps}
+          />
+        );
+      case 'select':
+        return (
+          <Select
+            key={field.name}
+            label={field.label}
+            value={fieldValue}
+            onChange={handleChange}
+            placeholder={field.placeholder}
+            required={isRequired}
+            data={field.options || []}
+            searchable={field.searchable}
+            clearable={field.clearable}
+            allowDeselect={field.allowDeselect}
+            comboboxProps={{ 
+              withinPortal: true
+            }}
+            {...commonProps}
+          />
+        );
+      case 'date':
+        return (
+          <TextInput
+            key={field.name}
+            label={field.label}
+            value={fieldValue}
+            onChange={(e) => handleChange(e.target.value)}
+            placeholder={field.placeholder}
+            required={isRequired}
+            type="date"
+            {...commonProps}
+          />
+        );
+      case 'datetime':
+        return (
+          <TextInput
+            key={field.name}
+            label={field.label}
+            value={fieldValue}
+            onChange={(e) => handleChange(e.target.value)}
+            placeholder={field.placeholder}
+            required={isRequired}
+            type="datetime-local"
+            {...commonProps}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
+  const fileId = file.id || `file-${index}`;
+  const fileAttachmentsList = fileAttachments?.[fileId] || [];
+  const existingDocsList = existingDocuments || [];
+
+  return (
+    <Card 
+      p="xl" 
+      withBorder 
+      shadow="lg" 
+      radius="lg"
+      className="construction-card"
+      style={CARD_STYLES}
+    >
+      {/* Декоративный элемент */}
+      <div style={DECORATIVE_STYLES} />
+      
+      <Stack gap="xl" style={{ position: 'relative' }}>
+        {/* Заголовок с иконкой */}
+        <Group gap="sm" align="center">
+          <div style={{
+            width: '8px',
+            height: '8px',
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, var(--color-blue-500) 0%, var(--color-blue-600) 100%)',
+            boxShadow: '0 0 8px rgba(59, 130, 246, 0.5)'
+          }} />
+          <Text size="lg" fw={700} c="var(--theme-text-primary)" style={{ letterSpacing: '0.5px' }}>
+            {fileCardTitle} #{index + 1}
+          </Text>
+        </Group>
+        
+        {/* Preview файла */}
+        {file.source && (
+          <Card 
+            p="md" 
+            withBorder 
+            radius="md" 
+            style={{ 
+              background: 'linear-gradient(135deg, var(--theme-bg-secondary) 0%, var(--theme-bg-elevated) 100%)',
+              border: '1px solid var(--theme-border)',
+              position: 'relative',
+              overflow: 'hidden'
+            }}
+          >
+            {/* Декоративная полоска */}
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '3px',
+              background: 'linear-gradient(90deg, var(--color-blue-500) 0%, var(--color-blue-600) 100%)'
+            }} />
+            
+            <Group gap="md" align="center" style={{ position: 'relative' }}>
+              {/* Красивая рамка для превью */}
+              <div style={{
+                position: 'relative',
+                borderRadius: '12px',
+                overflow: 'hidden',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                border: '2px solid var(--theme-border)',
+                background: 'var(--theme-bg-elevated)',
+                padding: '8px'
+              }}>
+                {typeof file.source === 'string' ? (
+                  <img 
+                    src={`${API}/${String(file.source).replace(/\\/g, '/')}`} 
+                    alt={String(file.source).split('\\').pop() || 'Файл'} 
+                    style={{ 
+                      height: 60, 
+                      width: 100, 
+                      objectFit: 'contain', 
+                      borderRadius: '8px',
+                      display: 'block'
+                    }} 
+                  />
+                ) : (
+                  <img 
+                    src={URL.createObjectURL(file.source as File)} 
+                    alt={(file.source as File).name} 
+                    style={{ 
+                      height: 60, 
+                      width: 100, 
+                      objectFit: 'contain', 
+                      borderRadius: '8px',
+                      display: 'block'
+                    }} 
+                  />
+                )}
+                {/* Индикатор успеха */}
+                <div style={{
+                  position: 'absolute',
+                  top: '4px',
+                  right: '4px',
+                  width: '16px',
+                  height: '16px',
+                  background: 'linear-gradient(135deg, var(--color-green-500) 0%, var(--color-green-600) 100%)',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
+                }}>
+                  <div style={{
+                    width: '8px',
+                    height: '8px',
+                    background: 'white',
+                    borderRadius: '50%'
+                  }} />
+                </div>
+              </div>
+              
+              <Stack gap="xs">
+                <Text size="sm" fw={600} c="var(--theme-text-primary)">
+                  Предпросмотр
+                </Text>
+                <Text size="xs" c="dimmed" fw={500}>
+                  {typeof file.source === 'string' 
+                    ? String(file.source).split('\\').pop() || 'Файл'
+                    : (file.source as File).name
+                  }
+                </Text>
+              </Stack>
+            </Group>
+          </Card>
+        )}
+        
+        <div className="construction-fields-grid">
+          {/* Левая колонка - поля конструкции */}
+          <Stack gap="lg">
+            {fileFields.slice(0, Math.ceil(fileFields.length / 2)).map((field, fieldIndex) => (
+              <div key={fieldIndex} style={{ position: 'relative' }}>
+                {renderFileField(field)}
+              </div>
+            ))}
+          </Stack>
+
+          {/* Правая колонка - остальные поля + документы */}
+          <Stack gap="lg">
+            {fileFields.slice(Math.ceil(fileFields.length / 2)).map((field, fieldIndex) => (
+              <div key={fieldIndex} style={{ position: 'relative' }}>
+                {renderFileField(field)}
+              </div>
+            ))}
+            
+            {/* Документы к конструкции */}
+            {fileAttachments && onFileAttachmentsChange && (
+              <Card 
+                p="md" 
+                withBorder 
+                radius="md" 
+                style={{ 
+                  background: 'linear-gradient(135deg, var(--theme-bg-secondary) 0%, var(--theme-bg-elevated) 100%)',
+                  border: '1px solid var(--theme-border)',
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}
+              >
+                {/* Декоративная полоска */}
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '3px',
+                  background: 'linear-gradient(90deg, var(--color-blue-500) 0%, var(--color-blue-600) 100%)'
+                }} />
+                
+                <Stack gap="md" style={{ position: 'relative' }}>
+                  <Group gap="sm" align="center">
+                    <div style={{
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '50%',
+                      background: 'var(--color-blue-500)'
+                    }} />
+                    <Text size="sm" fw={600} c="var(--theme-text-primary)">
+                      {attachmentLabel || "📎 Документы к конструкциям"}
+                    </Text>
+                  </Group>
+                  
+                  <Group justify="space-between" align="center">
+                    <Text size="xs" c="dimmed" fw={500}>
+                      {fileAttachmentsList.length + existingDocsList.length} вложений
+                    </Text>
+                    <Group gap="xs">
+                      <Button
+                        size="xs"
+                        variant="gradient"
+                        gradient={{ from: 'blue', to: 'cyan', deg: 45 }}
+                        leftSection={<IconUpload size={12} />}
+                        radius="md"
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.multiple = true;
+                          input.accept = attachmentAccept || "*";
+                          input.onchange = (e) => {
+                            const files = Array.from((e.target as HTMLInputElement).files || []);
+                            if (files.length > 0) {
+                              onFileAttachmentsChange(fileId, [...fileAttachmentsList, ...files]);
+                            }
+                          };
+                          input.click();
+                        }}
+                        style={{ 
+                          boxShadow: '0 2px 4px rgba(59, 130, 246, 0.3)',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        Добавить
+                      </Button>
+                      {fileAttachmentsList.length > 0 && (
+                        <Button
+                          size="xs"
+                          variant="light"
+                          color="red"
+                          leftSection={<IconX size={12} />}
+                          radius="md"
+                          onClick={() => onFileAttachmentsChange(fileId, [])}
+                          style={{ 
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          Очистить
+                        </Button>
+                      )}
+                    </Group>
+                  </Group>
+                  
+                  {(fileAttachmentsList.length > 0 || existingDocsList.length > 0) && (
+                    <Stack gap="xs" mt="sm">
+                      {/* Существующие документы */}
+                      {existingDocsList.map((doc, docIndex) => (
+                        <Card
+                          key={`existing-${docIndex}`}
+                          p="sm"
+                          withBorder
+                          radius="md"
+                          style={{ 
+                            background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
+                            border: '1px solid var(--theme-border)',
+                            transition: 'all 0.2s ease',
+                            cursor: 'pointer',
+                            position: 'relative'
+                          }}
+                        >
+                          <Group justify="space-between" align="center">
+                            <Group gap="sm" align="center" style={{ flex: 1 }}>
+                              <div style={{
+                                width: '32px',
+                                height: '32px',
+                                borderRadius: 'var(--radius-sm)',
+                                background: 'linear-gradient(135deg, var(--color-green-500), var(--color-green-600))',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: 'white',
+                                fontSize: '12px',
+                                fontWeight: 'bold'
+                              }}>
+                                📄
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <Text size="sm" fw={600} c="var(--theme-text-primary)" truncate>
+                                  {doc.source?.split('\\').pop() || doc.source?.split('/').pop() || 'Документ'}
+                                </Text>
+                                <Text size="xs" c="dimmed">
+                                  Существующий документ
+                                </Text>
+                              </div>
+                            </Group>
+                            <Badge color="green" variant="light" size="xs">
+                              Существует
+                            </Badge>
+                          </Group>
+                        </Card>
+                      ))}
+                      
+                      {/* Новые документы */}
+                      {fileAttachmentsList.map((attachment, attachmentIndex) => (
+                        <Card
+                          key={attachmentIndex}
+                          p="sm"
+                          withBorder
+                          radius="md"
+                          style={{ 
+                            background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
+                            border: '1px solid var(--theme-border)',
+                            transition: 'all 0.2s ease',
+                            cursor: 'pointer',
+                            position: 'relative',
+                            overflow: 'hidden'
+                          }}
+                          className="attachment-item"
+                        >
+                          {/* Декоративная полоска */}
+                          <div style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            height: '2px',
+                            background: 'linear-gradient(90deg, var(--color-blue-500) 0%, var(--color-blue-600) 100%)'
+                          }} />
+                          
+                          <Group justify="space-between" align="center" style={{ position: 'relative' }}>
+                            <Group gap="sm" align="center">
+                              <div style={{
+                                width: '6px',
+                                height: '6px',
+                                borderRadius: '50%',
+                                background: 'var(--color-blue-500)'
+                              }} />
+                              <Text size="xs" truncate style={{ maxWidth: '150px', fontWeight: 500 }}>
+                                {attachment.name}
+                              </Text>
+                            </Group>
+                            <ActionIcon
+                              size="sm"
+                              variant="light"
+                              color="red"
+                              radius="md"
+                              onClick={() => {
+                                const newAttachments = fileAttachmentsList.filter((_, i) => i !== attachmentIndex);
+                                onFileAttachmentsChange(fileId, newAttachments);
+                              }}
+                              style={{ 
+                                transition: 'all 0.2s ease'
+                              }}
+                            >
+                              <IconX size={12} />
+                            </ActionIcon>
+                          </Group>
+                        </Card>
+                      ))}
+                    </Stack>
+                  )}
+                </Stack>
+              </Card>
+            )}
+          </Stack>
+        </div>
+      </Stack>
+    </Card>
+  );
+});
 
 export const DynamicFormModal = ({
   opened,
@@ -291,35 +833,45 @@ export const DynamicFormModal = ({
   cancelButtonText,
   hideButtons = false,
   size = 'md',
-  fullScreen = false
+  fullScreen = false,
+  fileAttachments,
+  onFileAttachmentsChange,
+  attachmentLabel,
+  attachmentAccept,
+  existingDocuments,
+  fileCardTitle = 'Конструкция'
 }: DynamicFormModalProps) => {
   const [previewId, setPreviewId] = useState<string | null>(null);
+  
+  // Отладка изменений previewId
+  useEffect(() => {
+  }, [previewId]);
   const form = useForm({ initialValues });
   const [attachmentsMap, setAttachmentsMap] = useState<Record<string, FileAttachment[]>>({});
   const initializedRef = useRef(false);
+
+  // Оптимизированная функция нормализации данных
+  const buildNormalizedAttachments = useCallback((arr: any[]): FileAttachment[] => {
+    return arr.map((att: any) => {
+        const derivedMeta: Record<string, any> = att?.meta ? { ...att.meta } : {};
+        Object.keys(att || {}).forEach((key) => {
+        if (!KNOWN_ATTACHMENT_KEYS.has(key) && !(key in derivedMeta)) {
+            derivedMeta[key] = att[key];
+          }
+        });
+        return { ...att, meta: derivedMeta } as FileAttachment;
+      });
+  }, []);
 
   useEffect(() => {
     if (opened && !initializedRef.current) {
       // Initialize once per open session
       const fileFieldNames = (fields || []).filter(f => f.type === 'file').map(f => f.name);
 
-      const buildNormalized = (arr: any[]) => arr.map((att: any) => {
-        const knownKeys = new Set([
-          'id', 'userAdd', 'userAddId', 'source', 'type', 'recordId', 'createdAt', 'updatedAt',
-        ]);
-        const derivedMeta: Record<string, any> = att?.meta ? { ...att.meta } : {};
-        Object.keys(att || {}).forEach((key) => {
-          if (!knownKeys.has(key) && !(key in derivedMeta)) {
-            derivedMeta[key] = att[key];
-          }
-        });
-        return { ...att, meta: derivedMeta } as FileAttachment;
-      });
-
       const nextMap: Record<string, FileAttachment[]> = {};
       for (const fieldName of fileFieldNames) {
         const incoming: any[] = (initialValues as any)[fieldName] || [];
-        nextMap[fieldName] = buildNormalized(incoming);
+        nextMap[fieldName] = buildNormalizedAttachments(incoming);
       }
 
       // Backward-compat: if generic attachments provided but no specific field had values, map to first file field
@@ -329,7 +881,7 @@ export const DynamicFormModal = ({
           || (initialValues as any).rocAttachment
           || [];
         if (generic.length && (!nextMap[fileFieldNames[0]] || nextMap[fileFieldNames[0]].length === 0)) {
-          nextMap[fileFieldNames[0]] = buildNormalized(generic);
+          nextMap[fileFieldNames[0]] = buildNormalizedAttachments(generic);
         }
       }
 
@@ -343,7 +895,7 @@ export const DynamicFormModal = ({
     if (!opened) {
       initializedRef.current = false;
     }
-  }, [opened]);
+  }, [opened, fields, initialValues, form, buildNormalizedAttachments]);
 
   const handleMetaChangeFor = useCallback(
     (fieldName: string) => (id: string | undefined, meta: Record<string, any>) => {
@@ -357,6 +909,12 @@ export const DynamicFormModal = ({
     },
     [form]
   );
+
+  // Мемоизированные обработчики для оптимизации
+  const handleClose = useCallback(() => {
+    initializedRef.current = false;
+    onClose();
+  }, [onClose]);
 
   const handleFileDropFor = useCallback((fieldName: string) => (files: File[]) => {
     const newAttachments = files.map((file, idx) => ({
@@ -388,13 +946,55 @@ export const DynamicFormModal = ({
     });
   }, [form]);
 
+  // Функция для группировки полей
+  const groupFields = useCallback((fields: FormField[]) => {
+    const grouped: (FormField | FormField[])[] = [];
+    const processed = new Set<string>();
+
+    for (let i = 0; i < fields.length; i++) {
+      const field = fields[i];
+      
+      if (processed.has(field.name)) continue;
+
+      // Проверяем, есть ли у поля группировка
+      if (field.groupWith && field.groupWith.length > 0) {
+        const groupFields: FormField[] = [field];
+        processed.add(field.name);
+
+        // Находим все поля в группе
+        for (const groupFieldName of field.groupWith) {
+          const groupField = fields.find(f => f.name === groupFieldName);
+          if (groupField && !processed.has(groupField.name)) {
+            groupFields.push(groupField);
+            processed.add(groupField.name);
+          }
+        }
+
+        // Сортируем группу по порядку в исходном массиве
+        groupFields.sort((a, b) => {
+          const aIndex = fields.findIndex(f => f.name === a.name);
+          const bIndex = fields.findIndex(f => f.name === b.name);
+          return aIndex - bIndex;
+        });
+
+        grouped.push(groupFields);
+      } else {
+        grouped.push(field);
+        processed.add(field.name);
+      }
+    }
+
+    return grouped;
+  }, []);
+
   const renderField = useCallback((field: FormField) => {
     const commonProps = {
       label: field.label,
       required: field.required,
       ...form.getInputProps(field.name),
-      mb: "md" as const,
+      mb: field.mb !== undefined ? field.mb : "md" as const,
       placeholder: field.placeholder,
+      ...COMMON_FIELD_PROPS
     };
 
     switch (field.type) {
@@ -429,7 +1029,7 @@ export const DynamicFormModal = ({
               onSearchChange={(s) => field.onSearchChange?.(s)}
               disabled={field.disabled}
               placeholder={field.placeholder}
-              comboboxProps={{ withinPortal: true, zIndex: 10001 }}
+              comboboxProps={{ withinPortal: true }}
               onChange={(vals) => {
                 form.setFieldValue(field.name, vals);
                 field.onChange?.(vals, form.setFieldValue);
@@ -503,7 +1103,29 @@ export const DynamicFormModal = ({
               withDnd={field.withDnd}
               fileFields={field.fileFields || []}
               onMetaChange={handleMetaChangeFor(field.name)}
+              hidePreview={true}
             />
+            {/* Рендерим поля для каждого файла в отдельной карточке */}
+            {attachmentsMap[field.name] && attachmentsMap[field.name].length > 0 && (
+              <Stack gap="md" mt="md">
+                {attachmentsMap[field.name].map((file: any, index: number) => (
+                  <FileFieldsCard
+                    key={file.id || index}
+                    file={file}
+                    index={index}
+                    fileFields={field.fileFields || []}
+                    form={form}
+                    setFieldValue={form.setFieldValue}
+                    fileAttachments={fileAttachments}
+                    onFileAttachmentsChange={onFileAttachmentsChange}
+                    attachmentLabel={attachmentLabel}
+                    attachmentAccept={attachmentAccept}
+                    fileCardTitle={fileCardTitle}
+                    existingDocuments={existingDocuments?.[file.id] || []}
+                  />
+                ))}
+              </Stack>
+            )}
           </div>
         );
       case 'boolean':
@@ -511,7 +1133,29 @@ export const DynamicFormModal = ({
       default:
         return null;
     }
-  }, [form, handleFileDropFor, handleRemoveAttachmentFor, attachmentsMap, handleMetaChangeFor, mode]);
+  }, [form, handleFileDropFor, handleRemoveAttachmentFor, attachmentsMap, handleMetaChangeFor, fileAttachments, onFileAttachmentsChange, attachmentLabel, attachmentAccept]);
+
+  // Функция для рендеринга группы полей
+  const renderFieldGroup = useCallback((fieldGroup: FormField[]) => {
+    const groupSize = fieldGroup[0]?.groupSize || 2;
+    
+    return (
+      <div 
+        key={`group-${fieldGroup.map(f => f.name).join('-')}`} 
+        className={`field-group field-group-${groupSize}`}
+      >
+        {fieldGroup.map((field) => (
+          <div key={field.name} className="field-item">
+            {renderField({
+              ...field,
+              // Убираем mb для полей в группах
+              mb: undefined
+            })}
+          </div>
+        ))}
+      </div>
+    );
+  }, [renderField]);
 
   const renderViewField = useCallback((config: ViewFieldConfig, item: any) => (
     <div key={config.label} className="view-field">
@@ -538,7 +1182,20 @@ export const DynamicFormModal = ({
     return (
       <Card key={fileId} p="sm" withBorder className="file-card">
         <Group justify="space-between" align="center">
-          <Group gap="md" onClick={() => setPreviewId(fileId)} style={{ cursor: 'pointer', flex: 1 }}>
+          <Group gap="md" onClick={() => {
+            setPreviewId(fileId);
+          }} style={{ cursor: 'pointer', flex: 1 }}>
+            {/* Тестовая кнопка для отладки */}
+            <Button 
+              size="xs" 
+              variant="outline" 
+              onClick={(e) => {
+                e.stopPropagation();
+                setPreviewId(fileId);
+              }}
+            >
+              Test
+            </Button>
             {isImage ? (
               <img 
                 src={fileUrl} 
@@ -588,25 +1245,6 @@ export const DynamicFormModal = ({
             Скачать
           </Button>
         </Group>
-        {/* FilePreviewModal expects Attachment[] with required id:string. Map gently. */}
-        <FilePreviewModal
-          opened={previewId === fileId}
-          onClose={() => setPreviewId(null)}
-          attachments={(() => {
-            const base: any[] = (initialValues as any).attachments
-              || (initialValues as any).rkAttachment
-              || (initialValues as any).rocAttachment
-              || [];
-            const extras: any[] = (viewSecondaryAttachments || []).flatMap(s => s.list || []);
-            const all = [...base, ...extras];
-            return all.map((a: any) => ({
-              id: String(a.id || `temp-${Math.random().toString(36).slice(2, 11)}`),
-              name: typeof a.source === 'string' ? (a.source.split('\\').pop() || 'Файл') : (a.source?.name || 'Файл'),
-              url: typeof a.source === 'string' ? `${API}/${a.source}` : (a.source ? URL.createObjectURL(a.source) : ''),
-              source: typeof a.source === 'string' ? a.source : '',
-            }));
-          })()}
-        />
       </Card>
     );
   }, [previewId, initialValues]);
@@ -686,7 +1324,7 @@ export const DynamicFormModal = ({
             <Group justify="flex-end" gap="sm">
               <Button 
                 variant="outline" 
-                onClick={() => { initializedRef.current = false; onClose(); }}
+                onClick={handleClose}
                 className="cancel-button"
               >
                 Отмена
@@ -708,21 +1346,15 @@ export const DynamicFormModal = ({
 
         if (panelContent) {
           return (
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-              <form onSubmit={form.onSubmit(values => onSubmit?.({ ...values }))} style={{ flex: 1 }}>
-                <Stack>
-                  {fields.map(renderField)}
-                  {error && <Alert color="red">{error}</Alert>}
-                  {!hideButtons && (
-                    <Group justify="flex-end" mt="md">
-                      <Button variant="default" onClick={() => { initializedRef.current = false; onClose(); }}>
-                        {cancelButtonText || 'Отмена'}
-                      </Button>
-                      <Button type="submit">
-                        {submitButtonText || (mode === 'create' ? 'Создать' : 'Сохранить')}
-                      </Button>
-                    </Group>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, height: '100%' }}>
+              <form onSubmit={form.onSubmit(values => onSubmit?.({ ...values }))} style={{ flex: 1, height: '100%' }}>
+                <Stack style={{ height: '100%' }}>
+                  {groupFields(fields).map((fieldOrGroup) => 
+                    Array.isArray(fieldOrGroup) 
+                      ? renderFieldGroup(fieldOrGroup)
+                      : renderField(fieldOrGroup)
                   )}
+                  {error && <Alert color="red">{error}</Alert>}
                 </Stack>
               </form>
               <div style={{ width: 380 }}>
@@ -736,31 +1368,26 @@ export const DynamicFormModal = ({
 
         // No side panel → render classic single-column form (full width)
         return (
-          <form onSubmit={form.onSubmit(values => onSubmit?.({ ...values }))}>
-            <Stack>
-              {fields.map(renderField)}
-              {error && <Alert color="red">{error}</Alert>}
-              {!hideButtons && (
-                <Group justify="flex-end" mt="md">
-                  <Button variant="default" onClick={() => { initializedRef.current = false; onClose(); }}>
-                    {cancelButtonText || 'Отмена'}
-                  </Button>
-                  <Button type="submit">
-                    {submitButtonText || (mode === 'create' ? 'Создать' : 'Сохранить')}
-                  </Button>
-                </Group>
+          <form onSubmit={form.onSubmit(values => onSubmit?.({ ...values }))} style={{ height: '100%' }}>
+            <Stack style={{ height: '100%' }}>
+              {groupFields(fields).map((fieldOrGroup) => 
+                Array.isArray(fieldOrGroup) 
+                  ? renderFieldGroup(fieldOrGroup)
+                  : renderField(fieldOrGroup)
               )}
+              {error && <Alert color="red">{error}</Alert>}
             </Stack>
           </form>
         );
       }
     }
-  }, [mode, viewFieldsConfig, initialValues, renderViewField, renderAttachmentCard, onClose, onConfirm, form, onSubmit, fields, renderField, error, attachmentsMap, hideDefaultViewAttachments, viewExtraContent]);
+  }, [mode, viewFieldsConfig, initialValues, renderViewField, renderAttachmentCard, onClose, onConfirm, form, onSubmit, fields, renderField, error, hideDefaultViewAttachments, viewExtraContent]);
 
   return (
+    <>
     <Modal 
       opened={opened} 
-      onClose={() => { initializedRef.current = false; onClose(); }} 
+      onClose={handleClose} 
       title={title} 
       size={size} 
       radius="lg"
@@ -777,15 +1404,97 @@ export const DynamicFormModal = ({
         content: {
           width: '100vw',
           maxWidth: '100vw',
-          maxHeight: '90vh'
+          maxHeight: '90vh',
+          display: 'flex',
+          flexDirection: 'column'
         },
         body: {
           width: '100%',
-          padding: 0
+          padding: 0,
+          flex: 1,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column'
         }
-      } : undefined}
+      } : {
+        content: {
+          display: 'flex',
+          flexDirection: 'column',
+          maxHeight: '90vh'
+        },
+        body: {
+          flex: 1,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column'
+        }
+      }}
     >
+      <div style={{ 
+        flex: 1, 
+        overflow: 'auto', 
+        padding: 'var(--mantine-spacing-md)',
+        margin: '0',
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
       {modalContent}
+      </div>
+      {!hideButtons && mode !== 'view' && (
+        <div style={{
+          padding: 'var(--mantine-spacing-lg) var(--mantine-spacing-md)',
+          borderTop: '1px solid var(--mantine-color-gray-3)',
+          background: 'var(--mantine-color-gray-0)',
+          display: 'flex',
+          justifyContent: 'flex-end',
+          gap: 'var(--mantine-spacing-md)',
+          borderRadius: '0 0 var(--mantine-radius-lg) var(--mantine-radius-lg)'
+        }} className="modal-footer">
+          <Button 
+            variant="default" 
+            onClick={() => { initializedRef.current = false; onClose(); }}
+          >
+            {cancelButtonText || 'Отмена'}
+          </Button>
+          <Button 
+            type="submit"
+            onClick={() => {
+              const formElement = document.querySelector('form');
+              if (formElement) {
+                formElement.requestSubmit();
+              }
+            }}
+          >
+            {submitButtonText || (mode === 'create' ? 'Создать' : 'Сохранить')}
+          </Button>
+        </div>
+      )}
     </Modal>
+    
+      {/* FilePreviewModal на уровне DynamicFormModal */}
+      <FilePreviewModal
+        opened={previewId !== null}
+        onClose={() => {
+          setPreviewId(null);
+        }}
+        attachments={(() => {
+          if (!previewId) {
+            return [];
+          }
+          const base: any[] = (initialValues as any).attachments
+            || (initialValues as any).rkAttachment
+            || (initialValues as any).rocAttachment
+            || [];
+          const extras: any[] = (viewSecondaryAttachments || []).flatMap(s => s.list || []);
+          const all = [...base, ...extras];
+          const mapped = all.map((a: any) => ({
+            id: String(a.id || `temp-${Math.random().toString(36).slice(2, 11)}`),
+            name: typeof a.source === 'string' ? (a.source.split('\\').pop() || 'Файл') : (a.source?.name || 'Файл'),
+            source: typeof a.source === 'string' ? `${API}/${a.source}` : (a.source ? a.source : ''),
+          }));
+          return mapped;
+        })()}
+      />
+    </>
   );
 };

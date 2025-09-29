@@ -237,12 +237,12 @@ model News {
 }
 
 model Bookmarks {
-  id     String @id @default(uuid())
-  name   String
-  url    String @unique
-  userId String
-  order  Int    @default(0)
-  user   User   @relation(fields: [userId], references: [id])
+  id         String  @id @default(uuid())
+  name       String
+  url        String  @unique
+  userId     String
+  order      Int     @default(0)
+  user       User    @relation(fields: [userId], references: [id])
 }
 
 /// AXO
@@ -398,25 +398,25 @@ model RK {
 }
 
 model RKAttachment {
-  id               String    @id @default(uuid())
-  createdAt        DateTime  @default(now())
-  userAddId        String
-  source           String
-  type             String
-  recordId         String
-  sizeXY           String
-  clarification    String
-  agreedTo         DateTime?
-  approvalStatusId String?
-  typeStructureId  String?
-  typeAttachment   String
+  id                 String         @id @default(uuid())
+  createdAt          DateTime       @default(now())
+  userAddId          String
+  source             String
+  type               String
+  recordId           String
+  sizeXY             String
+  clarification      String
+  agreedTo           DateTime?
+  approvalStatusId   String?
+  typeStructureId    String?
+  typeAttachment     String
   parentAttachmentId String?
-  approvalStatus   Type?     @relation("RK_approvalStatus", fields: [approvalStatusId], references: [id])
-  rk               RK        @relation(fields: [recordId], references: [id])
-  typeStructure    Type?     @relation("RK_typeStructure", fields: [typeStructureId], references: [id])
-  userAdd          User      @relation(fields: [userAddId], references: [id])
-  parentAttachment RKAttachment? @relation("RKAttachment_Parent", fields: [parentAttachmentId], references: [id])
-  childAttachments RKAttachment[] @relation("RKAttachment_Parent")
+  approvalStatus     Type?          @relation("RK_approvalStatus", fields: [approvalStatusId], references: [id])
+  parentAttachment   RKAttachment?  @relation("RKAttachment_Parent", fields: [parentAttachmentId], references: [id])
+  childAttachments   RKAttachment[] @relation("RKAttachment_Parent")
+  rk                 RK             @relation(fields: [recordId], references: [id])
+  typeStructure      Type?          @relation("RK_typeStructure", fields: [typeStructureId], references: [id])
+  userAdd            User           @relation(fields: [userAddId], references: [id])
 }
 
 model Doc {
@@ -513,6 +513,23 @@ model Slider {
   updatedAt   DateTime  @updatedAt
   addedBy     User      @relation("added", fields: [addedById], references: [id])
   updatedBy   User?     @relation("updated", fields: [updatedById], references: [id])
+}
+
+model RadioStream {
+  id               String    @id @default(cuid())
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  name             String
+  branchTypeOfDist String
+  frequencySongs   Int
+  fadeInDuration   Int
+  volumeLevel      Int
+  startDate        DateTime
+  endDate          DateTime?
+  attachment       String?
+  isActive         Boolean   @default(true)
+
+  @@map("RadioStream")
 }
 
 enum Role {

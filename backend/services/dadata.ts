@@ -24,6 +24,23 @@ export interface DadataParty {
   liquidationDate?: string;
   successorName?: string;
   successorINN?: string;
+  // Расширенные поля
+  phones?: string[];
+  emails?: string[];
+  managerName?: string;
+  managerPost?: string;
+  capital?: number;
+  revenue?: number;
+  expenses?: number;
+  licenses?: string[];
+  courtDecisions?: string[];
+  taxViolations?: string[];
+  isReliable?: boolean;
+  founders?: Array<{
+    name: string;
+    inn: string;
+    share: number;
+  }>;
 }
 
 export async function suggestParty(query: string): Promise<DadataParty[]> {
@@ -75,6 +92,39 @@ export async function findPartyByInn(inn: string): Promise<DadataParty | null> {
   }).catch(() => ({ data: { suggestions: [] } } as any));
   const first = resp?.data?.suggestions?.[0]?.data;
   if (!first) return null;
+  
+  // Извлекаем телефоны
+  const phones = first.phones?.map((p: any) => p.data?.source).filter(Boolean) || [];
+  
+  // Извлекаем email адреса
+  const emails = first.emails?.map((e: any) => e.data?.source).filter(Boolean) || [];
+  
+  // Информация о руководителе
+  const manager = first.management;
+  
+  // Финансовая информация
+  const finance = first.finance;
+  
+  // Учредители
+  const founders = first.founders?.map((f: any) => ({
+    name: f.name || '',
+    inn: f.inn || '',
+    share: f.share || 0
+  })) || [];
+  
+  // Лицензии
+  const licenses = first.licenses?.map((l: any) => l.name).filter(Boolean) || [];
+  
+  // Судебные решения
+  const courtDecisions = first.courtDecisions?.map((c: any) => 
+    `${c.name} от ${c.date ? new Date(c.date).toLocaleDateString() : ''}`
+  ).filter(Boolean) || [];
+  
+  // Налоговые нарушения
+  const taxViolations = first.taxViolations?.map((t: any) => 
+    `${t.name} от ${t.date ? new Date(t.date).toLocaleDateString() : ''}`
+  ).filter(Boolean) || [];
+  
   return {
     inn: first.inn || '',
     kpp: first.kpp || '',
@@ -82,9 +132,25 @@ export async function findPartyByInn(inn: string): Promise<DadataParty | null> {
     name: first.name?.full_with_opf || first.name?.full || '',
     shortName: first.name?.short_with_opf || first.name?.short || '',
     address: first.address?.value || '',
-    phone: '',
-    email: '',
+    phone: phones[0] || '',
+    email: emails[0] || '',
     taxationSystem: first.opf?.short || '',
+    // Расширенные поля
+    phones,
+    emails,
+    managerName: manager?.name || '',
+    managerPost: manager?.post || '',
+    capital: finance?.capital?.value || 0,
+    revenue: finance?.revenue || 0,
+    expenses: finance?.expenses || 0,
+    licenses,
+    courtDecisions,
+    taxViolations,
+    isReliable: !first.invalid,
+    founders,
+    siEgrul: first.state?.status || '',
+    statusCode: first.state?.code,
+    liquidationDate: first.state?.liquidation_date ? new Date(first.state.liquidation_date).toISOString() : undefined,
   };
 }
 

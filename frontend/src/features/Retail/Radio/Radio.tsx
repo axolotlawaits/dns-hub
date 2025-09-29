@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
-import {Container,Title,Paper,Text,Button,Group,Stack,Modal,FileInput,Progress,Box,LoadingOverlay, TextInput} from '@mantine/core';
+import {Container,Title,Paper,Text,Button,Group,Stack,Modal,LoadingOverlay, TextInput} from '@mantine/core';
 import { TimeInput } from '@mantine/dates';
-import {  IconUpload,  IconMusic,  IconClock,  IconDeviceMobile,  IconBuilding, IconEdit, IconCheck, IconRefresh, IconPower, IconBattery, IconWifi, IconCalendar, IconPlayerPlay, IconPlayerPause, IconSettings, IconWifiOff, IconX } from '@tabler/icons-react';
+import {  IconUpload,  IconMusic,  IconClock,  IconDeviceMobile,  IconBuilding, IconEdit, IconCheck, IconRefresh, IconPower, IconBattery, IconWifi, IconCalendar, IconPlayerPlay, IconPlayerPause, IconWifiOff, IconX } from '@tabler/icons-react';
 import { notificationSystem } from '../../../utils/Push';
 import { API } from '../../../config/constants';
+import { DynamicFormModal, FormField } from '../../../utils/formModal';
+import './Radio.css';
 
 
 interface Device {
@@ -29,6 +31,22 @@ interface Branch {
   typeOfDist: string;
 }
 
+// Интерфейсы для системы радио потоков
+interface RadioStream {
+  id: string;
+  name: string;
+  branchTypeOfDist: string;
+  frequencySongs: number;
+  fadeInDuration: number;
+  volumeLevel: number;
+  startDate: string;
+  endDate?: string;
+  attachment?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface BranchWithDevices {
   branch: Branch;
   devices: Device[];
@@ -45,13 +63,19 @@ const RadioAdmin: React.FC = () => {
   const [branchesWithDevices, setBranchesWithDevices] = useState<BranchWithDevices[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
 
   const [statusMap, setStatusMap] = useState<Record<string, boolean>>({});
+
+  // Состояние для радио потоков
+  const [radioStreams, setRadioStreams] = useState<RadioStream[]>([]);
+  
+  // Состояния для нового модального окна
+  const [streamModalOpen, setStreamModalOpen] = useState(false);
+  const [streamModalMode, setStreamModalMode] = useState<'create' | 'edit' | 'view' | 'delete'>('create');
+  const [selectedStream, setSelectedStream] = useState<RadioStream | null>(null);
 
   
   // Device Management Modal
@@ -103,17 +127,18 @@ const RadioAdmin: React.FC = () => {
     const now = new Date();
     const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
     const currentYear = now.getFullYear();
-    const currentMonthFolder = `01-${currentMonth}-${currentYear}`;
+    const currentMonthFolder = `${currentMonth}-${currentYear}`;
     
     // Проверяем, есть ли музыка за текущий месяц
-    // Предполагаем, что если есть общее количество файлов, то музыка загружена
+    // TODO: В будущем нужно проверять конкретную папку текущего месяца
+    // Пока что используем общее количество файлов как индикатор
     const hasCurrentMonthMusic = stats?.totalMusicFiles && stats.totalMusicFiles > 0;
     
     // Вычисляем дату через 5 дней
     const fiveDaysFromNow = new Date(now.getTime() + (5 * 24 * 60 * 60 * 1000));
     const nextMonth = fiveDaysFromNow.getMonth() + 1;
     const nextYear = fiveDaysFromNow.getFullYear();
-    const nextMonthFolder = `01-${String(nextMonth).padStart(2, '0')}-${nextYear}`;
+    const nextMonthFolder = `${String(nextMonth).padStart(2, '0')}-${nextYear}`;
     
     // Проверяем, нужно ли предупреждение (через 5 дней будет новый месяц)
     const shouldWarn = fiveDaysFromNow.getMonth() !== now.getMonth();
@@ -130,6 +155,86 @@ const RadioAdmin: React.FC = () => {
       daysUntilNextMonth: shouldWarn ? daysUntilNextMonth : 0
     };
   }, [stats]);
+
+
+
+
+  const handleCreateStream = useCallback(() => {
+    setSelectedStream(null);
+    setStreamModalMode('create');
+    setStreamModalOpen(true);
+  }, []);
+
+
+
+
+  // Конфигурация полей для формы радио потока
+  const streamFormFields: FormField[] = [
+    {
+      name: 'name',
+      label: 'Название потока',
+      type: 'text',
+      required: true,
+      placeholder: 'Введите название потока'
+    },
+    {
+      name: 'branchTypeOfDist',
+      label: 'Тип филиала',
+      type: 'select',
+      required: true,
+      options: [
+        { value: 'Магазин', label: 'Магазин' },
+        { value: 'Самообслуживание', label: 'Самообслуживание' },
+        { value: 'Конвеер', label: 'Конвеер' },
+        { value: 'Технопоинт', label: 'Технопоинт' }
+      ]
+    },
+    {
+      name: 'frequencySongs',
+      label: 'Каждые N песен',
+      type: 'number',
+      required: true,
+      min: 1,
+      max: 100,
+      step: '1'
+    },
+    {
+      name: 'volumeLevel',
+      label: 'Уровень громкости (%)',
+      type: 'number',
+      required: true,
+      min: 0,
+      max: 100,
+      step: '1'
+    },
+    {
+      name: 'fadeInDuration',
+      label: 'Плавное появление (сек)',
+      type: 'number',
+      required: true,
+      min: 0,
+      max: 10,
+      step: '0.1'
+    },
+    {
+      name: 'startDate',
+      label: 'Дата начала',
+      type: 'date',
+      required: true
+    },
+    {
+      name: 'endDate',
+      label: 'Дата окончания',
+      type: 'date',
+      required: false
+    },
+    {
+      name: 'isActive',
+      label: 'Активен',
+      type: 'boolean',
+      required: false
+    }
+  ];
 
   const loadData = useCallback(async () => {
     try {
@@ -182,12 +287,25 @@ const RadioAdmin: React.FC = () => {
       }
 
       const sd = (statsResponse.data && statsResponse.data.data) ? statsResponse.data.data : {};
+      console.log('Stats response:', statsResponse.data);
+      console.log('Stats data:', sd);
       setStats({
         totalDevices: sd.totalDevices ?? 0,
         activeDevices: sd.activeDevices ?? 0,
         totalBranches: sd.totalBranches ?? 0,
         totalMusicFiles: sd.totalMusicFiles ?? 0
       });
+
+      // Загружаем данные о радио потоках
+      try {
+        const streamsResponse = await axios.get(`${API_BASE}/streams`);
+        const streamsData = (streamsResponse.data && streamsResponse.data.data) ? streamsResponse.data.data : [];
+        setRadioStreams(streamsData);
+      } catch (e) {
+        console.error('Error loading radio streams:', e);
+        setRadioStreams([]);
+      }
+
     } catch (err) {
       console.error('Error loading data:', err);
 
@@ -196,6 +314,36 @@ const RadioAdmin: React.FC = () => {
       setLoading(false);
     }
   }, [API_BASE]);
+
+  const handleStreamSubmit = useCallback(async (values: Record<string, any>) => {
+    try {
+      if (streamModalMode === 'create') {
+        const response = await axios.post(`${API_BASE}/streams`, values);
+        console.log('Поток создан:', response.data);
+        loadData();
+      } else if (streamModalMode === 'edit' && selectedStream) {
+        const response = await axios.put(`${API_BASE}/streams/${selectedStream.id}`, values);
+        console.log('Поток обновлен:', response.data);
+        loadData();
+      }
+      setStreamModalOpen(false);
+    } catch (error) {
+      console.error('Ошибка сохранения потока:', error);
+    }
+  }, [streamModalMode, selectedStream, loadData, API_BASE]);
+
+  const handleStreamDelete = useCallback(async () => {
+    if (selectedStream) {
+      try {
+        await axios.delete(`${API_BASE}/streams/${selectedStream.id}`);
+        console.log('Поток удален:', selectedStream.id);
+        loadData();
+        setStreamModalOpen(false);
+      } catch (error) {
+        console.error('Ошибка удаления потока:', error);
+      }
+    }
+  }, [selectedStream, loadData, API_BASE]);
 
   useEffect(() => {
     loadData();
@@ -367,40 +515,24 @@ const RadioAdmin: React.FC = () => {
     }
   };
 
-  const handleFileSelect = (files: File[] | null) => {
-    if (files) {
-      setSelectedFiles(Array.from(files));
-    }
-  };
 
-  const handleUpload = async () => {
-    if (selectedFiles.length === 0) return;
+  const handleUpload = async (values: Record<string, any>) => {
+    const files = values.files || selectedFiles;
+    if (files.length === 0) return;
 
     try {
-      setUploading(true);
-      setUploadProgress(0);
-
-
-      for (let i = 0; i < selectedFiles.length; i++) {
-        const file = selectedFiles[i];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
         const formData = new FormData();
         formData.append('music', file);
 
         await axios.post(`${API_BASE}/upload`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-          onUploadProgress: (progressEvent) => {
-            const progress = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 1));
-            setUploadProgress(progress);
-          }
+          headers: { 'Content-Type': 'multipart/form-data' }
         });
-
-        setUploadProgress(((i + 1) / selectedFiles.length) * 100);
       }
-
 
       setSelectedFiles([]);
       setUploadModalOpen(false);
-      setUploadProgress(0);
       
       setTimeout(loadData, 1000);
     } catch (err) {
@@ -408,7 +540,7 @@ const RadioAdmin: React.FC = () => {
 
       try { notificationSystem.addNotification('Ошибка', 'Ошибка загрузки файлов', 'error'); } catch {}
     } finally {
-      setUploading(false);
+      // Upload completed
     }
   };
 
@@ -615,6 +747,102 @@ const RadioAdmin: React.FC = () => {
               </div>
             )}
 
+            {/* Radio Streams */}
+            <div style={{
+              padding: '24px',
+              backgroundColor: 'var(--layer)',
+              borderRadius: '16px',
+              boxShadow: 'var(--soft-shadow)',
+              border: '1px solid var(--outline-shadow)'
+            }}>
+              <Group justify="space-between" mb="md">
+                <Title order={2} size="h3" style={{ color: 'var(--font)', fontSize: '20px' }}>
+                  <IconMusic size={24} style={{ marginRight: 8, color: 'var(--font-info)' }} />
+                  Радио потоки
+                </Title>
+                <Button 
+                  onClick={handleCreateStream}
+                  leftSection={<IconMusic size={16} />}
+                  variant="outline"
+                  style={{
+                    borderColor: 'var(--select)',
+                    color: 'var(--font)',
+                    borderRadius: '8px',
+                    transition: 'var(--hover-transition)'
+                  }}
+                >
+                  Добавить поток
+                </Button>
+              </Group>
+              
+              {radioStreams.length > 0 ? (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+                  {radioStreams.map((stream) => (
+                    <Paper key={stream.id} p="md" withBorder style={{
+                      backgroundColor: 'var(--theme-bg-elevated)',
+                      border: '1px solid var(--theme-border)',
+                      borderRadius: '12px',
+                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+                      transition: 'all 0.2s ease'
+                    }}>
+                      <Group justify="space-between" mb="sm">
+                        <Text fw={600} size="lg" style={{ color: 'var(--theme-text-primary)' }}>
+                          {stream.name}
+                        </Text>
+                        <Group gap="xs">
+                          {stream.isActive ? (
+                            <div style={{
+                              width: '8px',
+                              height: '8px',
+                              borderRadius: '50%',
+                              backgroundColor: '#10b981'
+                            }} />
+                          ) : (
+                            <div style={{
+                              width: '8px',
+                              height: '8px',
+                              borderRadius: '50%',
+                              backgroundColor: '#ef4444'
+                            }} />
+                          )}
+                          <Text size="xs" style={{ color: stream.isActive ? '#10b981' : '#ef4444' }}>
+                            {stream.isActive ? 'Активен' : 'Неактивен'}
+                          </Text>
+                        </Group>
+                      </Group>
+                      
+                      <Stack gap="xs">
+                        <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                          Тип филиала: <Text span fw={500} style={{ color: 'var(--theme-text-primary)' }}>{stream.branchTypeOfDist}</Text>
+                        </Text>
+                        <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                          Частота: <Text span fw={500} style={{ color: 'var(--theme-text-primary)' }}>каждые {stream.frequencySongs} песен</Text>
+                        </Text>
+                        <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                          Громкость: <Text span fw={500} style={{ color: 'var(--theme-text-primary)' }}>{stream.volumeLevel}%</Text>
+                        </Text>
+                        <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                          Плавность: <Text span fw={500} style={{ color: 'var(--theme-text-primary)' }}>{stream.fadeInDuration}с</Text>
+                        </Text>
+                        {stream.attachment && (
+                          <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                            Файл: <Text span fw={500} style={{ color: 'var(--theme-text-primary)' }}>{stream.attachment}</Text>
+                          </Text>
+                        )}
+                        <Text size="xs" style={{ color: 'var(--theme-text-tertiary)' }}>
+                          Создан: {new Date(stream.createdAt).toLocaleDateString('ru-RU')}
+                        </Text>
+                      </Stack>
+                    </Paper>
+                  ))}
+                </div>
+              ) : (
+                <Text size="sm" style={{ color: 'var(--theme-text-secondary)', textAlign: 'center', padding: '40px' }}>
+                  Радио потоки не найдены. Создайте первый поток для начала работы.
+                </Text>
+              )}
+            </div>
+
             {/* Music Upload */}
             <div style={{
               padding: '24px',
@@ -628,22 +856,37 @@ const RadioAdmin: React.FC = () => {
                   <IconUpload size={24} style={{ marginRight: 8, color: 'var(--font-info)' }} />
                   Загрузка музыки
                 </Title>
-                <Button 
-                  onClick={() => setUploadModalOpen(true)}
-                  leftSection={<IconUpload size={16} />}
-                  style={{
-                    backgroundColor: 'var(--select)',
-                    color: 'var(--font-contrast)',
-                    border: 'none',
-                    borderRadius: '8px',
-                    transition: 'var(--hover-transition)'
-                  }}
-                >
-                  Загрузить файлы
-                </Button>
+                <Group gap="sm">
+                  <Button 
+                    onClick={handleCreateStream}
+                    leftSection={<IconMusic size={16} />}
+                    variant="outline"
+                    style={{
+                      borderColor: 'var(--select)',
+                      color: 'var(--font)',
+                      borderRadius: '8px',
+                      transition: 'var(--hover-transition)'
+                    }}
+                  >
+                    Радио потоки
+                  </Button>
+                  <Button 
+                    onClick={() => setUploadModalOpen(true)}
+                    leftSection={<IconUpload size={16} />}
+                    style={{
+                      backgroundColor: 'var(--select)',
+                      color: 'var(--font-contrast)',
+                      border: 'none',
+                      borderRadius: '8px',
+                      transition: 'var(--hover-transition)'
+                    }}
+                  >
+                    Загрузить файлы
+                  </Button>
+                </Group>
               </Group>
               <Text style={{ color: 'var(--font-aux)', fontSize: '14px' }}>
-                Загружайте MP3 файлы для воспроизведения в филиалах. Файлы автоматически сохраняются в папку текущего месяца.
+                Загружайте MP3 файлы для воспроизведения в филиалах. Файлы автоматически сохраняются в папку retail/music/{musicStatus?.currentMonthFolder || 'текущий месяц'}.
               </Text>
             </div>
 
@@ -803,80 +1046,86 @@ const RadioAdmin: React.FC = () => {
         </div>
       </div>
 
-      <Modal 
-        opened={uploadModalOpen} 
+      {/* Upload Modal using DynamicFormModal */}
+      <DynamicFormModal
+        opened={uploadModalOpen}
         onClose={() => setUploadModalOpen(false)}
         title="Загрузка музыкальных файлов"
+        mode="create"
+        fields={[
+          {
+            name: 'files',
+            label: 'Выберите MP3 файлы',
+            type: 'file',
+            required: true,
+            multiple: true,
+            accept: 'audio/mpeg',
+            placeholder: 'Нажмите для выбора файлов'
+          }
+        ]}
+        initialValues={{ files: selectedFiles }}
+        onSubmit={handleUpload}
+        submitButtonText="Загрузить"
+        cancelButtonText="Отмена"
         size="md"
-      >
-        <Stack gap="md">
-          <FileInput
-            label="Выберите MP3 файлы"
-            placeholder="Нажмите для выбора файлов"
-            accept="audio/mpeg"
-            multiple
-            value={selectedFiles}
-            onChange={handleFileSelect}
-            leftSection={<IconMusic size={16} />}
-          />
-          
-          {selectedFiles.length > 0 && (
-            <Text size="sm" c="dimmed">
-              Выбрано файлов: {selectedFiles.length}
-            </Text>
-          )}
-          
-          {uploading && (
-            <Box>
-              <Text size="sm" mb="xs">Загрузка...</Text>
-              <Progress value={uploadProgress} size="sm" />
-            </Box>
-          )}
-          
-          <Group justify="flex-end">
-            <Button variant="light" onClick={() => setUploadModalOpen(false)}>
-              Отмена
-            </Button>
-            <Button 
-              onClick={handleUpload}
-              loading={uploading}
-              disabled={selectedFiles.length === 0}
-              leftSection={<IconUpload size={16} />}
-            >
-              Загрузить
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
+      />
 
 
 
 
 
-      {/* Device Management Modal */}
+      {/* Device Management Modal - Info View Only */}
       <Modal 
         opened={deviceModalOpen} 
         onClose={() => setDeviceModalOpen(false)} 
-        title={`Управление устройством: ${selectedDevice?.name || ''}`} 
+        title={`Информация об устройстве: ${selectedDevice?.name || ''}`} 
         size="lg"
+        classNames={{
+          content: 'device-modal-content',
+          header: 'device-modal-header',
+          title: 'device-modal-title',
+          body: 'device-modal-body'
+        }}
       >
         {selectedDevice && (
           <Stack gap="md">
             {/* Device Info */}
-            <Paper p="md" withBorder>
-              <Text fw={500} mb="sm">Информация об устройстве</Text>
-              <Group justify="space-between">
-                <Text size="sm">IP: {selectedDevice.network}{selectedDevice.number}</Text>
-                <Text size="sm">OS: {selectedDevice.os}</Text>
-                <Text size="sm">App: {selectedDevice.app}</Text>
+            <Paper p="lg" withBorder style={{
+              background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
+              border: '1px solid var(--theme-border)',
+              borderRadius: '12px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+            }}>
+              <Text fw={600} mb="md" size="lg" style={{ color: 'var(--theme-text-primary)' }}>
+                📱 Информация об устройстве
+              </Text>
+              <Group justify="space-between" wrap="wrap">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <Text size="sm" fw={500} style={{ color: 'var(--theme-text-secondary)' }}>IP адрес</Text>
+                  <Text size="sm" style={{ color: 'var(--theme-text-primary)' }}>
+                    {selectedDevice.network}{selectedDevice.number}
+                  </Text>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <Text size="sm" fw={500} style={{ color: 'var(--theme-text-secondary)' }}>Операционная система</Text>
+                  <Text size="sm" style={{ color: 'var(--theme-text-primary)' }}>{selectedDevice.os}</Text>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <Text size="sm" fw={500} style={{ color: 'var(--theme-text-secondary)' }}>Версия приложения</Text>
+                  <Text size="sm" style={{ color: 'var(--theme-text-primary)' }}>{selectedDevice.app}</Text>
+                </div>
               </Group>
             </Paper>
 
             {/* Device Status */}
-            <Paper p="md" withBorder>
-              <Text fw={500} mb="sm">
-                <IconSettings size={16} style={{ marginRight: 8 }} />
-                Статус устройства
+            <Paper p="lg" withBorder style={{
+              background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
+              border: '1px solid var(--theme-border)',
+              borderRadius: '12px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+            }}>
+              <Text fw={600} mb="md" size="lg" style={{ color: 'var(--theme-text-primary)' }}>
+                ⚙️ Статус устройства
               </Text>
               {deviceStatus ? (
                 <Stack gap="xs">
@@ -910,10 +1159,14 @@ const RadioAdmin: React.FC = () => {
             </Paper>
 
             {/* Time Management */}
-            <Paper p="md" withBorder>
-              <Text fw={500} mb="sm">
-                <IconClock size={16} style={{ marginRight: 8 }} />
-                Управление временем
+            <Paper p="lg" withBorder style={{
+              background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
+              border: '1px solid var(--theme-border)',
+              borderRadius: '12px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+            }}>
+              <Text fw={600} mb="md" size="lg" style={{ color: 'var(--theme-text-primary)' }}>
+                🕐 Управление временем
               </Text>
               <Stack gap="sm">
                 <Group justify="space-between">
@@ -929,6 +1182,15 @@ const RadioAdmin: React.FC = () => {
                     onClick={syncTime}
                     loading={loadingDeviceAction === 'sync-time'}
                     leftSection={<IconClock size={16} />}
+                    style={{
+                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontWeight: '500',
+                      boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
+                      transition: 'all 0.2s ease'
+                    }}
                   >
                     Синхронизировать с сервером
                   </Button>
@@ -965,7 +1227,16 @@ const RadioAdmin: React.FC = () => {
                     variant="light" 
                     onClick={setTime}
                     loading={loadingDeviceAction === 'set-time'}
-                    style={{ alignSelf: 'end' }}
+                    style={{ 
+                      alignSelf: 'end',
+                      background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontWeight: '500',
+                      boxShadow: '0 4px 12px rgba(139, 92, 246, 0.3)',
+                      transition: 'all 0.2s ease'
+                    }}
                   >
                     Установить
                   </Button>
@@ -974,8 +1245,15 @@ const RadioAdmin: React.FC = () => {
             </Paper>
 
             {/* Playback Time Settings */}
-            <Paper p="md" withBorder>
-              <Text fw={500} mb="sm">Время воспроизведения</Text>
+            <Paper p="lg" withBorder style={{
+              background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
+              border: '1px solid var(--theme-border)',
+              borderRadius: '12px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+            }}>
+              <Text fw={600} mb="md" size="lg" style={{ color: 'var(--theme-text-primary)' }}>
+                🎵 Время воспроизведения
+              </Text>
               <Stack gap="sm">
                 <Group grow>
                   <TimeInput
@@ -1009,14 +1287,30 @@ const RadioAdmin: React.FC = () => {
                   onClick={updatePlaybackTime}
                   loading={loadingDeviceAction === 'update-playback-time'}
                   leftSection={<IconClock size={16} />}
+                  style={{
+                    background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontWeight: '500',
+                    boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)',
+                    transition: 'all 0.2s ease'
+                  }}
                 >
                   Обновить время воспроизведения
                 </Button>
               </Stack>
             </Paper>
             {/* Device Actions */}
-            <Paper p="md" withBorder>
-              <Text fw={500} mb="sm">Действия с устройством</Text>
+            <Paper p="lg" withBorder style={{
+              background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
+              border: '1px solid var(--theme-border)',
+              borderRadius: '12px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+            }}>
+              <Text fw={600} mb="md" size="lg" style={{ color: 'var(--theme-text-primary)' }}>
+                🔧 Действия с устройством
+              </Text>
               <Group grow>
                 <Button 
                   variant="light" 
@@ -1024,6 +1318,15 @@ const RadioAdmin: React.FC = () => {
                   onClick={restartApp}
                   loading={loadingDeviceAction === 'restart-app'}
                   leftSection={<IconRefresh size={16} />}
+                  style={{
+                    background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontWeight: '500',
+                    boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
+                    transition: 'all 0.2s ease'
+                  }}
                 >
                   Перезапустить приложение
                 </Button>
@@ -1033,6 +1336,15 @@ const RadioAdmin: React.FC = () => {
                   onClick={rebootDevice}
                   loading={loadingDeviceAction === 'reboot'}
                   leftSection={<IconPower size={16} />}
+                  style={{
+                    background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontWeight: '500',
+                    boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)',
+                    transition: 'all 0.2s ease'
+                  }}
                 >
                   Перезагрузить устройство
                 </Button>
@@ -1041,6 +1353,40 @@ const RadioAdmin: React.FC = () => {
           </Stack>
         )}
       </Modal>
+
+
+      {/* Новое модальное окно для радио потоков */}
+      <DynamicFormModal
+        opened={streamModalOpen}
+        onClose={() => setStreamModalOpen(false)}
+        title={
+          streamModalMode === 'create' ? 'Создание радио потока' :
+          streamModalMode === 'edit' ? 'Редактирование радио потока' :
+          streamModalMode === 'view' ? 'Просмотр радио потока' :
+          'Удаление радио потока'
+        }
+        mode={streamModalMode}
+        fields={streamFormFields}
+        initialValues={selectedStream || {
+          name: '',
+          branchTypeOfDist: '',
+          frequencySongs: 5,
+          volumeLevel: 80,
+          fadeInDuration: 2,
+          startDate: new Date().toISOString().split('T')[0],
+          endDate: '',
+          isActive: true
+        }}
+        onSubmit={streamModalMode === 'delete' ? undefined : handleStreamSubmit}
+        onConfirm={streamModalMode === 'delete' ? handleStreamDelete : undefined}
+        submitButtonText={
+          streamModalMode === 'create' ? 'Создать поток' :
+          streamModalMode === 'edit' ? 'Сохранить изменения' :
+          undefined
+        }
+        cancelButtonText="Отмена"
+        size="lg"
+      />
     </div>
   );
 };

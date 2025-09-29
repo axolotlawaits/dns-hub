@@ -8,8 +8,18 @@ import { BranchType } from "../app/handbook/Branch"
 import { EmployeeType } from "../app/handbook/Employee"
 import { Tool } from "./Tools"
 
-function Search() {
-  const [opened, { open, close }] = useDisclosure(false)
+interface SearchProps {
+  opened?: boolean;
+  onClose?: () => void;
+  showButton?: boolean;
+}
+
+function Search({ opened: externalOpened, onClose: externalOnClose, showButton = true }: SearchProps = {}) {
+  const [internalOpened, { open, close }] = useDisclosure(false)
+  
+  // Используем внешнее управление, если передано, иначе внутреннее
+  const opened = externalOpened !== undefined ? externalOpened : internalOpened
+  const handleClose = externalOnClose || close
   const [branchResult, setBranchResult] = useState<BranchType[]>([])
   const [employeeResult, setEmployeeResult] = useState<EmployeeType[]>([])
   const [toolResult, setToolResult] = useState<Tool[]>([])
@@ -36,10 +46,10 @@ function Search() {
   }, [])
 
   const onResultClick = useCallback((link: string) => {
-    close()
+    handleClose()
     clearData()
     navigate(link)
-  }, [close, navigate])
+  }, [handleClose, navigate])
 
 
   const clearData = useCallback(() => {
@@ -380,7 +390,7 @@ function Search() {
     <>
       <Modal
         opened={opened}
-        onClose={() => { close(); clearData(); setText(''); }}
+        onClose={() => { handleClose(); clearData(); setText(''); }}
         title=""
         size="90%"
         radius="lg"
@@ -437,7 +447,7 @@ function Search() {
                       size="lg"
                       variant="subtle"
                       color="white"
-                      onClick={() => { close(); clearData(); setText(''); }}
+                      onClick={() => { handleClose(); clearData(); setText(''); }}
                       style={{
                         background: 'rgba(255, 255, 255, 0.2)',
                         backdropFilter: 'blur(10px)',
@@ -460,7 +470,7 @@ function Search() {
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && text.trim()) {
                         navigate(`/search?text=${encodeURIComponent(text)}`);
-                        close();
+                        handleClose();
                         clearData();
                         setText('');
                       }
@@ -511,7 +521,7 @@ function Search() {
                     onClick={() => {
                       if (text.trim()) {
                         navigate(`/search?text=${encodeURIComponent(text)}`);
-                        close();
+                        handleClose();
                         clearData();
                         setText('');
                       }
@@ -534,32 +544,34 @@ function Search() {
         </Box>
       </Modal>
       
-      <Button
-        style={{
-          background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-600) 100%)',
-          border: 'none',
-          borderRadius: 'var(--radius-xl)',
-          color: 'white',
-          fontWeight: 'var(--font-weight-medium)',
-          boxShadow: 'var(--theme-shadow-md)',
-          transition: 'var(--transition-all)',
-          padding: 'var(--space-3) var(--space-6)',
-          width: '200px'
-        }}
-        size="md"
-        leftSection={<IconSearch size={18} />}
-        onClick={open}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.transform = 'translateY(-2px)'
-          e.currentTarget.style.boxShadow = 'var(--theme-shadow-lg)'
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.transform = 'translateY(0)'
-          e.currentTarget.style.boxShadow = 'var(--theme-shadow-md)'
-        }}
-      >
-        Поиск
-      </Button>
+      {showButton && (
+        <Button
+          style={{
+            background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-600) 100%)',
+            border: 'none',
+            borderRadius: 'var(--radius-xl)',
+            color: 'white',
+            fontWeight: 'var(--font-weight-medium)',
+            boxShadow: 'var(--theme-shadow-md)',
+            transition: 'var(--transition-all)',
+            padding: 'var(--space-3) var(--space-6)',
+            width: '200px'
+          }}
+          size="md"
+          leftSection={<IconSearch size={18} />}
+          onClick={open}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-2px)'
+            e.currentTarget.style.boxShadow = 'var(--theme-shadow-lg)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)'
+            e.currentTarget.style.boxShadow = 'var(--theme-shadow-md)'
+          }}
+        >
+          Поиск
+        </Button>
+      )}
     </>
   )
 }
