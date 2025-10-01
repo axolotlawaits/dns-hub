@@ -83,6 +83,7 @@ interface FileFieldConfig {
   clearable?: boolean;
   allowDeselect?: boolean;
   onChange?: (value: any) => void;
+  onKeyDown?: (e: React.KeyboardEvent) => void; // Обработчик нажатия клавиш
 }
 
 export interface FormField {
@@ -114,6 +115,7 @@ export interface FormField {
   mask?: (value: string) => string;
   placeholder?: string;
   mb?: string | number; // Отступ снизу для поля
+  onKeyDown?: (e: React.KeyboardEvent) => void; // Обработчик нажатия клавиш
 }
 
 export interface ViewFieldConfig {
@@ -332,11 +334,76 @@ const FileUploadComponent = memo(({
 
   return (
     <>
-      <input
-        type="file"
-        multiple
-        onChange={(e) => e.target.files && onFilesDrop(Array.from(e.target.files))}
-      />
+      <Paper
+        p="xl"
+        withBorder
+        radius="lg"
+        style={{
+          background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
+          border: '2px dashed var(--theme-border)',
+          cursor: 'pointer',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          position: 'relative',
+          overflow: 'hidden'
+        }}
+        className="file-upload-area"
+      >
+        {/* Декоративный элемент */}
+        <div style={{
+          position: 'absolute',
+          top: '-20px',
+          right: '-20px',
+          width: '80px',
+          height: '80px',
+          background: 'linear-gradient(135deg, var(--color-blue-500) 0%, var(--color-blue-600) 100%)',
+          borderRadius: '50%',
+          opacity: 0.1,
+        }} />
+        
+        <Stack align="center" gap="md">
+          <div style={{
+            width: '60px',
+            height: '60px',
+            background: 'linear-gradient(135deg, var(--color-blue-500) 0%, var(--color-blue-600) 100%)',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
+          }}>
+            <IconUpload size={24} color="white" />
+          </div>
+          
+          <Stack align="center" gap="xs">
+            <Text fw={600} size="lg" c="var(--theme-text-primary)">
+              Загрузить файл
+            </Text>
+            <Text size="sm" c="dimmed" ta="center">
+              Перетащите файл сюда или нажмите для выбора
+            </Text>
+            <Text size="xs" c="dimmed" ta="center">
+              Поддерживаются: MP3, WAV, OGG, MP4, FLAC
+            </Text>
+          </Stack>
+        </Stack>
+        
+        <input
+          type="file"
+          multiple
+          accept="audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/mp4,audio/flac,.mp3,.wav,.ogg,.mp4,.flac"
+          onChange={(e) => e.target.files && onFilesDrop(Array.from(e.target.files))}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            opacity: 0,
+            cursor: 'pointer'
+          }}
+        />
+      </Paper>
+      
       {!hidePreview && (
       <Stack mt="md">
         {attachments.map(renderAttachment)}
@@ -410,6 +477,7 @@ const FileFieldsCard = memo(({
               const masked = typeof field.mask === 'function' ? field.mask(raw) : raw;
               handleChange(masked);
             }}
+            onKeyDown={field.onKeyDown}
             placeholder={field.placeholder}
             required={isRequired}
             {...commonProps}
@@ -1003,6 +1071,7 @@ export const DynamicFormModal = ({
           <TextInput
             key={field.name}
             {...commonProps}
+            onKeyDown={field.onKeyDown}
             onChange={(e) => {
               const raw = e.target.value;
               const masked = typeof field.mask === 'function' ? field.mask(raw) : raw;
@@ -1321,22 +1390,6 @@ export const DynamicFormModal = ({
                 </Text>
               </div>
             </Group>
-            <Group justify="flex-end" gap="sm">
-              <Button 
-                variant="outline" 
-                onClick={handleClose}
-                className="cancel-button"
-              >
-                Отмена
-              </Button>
-              <Button 
-                color="red" 
-                onClick={onConfirm}
-                className="delete-button"
-              >
-                Удалить
-              </Button>
-            </Group>
           </Stack>
         );
       default: {
@@ -1458,14 +1511,19 @@ export const DynamicFormModal = ({
           </Button>
           <Button 
             type="submit"
+            color={mode === 'delete' ? 'red' : undefined}
             onClick={() => {
-              const formElement = document.querySelector('form');
-              if (formElement) {
-                formElement.requestSubmit();
+              if (mode === 'delete' && onConfirm) {
+                onConfirm();
+              } else {
+                const formElement = document.querySelector('form');
+                if (formElement) {
+                  formElement.requestSubmit();
+                }
               }
             }}
           >
-            {submitButtonText || (mode === 'create' ? 'Создать' : 'Сохранить')}
+            {submitButtonText || (mode === 'create' ? 'Создать' : mode === 'delete' ? 'Удалить' : 'Сохранить')}
           </Button>
         </div>
       )}

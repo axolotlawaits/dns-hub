@@ -22,12 +22,12 @@ const FloatingActionButton: React.FC = () => {
           <Button
             size="lg"
             radius="xl"
-            onClick={header.actionButton.onClick}
-            loading={header.actionButton.loading}
+            onClick={header.actionButton?.onClick}
+            loading={header.actionButton?.loading}
             className="fab-button"
-            leftSection={header.actionButton.icon}
+            leftSection={header.actionButton?.icon}
           >
-            {header.actionButton.text}
+            {header.actionButton?.text}
           </Button>
         </div>
       )}

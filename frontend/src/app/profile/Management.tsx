@@ -3,7 +3,7 @@ import { API } from "../../config/constants"
 import { ActionIcon, Select, TextInput, Tooltip, Box, Title, Text, Group, Card, Badge, LoadingOverlay } from "@mantine/core"
 import { useDisclosure } from "@mantine/hooks"
 import { Tool } from "../../components/Tools"
-import { IconExternalLink, IconLockAccess, IconLockOpen2, IconSearch, IconUsers, IconUser, IconBriefcase, IconShield } from "@tabler/icons-react"
+import { IconExternalLink, IconLockAccess, IconSearch, IconUsers, IconUser, IconBriefcase, IconShield } from "@tabler/icons-react"
 import { useNavigate } from "react-router"
 import { User, UserRole } from "../../contexts/UserContext"
 import { DynamicFormModal } from "../../utils/formModal"
@@ -57,7 +57,6 @@ function Management() {
 
   const modals = {
     changeAccess: useDisclosure(false),
-    changeRole: useDisclosure(false),
   }
 
   const getEntities = useCallback(async () => {
@@ -350,23 +349,14 @@ function Management() {
                 <Text size="sm" fw={500} c="var(--theme-text-primary)" mb="xs">
                   Роль
                 </Text>
-                <Group gap="xs">
-                  <Select 
-                    data={rolesData} 
-                    value={users.find((u: User) => u.id === curEntity)?.role} 
-                    onChange={updateUserRole} 
-                    placeholder="Выберите роль" 
-                    clearable
-                    style={{ flex: 1 }}
-                  />
-                  <ActionIcon 
-                    variant="light" 
-                    color="blue"
-                    onClick={() => modals.changeRole[1].open()}
-                  >
-                    <IconLockOpen2 size={16} />
-                  </ActionIcon>
-                </Group>
+                <Select 
+                  data={rolesData} 
+                  value={users.find((u: User) => u.id === curEntity)?.role} 
+                  onChange={updateUserRole} 
+                  placeholder="Выберите роль" 
+                  clearable
+                  style={{ width: '100%' }}
+                />
               </Box>
             )}
           </Group>
@@ -468,7 +458,7 @@ function Management() {
                               modals.changeAccess[1].open()
                             }}
                           >
-                            <IconLockOpen2 size={16} />
+                            <IconLockAccess size={16} />
                           </ActionIcon>
                         </Tooltip>
                         <Tooltip label="Убрать доступ">
@@ -492,7 +482,7 @@ function Management() {
                             modals.changeAccess[1].open()
                           }}
                         >
-                          <IconLockOpen2 size={16} />
+                          <IconLockAccess size={16} />
                         </ActionIcon>
                       </Tooltip>
                     )}
@@ -558,28 +548,6 @@ function Management() {
         }}
       />
 
-      <DynamicFormModal
-        opened={modals.changeRole[0]}
-        onClose={modals.changeRole[1].close}
-        title="Изменение роли пользователя"
-        mode="edit"
-        fields={[
-          {
-            name: 'role',
-            label: 'Роль',
-            type: 'select',
-            required: true,
-            options: rolesData
-          }
-        ]}
-        initialValues={{ 
-          role: curEntity && entityType === 'user' ? users.find((u: User) => u.id === curEntity)?.role || '' : ''
-        }}
-        onSubmit={(values) => {
-          updateUserRole(values.role)
-          modals.changeRole[1].close()
-        }}
-      />
     </Box>
   )
 }

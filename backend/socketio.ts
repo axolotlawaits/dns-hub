@@ -358,4 +358,11 @@ export class SocketIOService {
     await Promise.all(promises);
     return results;
   }
+
+  // Метод для отправки события всем подключенным клиентам
+  public emit(event: string, payload?: any): void {
+    if (this.io) {
+      this.io.emit(event, payload);
+    }
+  }
 }

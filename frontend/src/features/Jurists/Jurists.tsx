@@ -40,7 +40,7 @@ function Jurists() {
 
   return (
     <div>
-      <h1>Реклама</h1>
+      <h1>Юристы</h1>
       <Tools tools={tools} />
     </div>
   );

@@ -1,30 +1,10 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { API } from '../../../config/constants';
-import { 
-  Button, 
-  Title, 
-  LoadingOverlay, 
-  Group, 
-  Select, 
-  TextInput, 
-  Text, 
-  ActionIcon, 
-  Badge, 
-  Stack, 
-  MultiSelect, 
-  Alert,
-  Container,
-  Paper,
-  Grid,
-  ThemeIcon,
-  Tooltip,
-  Divider,
-  ScrollArea
-} from '@mantine/core';
+import { usePageHeader } from '../../../contexts/PageHeaderContext';
+import {  Button,  Title,  LoadingOverlay,  Group,  Select,  TextInput,  Text,  ActionIcon,  Badge,  Stack,  MultiSelect,  Alert, Container, Paper, Grid, ThemeIcon, Tooltip, Divider, ScrollArea } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { notificationSystem } from '../../../utils/Push';
 import { formatPrice } from '../../../utils/format';
-// import { TableComponent } from '../../../utils/table';
 import { DynamicFormModal } from '../../../utils/formModal';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ru';
@@ -193,6 +173,7 @@ const PrintItemCard = ({
 );
 
 const PriceTagPrinting = () => {
+  const { setHeader, clearHeader } = usePageHeader();
   const [dateFrom, setDateFrom] = useState<Date | null>(new Date());
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -210,6 +191,17 @@ const PriceTagPrinting = () => {
       type
     );
   }, []);
+
+  // Устанавливаем заголовок страницы
+  useEffect(() => {
+    setHeader({
+      title: 'Печать ценников',
+      subtitle: 'Управление печатью ценников для розничной сети',
+      icon: <Text size="xl" fw={700} c="white">🖨️</Text>
+    });
+
+    return () => clearHeader();
+  }, [setHeader, clearHeader]);
 
   const getUniqueOptions = useCallback((items: PreviewItem[], key: keyof PreviewItem) => {
     const uniqueValues = [...new Set(items.map(item => item[key]))];
@@ -426,6 +418,7 @@ const PriceTagPrinting = () => {
             onClose={closeModal}
             title="Авторизация (WEB База)"
             mode="create"
+            submitButtonText="Создать"
             fields={[
               {
                 name: 'login',
@@ -433,7 +426,19 @@ const PriceTagPrinting = () => {
                 type: 'text',
                 required: true,
                 placeholder: 'Введите логин',
-                leftSection: <IconSettings size={16} />
+                leftSection: <IconSettings size={16} />,
+                onKeyDown: (e: React.KeyboardEvent) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const form = e.currentTarget.closest('form');
+                    if (form) {
+                      const submitButton = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+                      if (submitButton) {
+                        submitButton.click();
+                      }
+                    }
+                  }
+                }
               },
               {
                 name: 'password',
@@ -441,6 +446,18 @@ const PriceTagPrinting = () => {
                 type: 'text',
                 required: true,
                 placeholder: 'Введите пароль',
+                onKeyDown: (e: React.KeyboardEvent) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const form = e.currentTarget.closest('form');
+                    if (form) {
+                      const submitButton = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+                      if (submitButton) {
+                        submitButton.click();
+                      }
+                    }
+                  }
+                }
                 // Для пароля можно добавить маскирование
               }
             ]}
@@ -467,7 +484,7 @@ const PriceTagPrinting = () => {
         <Paper 
           shadow="xl" 
           radius="xl" 
-          p="xl"
+          p="lg"
           style={{
             background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05))',
             backdropFilter: 'blur(20px)',
@@ -475,28 +492,6 @@ const PriceTagPrinting = () => {
           }}
         >
           <Stack gap="lg">
-            <Group justify="space-between" align="center">
-              <Group gap="md">
-                <ThemeIcon size={50} radius="xl" variant="gradient" gradient={{ from: 'blue', to: 'cyan' }}>
-                  <IconPrinter size={28} />
-                </ThemeIcon>
-                <div>
-                  <Title order={1} c="white">Печать ценников</Title>
-                  <Text c="dimmed">Управление печатью ценников для розничной сети</Text>
-                </div>
-              </Group>
-              
-              <Button
-                variant="gradient"
-                gradient={{ from: 'red', to: 'orange' }}
-                leftSection={<IconRefresh size={16} />}
-                onClick={fetchPreview}
-                loading={loading}
-                radius="xl"
-              >
-                Обновить данные
-              </Button>
-            </Group>
 
             <Alert 
               variant="light" 

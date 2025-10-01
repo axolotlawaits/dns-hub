@@ -9,6 +9,70 @@ import { SocketIOService } from '../../socketio.js';
 const statsCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 минут
 
+// Функция для уведомления об обновлении потоков
+const notifyStreamsUpdate = async (branchType: string) => {
+  try {
+    console.log(`Notifying devices about stream update for branch type: ${branchType}`);
+    const socketService = SocketIOService.getInstance();
+    socketService.emit('device_streams_updated', {
+      branchType: branchType
+    });
+  } catch (error) {
+    console.error('Error notifying streams update:', error);
+  }
+};
+
+// Функция для очистки старых папок с музыкой
+export const cleanupOldMusicFolders = async () => {
+  try {
+    console.log('🧹 Запуск очистки папок с музыкой...');
+    const musicPath = './public/retail/radio/music';
+    
+    if (!fs.existsSync(musicPath)) {
+      console.log('📁 Папка retail/radio/music не существует, пропускаем очистку');
+      return;
+    }
+
+    const folders = fs.readdirSync(musicPath);
+    const currentDate = new Date();
+    const currentMonth = String(currentDate.getMonth() + 1).padStart(2, '0');
+    const currentYear = currentDate.getFullYear();
+    const currentFolder = `${currentMonth}-${currentYear}`;
+    
+    let deletedCount = 0;
+    
+    for (const folder of folders) {
+      // Пропускаем текущую папку
+      if (folder === currentFolder) {
+        console.log(`✅ Пропускаем текущую папку: ${folder}`);
+        continue;
+      }
+      
+      // Проверяем формат папки (MM-YYYY)
+      const folderRegex = /^\d{2}-\d{4}$/;
+      if (!folderRegex.test(folder)) {
+        console.log(`⚠️ Пропускаем папку с неверным форматом: ${folder}`);
+        continue;
+      }
+      
+      const folderPath = path.join(musicPath, folder);
+      const stats = fs.statSync(folderPath);
+      
+      if (stats.isDirectory()) {
+        // Удаляем ВСЕ папки, которые не соответствуют текущему месяцу
+        console.log(`🗑️ Удаляем папку: ${folder} (не соответствует текущему месяцу ${currentFolder})`);
+        fs.rmSync(folderPath, { recursive: true, force: true });
+        deletedCount++;
+        console.log(`✅ Папка ${folder} успешно удалена`);
+      }
+    }
+    
+    console.log(`🧹 Очистка завершена. Удалено ${deletedCount} папок.`);
+  } catch (error) {
+    console.error('❌ Ошибка при очистке папок с музыкой:', error);
+  }
+};
+
 // Утилита для получения текущей папки месяца
 const getCurrentMonthFolder = (): string => {
   const currentDate = new Date();
@@ -55,7 +119,14 @@ export const createMusicFolder = async (req: Request, res: Response): Promise<an
 
 export const uploadMusic = async (req: Request, res: Response): Promise<any> => {
   try {
+    console.log('Upload request received:', {
+      body: req.body,
+      file: req.file,
+      files: req.files
+    });
+    
     if (!req.file) {
+      console.log('No file in request');
       return res.status(400).json({ error: 'Файл не загружен' });
     }
     
@@ -65,30 +136,22 @@ export const uploadMusic = async (req: Request, res: Response): Promise<any> => 
     const fileName = req.file.originalname;
     const filePath = path.join(musicPath, fileName);
     
+    // Просто перезаписываем файл, если он уже существует
     if (fs.existsSync(filePath)) {
-      const timestamp = Date.now();
-      const nameWithoutExt = path.parse(fileName).name;
-      const ext = path.parse(fileName).ext;
-      const newFileName = `${nameWithoutExt}_${timestamp}${ext}`;
-      const newFilePath = path.join(musicPath, newFileName);
-      fs.renameSync(req.file.path, newFilePath);
-      return res.status(200).json({ 
-        success: true, 
-        message: 'Музыка загружена успешно', 
-        fileName: newFileName, 
-        folderName, 
-        path: newFilePath 
-      });
-    } else {
-      fs.renameSync(req.file.path, filePath);
-      return res.status(200).json({ 
-        success: true, 
-        message: 'Музыка загружена успешно', 
-        fileName, 
-        folderName, 
-        path: filePath 
-      });
+      console.log(`File ${fileName} already exists, overwriting...`);
+      fs.unlinkSync(filePath); // Удаляем старый файл
     }
+    
+    // Перемещаем файл в папку музыки
+    fs.renameSync(req.file.path, filePath);
+    
+    return res.status(200).json({ 
+      success: true, 
+      message: 'Музыка загружена успешно', 
+      fileName, 
+      folderName, 
+      path: filePath 
+    });
   } catch (error) {
     console.error('Error uploading music:', error);
     return res.status(500).json({ error: 'Ошибка при загрузке музыки' });
@@ -367,6 +430,9 @@ const countMusicFilesAsync = (): Promise<number> => {
 
 export const getDevicesStats = async (req: Request, res: Response) => {
   try {
+    // Очищаем старые папки с музыкой при каждом запросе статистики
+    await cleanupOldMusicFolders();
+    
     const cacheKey = 'devices_stats';
     const cached = statsCache.get(cacheKey);
     
@@ -610,92 +676,6 @@ export const actionUpdateApp = async (req: Request, res: Response) => {
 
 
 
-export const cleanupOldMusicFolders = async () => {
-  try {
-    console.log('🧹 Запуск очистки старых папок с музыкой...');
-    
-    const musicPath = './public/retail/radio/music';
-    
-    // Проверяем существование папки
-    if (!fs.existsSync(musicPath)) {
-      console.log('📁 Папка retail/radio/music не существует, пропускаем очистку');
-      return;
-    }
-    
-    // Получаем текущую дату
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth() + 1; // getMonth() возвращает 0-11
-    
-    // Вычисляем прошлый месяц
-    let lastMonth = currentMonth - 1;
-    let lastYear = currentYear;
-    
-    if (lastMonth === 0) {
-      lastMonth = 12;
-      lastYear = currentYear - 1;
-    }
-    
-    // Формируем название папки за прошлый месяц
-    const lastMonthFolder = `${String(lastMonth).padStart(2, '0')}-${lastYear}`;
-    const folderPath = path.join(musicPath, lastMonthFolder);
-    
-    console.log(`🗑️ Удаляем папку: ${lastMonthFolder}`);
-    
-    // Проверяем существование папки
-    if (fs.existsSync(folderPath)) {
-      // Удаляем папку рекурсивно
-      fs.rmSync(folderPath, { recursive: true, force: true });
-      console.log(`✅ Папка ${lastMonthFolder} успешно удалена`);
-    } else {
-      console.log(`ℹ️ Папка ${lastMonthFolder} не найдена, пропускаем`);
-    }
-    
-    // Дополнительно: удаляем папки старше 3 месяцев
-    await cleanupVeryOldFolders(musicPath);
-    
-  } catch (error) {
-    console.error('❌ Ошибка при очистке папок с музыкой:', error);
-  }
-};
-
-/**
- * Удаляет папки старше 3 месяцев
- */
-const cleanupVeryOldFolders = async (musicPath: string) => {
-  try {
-    const items = fs.readdirSync(musicPath, { withFileTypes: true });
-    const folders = items.filter(item => item.isDirectory());
-    
-    const now = new Date();
-    const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1);
-    
-    for (const folder of folders) {
-      const folderName = folder.name;
-      
-      // Проверяем формат папки (MM-YYYY)
-      const match = folderName.match(/^(\d{2})-(\d{4})$/);
-      if (!match) {
-        console.log(`⚠️ Пропускаем папку с неверным форматом: ${folderName}`);
-        continue;
-      }
-      
-      const [, month, year] = match;
-      const folderDate = new Date(parseInt(year), parseInt(month) - 1, 1);
-      
-      // Если папка старше 3 месяцев, удаляем её
-      if (folderDate < threeMonthsAgo) {
-        const folderPath = path.join(musicPath, folderName);
-        console.log(`🗑️ Удаляем старую папку: ${folderName}`);
-        fs.rmSync(folderPath, { recursive: true, force: true });
-        console.log(`✅ Старая папка ${folderName} удалена`);
-      }
-    }
-  } catch (error) {
-    console.error('❌ Ошибка при удалении старых папок:', error);
-  }
-};
-
 // ===== Radio Streams Functions =====
 
 // Создание папки для радио потоков
@@ -727,6 +707,9 @@ export const getRadioStreams = async (req: Request, res: Response): Promise<any>
 export const createRadioStream = async (req: Request, res: Response): Promise<any> => {
   try {
     console.log('Creating radio stream with data:', req.body);
+    console.log('Request file:', req.file);
+    console.log('Request files:', req.files);
+    console.log('Content-Type:', req.headers['content-type']);
     const { name, branchTypeOfDist, frequencySongs, fadeInDuration, volumeLevel, startDate, endDate } = req.body;
 
     console.log('Parsed data:', {
@@ -739,21 +722,63 @@ export const createRadioStream = async (req: Request, res: Response): Promise<an
       endDate
     });
 
+    let attachmentPath = null;
+    
+    // Обработка загруженного файла
+    if (req.file) {
+      console.log('File uploaded:', req.file);
+      console.log('File path:', req.file.path);
+      console.log('File exists:', fs.existsSync(req.file.path));
+      
+      // Перемещаем файл из temp в stream папку
+      const tempPath = req.file.path;
+      const streamDir = './public/retail/radio/stream';
+      const finalPath = path.join(streamDir, req.file.filename);
+      
+      console.log('Temp path:', tempPath);
+      console.log('Final path:', finalPath);
+      
+      // Создаем папку stream если её нет
+      if (!fs.existsSync(streamDir)) {
+        console.log('Creating stream directory:', streamDir);
+        fs.mkdirSync(streamDir, { recursive: true });
+      }
+      
+      // Перемещаем файл
+      try {
+        fs.renameSync(tempPath, finalPath);
+        console.log('File moved successfully to:', finalPath);
+        // Сохраняем только имя файла с расширением
+        attachmentPath = req.file.filename;
+        console.log('Attachment path set to:', attachmentPath);
+      } catch (error) {
+        console.error('Error moving file:', error);
+        attachmentPath = null;
+      }
+    } else {
+      console.log('No file uploaded');
+    }
+
     const stream = await prisma.radioStream.create({
       data: {
         name,
         branchTypeOfDist,
-        frequencySongs: frequencySongs || 5,
-        fadeInDuration: fadeInDuration || 2,
-        volumeLevel: volumeLevel || 80,
+        frequencySongs: parseInt(frequencySongs) || 5,
+        fadeInDuration: parseInt(fadeInDuration) || 2,
+        volumeLevel: parseInt(volumeLevel) || 80,
         startDate: new Date(startDate),
-        endDate: endDate ? new Date(endDate) : null
+        endDate: endDate ? new Date(endDate) : null,
+        attachment: attachmentPath
       }
     });
 
     console.log('Created stream:', stream);
+    
+    // Уведомляем устройства об обновлении потоков
+    await notifyStreamsUpdate(stream.branchTypeOfDist);
+    
     return res.status(201).json({ success: true, data: stream });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating radio stream:', error);
     console.error('Error details:', error.message);
     console.error('Error stack:', error.stack);
@@ -812,15 +837,18 @@ export const updateRadioStream = async (req: Request, res: Response): Promise<an
       data: {
         name,
         branchTypeOfDist,
-        frequencySongs,
-        fadeInDuration,
-        volumeLevel,
+        frequencySongs: frequencySongs ? parseInt(frequencySongs) : undefined,
+        fadeInDuration: fadeInDuration ? parseInt(fadeInDuration) : undefined,
+        volumeLevel: volumeLevel ? parseInt(volumeLevel) : undefined,
         startDate: startDate ? new Date(startDate) : undefined,
         endDate: endDate ? new Date(endDate) : undefined,
         isActive
       }
     });
 
+    // Уведомляем устройства об обновлении потоков
+    await notifyStreamsUpdate(stream.branchTypeOfDist);
+    
     return res.status(200).json({ success: true, data: stream });
   } catch (error) {
     console.error('Error updating radio stream:', error);
@@ -829,6 +857,44 @@ export const updateRadioStream = async (req: Request, res: Response): Promise<an
 };
 
 // Удаление радио потока
+// Получение активных потоков по типу филиала
+export const getActiveStreamsByBranchType = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { branchType } = req.query;
+    
+    if (!branchType) {
+      return res.status(400).json({ error: 'Тип филиала обязателен' });
+    }
+
+    const currentDate = new Date();
+    
+    const streams = await prisma.radioStream.findMany({
+      where: {
+        branchTypeOfDist: branchType as string,
+        isActive: true,
+        startDate: {
+          lte: currentDate
+        },
+        OR: [
+          { endDate: null },
+          { endDate: { gte: currentDate } }
+        ]
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: streams
+    });
+  } catch (error) {
+    console.error('Error getting active streams by branch type:', error);
+    return res.status(500).json({ error: 'Ошибка при получении активных потоков' });
+  }
+};
+
 export const deleteRadioStream = async (req: Request, res: Response): Promise<any> => {
   try {
     const { id } = req.params;
@@ -849,6 +915,11 @@ export const deleteRadioStream = async (req: Request, res: Response): Promise<an
     await prisma.radioStream.delete({
       where: { id }
     });
+
+    // Уведомляем устройства об обновлении потоков
+    if (stream) {
+      await notifyStreamsUpdate(stream.branchTypeOfDist);
+    }
 
     return res.status(200).json({ success: true, message: 'Радио поток удален' });
   } catch (error) {

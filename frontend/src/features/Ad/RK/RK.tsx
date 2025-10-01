@@ -666,6 +666,7 @@ const RKList: React.FC = () => {
     setHeader({
       title: 'Реестр конструкций',
       subtitle: 'Управление рекламными конструкциями',
+      icon: <Text size="xl" fw={700} c="white">🏗️</Text>,
       actionButton: {
         text: 'Добавить конструкцию',
         onClick: openCreateModal,
@@ -1066,16 +1067,6 @@ return (
       
       {/* Фильтры */}
       {rkData.length > 0 && (
-        <Box
-          style={{
-            background: 'var(--theme-bg-elevated)',
-            borderRadius: '16px',
-            padding: '20px',
-            border: '1px solid var(--theme-border-primary)',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
-            marginBottom: '20px'
-          }}
-        >
           <FilterGroup
             filters={[
               {
@@ -1137,7 +1128,6 @@ return (
               return [...next, { id, value }];
             })}
           />
-        </Box>
       )}
       <Stack gap="md">
         {Array.isArray(rkData) && rkData.length > 0 ? (

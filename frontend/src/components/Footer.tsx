@@ -8,6 +8,8 @@ import dayjs from "dayjs";
 import 'dayjs/locale/ru';
 import "./styles/Footer.css";
 import { ThemeContext } from "../contexts/ThemeContext";
+import { useUserContext } from "../hooks/useUserContext";
+import { API } from "../config/constants";
 
 interface ForecastDay {
   date: string;
@@ -82,6 +84,7 @@ const getDayWeatherIcon = (conditionText: string) => {
 
 function Footer() {
   const themeContext = useContext(ThemeContext);
+  const { user } = useUserContext();
   const isDark = themeContext?.isDark ?? false;
 
   // Базовые данные о погоде
@@ -98,6 +101,10 @@ function Footer() {
   const [calendarOpened, setCalendarOpened] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [isScrolled, setIsScrolled] = useState(false);
+  const [isFooterVisible, setIsFooterVisible] = useState(false);
+  const [scrollProgress, setScrollProgress] = useState(0);
+  const [autoHideEnabled, setAutoHideEnabled] = useState(false);
+  const [hideTimer, setHideTimer] = useState<NodeJS.Timeout | null>(null);
 
   // Загрузка текущей температуры и прогноза
   const fetchWeatherData = useCallback(async () => {
@@ -129,6 +136,63 @@ function Footer() {
     fetchWeatherData();
   }, [fetchWeatherData]);
 
+  // Загрузка настройки автоскрытия футера
+  useEffect(() => {
+    const loadFooterSetting = async () => {
+      try {
+        const response = await fetch(`${API}/user/settings/${user?.id}/auto_hide_footer`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setAutoHideEnabled(data.value === 'true');
+        } else if (response.status === 404) {
+          // Если настройка не найдена, используем значение по умолчанию (отключено)
+          setAutoHideEnabled(false);
+        }
+      } catch (error) {
+        console.error('Error loading footer setting:', error);
+      }
+    };
+
+    if (user?.id) {
+      loadFooterSetting();
+    }
+  }, [user?.id]);
+
+  // Слушатель изменения настройки автоскрытия футера
+  useEffect(() => {
+    const handleFooterSettingChange = (event: CustomEvent) => {
+      setAutoHideEnabled(event.detail);
+    };
+
+    window.addEventListener('footer-setting-changed', handleFooterSettingChange as EventListener);
+    
+    return () => {
+      window.removeEventListener('footer-setting-changed', handleFooterSettingChange as EventListener);
+    };
+  }, []);
+
+  // Очистка таймера при размонтировании
+  useEffect(() => {
+    return () => {
+      if (hideTimer) {
+        clearTimeout(hideTimer);
+      }
+    };
+  }, [hideTimer]);
+
+  // Инициализация видимости футера
+  useEffect(() => {
+    if (!autoHideEnabled) {
+      setIsFooterVisible(true);
+    } else {
+      setIsFooterVisible(false);
+    }
+  }, [autoHideEnabled]);
+
   // Обновление времени
   useEffect(() => {
     const updateTime = () => {
@@ -145,22 +209,29 @@ function Footer() {
     return () => clearInterval(timer);
   }, []);
 
-  // Эффект скролла для футера
+  // Эффект скролла для прогресса (только для индикатора)
   useEffect(() => {
     const handleScroll = () => {
       const scrollY = window.scrollY;
       const windowHeight = window.innerHeight;
       const documentHeight = document.documentElement.scrollHeight;
       
+      // Прогресс прокрутки (0-100%)
+      const maxScroll = documentHeight - windowHeight;
+      const progress = maxScroll > 0 ? Math.min((scrollY / maxScroll) * 100, 100) : 0;
+      setScrollProgress(progress);
+      
       // Добавляем класс при скролле вниз или когда контент больше экрана
       const shouldShowScrolled = scrollY > 50 || documentHeight > windowHeight + 100;
       setIsScrolled(shouldShowScrolled);
     };
 
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     handleScroll(); // Проверяем при загрузке
     
-    return () => window.removeEventListener('scroll', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
   }, []);
 
   // Загрузка прогноза при открытии попапа погоды
@@ -183,8 +254,43 @@ function Footer() {
     ))
   ), [forecast]);
 
+
+  // Обработчики мыши для футера
+  const handleMouseEnter = () => {
+    if (autoHideEnabled) {
+      setIsFooterVisible(true);
+      // Очищаем таймер при наведении
+      if (hideTimer) {
+        clearTimeout(hideTimer);
+        setHideTimer(null);
+      }
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (autoHideEnabled) {
+      // Устанавливаем таймер на 5 секунд
+      const timer = setTimeout(() => {
+        setIsFooterVisible(false);
+        setHideTimer(null);
+      }, 5000);
+      setHideTimer(timer);
+    }
+  };
+
   return (
-    <AppShell.Footer id="footer-wrapper" className={isScrolled ? 'scrolled' : ''}>
+    <AppShell.Footer 
+      id="footer-wrapper" 
+      className={`auto-hide-footer ${isScrolled ? 'scrolled' : ''} ${isFooterVisible ? 'visible' : 'hidden'} ${autoHideEnabled ? 'auto-hide-enabled' : 'auto-hide-disabled'}`}
+      style={{
+        '--scroll-progress': `${scrollProgress}%`
+      } as React.CSSProperties}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {/* Индикатор прогресса прокрутки */}
+      <div className="scroll-progress-bar" style={{ width: `${scrollProgress}%` }} />
+      
       <div id="footer">
         <div id="footer-nav">
           {/* Основные ссылки */}

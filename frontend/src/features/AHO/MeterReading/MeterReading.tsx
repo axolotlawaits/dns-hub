@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { API } from '../../../config/constants';
 import { useUserContext } from '../../../hooks/useUserContext';
+import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { notificationSystem } from '../../../utils/Push';
 import { formatName, formatValue } from '../../../utils/format';
 import { FilterGroup } from '../../../utils/filter';
-import { Button, Title, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Pagination, Select } from '@mantine/core';
+import { Title, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Pagination, Select } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
-import { IconPencil, IconTrash, IconArrowUp, IconArrowDown } from '@tabler/icons-react';
+import { IconPencil, IconTrash, IconArrowUp, IconArrowDown, IconPlus } from '@tabler/icons-react';
 import { ColumnFiltersState } from '@tanstack/react-table';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import FloatingActionButton from '../../../components/FloatingActionButton';
 import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
 import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
 import isBetween from 'dayjs/plugin/isBetween';
@@ -916,6 +918,7 @@ const useMeterReadings = () => {
 };
 
 const MeterReadingsList = () => {
+  const { setHeader, clearHeader } = usePageHeader();
   const {
     loading,
     filteredData,
@@ -937,8 +940,26 @@ const MeterReadingsList = () => {
     handleFormSubmit,
     handleFilterChange,
     setReadingForm,
-    setColumnFilters,
   } = useMeterReadings();
+
+  // Устанавливаем заголовок страницы
+  useEffect(() => {
+    setHeader({
+      title: 'Показания счётчиков',
+      subtitle: 'Управление показаниями коммунальных услуг',
+      icon: <Text size="xl" fw={700} c="white">📊</Text>,
+      actionButton: {
+        text: 'Добавить показание',
+        onClick: () => {
+          setReadingForm(DEFAULT_READING_FORM);
+          modals.create[1].open();
+        },
+        icon: <IconPlus size={18} />
+      }
+    });
+
+    return () => clearHeader();
+  }, [setHeader, clearHeader]);
 
   const totals = useMemo(() => calculateTotals(filteredData), [filteredData]);
 
@@ -990,73 +1011,15 @@ const MeterReadingsList = () => {
 
   return (
     <Box p="md" style={{ background: 'var(--theme-bg-primary)', minHeight: '100vh' }}>
-      {/* Заголовок и навигация */}
-      <Box mb="xl" style={{ 
-        background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
-        borderRadius: '16px',
-        padding: '24px',
-        border: '1px solid var(--theme-border-primary)',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
-      }}>
-        <Group justify="space-between" mb="md">
-          <Group gap="md">
-            <Box style={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              borderRadius: '12px',
-              padding: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <Text size="xl" fw={700} c="white">
-                📊
-              </Text>
-            </Box>
-            <Box>
-              <Title order={1} style={{ color: 'var(--theme-text-primary)', margin: 0 }}>
-                Показания счётчиков
-              </Title>
-              <Text size="sm" c="var(--theme-text-secondary)" mt={4}>
-                Управление показаниями коммунальных услуг
-              </Text>
-            </Box>
-          </Group>
-          <Group gap="sm">
-            <Button
-              variant="outline"
-              onClick={() => setColumnFilters([])}
-              size="sm"
-            >
-              Сбросить фильтры
-            </Button>
-            <Button
-              size="md"
-              variant="gradient"
-              gradient={{ from: 'blue', to: 'cyan' }}
-              onClick={() => {
-                setReadingForm(DEFAULT_READING_FORM);
-                modals.create[1].open();
-              }}
-            >
-              + Добавить показание
-            </Button>
-          </Group>
-        </Group>
-        
-        {/* Фильтры */}
-        <Box style={{
-          background: 'var(--theme-bg-primary)',
-          borderRadius: '12px',
-          padding: '16px',
-          border: '1px solid var(--theme-border-secondary)'
-        }}>
-          <FilterGroup
-            filters={filters}
-            columnFilters={columnFilters}
-            onColumnFiltersChange={handleFilterChange}
-          />
-        </Box>
+      {/* Фильтры */}
+      <Box mb="xl">
+        <FilterGroup
+          filters={filters}
+          columnFilters={columnFilters}
+          onColumnFiltersChange={handleFilterChange}
+        />
       </Box>
+
       {/* Основной контент с адаптивной сеткой */}
       <Box style={{ 
         display: 'grid', 
@@ -1201,6 +1164,7 @@ const MeterReadingsList = () => {
         initialValues={selectedReading || {}}
         onConfirm={handleDeleteConfirm}
       />
+      <FloatingActionButton />
     </Box>
   );
 };

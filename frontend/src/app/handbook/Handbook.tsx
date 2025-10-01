@@ -159,15 +159,15 @@ function Handbook() {
           </Title>
           
           <Flex gap="md" align="end" wrap="wrap">
-            <Select 
-              data={[
+        <Select 
+          data={[
                 {value: 'branch', label: 'Филиалы'}, 
                 {value: 'employee', label: 'Сотрудники'},
                 {value: 'tool', label: 'Инструменты'}
-              ]} 
-              value={searchFilter} 
-              onChange={setSearchFilter} 
-              placeholder="Поиск по..." 
+          ]} 
+          value={searchFilter} 
+          onChange={setSearchFilter} 
+          placeholder="Поиск по..." 
               style={{ minWidth: 200 }}
               leftSection={<IconSearch size={16} />}
               styles={{
@@ -179,15 +179,15 @@ function Handbook() {
               }}
             />
             
-            {searchFilter === 'branch' &&
-              <Select 
-                data={cities} 
-                value={cityFilter} 
-                onChange={setCityFilter} 
-                placeholder="Выбрать город" 
+        {searchFilter === 'branch' &&
+          <Select 
+            data={cities} 
+            value={cityFilter} 
+            onChange={setCityFilter} 
+            placeholder="Выбрать город" 
                 style={{ minWidth: 200 }}
-                searchable
-                clearable
+            searchable
+            clearable
                 leftSection={<IconBuilding size={16} />}
                 styles={{
                   input: {
@@ -199,15 +199,15 @@ function Handbook() {
               />
             }
             
-            {searchFilter === 'employee' &&
-              <Select 
-                data={positions} 
-                value={positionFilter} 
-                onChange={setPositionFilter} 
-                placeholder="Выбрать должность" 
+        {searchFilter === 'employee' &&
+          <Select 
+            data={positions} 
+            value={positionFilter} 
+            onChange={setPositionFilter} 
+            placeholder="Выбрать должность" 
                 style={{ minWidth: 200 }}
-                searchable
-                clearable
+            searchable
+            clearable
                 leftSection={<IconUsers size={16} />}
                 styles={{
                   input: {
@@ -219,7 +219,7 @@ function Handbook() {
               />
             }
             
-            {(searchFilter || cityFilter || positionFilter) &&
+        {(searchFilter || cityFilter || positionFilter) &&
               <Button 
                 onClick={clearFilters} 
                 variant="light" 

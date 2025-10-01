@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { API } from '../../../config/constants';
 import { useUserContext } from '../../../hooks/useUserContext';
+import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { notificationSystem } from '../../../utils/Push';
 import { formatName } from '../../../utils/format';
 import { dateRange, FilterGroup } from '../../../utils/filter';
-import { Button, Title, Box, LoadingOverlay, Grid, Group, ActionIcon, Text, Badge, Avatar } from '@mantine/core';
+import { Box, LoadingOverlay, Grid, Group, ActionIcon, Text, Badge, Avatar } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
 import { IconPencil, IconTrash, IconPlus, IconPhoto, IconVideo, IconMusic, IconFile, IconEye } from '@tabler/icons-react';
@@ -12,6 +13,7 @@ import { ColumnDef, ColumnFiltersState, SortingState } from '@tanstack/react-tab
 import { DndProviderWrapper } from '../../../utils/dnd';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { TableComponent } from '../../../utils/table';
+import FloatingActionButton from '../../../components/FloatingActionButton';
 
 type Updater<T> = T | ((prev: T) => T);
 const MODEL_UUID = 'dd6ec264-4e8c-477a-b2d6-c62a956422c0';
@@ -98,6 +100,7 @@ const getFilterOptions = <T,>(data: T[], mapper: (item: T) => string) => {
 
 export default function MediaList() {
   const { user } = useUserContext();
+  const { setHeader, clearHeader } = usePageHeader();
   const [state, setState] = useState({
     media: [] as Media[],
     loading: true,
@@ -173,6 +176,22 @@ export default function MediaList() {
     };
     loadData();
   }, [fetchData, fetchTypeOptions]);
+
+  // Устанавливаем заголовок страницы
+  useEffect(() => {
+    setHeader({
+      title: 'Медиа библиотека',
+      subtitle: 'Управление медиа контентом и файлами',
+      icon: <Text size="xl" fw={700} c="white">🎬</Text>,
+      actionButton: {
+        text: 'Добавить медиа',
+        onClick: () => modals.create[1].open(),
+        icon: <IconPlus size={20} />
+      }
+    });
+
+    return () => clearHeader();
+  }, [setHeader, clearHeader]);
 
   const formConfig = useMemo(() => ({
     fields: [
@@ -597,141 +616,9 @@ export default function MediaList() {
       >
         {state.loading && <LoadingOverlay visible />}
         
-        {/* Современный заголовок */}
-        <Box
-          style={{
-            background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
-            borderRadius: '16px',
-            padding: '24px',
-            marginBottom: '24px',
-            border: '1px solid var(--theme-border-primary)',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-            position: 'relative',
-            overflow: 'hidden'
-          }}
-        >
-          {/* Декоративные элементы */}
-          <Box
-            style={{
-              position: 'absolute',
-              top: '-20px',
-              right: '-20px',
-              width: '120px',
-              height: '120px',
-              background: 'rgba(255, 255, 255, 0.1)',
-              borderRadius: '50%',
-              zIndex: 1
-            }}
-          />
-          <Box
-            style={{
-              position: 'absolute',
-              bottom: '-30px',
-              left: '-30px',
-              width: '80px',
-              height: '80px',
-              background: 'rgba(255, 255, 255, 0.05)',
-              borderRadius: '50%',
-              zIndex: 1
-            }}
-          />
-          
-          <Group justify="space-between" align="center" style={{ position: 'relative', zIndex: 2 }}>
-            <Group gap="16px" align="center">
-              <Box
-                style={{
-                  width: '48px',
-                  height: '48px',
-                  background: 'rgba(255, 255, 255, 0.2)',
-                  borderRadius: '12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '24px'
-                }}
-              >
-                🎬
-              </Box>
-              <Box>
-                <Title 
-                  order={2} 
-                  style={{ 
-                    color: 'white', 
-                    margin: 0,
-                    fontSize: '28px',
-                    fontWeight: '700'
-                  }}
-                >
-                  Медиа библиотека
-                </Title>
-                <Text 
-                  style={{ 
-                    color: 'rgba(255, 255, 255, 0.8)', 
-                    fontSize: '16px',
-                    marginTop: '4px'
-                  }}
-                >
-                  Управление медиа контентом и файлами
-                </Text>
-              </Box>
-            </Group>
-            
-            <Button
-              size="lg"
-              radius="xl"
-              onClick={() => modals.create[1].open()}
-              style={{
-                background: 'rgba(255, 255, 255, 0.2)',
-                color: 'white',
-                border: '1px solid rgba(255, 255, 255, 0.3)',
-                backdropFilter: 'blur(10px)',
-                fontWeight: '600',
-                fontSize: '16px',
-                padding: '12px 24px'
-              }}
-              leftSection={<IconPlus size={20} />}
-            >
-              Добавить медиа
-            </Button>
-          </Group>
-        </Box>
         <Grid>
           <Grid.Col span={12}>
-            <Box
-              style={{
-                background: 'var(--theme-bg-elevated)',
-                borderRadius: '16px',
-                padding: '20px',
-                border: '1px solid var(--theme-border-primary)',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
-                marginBottom: '20px'
-              }}
-            >
-              <Group gap="12px" align="center" style={{ marginBottom: '16px' }}>
-                <Box
-                  style={{
-                    width: '32px',
-                    height: '32px',
-                    background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
-                    borderRadius: '8px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '16px'
-                  }}
-                >
-                  🔍
-                </Box>
-                <Text 
-                  style={{ 
-                    fontSize: '18px', 
-                    fontWeight: '600',
-                    color: 'var(--theme-text-primary)'
-                  }}
-                >
-                  Фильтры
-                </Text>
-              </Group>
+
               <FilterGroup
                 filters={filters}
                 columnFilters={state.columnFilters}
@@ -745,7 +632,6 @@ export default function MediaList() {
                   }))
                 }
               />
-            </Box>
           </Grid.Col>
           <Grid.Col span={12}>
             <Box
@@ -810,6 +696,7 @@ export default function MediaList() {
           initialValues={state.selectedMedia || {}}
         />
       </Box>
+      <FloatingActionButton />
     </DndProviderWrapper>
   );
 }

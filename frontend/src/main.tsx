@@ -13,7 +13,7 @@ import { registerLocale } from 'react-datepicker'
 import { ru } from 'date-fns/locale/ru'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
-registerLocale('ru', ru);
+registerLocale('ru', ru as any);
 dayjs.locale('ru');
 
 const queryClient = new QueryClient()

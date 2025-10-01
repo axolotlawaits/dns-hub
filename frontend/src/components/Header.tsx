@@ -78,14 +78,44 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
           {header.title ? (
             <div className="page-header-content">
               <div className="page-header-text">
-                <Text size="xl" fw={700} c="var(--theme-text-primary)">
-                  {header.title}
-                </Text>
-                {header.subtitle && (
-                  <Text size="sm" c="var(--theme-text-secondary)">
-                    {header.subtitle}
-                  </Text>
-                )}
+                <div className="page-title-wrapper">
+                  <Group gap="md" align="center">
+                    {header.icon && (
+                      <div className="page-header-icon">
+                        {header.icon}
+                      </div>
+                    )}
+                    <div>
+                      <Text 
+                        size="xl" 
+                        fw={700} 
+                        className="page-title"
+                        style={{
+                          background: 'linear-gradient(135deg, var(--color-primary-600), var(--color-primary-500))',
+                          WebkitBackgroundClip: 'text',
+                          WebkitTextFillColor: 'transparent',
+                          backgroundClip: 'text',
+                          filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1))'
+                        }}
+                      >
+                        {header.title}
+                      </Text>
+                      {header.subtitle && (
+                        <Text 
+                          size="sm" 
+                          c="var(--theme-text-secondary)"
+                          className="page-subtitle"
+                          style={{
+                            fontWeight: '500',
+                            opacity: '0.8'
+                          }}
+                        >
+                          {header.subtitle}
+                        </Text>
+                      )}
+                    </div>
+                  </Group>
+                </div>
               </div>
               <div className="page-header-actions">
                 <ActionIcon
@@ -98,8 +128,11 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
                     background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
                     color: 'white',
                     border: 'none',
-                    fontWeight: '600'
+                    fontWeight: '600',
+                    boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
+                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
                   }}
+                  className="search-button"
                 >
                   <IconSearch size={18} />
                 </ActionIcon>
@@ -117,8 +150,11 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
                 background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
                 color: 'white',
                 border: 'none',
-                fontWeight: '600'
+                fontWeight: '600',
+                boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
               }}
+              className="search-button"
             >
               Поиск
             </Button>

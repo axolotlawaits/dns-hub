@@ -1,45 +1,27 @@
-import { Tabs, Box, Title, Text, Group, Card } from "@mantine/core"
-import { useState } from "react"
-import { IconTruck, IconChartBar, IconRoute} from "@tabler/icons-react"
+import { Tabs, Box, Card, Text } from "@mantine/core"
+import { useState, useEffect } from "react"
+import { IconChartBar, IconRoute} from "@tabler/icons-react"
 import LoadersRoutes from "./LoadersRoutes"
 import LoadersSummary from "./LoadersSummary"
+import { usePageHeader } from "../../../contexts/PageHeaderContext"
 
 function LoadersHome() {
+  const { setHeader, clearHeader } = usePageHeader();
   const [activeTab, setActiveTab] = useState<string | null>('routes')
+
+  // Устанавливаем заголовок страницы
+  useEffect(() => {
+    setHeader({
+      title: 'Управление грузчиками',
+      subtitle: 'Планирование маршрутов и контроль работы грузчиков',
+      icon: <Text size="xl" fw={700} c="white">🚛</Text>
+    });
+
+    return () => clearHeader();
+  }, [setHeader, clearHeader]);
   
   return (
     <Box p="md" style={{ background: 'var(--theme-bg-primary)', minHeight: '100vh' }}>
-      {/* Современный заголовок */}
-      <Box mb="xl" style={{ 
-        background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
-        borderRadius: '16px',
-        padding: '24px',
-        border: '1px solid var(--theme-border-primary)',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
-      }}>
-        <Group justify="space-between" mb="md">
-          <Group gap="md">
-            <Box style={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              borderRadius: '12px',
-              padding: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <IconTruck size={24} color="white" />
-            </Box>
-            <Box>
-              <Title order={1} style={{ color: 'var(--theme-text-primary)', margin: 0 }}>
-                Управление грузчиками
-              </Title>
-              <Text size="sm" c="var(--theme-text-secondary)" mt={4}>
-                Планирование маршрутов и контроль работы грузчиков
-              </Text>
-            </Box>
-          </Group>
-        </Group>
-      </Box>
       
       {/* Основной контент */}
       <Card style={{

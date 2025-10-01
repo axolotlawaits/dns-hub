@@ -37,10 +37,10 @@
 .filter-item {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  min-width: 200px;
-  flex: 1 1 200px;
-  max-width: 300px;
+  gap: 6px;
+  min-width: 180px;
+  flex: 1 1 180px;
+  max-width: 250px;
 }
 
 /* Стили для лейблов фильтров */
@@ -48,8 +48,6 @@
   font-size: 14px;
   font-weight: 500;
   color: var(--theme-text-secondary);
-  margin-bottom: 6px;
-  padding: 4px 0;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -60,7 +58,6 @@
   background: var(--theme-bg-secondary);
   border: 1px solid var(--theme-border-primary);
   border-radius: 8px;
-  padding: 8px 12px;
   font-size: 14px;
   color: var(--theme-text-primary);
   transition: all 0.2s ease;
@@ -90,7 +87,7 @@
   border: 1px solid var(--theme-border-primary) !important;
   background: var(--theme-bg-secondary) !important;
   border-radius: 8px !important;
-  padding: 8px 12px !important;
+  padding: 6px 10px !important;
   font-size: 14px !important;
   color: var(--theme-text-primary) !important;
   transition: all 0.2s ease !important;
@@ -125,6 +122,52 @@
   border: 1px solid var(--theme-border-primary);
   border-radius: 8px;
   transition: all 0.2s ease;
+}
+
+/* Стили для MultiSelect - ограничиваем высоту и добавляем +n */
+.filter-select .mantine-MultiSelect-input {
+  min-height: 36px !important;
+  max-height: 36px !important;
+  overflow: hidden !important;
+}
+
+.filter-select .mantine-MultiSelect-values {
+  max-height: 24px !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  gap: 2px !important;
+}
+
+.filter-select .mantine-MultiSelect-value {
+  max-width: 80px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font-size: 12px !important;
+  padding: 2px 6px !important;
+  margin: 0 !important;
+  flex-shrink: 0 !important;
+}
+
+/* Скрываем значения после второго */
+.filter-select[data-has-remaining="true"] .mantine-MultiSelect-value:nth-child(n+3) {
+  display: none !important;
+}
+
+/* Показываем +n если значений больше чем помещается */
+.filter-select[data-has-remaining="true"] .mantine-MultiSelect-values::after {
+  content: attr(data-remaining);
+  display: inline-block;
+  background: var(--color-primary-100);
+  color: var(--color-primary-700);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  margin-left: 4px;
+  flex-shrink: 0;
 }
 
 .filter-select:hover {
@@ -191,22 +234,51 @@
 .filter-date-group {
   display: flex !important;
   flex-direction: row !important;
-  gap: 12px;
+  gap: 4px;
   align-items: flex-end;
   width: 100%;
 }
 
 .filter-date-item {
   flex: 1;
-  min-width: 200px;
+  min-width: 120px;
   max-width: 50%;
 }
 
 /* Адаптивность для большого количества фильтров */
+@media (max-width: 1400px) {
+  .filter-item {
+    min-width: 140px;
+    flex: 1 1 140px;
+    max-width: 180px;
+  }
+  
+  .filter-date-item {
+    min-width: 100px;
+  }
+}
+
 @media (max-width: 1200px) {
   .filter-item {
-    min-width: 180px;
-    flex: 1 1 180px;
+    min-width: 130px;
+    flex: 1 1 130px;
+    max-width: 160px;
+  }
+  
+  .filter-date-item {
+    min-width: 90px;
+  }
+}
+
+@media (max-width: 992px) {
+  .filter-item {
+    min-width: 120px;
+    flex: 1 1 120px;
+    max-width: 150px;
+  }
+  
+  .filter-date-item {
+    min-width: 80px;
   }
 }
 

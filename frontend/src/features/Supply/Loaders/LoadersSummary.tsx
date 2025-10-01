@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from "react"
+import { useEffect, useRef, useState } from "react"
 import { API } from "../../../config/constants"
 import dayjs from "dayjs"
 import { DayType } from "./Day"

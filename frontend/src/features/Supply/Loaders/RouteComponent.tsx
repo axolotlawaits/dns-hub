@@ -1,17 +1,20 @@
 import { useEffect, useState, useMemo, useCallback } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { API } from "../../../config/constants"
+import { usePageHeader } from "../../../contexts/PageHeaderContext"
 import './styles/Route.css'
 import Day from "./Day"
 import { DayType } from "./Day"
-import { ActionIcon, Button, TextInput, Box, Title, Text, Group, Card, Badge, LoadingOverlay, Stack } from "@mantine/core"
-import { IconArrowLeft, IconRoute, IconTrash, IconCalendar, IconTruck, IconClock, IconMapPin } from "@tabler/icons-react"
+import { ActionIcon, TextInput, Box, Text, Group, Card, Badge, LoadingOverlay, Stack } from "@mantine/core"
+import { IconArrowLeft, IconTrash, IconCalendar, IconTruck, IconClock, IconMapPin } from "@tabler/icons-react"
 import "react-datepicker/dist/react-datepicker.css"
 import dayjs from "dayjs"
+import FloatingActionButton from "../../../components/FloatingActionButton"
 
 function RouteComponent() {
   const routeParams = useParams()
   const navigate = useNavigate()
+  const { setHeader, clearHeader } = usePageHeader()
   const [days, setDays] = useState<DayType[]>([])
   const [searchDay, setSearchDay] = useState('')
   const [loading, setLoading] = useState(true)
@@ -65,6 +68,22 @@ function RouteComponent() {
     return days[0]?.route
   }, [days])
 
+  // Устанавливаем заголовок страницы
+  useEffect(() => {
+    setHeader({
+      title: routeInfo?.name || 'Маршрут',
+      subtitle: 'Управление днями маршрута и погрузчиками',
+      icon: <Text size="xl" fw={700} c="white">🚛</Text>,
+      actionButton: {
+        text: 'К маршрутам',
+        onClick: () => navigate(`/supply/loaders`),
+        icon: <IconArrowLeft size={18} />
+      }
+    });
+
+    return () => clearHeader();
+  }, [setHeader, clearHeader, routeInfo?.name, navigate]);
+
   const filteredDays = useMemo(() => {
     if (!searchDay) return days
     return days.filter(day => 
@@ -76,74 +95,36 @@ function RouteComponent() {
 
   return (
     <Box p="md" style={{ background: 'var(--theme-bg-primary)', minHeight: '100vh' }}>
-      {/* Современный заголовок */}
-      <Box mb="xl" style={{ 
-        background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
-        borderRadius: '16px',
-        padding: '24px',
-        border: '1px solid var(--theme-border-primary)',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
+      {/* Поиск и фильтры */}
+      <Box mb="xl" style={{
+        background: 'var(--theme-bg-elevated)',
+        borderRadius: '12px',
+        padding: '16px',
+        border: '1px solid var(--theme-border-secondary)'
       }}>
-        <Group justify="space-between" mb="md">
-          <Group gap="md">
-            <Box style={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              borderRadius: '12px',
-              padding: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <IconRoute size={24} color="white" />
-            </Box>
-            <Box>
-              <Title order={1} style={{ color: 'var(--theme-text-primary)', margin: 0 }}>
-                {routeInfo?.name || 'Маршрут'}
-              </Title>
-              <Text size="sm" c="var(--theme-text-secondary)" mt={4}>
-                Управление днями маршрута и погрузчиками
-              </Text>
-            </Box>
-          </Group>
-          <Button
-            leftSection={<IconArrowLeft size={18} />}
-            variant="outline"
-            onClick={() => navigate(`/supply/loaders`)}
+        <Group gap="md" align="end">
+          <Box style={{ flex: 1 }}>
+            <Text size="sm" fw={500} c="var(--theme-text-primary)" mb="xs">
+              Поиск по дате
+            </Text>
+            <TextInput 
+              value={searchDay}
+              onChange={(e) => setSearchDay(e.currentTarget.value)}
+              type="date"
+              leftSection={<IconCalendar size={16} />}
+              placeholder="Выберите дату"
+            />
+          </Box>
+          <ActionIcon 
+            variant="light" 
+            color="red" 
+            size="lg"
+            onClick={() => setSearchDay('')}
+            disabled={!searchDay}
           >
-            К маршрутам
-          </Button>
+            <IconTrash size={16} />
+          </ActionIcon>
         </Group>
-        {/* Поиск и фильтры */}
-        <Box style={{
-          background: 'var(--theme-bg-primary)',
-          borderRadius: '12px',
-          padding: '16px',
-          border: '1px solid var(--theme-border-secondary)'
-        }}>
-          <Group gap="md" align="end">
-            <Box style={{ flex: 1 }}>
-              <Text size="sm" fw={500} c="var(--theme-text-primary)" mb="xs">
-                Поиск по дате
-              </Text>
-              <TextInput 
-                value={searchDay}
-                onChange={(e) => setSearchDay(e.currentTarget.value)}
-                type="date"
-                leftSection={<IconCalendar size={16} />}
-                placeholder="Выберите дату"
-              />
-            </Box>
-            <ActionIcon 
-              variant="light" 
-              color="red" 
-              size="lg"
-              onClick={() => setSearchDay('')}
-              disabled={!searchDay}
-            >
-              <IconTrash size={16} />
-            </ActionIcon>
-          </Group>
-        </Box>
       </Box>
 
       {/* Список дней */}
@@ -262,6 +243,7 @@ function RouteComponent() {
           </Box>
         )}
       </Box>
+      <FloatingActionButton />
     </Box>
   )
 }

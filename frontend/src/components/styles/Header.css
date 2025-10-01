@@ -91,23 +91,75 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
+
+  padding: var(--space-4) var(--space-6);
+
 }
 
 .page-header-text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   text-align: left;
   flex: 0 0 auto;
-  padding-left: 15px;
+}
+
+.page-header-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600));
+  border-radius: 12px;
+  color: white;
+  font-size: 24px;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.page-header-icon:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
+}
+
+.page-title-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.page-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.page-subtitle {
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.4;
+  opacity: 0.8;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .page-header-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   flex: 0 0 auto;
-  padding-right: 15px;
+}
+
+
+.search-button {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.search-button:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
 }
 
 /* Правая часть */
@@ -221,8 +273,9 @@
   
   .page-header-content {
     flex-direction: column;
-    gap: var(--space-2);
+    gap: var(--space-3);
     align-items: flex-start;
+    padding: var(--space-3) var(--space-4);
   }
   
   .page-header-text {
@@ -230,11 +283,20 @@
     max-width: 100%;
   }
   
+  .page-title {
+    font-size: 1.25rem;
+  }
+  
+  .page-subtitle {
+    font-size: 0.8rem;
+  }
+  
   .page-header-actions {
     width: 100%;
     justify-content: flex-end;
-    gap: var(--space-3);
+    gap: var(--space-2);
   }
+  
 }
 
 @media (max-width: 640px) {
@@ -272,11 +334,6 @@
   100% { transform: rotate(360deg); }
 }
 
-/* Фокус для доступности */
-.header-action:focus-visible {
-  outline: 2px solid var(--theme-border-focus);
-  outline-offset: 2px;
-}
 
 /* Темная тема - дополнительные стили */
 [data-theme="dark"] .header-title {

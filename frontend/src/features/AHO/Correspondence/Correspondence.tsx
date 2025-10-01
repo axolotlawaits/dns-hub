@@ -1,17 +1,19 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { API } from '../../../config/constants';
 import { useUserContext } from '../../../hooks/useUserContext';
+import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { notificationSystem } from '../../../utils/Push';
 import { formatName } from '../../../utils/format';
 import { dateRange, FilterGroup } from '../../../utils/filter';
-import { Button, Title, Box, LoadingOverlay, Group, ActionIcon, Text, Badge, Avatar, Card } from '@mantine/core';
+import { Box, LoadingOverlay, Group, ActionIcon, Text, Badge, Avatar, Card } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
-import { IconPencil, IconTrash } from '@tabler/icons-react';
+import { IconPencil, IconTrash, IconPlus } from '@tabler/icons-react';
 import { ColumnDef, ColumnFiltersState, SortingState } from '@tanstack/react-table';
 import { DndProviderWrapper } from '../../../utils/dnd';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { TableComponent } from '../../../utils/table';
+import FloatingActionButton from '../../../components/FloatingActionButton';
 
 interface TypeMailOption {
   value: string;
@@ -96,6 +98,7 @@ const getFilterOptions = <T,>(data: T[], mapper: (item: T) => string) => {
 
 export default function CorrespondenceList() {
   const { user } = useUserContext();
+  const { setHeader, clearHeader } = usePageHeader();
   const [state, setState] = useState({
     correspondence: [] as Correspondence[],
     loading: true,
@@ -171,6 +174,22 @@ export default function CorrespondenceList() {
     };
     loadData();
   }, [fetchData, fetchTypeMailOptions]);
+
+  // Устанавливаем заголовок страницы
+  useEffect(() => {
+    setHeader({
+      title: 'Корреспонденция',
+      subtitle: 'Управление входящей и исходящей корреспонденцией',
+      icon: <Text size="xl" fw={700} c="white">📮</Text>,
+      actionButton: {
+        text: 'Добавить корреспонденцию',
+        onClick: () => modals.create[1].open(),
+        icon: <IconPlus size={18} />
+      }
+    });
+
+    return () => clearHeader();
+  }, [setHeader, clearHeader]);
 
   const formConfig = useMemo(() => ({
     fields: [
@@ -604,119 +623,12 @@ export default function CorrespondenceList() {
   return (
     <DndProviderWrapper>
       <Box p="md" style={{ background: 'var(--theme-bg-primary)', minHeight: '100vh' }}>
-        {/* Современный заголовок */}
-        <Box mb="xl" style={{ 
-          background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
-          borderRadius: '16px',
-          padding: '24px',
-          border: '1px solid var(--theme-border-primary)',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
-        }}>
-          <Group justify="space-between" mb="md">
-            <Group gap="md">
-              <Box style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                borderRadius: '12px',
-                padding: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <Text size="xl" fw={700} c="white">
-                  📧
-                </Text>
-              </Box>
-              <Box>
-                <Title order={1} style={{ color: 'var(--theme-text-primary)', margin: 0 }}>
-                  Корреспонденция
-                </Title>
-                <Text size="sm" c="var(--theme-text-secondary)" mt={4}>
-                  Управление входящей и исходящей корреспонденцией
-                </Text>
-              </Box>
-            </Group>
-            <Button
-              size="md"
-              variant="gradient"
-              gradient={{ from: 'blue', to: 'cyan' }}
-              onClick={() => {
-                setState(prev => ({
-                  ...prev,
-                  correspondenceForm: {
-                    ...DEFAULT_CORRESPONDENCE_FORM,
-                    ReceiptDate: dayjs().format('YYYY-MM-DDTHH:mm')
-                  }
-                }));
-                modals.create[1].open();
-              }}
-            >
-              + Добавить корреспонденцию
-            </Button>
-          </Group>
-
-          {/* Статистика */}
-          <Group gap="lg" mb="md">
-            <Box style={{
-              background: 'var(--theme-bg-primary)',
-              borderRadius: '12px',
-              padding: '16px',
-              border: '1px solid var(--theme-border-secondary)',
-              textAlign: 'center',
-              minWidth: '120px'
-            }}>
-              <Text size="xl" fw={700} c="var(--theme-text-primary)">
-                {state.correspondence.length}
-              </Text>
-              <Text size="sm" c="var(--theme-text-secondary)">
-                Всего писем
-              </Text>
-            </Box>
-            <Box style={{
-              background: 'var(--theme-bg-primary)',
-              borderRadius: '12px',
-              padding: '16px',
-              border: '1px solid var(--theme-border-secondary)',
-              textAlign: 'center',
-              minWidth: '120px'
-            }}>
-              <Text size="xl" fw={700} c="var(--theme-text-primary)">
-                {state.correspondence.filter(c => dayjs(c.ReceiptDate).isAfter(dayjs().subtract(30, 'days'))).length}
-              </Text>
-              <Text size="sm" c="var(--theme-text-secondary)">
-                За 30 дней
-              </Text>
-            </Box>
-            <Box style={{
-              background: 'var(--theme-bg-primary)',
-              borderRadius: '12px',
-              padding: '16px',
-              border: '1px solid var(--theme-border-secondary)',
-              textAlign: 'center',
-              minWidth: '120px'
-            }}>
-              <Text size="xl" fw={700} c="var(--theme-text-primary)">
-                {state.correspondence.reduce((acc, c) => acc + c.attachments.length, 0)}
-              </Text>
-              <Text size="sm" c="var(--theme-text-secondary)">
-                Вложений
-              </Text>
-            </Box>
-          </Group>
-
           {/* Фильтры */}
-          <Box style={{
-            background: 'var(--theme-bg-primary)',
-            borderRadius: '12px',
-            padding: '16px',
-            border: '1px solid var(--theme-border-secondary)'
-          }}>
             <FilterGroup
               filters={filters}
               columnFilters={state.columnFilters}
               onColumnFiltersChange={handleColumnFiltersChange}
             />
-          </Box>
-        </Box>
         {/* Таблица корреспонденции */}
         <Card style={{
           background: 'var(--theme-bg-elevated)',
@@ -789,6 +701,7 @@ export default function CorrespondenceList() {
           onConfirm={handleDeleteConfirm}
         />
       </Box>
+      <FloatingActionButton />
     </DndProviderWrapper>
   );
 }

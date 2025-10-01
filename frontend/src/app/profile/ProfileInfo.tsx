@@ -48,11 +48,25 @@ const ProfileInfo = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [newPhoto, setNewPhoto] = useState<string | null>(null);
+  const [autoHideFooter, setAutoHideFooter] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isTelegramConnected, setIsTelegramConnected] = useState(false);
   const [telegramLink, setTelegramLink] = useState('');
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
+
+  // Обработчик изменения настройки футера
+  const handleFooterSettingChange = async (value: boolean) => {
+    setAutoHideFooter(value);
+    await saveUserSetting('auto_hide_footer', value.toString());
+    // Уведомляем другие компоненты об изменении настройки
+    window.dispatchEvent(new CustomEvent('footer-setting-changed', { detail: value }));
+    notificationSystem.addNotification(
+      'Успех',
+      `Настройка панели обновлена: ${value ? 'автоскрытие включено' : 'автоскрытие отключено'}`,
+      'success'
+    );
+  };
   const [telegramUserName, setTelegramUserName] = useState('');
   const [telegramLoading, setTelegramLoading] = useState(true);
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(true);
@@ -210,8 +224,8 @@ const ProfileInfo = () => {
     }
   };
 
-  // Функции для работы с настройками закладок
-  const saveBookmarksSetting = async (parameter: string, value: string) => {
+  // Функции для работы с настройками пользователя
+  const saveUserSetting = async (parameter: string, value: string) => {
     if (!user?.id) return;
 
     try {
@@ -241,7 +255,7 @@ const ProfileInfo = () => {
     }
   };
 
-  const loadBookmarksSetting = async (parameter: string) => {
+  const loadUserSetting = async (parameter: string) => {
     if (!user?.id) return null;
 
     try {
@@ -264,7 +278,7 @@ const ProfileInfo = () => {
   const handleBookmarksCardsPerRowChange = async (value: string) => {
     const newCardsPerRow = parseInt(value) as 3 | 6 | 9;
     setBookmarksCardsPerRow(newCardsPerRow);
-    await saveBookmarksSetting('bookmarks_cards_per_row', value);
+    await saveUserSetting('bookmarks_cards_per_row', value);
     notificationSystem.addNotification(
       'Успех',
       `Настройка закладок обновлена: ${newCardsPerRow} карточек в ряд`,
@@ -275,7 +289,7 @@ const ProfileInfo = () => {
   // Загрузка сохраненной настройки количества карточек
   useEffect(() => {
     const loadCardsPerRowSetting = async () => {
-      const savedSetting = await loadBookmarksSetting('bookmarks_cards_per_row');
+      const savedSetting = await loadUserSetting('bookmarks_cards_per_row');
       if (savedSetting && ['3', '6', '9'].includes(savedSetting)) {
         setBookmarksCardsPerRow(parseInt(savedSetting) as 3 | 6 | 9);
       }
@@ -283,6 +297,23 @@ const ProfileInfo = () => {
 
     if (user?.id) {
       loadCardsPerRowSetting();
+    }
+  }, [user?.id]);
+
+  // Загрузка настройки автоскрытия футера
+  useEffect(() => {
+    const loadFooterSetting = async () => {
+      const savedSetting = await loadUserSetting('auto_hide_footer');
+      if (savedSetting !== null) {
+        setAutoHideFooter(savedSetting === 'true');
+      } else {
+        // Если настройка не найдена, используем значение по умолчанию (отключено)
+        setAutoHideFooter(false);
+      }
+    };
+
+    if (user?.id) {
+      loadFooterSetting();
     }
   }, [user?.id]);
 
@@ -408,7 +439,6 @@ const ProfileInfo = () => {
       {/* Основная информация о пользователе */}
       <Card 
         shadow="lg" 
-        padding="xl" 
         radius="lg" 
         className="profile-main-card"
         style={{
@@ -608,7 +638,6 @@ const ProfileInfo = () => {
       {/* Настройки уведомлений */}
       <Card 
         shadow="lg" 
-        padding="xl" 
         radius="lg" 
         className="notifications-card"
         style={{
@@ -771,10 +800,66 @@ const ProfileInfo = () => {
         </Grid>
       </Card>
 
+      {/* Настройки интерфейса */}
+      <Card 
+        shadow="lg"  
+        radius="lg" 
+        className="interface-settings-card"
+        style={{
+          background: 'var(--theme-bg-elevated)',
+          border: '1px solid var(--theme-border)',
+          transition: 'var(--transition-all)',
+          marginBottom: 'var(--space-4)'
+        }}
+      >
+        <Group mb="md" align="center">
+          <ThemeIcon size="lg" color="blue" variant="light" radius="xl">
+            <IconBell size={20} />
+          </ThemeIcon>
+          <Box>
+            <Title order={4} c="var(--theme-text-primary)">
+              Настройки интерфейса
+            </Title>
+            <Text size="sm" c="var(--theme-text-secondary)">
+              Персонализация внешнего вида
+            </Text>
+          </Box>
+        </Group>
+
+        <Grid>
+          <Grid.Col span={12}>
+            <Card 
+              padding="md" 
+              radius="md"
+              style={{ 
+                background: 'var(--theme-bg-tertiary)',
+                border: '1px solid var(--theme-border-primary)'
+              }}
+            >
+              <Group justify="space-between" align="center">
+                <Box>
+                  <Text size="sm" fw={500} c="var(--theme-text-primary)">
+                    Автоскрывающаяся нижняя панель
+                  </Text>
+                  <Text size="xs" c="var(--theme-text-secondary)">
+                    Панель будет скрываться автоматически и появляться при наведении
+                  </Text>
+                </Box>
+                <Switch
+                  checked={autoHideFooter}
+                  onChange={(event) => handleFooterSettingChange(event.currentTarget.checked)}
+                  color="blue"
+                  size="sm"
+                />
+              </Group>
+            </Card>
+          </Grid.Col>
+        </Grid>
+      </Card>
+
       {/* Настройки закладок */}
       <Card 
         shadow="lg" 
-        padding="xl" 
         radius="lg" 
         className="notifications-card"
         style={{

@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
-import {Container,Title,Paper,Text,Button,Group,Stack,Modal,LoadingOverlay, TextInput} from '@mantine/core';
+import {Container,Title,Paper,Text,Button,Group,Stack,Modal,LoadingOverlay, TextInput, Tabs, Card, Box, ThemeIcon, Progress} from '@mantine/core';
 import { TimeInput } from '@mantine/dates';
-import {  IconUpload,  IconMusic,  IconClock,  IconDeviceMobile,  IconBuilding, IconEdit, IconCheck, IconRefresh, IconPower, IconBattery, IconWifi, IconCalendar, IconPlayerPlay, IconPlayerPause, IconWifiOff, IconX } from '@tabler/icons-react';
+import {  IconUpload,  IconMusic,  IconClock,  IconDeviceMobile,  IconBuilding, IconEdit, IconCheck, IconRefresh, IconPower, IconBattery, IconWifi, IconCalendar, IconPlayerPlay, IconPlayerPause, IconWifiOff, IconX, IconRadio } from '@tabler/icons-react';
 import { notificationSystem } from '../../../utils/Push';
 import { API } from '../../../config/constants';
 import { DynamicFormModal, FormField } from '../../../utils/formModal';
+import { DndProviderWrapper } from '../../../utils/dnd';
+import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import './Radio.css';
+import '../../../app/styles/DesignSystem.css';
 
 
 interface Device {
@@ -60,12 +63,15 @@ interface Stats {
 }
 
 const RadioAdmin: React.FC = () => {
+  const { setHeader, clearHeader } = usePageHeader();
   const [branchesWithDevices, setBranchesWithDevices] = useState<BranchWithDevices[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
 
   const [statusMap, setStatusMap] = useState<Record<string, boolean>>({});
 
@@ -117,10 +123,6 @@ const RadioAdmin: React.FC = () => {
     return branchesWithDevices[0]?.devices || [];
   }, [branchesWithDevices]);
 
-  // Мемоизация всех устройств
-  const allDevices = useMemo(() => {
-    return branchesWithDevices.flatMap(branch => branch.devices);
-  }, [branchesWithDevices]);
 
   // Проверка состояния музыки
   const musicStatus = useMemo(() => {
@@ -233,6 +235,15 @@ const RadioAdmin: React.FC = () => {
       label: 'Активен',
       type: 'boolean',
       required: false
+    },
+    {
+      name: 'attachment',
+      label: 'Файл потока',
+      type: 'file',
+      required: false,
+      accept: 'audio/mpeg,audio/mp3,.mp3',
+      multiple: false,
+      withDnd: true
     }
   ];
 
@@ -317,12 +328,39 @@ const RadioAdmin: React.FC = () => {
 
   const handleStreamSubmit = useCallback(async (values: Record<string, any>) => {
     try {
+      console.log('Form values:', values);
+      
+      const formData = new FormData();
+      
+      // Добавляем все поля кроме файла
+      Object.keys(values).forEach(key => {
+        if (key !== 'attachment' && values[key] !== undefined && values[key] !== null) {
+          formData.append(key, values[key]);
+        }
+      });
+      
+      // Добавляем файл если он есть в values.attachment
+      if (values.attachment && Array.isArray(values.attachment) && values.attachment.length > 0) {
+        console.log('Adding file to FormData:', values.attachment[0]);
+        formData.append('attachment', values.attachment[0].source);
+      } else {
+        console.log('No file to add to FormData');
+      }
+      
       if (streamModalMode === 'create') {
-        const response = await axios.post(`${API_BASE}/streams`, values);
+        const response = await axios.post(`${API_BASE}/streams`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        });
         console.log('Поток создан:', response.data);
         loadData();
       } else if (streamModalMode === 'edit' && selectedStream) {
-        const response = await axios.put(`${API_BASE}/streams/${selectedStream.id}`, values);
+        const response = await axios.put(`${API_BASE}/streams/${selectedStream.id}`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        });
         console.log('Поток обновлен:', response.data);
         loadData();
       }
@@ -345,9 +383,32 @@ const RadioAdmin: React.FC = () => {
     }
   }, [selectedStream, loadData, API_BASE]);
 
+  // Обработчики для редактирования и удаления потоков
+  const handleEditStream = useCallback((stream: RadioStream) => {
+    setSelectedStream(stream);
+    setStreamModalMode('edit');
+    setStreamModalOpen(true);
+  }, []);
+
+  const handleDeleteStream = useCallback((stream: RadioStream) => {
+    setSelectedStream(stream);
+    setStreamModalMode('delete');
+    setStreamModalOpen(true);
+  }, []);
+
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Устанавливаем заголовок страницы
+  useEffect(() => {
+    setHeader({
+      title: 'Админ панель DNS Radio',
+      subtitle: 'Управление радио потоками и устройствами'
+    });
+
+    return () => clearHeader();
+  }, [setHeader, clearHeader]);
 
   // Device Management Functions
   const openDeviceModal = useCallback(async (device: Device) => {
@@ -517,18 +578,68 @@ const RadioAdmin: React.FC = () => {
 
 
   const handleUpload = async (values: Record<string, any>) => {
+    console.log('handleUpload values:', values);
+    
     const files = values.files || selectedFiles;
-    if (files.length === 0) return;
+    console.log('Files to upload:', files);
+    
+    if (!files || files.length === 0) {
+      console.log('No files to upload');
+      return;
+    }
+
+    // Извлекаем файлы из структуры FileAttachment
+    const extractedFiles = files.map((item: any) => {
+      if (item && item.source) {
+        return item.source; // Это File объект
+      }
+      return item; // Возможно, это уже File объект
+    });
+
+    console.log('Extracted files:', extractedFiles);
+    console.log('First few extracted files:', extractedFiles.slice(0, 3));
+    
+    // Фильтруем только валидные файлы
+    const validFiles = extractedFiles.filter((file: any) => {
+      console.log('Checking file:', file, 'has name:', file?.name, 'is file:', file instanceof File);
+      return file && file.name;
+    });
+    console.log('Valid files to upload:', validFiles.length);
+
+    if (validFiles.length === 0) {
+      console.log('No valid files to upload');
+      return;
+    }
+
+    console.log('Uploading files:', validFiles);
+    console.log('API_BASE:', API_BASE);
+
+    setIsUploading(true);
+      setUploadProgress(0);
 
     try {
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
+      // Загружаем файлы последовательно, а не параллельно
+      for (let i = 0; i < validFiles.length; i++) {
+        const file = validFiles[i];
+
         const formData = new FormData();
         formData.append('music', file);
 
-        await axios.post(`${API_BASE}/upload`, formData, {
+        console.log(`Sending file ${i + 1}/${validFiles.length}:`, file.name, 'to:', `${API_BASE}/upload`);
+
+        const response = await axios.post(`${API_BASE}/upload`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
+        
+        console.log('Upload response:', response.data);
+        
+        // Обновляем прогресс
+        setUploadProgress(Math.round(((i + 1) / validFiles.length) * 100));
+        
+        // Небольшая задержка между загрузками для стабильности
+        if (i < validFiles.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
       }
 
       setSelectedFiles([]);
@@ -540,7 +651,8 @@ const RadioAdmin: React.FC = () => {
 
       try { notificationSystem.addNotification('Ошибка', 'Ошибка загрузки файлов', 'error'); } catch {}
     } finally {
-      // Upload completed
+      setIsUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -564,364 +676,305 @@ const RadioAdmin: React.FC = () => {
   }
 
   return (
-    <div style={{ 
-      width: '100%', 
-      height: '100vh', 
-      display: 'flex', 
-      flexDirection: 'column',
-      backgroundColor: 'var(--bg)',
-      color: 'var(--font)'
-    }}>
-      {/* Header */}
-      <div style={{
-        padding: '20px 40px',
-        backgroundColor: 'var(--layer)',
-        borderBottom: '1px solid var(--outline-shadow)',
-        boxShadow: 'var(--outline-bottom-shadow)',
-        zIndex: 2
-      }}>
-        <Group justify="space-between" align="center">
-          <Title order={1} style={{ color: 'var(--font-info)', fontSize: '28px', fontWeight: 'bold' }}>
-            <IconMusic size={32} style={{ marginRight: 12, color: 'var(--font-info)' }} />
-            Админ панель DNS Radio
+    <DndProviderWrapper>
+      <Box className="radio-container" style={{ paddingRight: 'var(--mantine-spacing-md)' }}>
+        <Stack gap="lg">
+          {/* Заголовок страницы */}
+          <Box className="radio-header">
+            <Group gap="md" align="center">
+              <ThemeIcon size="lg" color="blue" variant="light" radius="xl">
+                <IconRadio size={24} />
+              </ThemeIcon>
+              <Box>
+                <Title order={2} c="var(--theme-text-primary)">
+                  DNS Radio
           </Title>
-          <Button 
-            leftSection={<IconRefresh size={16} />}
-            onClick={loadData}
-            variant="light"
-            style={{
-              backgroundColor: 'var(--select)',
-              color: 'var(--font-contrast)',
-              border: 'none',
-              transition: 'var(--hover-transition)'
-            }}
-          >
-            Обновить
-          </Button>
-        </Group>
-      </div>
+                <Text size="md" c="var(--theme-text-secondary)">
+                  Управление радио потоками и устройствами
+                </Text>
+              </Box>
+            </Group>
+          </Box>
 
-      {/* Main Content */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        {/* Left Column - 80% */}
-        <div style={{ width: '80%', padding: '30px', overflow: 'auto' }}>
-          <Stack gap="xl">
+          {/* Навигация и контент вкладок */}
+          <Card shadow="sm" radius="lg" p="md" className="radio-navigation">
+            <Tabs 
+              defaultValue="music"
+              variant="pills"
+              classNames={{
+                list: 'radio-tabs-list',
+                tab: 'radio-tab'
+              }}
+            >
+              <Tabs.List grow>
+                <Tabs.Tab 
+                  value="music" 
+                  leftSection={<IconMusic size={18} />}
+                  className="radio-tab-item"
+                >
+                  Музыка
+                  {stats && (
+                    <Text span size="xs" c="dimmed" ml="xs">
+                      ({stats.totalMusicFiles})
+                    </Text>
+                  )}
+                </Tabs.Tab>
+                <Tabs.Tab 
+                  value="streams" 
+                  leftSection={<IconRadio size={18} />}
+                  className="radio-tab-item"
+                >
+                  Потоки
+                  <Text span size="xs" c="dimmed" ml="xs">
+                    ({radioStreams.length})
+                  </Text>
+                </Tabs.Tab>
+                <Tabs.Tab 
+                  value="devices" 
+                  leftSection={<IconDeviceMobile size={18} />}
+                  className="radio-tab-item"
+                >
+                  Устройства
+                  {stats && (
+                    <Text span size="xs" c="dimmed" ml="xs">
+                      ({stats.activeDevices}/{stats.totalDevices})
+                    </Text>
+                  )}
+                </Tabs.Tab>
+              </Tabs.List>
 
+              {/* Контент вкладок */}
+              <Box className="radio-content" mt="md">
 
-
-
-            {/* Statistics */}
+              <Tabs.Panel value="music">
+              <Stack gap="lg">
+                {/* Статистика музыки */}
             {stats && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px' }}>
-                <div style={{
-                  padding: '24px',
-                  backgroundColor: 'var(--layer)',
-                  borderRadius: '12px',
-                  boxShadow: 'var(--soft-shadow)',
-                  border: '1px solid var(--outline-shadow)',
-                  transition: 'var(--hover-transition)',
-                  cursor: 'pointer'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.boxShadow = 'var(--outline-shadow)'}
-                onMouseLeave={(e) => e.currentTarget.style.boxShadow = 'var(--soft-shadow)'}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                    <Paper p="md" withBorder>
                   <Group>
                     <div style={{
-                      width: '48px',
-                      height: '48px',
-                      borderRadius: '12px',
-                      backgroundColor: '#339af0',
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '8px',
+                          backgroundColor: '#9775fa',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center'
                     }}>
-                      <IconDeviceMobile size={24} color="white" />
+                          <IconMusic size={20} color="white" />
                     </div>
                     <div>
-                      <Text size="sm" style={{ color: 'var(--font-aux)', marginBottom: '4px' }}>Всего устройств</Text>
-                      <Text size="xl" fw={700} style={{ color: 'var(--font)' }}>{stats.totalDevices}</Text>
+                          <Text size="sm" c="dimmed">Музыкальных файлов</Text>
+                          <Text size="lg" fw={700}>{stats.totalMusicFiles}</Text>
                     </div>
                   </Group>
-                </div>
-                
-                <div style={{
-                  padding: '24px',
-                  backgroundColor: 'var(--layer)',
-                  borderRadius: '12px',
-                  boxShadow: 'var(--soft-shadow)',
-                  border: '1px solid var(--outline-shadow)',
-                  transition: 'var(--hover-transition)',
-                  cursor: 'pointer'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.boxShadow = 'var(--outline-shadow)'}
-                onMouseLeave={(e) => e.currentTarget.style.boxShadow = 'var(--soft-shadow)'}>
+                    </Paper>
+                    
+                    <Paper p="md" withBorder>
                   <Group>
                     <div style={{
-                      width: '48px',
-                      height: '48px',
-                      borderRadius: '12px',
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '8px',
                       backgroundColor: '#20c997',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center'
                     }}>
-                      <IconCheck size={24} color="white" />
+                          <IconBuilding size={20} color="white" />
                     </div>
                     <div>
-                      <Text size="sm" style={{ color: 'var(--font-aux)', marginBottom: '4px' }}>Активных</Text>
-                      <Text size="xl" fw={700} style={{ color: 'var(--font)' }}>{stats.activeDevices}</Text>
+                          <Text size="sm" c="dimmed">Филиалов</Text>
+                          <Text size="lg" fw={700}>{stats.totalBranches}</Text>
                     </div>
                   </Group>
-                </div>
-                
-                <div style={{
-                  padding: '24px',
-                  backgroundColor: 'var(--layer)',
-                  borderRadius: '12px',
-                  boxShadow: 'var(--soft-shadow)',
-                  border: '1px solid var(--outline-shadow)',
-                  transition: 'var(--hover-transition)',
-                  cursor: 'pointer'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.boxShadow = 'var(--outline-shadow)'}
-                onMouseLeave={(e) => e.currentTarget.style.boxShadow = 'var(--soft-shadow)'}>
-                  <Group>
-                    <div style={{
-                      width: '48px',
-                      height: '48px',
-                      borderRadius: '12px',
-                      backgroundColor: '#fd7e14',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}>
-                      <IconBuilding size={24} color="white" />
-                    </div>
-                    <div>
-                      <Text size="sm" style={{ color: 'var(--font-aux)', marginBottom: '4px' }}>Филиалов</Text>
-                      <Text size="xl" fw={700} style={{ color: 'var(--font)' }}>{stats.totalBranches}</Text>
-                    </div>
-                  </Group>
-                </div>
-                
-                <div style={{
-                  padding: '24px',
-                  backgroundColor: 'var(--layer)',
-                  borderRadius: '12px',
-                  boxShadow: 'var(--soft-shadow)',
-                  border: '1px solid var(--outline-shadow)',
-                  transition: 'var(--hover-transition)',
-                  cursor: 'pointer'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.boxShadow = 'var(--outline-shadow)'}
-                onMouseLeave={(e) => e.currentTarget.style.boxShadow = 'var(--soft-shadow)'}>
-                  <Group>
-                    <div style={{
-                      width: '48px',
-                      height: '48px',
-                      borderRadius: '12px',
-                      backgroundColor: '#9775fa',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}>
-                      <IconMusic size={24} color="white" />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <Text size="sm" style={{ color: 'var(--font-aux)', marginBottom: '4px' }}>Музыкальных файлов</Text>
-                      <Text size="xl" fw={700} style={{ color: 'var(--font)' }}>{stats.totalMusicFiles}</Text>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      {musicStatus?.hasCurrentMonthMusic ? (
-                        <IconCheck size={20} color="#10b981" />
-                      ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <IconX size={20} color="#ef4444" />
-                          <Text size="xs" style={{ color: '#ef4444', fontWeight: '500' }}>
-                            Пора загружать
-                          </Text>
-                        </div>
-                      )}
-                    </div>
-                  </Group>
-                </div>
-              </div>
-            )}
-
-            {/* Radio Streams */}
-            <div style={{
-              padding: '24px',
-              backgroundColor: 'var(--layer)',
-              borderRadius: '16px',
-              boxShadow: 'var(--soft-shadow)',
-              border: '1px solid var(--outline-shadow)'
-            }}>
-              <Group justify="space-between" mb="md">
-                <Title order={2} size="h3" style={{ color: 'var(--font)', fontSize: '20px' }}>
-                  <IconMusic size={24} style={{ marginRight: 8, color: 'var(--font-info)' }} />
-                  Радио потоки
-                </Title>
-                <Button 
-                  onClick={handleCreateStream}
-                  leftSection={<IconMusic size={16} />}
-                  variant="outline"
-                  style={{
-                    borderColor: 'var(--select)',
-                    color: 'var(--font)',
-                    borderRadius: '8px',
-                    transition: 'var(--hover-transition)'
-                  }}
-                >
-                  Добавить поток
-                </Button>
-              </Group>
-              
-              {radioStreams.length > 0 ? (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
-                  {radioStreams.map((stream) => (
-                    <Paper key={stream.id} p="md" withBorder style={{
-                      backgroundColor: 'var(--theme-bg-elevated)',
-                      border: '1px solid var(--theme-border)',
-                      borderRadius: '12px',
-                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-                      transition: 'all 0.2s ease'
-                    }}>
-                      <Group justify="space-between" mb="sm">
-                        <Text fw={600} size="lg" style={{ color: 'var(--theme-text-primary)' }}>
-                          {stream.name}
-                        </Text>
-                        <Group gap="xs">
-                          {stream.isActive ? (
-                            <div style={{
-                              width: '8px',
-                              height: '8px',
-                              borderRadius: '50%',
-                              backgroundColor: '#10b981'
-                            }} />
-                          ) : (
-                            <div style={{
-                              width: '8px',
-                              height: '8px',
-                              borderRadius: '50%',
-                              backgroundColor: '#ef4444'
-                            }} />
-                          )}
-                          <Text size="xs" style={{ color: stream.isActive ? '#10b981' : '#ef4444' }}>
-                            {stream.isActive ? 'Активен' : 'Неактивен'}
-                          </Text>
-                        </Group>
-                      </Group>
-                      
-                      <Stack gap="xs">
-                        <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
-                          Тип филиала: <Text span fw={500} style={{ color: 'var(--theme-text-primary)' }}>{stream.branchTypeOfDist}</Text>
-                        </Text>
-                        <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
-                          Частота: <Text span fw={500} style={{ color: 'var(--theme-text-primary)' }}>каждые {stream.frequencySongs} песен</Text>
-                        </Text>
-                        <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
-                          Громкость: <Text span fw={500} style={{ color: 'var(--theme-text-primary)' }}>{stream.volumeLevel}%</Text>
-                        </Text>
-                        <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
-                          Плавность: <Text span fw={500} style={{ color: 'var(--theme-text-primary)' }}>{stream.fadeInDuration}с</Text>
-                        </Text>
-                        {stream.attachment && (
-                          <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
-                            Файл: <Text span fw={500} style={{ color: 'var(--theme-text-primary)' }}>{stream.attachment}</Text>
-                          </Text>
-                        )}
-                        <Text size="xs" style={{ color: 'var(--theme-text-tertiary)' }}>
-                          Создан: {new Date(stream.createdAt).toLocaleDateString('ru-RU')}
-                        </Text>
-                      </Stack>
                     </Paper>
-                  ))}
                 </div>
-              ) : (
-                <Text size="sm" style={{ color: 'var(--theme-text-secondary)', textAlign: 'center', padding: '40px' }}>
-                  Радио потоки не найдены. Создайте первый поток для начала работы.
-                </Text>
-              )}
-            </div>
+                )}
 
-            {/* Music Upload */}
-            <div style={{
-              padding: '24px',
-              backgroundColor: 'var(--layer)',
-              borderRadius: '16px',
-              boxShadow: 'var(--soft-shadow)',
-              border: '1px solid var(--outline-shadow)'
-            }}>
-              <Group justify="space-between" mb="md">
-                <Title order={2} size="h3" style={{ color: 'var(--font)', fontSize: '20px' }}>
-                  <IconUpload size={24} style={{ marginRight: 8, color: 'var(--font-info)' }} />
-                  Загрузка музыки
-                </Title>
-                <Group gap="sm">
+                {/* Загрузка музыки */}
+                <Paper p="lg" withBorder>
+                  <Group justify="space-between" mb="md">
+                    <Title order={3} size="h4">
+                      <IconUpload size={20} style={{ marginRight: 8 }} />
+                      Загрузка музыкальных файлов
+                    </Title>
+                    <Button 
+                      onClick={() => setUploadModalOpen(true)}
+                      leftSection={<IconUpload size={16} />}
+                    >
+                      Загрузить файлы
+                    </Button>
+                  </Group>
+                  <Text c="dimmed" size="sm">
+                    Загружайте MP3 файлы для воспроизведения в филиалах. 
+                    Файлы автоматически сохраняются в папку retail/music/{musicStatus?.currentMonthFolder || 'текущий месяц'}.
+                  </Text>
+                </Paper>
+              </Stack>
+              </Tabs.Panel>
+
+              <Tabs.Panel value="streams">
+              <Stack gap="lg">
+                <Group justify="space-between">
+                  <Title order={3} size="h4">
+                    <IconRadio size={20} style={{ marginRight: 8 }} />
+                    Радио потоки
+                  </Title>
                   <Button 
                     onClick={handleCreateStream}
                     leftSection={<IconMusic size={16} />}
                     variant="outline"
-                    style={{
-                      borderColor: 'var(--select)',
-                      color: 'var(--font)',
-                      borderRadius: '8px',
-                      transition: 'var(--hover-transition)'
-                    }}
                   >
-                    Радио потоки
-                  </Button>
-                  <Button 
-                    onClick={() => setUploadModalOpen(true)}
-                    leftSection={<IconUpload size={16} />}
-                    style={{
-                      backgroundColor: 'var(--select)',
-                      color: 'var(--font-contrast)',
-                      border: 'none',
-                      borderRadius: '8px',
-                      transition: 'var(--hover-transition)'
-                    }}
-                  >
-                    Загрузить файлы
+                    Добавить поток
                   </Button>
                 </Group>
-              </Group>
-              <Text style={{ color: 'var(--font-aux)', fontSize: '14px' }}>
-                Загружайте MP3 файлы для воспроизведения в филиалах. Файлы автоматически сохраняются в папку retail/music/{musicStatus?.currentMonthFolder || 'текущий месяц'}.
-              </Text>
-            </div>
+                
+                {radioStreams.length > 0 ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+                    {radioStreams.map((stream) => (
+                      <Paper key={stream.id} p="md" withBorder>
+                        <Group justify="space-between" mb="sm">
+                          <Text fw={600} size="lg">
+                            {stream.name}
+                          </Text>
+                          <Group gap="xs">
+                            {stream.isActive ? (
+                <div style={{
+                                width: '8px',
+                                height: '8px',
+                                borderRadius: '50%',
+                                backgroundColor: '#10b981'
+                              }} />
+                            ) : (
+                              <div style={{
+                                width: '8px',
+                                height: '8px',
+                                borderRadius: '50%',
+                                backgroundColor: '#ef4444'
+                              }} />
+                            )}
+                            <Text size="xs" c={stream.isActive ? 'green' : 'red'}>
+                              {stream.isActive ? 'Активен' : 'Неактивен'}
+                            </Text>
+                          </Group>
+                        </Group>
+                        
+                        <Stack gap="xs">
+                          <Text size="sm" c="dimmed">
+                            Тип филиала: <Text span fw={500}>{stream.branchTypeOfDist}</Text>
+                          </Text>
+                          <Text size="sm" c="dimmed">
+                            Частота: <Text span fw={500}>каждые {stream.frequencySongs} песен</Text>
+                          </Text>
+                          <Text size="sm" c="dimmed">
+                            Громкость: <Text span fw={500}>{stream.volumeLevel}%</Text>
+                          </Text>
+                          <Text size="sm" c="dimmed">
+                            Плавность: <Text span fw={500}>{stream.fadeInDuration}с</Text>
+                          </Text>
+                          {stream.attachment && (
+                            <Text size="sm" c="dimmed">
+                              Файл: <Text span fw={500}>{stream.attachment}</Text>
+                            </Text>
+                          )}
+                          <Text size="xs" c="dimmed">
+                            Создан: {new Date(stream.createdAt).toLocaleDateString('ru-RU')}
+                          </Text>
+                        </Stack>
+                        
+                        <Group justify="flex-end" mt="md">
+                          <Button
+                            variant="light"
+                            size="xs"
+                            leftSection={<IconEdit size={14} />}
+                            onClick={() => handleEditStream(stream)}
+                          >
+                            Редактировать
+                          </Button>
+                          <Button
+                            variant="light"
+                            color="red"
+                            size="xs"
+                            leftSection={<IconX size={14} />}
+                            onClick={() => handleDeleteStream(stream)}
+                          >
+                            Удалить
+                          </Button>
+                        </Group>
+                      </Paper>
+                    ))}
+                  </div>
+                ) : (
+                  <Text size="sm" c="dimmed" ta="center" py="xl">
+                    Радио потоки не найдены. Создайте первый поток для начала работы.
+                  </Text>
+                )}
+              </Stack>
+              </Tabs.Panel>
 
-            {/* Branch Devices */}
-            <div style={{
-              padding: '24px',
-              backgroundColor: 'var(--layer)',
-              borderRadius: '16px',
-              boxShadow: 'var(--soft-shadow)',
-              border: '1px solid var(--outline-shadow)'
-            }}>
-              <Title order={2} size="h3" mb="lg" style={{ color: 'var(--font)', fontSize: '20px' }}>
-                <IconDeviceMobile size={24} style={{ marginRight: 8, color: 'var(--font-info)' }} />
-                Устройства вашего филиала
-              </Title>
-              
+              <Tabs.Panel value="devices">
+              <Stack gap="lg">
+                {/* Статистика устройств */}
+                {stats && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                    <Paper p="md" withBorder>
+                  <Group>
+                    <div style={{
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '8px',
+                          backgroundColor: '#339af0',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                          <IconDeviceMobile size={20} color="white" />
+                    </div>
+                    <div>
+                          <Text size="sm" c="dimmed">Всего устройств</Text>
+                          <Text size="lg" fw={700}>{stats.totalDevices}</Text>
+                    </div>
+                  </Group>
+                    </Paper>
+                    
+                    <Paper p="md" withBorder>
+                  <Group>
+                    <div style={{
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '8px',
+                          backgroundColor: '#20c997',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                          <IconCheck size={20} color="white" />
+                    </div>
+                        <div>
+                          <Text size="sm" c="dimmed">Активных</Text>
+                          <Text size="lg" fw={700}>{stats.activeDevices}</Text>
+                    </div>
+                  </Group>
+                    </Paper>
+              </div>
+            )}
+
+                {/* Устройства по филиалам */}
               <Stack gap="lg">
                 {branchesWithDevices.map((branchData) => (
-                  <div key={branchData.branch.uuid} style={{
-                    padding: '20px',
-                    backgroundColor: 'var(--bg)',
-                    borderRadius: '12px',
-                    border: '1px solid var(--outline-shadow)',
-                    boxShadow: 'var(--soft-shadow)'
-                  }}>
+                    <Paper key={branchData.branch.uuid} p="lg" withBorder>
                     <Group justify="space-between" mb="md">
                       <div>
-                        <Title order={3} size="h4" style={{ color: 'var(--font)', fontSize: '18px' }}>{branchData.branch.name}</Title>
-                        <Text style={{ color: 'var(--font-aux)', fontSize: '14px' }}>{branchData.branch.typeOfDist}</Text>
+                          <Title order={4} size="h5">{branchData.branch.name}</Title>
+                          <Text size="sm" c="dimmed">{branchData.branch.typeOfDist}</Text>
                       </div>
                       <div style={{
                         padding: '6px 12px',
-                        backgroundColor: 'var(--select)',
+                          backgroundColor: 'var(--mantine-color-blue-6)',
                         borderRadius: '20px',
-                        color: 'var(--font-contrast)',
+                          color: 'white',
                         fontSize: '12px',
                         fontWeight: '500'
                       }}>
@@ -937,20 +990,20 @@ const RadioAdmin: React.FC = () => {
                             key={device.id} 
                             style={{ 
                               padding: '16px',
-                              backgroundColor: 'var(--layer)',
+                                backgroundColor: 'var(--mantine-color-gray-0)',
                               borderRadius: '8px',
-                              border: '1px solid var(--outline-shadow)',
+                                border: '1px solid var(--mantine-color-gray-3)',
                               cursor: 'pointer',
-                              transition: 'var(--hover-transition)'
+                                transition: 'all 0.2s ease'
                             }}
                             onClick={() => openDeviceModal(device)}
-                            onMouseEnter={(e) => e.currentTarget.style.boxShadow = 'var(--outline-shadow)'}
+                              onMouseEnter={(e) => e.currentTarget.style.boxShadow = 'var(--mantine-shadow-sm)'}
                             onMouseLeave={(e) => e.currentTarget.style.boxShadow = 'none'}
                           >
                             <Group justify="space-between" align="center">
                               <div>
-                                <Text fw={500} style={{ color: 'var(--font)', fontSize: '16px' }}>{device.name}</Text>
-                                <Text size="sm" style={{ color: 'var(--font-aux)', fontSize: '13px' }}>
+                                  <Text fw={500} size="sm">{device.name}</Text>
+                                  <Text size="xs" c="dimmed">
                                   {device.network}{device.number} • {device.os} • {device.app}
                                 </Text>
                               </div>
@@ -967,88 +1020,35 @@ const RadioAdmin: React.FC = () => {
                                   {online ? 'Онлайн' : 'Оффлайн'}
                                 </div>
                                 
-                                <Text size="sm" style={{ color: 'var(--font-aux)', fontSize: '12px' }}>
+                                  <Text size="xs" c="dimmed">
                                   {formatTime(device.timeFrom)} - {formatTime(device.timeUntil)}
                                 </Text>
                                 
-                                <IconEdit size={16} style={{ color: 'var(--font-aux)' }} />
+                                  <IconEdit size={16} style={{ color: 'var(--mantine-color-gray-6)' }} />
                               </Group>
                             </Group>
                           </div>
                         )
                       })}
                     </Stack>
-                  </div>
+                    </Paper>
                 ))}
               </Stack>
-            </div>
           </Stack>
-        </div>
+              </Tabs.Panel>
+              </Box>
+            </Tabs>
+          </Card>
+        </Stack>
+      </Box>
 
-        {/* Right Column - 20% */}
-        <div style={{ 
-          width: '20%', 
-          padding: '24px', 
-          borderLeft: '1px solid var(--outline-shadow)', 
-          overflow: 'auto',
-          backgroundColor: 'var(--layer)'
-        }}>
-          <Stack gap="md">
-            <Title order={3} size="h4" style={{ color: 'var(--font)', fontSize: '18px' }}>
-              <IconDeviceMobile size={20} style={{ marginRight: 8, color: 'var(--font-info)' }} />
-              Все устройства
-            </Title>
-            
-            {branchesWithDevices.map((branchData) => (
-              <div key={branchData.branch.uuid}>
-                <Text fw={500} size="sm" mb="xs" style={{ color: 'var(--font-info)', fontSize: '14px' }}>
-                  {branchData.branch.name}
-                </Text>
-                <Stack gap="xs">
-                  {allDevices.map((device) => {
-                    const online = !!statusMap[device.id];
-                    return (
-                      <div 
-                        key={device.id} 
-                        style={{ 
-                          padding: '12px',
-                          backgroundColor: 'var(--bg)',
-                          borderRadius: '8px',
-                          border: '1px solid var(--outline-shadow)',
-                          cursor: 'pointer',
-                          transition: 'var(--hover-transition)'
-                        }}
-                        onClick={() => openDeviceModal(device)}
-                        onMouseEnter={(e) => e.currentTarget.style.boxShadow = 'var(--outline-shadow)'}
-                        onMouseLeave={(e) => e.currentTarget.style.boxShadow = 'none'}
-                      >
-                        <Group justify="space-between" align="center">
-                          <div>
-                            <Text size="sm" fw={500} style={{ color: 'var(--font)', fontSize: '13px' }}>{device.name}</Text>
-                            <Text size="xs" style={{ color: 'var(--font-aux)', fontSize: '11px' }}>
-                              {device.network}{device.number}
-                            </Text>
-                          </div>
-                          <div style={{
-                            width: '8px',
-                            height: '8px',
-                            borderRadius: '50%',
-                            backgroundColor: online ? '#20c997' : '#6c757d'
-                          }} />
-                        </Group>
-                      </div>
-                    )
-                  })}
-                </Stack>
-              </div>
-            ))}
-          </Stack>
-        </div>
-      </div>
+
+
+
 
       {/* Upload Modal using DynamicFormModal */}
       <DynamicFormModal
-        opened={uploadModalOpen}
+        opened={uploadModalOpen} 
         onClose={() => setUploadModalOpen(false)}
         title="Загрузка музыкальных файлов"
         mode="create"
@@ -1063,12 +1063,46 @@ const RadioAdmin: React.FC = () => {
             placeholder: 'Нажмите для выбора файлов'
           }
         ]}
-        initialValues={{ files: selectedFiles }}
+        initialValues={{ files: selectedFiles.map(file => ({
+          id: Math.random().toString(36).substr(2, 9),
+          userAdd: 'user',
+          source: file,
+          meta: {}
+        })) }}
         onSubmit={handleUpload}
-        submitButtonText="Загрузить"
+        submitButtonText={isUploading ? `Загрузка... ${uploadProgress}%` : "Загрузить"}
         cancelButtonText="Отмена"
         size="md"
       />
+      
+      {/* Progress Bar */}
+      {isUploading && (
+        <Modal
+          opened={isUploading}
+          onClose={() => {}}
+          title="Загрузка файлов"
+          size="md"
+          closeOnClickOutside={false}
+          closeOnEscape={false}
+          withCloseButton={false}
+        >
+          <Stack gap="md">
+            <Text size="sm" c="dimmed">
+              Загружается {uploadProgress}% файлов...
+            </Text>
+            <Progress 
+              value={uploadProgress} 
+              size="lg" 
+              radius="md"
+              color="blue"
+              animated
+            />
+            <Text size="xs" c="dimmed" ta="center">
+              Пожалуйста, не закрывайте браузер до завершения загрузки
+            </Text>
+          </Stack>
+        </Modal>
+      )}
 
 
 
@@ -1387,7 +1421,7 @@ const RadioAdmin: React.FC = () => {
         cancelButtonText="Отмена"
         size="lg"
       />
-    </div>
+    </DndProviderWrapper>
   );
 };
 

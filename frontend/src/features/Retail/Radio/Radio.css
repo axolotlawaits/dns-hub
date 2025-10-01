@@ -1,195 +1,193 @@
 /* ========================================
-   DEVICE MODAL - СТИЛИЗАЦИЯ В СООТВЕТСТВИИ С СИСТЕМОЙ
+   СОВРЕМЕННЫЙ ДИЗАЙН DNS RADIO
    ======================================== */
 
-.device-modal-content {
-  position: fixed !important;
-  top: 50% !important;
-  left: 50% !important;
-  transform: translate(-50%, -50%) !important;
-  max-width: 95vw !important;
-  max-height: 90vh !important;
-  width: 900px !important;
-  min-width: 700px !important;
-  height: auto !important;
-  border-radius: 16px !important;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
-  background: var(--theme-bg-elevated) !important;
-  border: 1px solid var(--theme-border) !important;
+.radio-container {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding-bottom: 100px; /* Отступ снизу чтобы контент не обрезался футером */
 }
 
-.device-modal-header {
-  padding: 24px 24px 16px 24px !important;
-  background: linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%) !important;
-  border-bottom: 1px solid var(--theme-border) !important;
-  border-radius: 16px 16px 0 0 !important;
+/* Заголовок страницы */
+.radio-header {
+  margin-bottom: var(--space-3);
 }
 
-.device-modal-title {
-  font-size: 20px !important;
-  font-weight: 700 !important;
-  color: var(--theme-text-primary) !important;
-  margin: 0 !important;
+/* Навигация по вкладкам */
+.radio-navigation {
+  background: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border);
+  margin-bottom: var(--space-4);
 }
 
-.device-modal-body {
-  padding: 24px !important;
-  max-height: 70vh !important;
-  overflow-y: auto !important;
-  background: var(--theme-bg-elevated) !important;
+.radio-tabs-list {
+  background: transparent;
+  border: none;
 }
 
-/* Стилизация Paper компонентов */
-.device-modal-body .mantine-Paper-root {
-  background: var(--theme-bg-elevated) !important;
-  border: 1px solid var(--theme-border) !important;
-  border-radius: 12px !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
-  transition: all 0.2s ease !important;
+.radio-tab-item {
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  transition: var(--transition-all);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--theme-text-primary);
 }
 
-.device-modal-body .mantine-Paper-root:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
-  transform: translateY(-1px) !important;
+.radio-tab-item:hover {
+  background: var(--theme-bg-hover);
+  transform: translateY(-1px);
 }
 
-/* Стилизация текста */
-.device-modal-body .mantine-Text-root {
-  color: var(--theme-text-primary) !important;
+.radio-tab-item[data-active="true"] {
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600));
+  color: white;
+  box-shadow: var(--theme-shadow-md);
 }
 
-.device-modal-body .mantine-Text-root[data-fw="500"] {
-  color: var(--theme-text-primary) !important;
-  font-weight: 600 !important;
+.radio-tab-item[data-active="false"] {
+  color: var(--theme-text-secondary);
+  background: transparent;
 }
 
-/* Стилизация кнопок */
-.device-modal-body .mantine-Button-root {
-  border-radius: 8px !important;
-  font-weight: 500 !important;
-  transition: all 0.2s ease !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+/* Контент вкладок */
+.radio-content {
+  background: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  box-shadow: var(--theme-shadow-sm);
+  transition: var(--transition-all);
 }
 
-.device-modal-body .mantine-Button-root:hover {
-  transform: translateY(-1px) !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+.radio-content:hover {
+  box-shadow: var(--theme-shadow-md);
+  transform: translateY(-1px);
 }
 
-.device-modal-body .mantine-Button-root[data-variant="light"] {
-  background: var(--theme-bg-secondary) !important;
-  color: var(--theme-text-primary) !important;
-  border: 1px solid var(--theme-border) !important;
+/* Статистические карточки */
+.radio-stats-card {
+  background: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  transition: var(--transition-all);
+  box-shadow: var(--theme-shadow-sm);
 }
 
-.device-modal-body .mantine-Button-root[data-variant="light"]:hover {
-  background: var(--theme-bg-tertiary) !important;
-  border-color: var(--theme-accent) !important;
+.radio-stats-card:hover {
+  box-shadow: var(--theme-shadow-md);
+  transform: translateY(-2px);
+  border-color: var(--color-primary-300);
 }
 
-.device-modal-body .mantine-Button-root[data-color="blue"] {
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
-  color: white !important;
-  border: none !important;
+/* Карточки потоков */
+.radio-stream-card {
+  background: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  transition: var(--transition-all);
+  box-shadow: var(--theme-shadow-sm);
 }
 
-.device-modal-body .mantine-Button-root[data-color="red"] {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
-  color: white !important;
-  border: none !important;
+.radio-stream-card:hover {
+  box-shadow: var(--theme-shadow-md);
+  transform: translateY(-2px);
+  border-color: var(--color-primary-300);
 }
 
-/* Стилизация полей ввода */
-.device-modal-body .mantine-TextInput-root {
-  border-radius: 8px !important;
-  border: 1px solid var(--theme-border) !important;
-  background: var(--theme-bg-elevated) !important;
-  transition: all 0.2s ease !important;
+/* Карточки устройств */
+.radio-device-card {
+  background: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  transition: var(--transition-all);
+  box-shadow: var(--theme-shadow-sm);
 }
 
-.device-modal-body .mantine-TextInput-root:focus-within {
-  border-color: var(--theme-accent) !important;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+.radio-device-card:hover {
+  box-shadow: var(--theme-shadow-md);
+  transform: translateY(-2px);
+  border-color: var(--color-primary-300);
 }
 
-.device-modal-body .mantine-TextInput-input {
-  color: var(--theme-text-primary) !important;
-  background: transparent !important;
+/* Кнопки действий */
+.radio-action-button {
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600));
+  border: none;
+  font-weight: 600;
+  transition: var(--transition-all);
+  border-radius: var(--radius-md);
 }
 
-.device-modal-body .mantine-TextInput-label {
-  color: var(--theme-text-secondary) !important;
-  font-weight: 500 !important;
-  margin-bottom: 6px !important;
+.radio-action-button:hover {
+  background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700));
+  transform: translateY(-1px);
+  box-shadow: var(--theme-shadow-md);
 }
 
-/* Стилизация TimeInput */
-.device-modal-body .mantine-TimeInput-root {
-  border-radius: 8px !important;
-  border: 1px solid var(--theme-border) !important;
-  background: var(--theme-bg-elevated) !important;
-  transition: all 0.2s ease !important;
-}
-
-.device-modal-body .mantine-TimeInput-root:focus-within {
-  border-color: var(--theme-accent) !important;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
-}
-
-.device-modal-body .mantine-TimeInput-input {
-  color: var(--theme-text-primary) !important;
-  background: transparent !important;
-}
-
-.device-modal-body .mantine-TimeInput-label {
-  color: var(--theme-text-secondary) !important;
-  font-weight: 500 !important;
-  margin-bottom: 6px !important;
-}
-
-/* Стилизация иконок */
-.device-modal-body .mantine-Button-leftSection {
-  color: inherit !important;
-}
-
-.device-modal-body .mantine-Button-leftSection svg {
-  width: 16px !important;
-  height: 16px !important;
-}
-
-/* Стилизация групп */
-.device-modal-body .mantine-Group-root {
-  gap: 12px !important;
-}
-
-.device-modal-body .mantine-Stack-root {
-  gap: 16px !important;
-}
-
-/* Стилизация скроллбара */
-.device-modal-body::-webkit-scrollbar {
-  width: 6px;
-}
-
-.device-modal-body::-webkit-scrollbar-track {
+.radio-secondary-button {
   background: var(--theme-bg-secondary);
-  border-radius: 3px;
+  border: 1px solid var(--theme-border);
+  color: var(--theme-text-primary);
+  transition: var(--transition-all);
+  border-radius: var(--radius-md);
 }
 
-.device-modal-body::-webkit-scrollbar-thumb {
-  background: var(--theme-border);
-  border-radius: 3px;
+.radio-secondary-button:hover {
+  background: var(--theme-bg-hover);
+  border-color: var(--color-primary-300);
+  transform: translateY(-1px);
+  box-shadow: var(--theme-shadow-sm);
 }
 
-.device-modal-body::-webkit-scrollbar-thumb:hover {
-  background: var(--theme-text-secondary);
+/* Статус индикаторы */
+.radio-status-online {
+  background: linear-gradient(135deg, var(--color-success), #059669);
+  color: white;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}
+
+.radio-status-offline {
+  background: linear-gradient(135deg, var(--color-gray-500), var(--color-gray-600));
+  color: white;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}
+
+.radio-status-active {
+  background: linear-gradient(135deg, var(--color-success), #059669);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.radio-status-inactive {
+  background: linear-gradient(135deg, var(--color-error), #dc2626);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
 }
 
 /* Анимации */
-@keyframes fadeIn {
+.radio-container {
+  animation: fadeInUp 0.6s ease-out;
+}
+
+@keyframes fadeInUp {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(30px);
   }
   to {
     opacity: 1;
@@ -197,23 +195,52 @@
   }
 }
 
-.device-modal-body .mantine-Paper-root {
-  animation: fadeIn 0.3s ease-out;
-}
-
 /* Адаптивность */
 @media (max-width: 768px) {
-  .device-modal-content {
-    width: 95vw !important;
-    min-width: 320px !important;
-    max-height: 85vh !important;
+  .radio-container {
+    padding: var(--space-4);
   }
   
-  .device-modal-body {
-    padding: 16px !important;
+  .radio-content {
+    padding: var(--space-4);
   }
   
-  .device-modal-header {
-    padding: 16px 16px 12px 16px !important;
+  .radio-stats-card,
+  .radio-stream-card,
+  .radio-device-card {
+    padding: var(--space-3);
   }
+}
+
+@media (max-width: 480px) {
+  .radio-container {
+    padding: var(--space-2);
+  }
+  
+  .radio-content {
+    padding: var(--space-3);
+  }
+  
+  .radio-stats-card,
+  .radio-stream-card,
+  .radio-device-card {
+    padding: var(--space-2);
+  }
+}
+
+/* Темная тема */
+[data-mantine-color-scheme="dark"] .radio-navigation,
+[data-mantine-color-scheme="dark"] .radio-content,
+[data-mantine-color-scheme="dark"] .radio-stats-card,
+[data-mantine-color-scheme="dark"] .radio-stream-card,
+[data-mantine-color-scheme="dark"] .radio-device-card {
+  background: rgba(30, 30, 30, 0.95);
+  border-color: var(--theme-border);
+}
+
+[data-mantine-color-scheme="dark"] .radio-content:hover,
+[data-mantine-color-scheme="dark"] .radio-stats-card:hover,
+[data-mantine-color-scheme="dark"] .radio-stream-card:hover,
+[data-mantine-color-scheme="dark"] .radio-device-card:hover {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }

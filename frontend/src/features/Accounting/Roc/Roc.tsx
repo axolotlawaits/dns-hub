@@ -149,6 +149,7 @@ export default function RocList() {
     setHeader({
       title: 'Реестр договоров',
       subtitle: 'Управление договорами и контрагентами',
+      icon: <Text size="xl" fw={700} c="white">📋</Text>,
       actionButton: {
         text: 'Добавить договор',
         onClick: openCreate,
@@ -591,16 +592,6 @@ export default function RocList() {
         <Tabs.Panel value="list" pt="md">
           <Grid>
             <Grid.Col span={12}>
-              <Box
-                style={{
-                  background: 'var(--theme-bg-elevated)',
-                  borderRadius: '16px',
-                  padding: '20px',
-                  border: '1px solid var(--theme-border-primary)',
-                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
-                  marginBottom: '20px'
-                }}
-              >
                 <FilterGroup
                   filters={filtersConfig}
                   columnFilters={filters.column}
@@ -614,7 +605,6 @@ export default function RocList() {
                     }))
                   }
                 />
-              </Box>
             </Grid.Col>
             <Grid.Col span={12}>
               <Box

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useReactTable, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, flexRender, type ColumnDef, type ColumnFiltersState, type SortingState, type PaginationState, type FilterFn, type OnChangeFn } from '@tanstack/react-table';
-import { Pagination, Select, Flex, Group, Box, Text, Card, Badge, ThemeIcon } from '@mantine/core';
-import { IconArrowUp, IconArrowDown, IconCalendar, IconClock } from '@tabler/icons-react';
+import { Pagination, Select, Flex, Group, Box, Text, Card, ThemeIcon } from '@mantine/core';
+import { IconArrowUp, IconArrowDown, IconCalendar } from '@tabler/icons-react';
 import './styles/tableUtils.css';
 
 export interface TableComponentProps<TData> {
@@ -14,6 +14,7 @@ export interface TableComponentProps<TData> {
   filterFns?: Record<string, FilterFn<TData>>;
   onRowClick?: (row: TData) => void;
   paginationOptions?: Array<{ value: string; label: string }>;
+  forceUpdate?: number; // Дополнительный проп для принудительного обновления UI
 }
 
 export function TableComponent<TData>({
@@ -32,6 +33,7 @@ export function TableComponent<TData>({
     { value: '30', label: '30' },
     { value: '50', label: '50' },
   ],
+  forceUpdate,
 }: TableComponentProps<TData>) {
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
@@ -54,10 +56,18 @@ export function TableComponent<TData>({
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    // Принудительное обновление для сторонних API
+    ...(forceUpdate && { meta: { forceUpdate } }),
   });
 
   return (
-    <Card shadow="sm" radius="lg" padding="md" className="table-container">
+    <Card 
+      key={forceUpdate ? `table-${forceUpdate}` : undefined}
+      shadow="sm" 
+      radius="lg" 
+      padding="md" 
+      className="table-container"
+    >
       <Box style={{ overflowX: 'auto', position: 'relative' }}>
         <table className='modern-table'>
           <thead>

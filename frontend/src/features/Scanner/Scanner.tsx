@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { API } from '../../config/constants';
 import { 
   Button, 
@@ -23,6 +23,7 @@ import {
 import { useDisclosure } from '@mantine/hooks';
 import { notificationSystem } from '../../utils/Push';
 import { IconRefresh, IconSearch, IconInfoCircle } from '@tabler/icons-react';
+import { usePageHeader } from '../../contexts/PageHeaderContext';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ru';
 
@@ -48,12 +49,23 @@ interface NetworkScanResult {
 }
 
 const Scanner = () => {
+  const { setHeader, clearHeader } = usePageHeader();
   const [printers, setPrinters] = useState<PrinterInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [scanResult, setScanResult] = useState<NetworkScanResult | null>(null);
   const [selectedPrinter, setSelectedPrinter] = useState<PrinterInfo | null>(null);
   const [modalOpened, { open: openModal, close: closeModal }] = useDisclosure(false);
+
+  // Устанавливаем заголовок страницы
+  useEffect(() => {
+    setHeader({
+      title: 'Поиск принтеров со сканерами',
+      subtitle: 'Сканирование сети и поиск устройств с возможностью сканирования'
+    });
+
+    return () => clearHeader();
+  }, [setHeader, clearHeader]);
   
   // Параметры сканирования
   const [scanParams, setScanParams] = useState({
@@ -202,7 +214,6 @@ const Scanner = () => {
 
   return (
     <Box p="md">
-      <Title order={2} mb="xl">Поиск принтеров со сканерами</Title>
       
       {/* Статистика */}
       <Grid mb="xl">

@@ -60,7 +60,6 @@ export const Filter = ({
   onFilterChange,
   label,
   placeholder,
-
   onDropdownOpenChange,
   showClearButton = true,
   icon,
@@ -108,7 +107,7 @@ export const Filter = ({
           <div className="filter-date-group">
             <Box className="filter-date-item">
               <TextInput
-                type="date"
+                  type="date"
                 placeholder="Начало периода"
                 value={(currentFilter as DateFilter)?.start || ''}
                 onChange={(e) => handleDateChange(e.target.value, true)}
@@ -193,6 +192,8 @@ export const Filter = ({
                 : [...selectedValues, val];
               onFilterChange(next);
             }}
+            data-remaining={selectedValues.length > 2 ? `+${selectedValues.length - 2}` : ''}
+            data-has-remaining={selectedValues.length > 2 ? 'true' : 'false'}
           />
         </Box>
       );     

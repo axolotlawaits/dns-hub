@@ -679,6 +679,11 @@ export const makeBranchJournalDecision = async (req: Request, res: Response) => 
       formData.append('decision', status);
       formData.append('user_id', userId);
       formData.append('branch_journal_id', branchJournalId);
+      
+      // Добавляем inspector: true если у пользователя есть полный доступ
+      if (hasAccess) {
+        formData.append('inspector', 'true');
+      }
 
       console.log('Sending FormData request to external API:', {
         url: `${EXTERNAL_API_URL}/branch_journals/${branchJournalId}/decision`,
@@ -686,7 +691,8 @@ export const makeBranchJournalDecision = async (req: Request, res: Response) => 
           status: status,
           decision: status,
           user_id: userId,
-          branch_journal_id: branchJournalId
+          branch_journal_id: branchJournalId,
+          inspector: hasAccess ? 'true' : 'false'
         }
       });
 

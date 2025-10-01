@@ -1,6 +1,6 @@
 import express, { RequestHandler } from 'express';
 import uploadRadio from '../../middleware/uploaderRadio.js';
-import {  createMusicFolder,  uploadMusic,  getMusicFolders,  getMusicInFolder,  deleteMusicFolder, getDevicesByBranches, getDevicesStatus, getDevicesStatusPing, updateDeviceTime, updateBranchDevicesTime, getDevicesStats, getDeviceInfo, actionRestartApp, actionGetTime, actionSyncTime, actionSetTime, actionGetDeviceStatus, actionConfigureWifi, actionReboot, actionUpdateApp, getRadioStreams, createRadioStream, uploadStreamRoll, updateRadioStream, deleteRadioStream} from '../../controllers/app/radio.js';
+import {  createMusicFolder,  uploadMusic,  getMusicFolders,  getMusicInFolder,  deleteMusicFolder, getDevicesByBranches, getDevicesStatus, getDevicesStatusPing, updateDeviceTime, updateBranchDevicesTime, getDevicesStats, getDeviceInfo, actionRestartApp, actionGetTime, actionSyncTime, actionSetTime, actionGetDeviceStatus, actionConfigureWifi, actionReboot, actionUpdateApp, getRadioStreams, createRadioStream, uploadStreamRoll, updateRadioStream, deleteRadioStream, getActiveStreamsByBranchType} from '../../controllers/app/radio.js';
 
 const router = express.Router();
 const h = (fn: any) => fn as unknown as RequestHandler;
@@ -14,7 +14,8 @@ router.delete('/folder/:folderName', h(deleteMusicFolder));
 
 // Radio streams routes
 router.get('/streams', h(getRadioStreams));
-router.post('/streams', h(createRadioStream));
+router.get('/streams/active', h(getActiveStreamsByBranchType));
+router.post('/streams', uploadRadio.single('attachment'), h(createRadioStream));
 router.post('/streams/:id/upload', uploadRadio.single('roll'), h(uploadStreamRoll));
 router.put('/streams/:id', h(updateRadioStream));
 router.delete('/streams/:id', h(deleteRadioStream));

@@ -797,7 +797,7 @@ export const FilePreviewModal = ({
     }
 
     // Если файл не определен, попробуем отобразить его как iframe
-    if (typeof currentAttachment.source === 'string' && fileUrl.startsWith('http')) {
+    if (currentAttachment && typeof currentAttachment.source === 'string' && fileUrl.startsWith('http')) {
       return (
         <Box
           style={{
@@ -1042,7 +1042,7 @@ export const FilePreviewModal = ({
                 </ActionIcon>
               </Tooltip>
               
-              {onDeleteFile && (
+              {onDeleteFile && currentAttachment?.id && (
                 <Tooltip label="Удалить файл">
                   <ActionIcon
                     size="lg"
@@ -1053,16 +1053,19 @@ export const FilePreviewModal = ({
                       }
                     }}
                     style={{
-                      background: 'rgba(255, 255, 255, 0.2)',
+                      background: 'rgba(239, 68, 68, 0.8)',
                       color: 'white',
-                      border: '1px solid rgba(255, 255, 255, 0.3)',
-                      backdropFilter: 'blur(10px)'
+                      border: '2px solid rgba(239, 68, 68, 0.9)',
+                      backdropFilter: 'blur(10px)',
+                      boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)',
+                      transform: 'scale(1.05)'
                     }}
                   >
                     <IconTrash size={20} />
                   </ActionIcon>
                 </Tooltip>
               )}
+              
               
               <Tooltip label="Закрыть">
                 <ActionIcon

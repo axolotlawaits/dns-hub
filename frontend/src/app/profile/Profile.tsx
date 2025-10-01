@@ -24,7 +24,7 @@ function Profile() {
   const [activeTab, setActiveTab] = useState<string | null>('first');
 
   return (
-    <Box className="profile-container">
+    <Box className="profile-container" style={{ paddingRight: 'var(--mantine-spacing-md)' }}>
       <Stack gap="lg">
         {/* Заголовок страницы */}
         <Box className="profile-header">

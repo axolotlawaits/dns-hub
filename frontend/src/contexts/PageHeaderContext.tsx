@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, ReactNode, useCallback } fr
 interface PageHeader {
   title?: string;
   subtitle?: string;
+  icon?: ReactNode;
   actionButton?: {
     text: string;
     onClick: () => void;

@@ -1,3 +1,167 @@
+/* ========================================
+   ПРОПАДАЮЩИЙ ФУТЕР
+   ======================================== */
+
+/* Основные стили для пропадающего футера */
+.auto-hide-footer {
+  position: fixed !important;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  transform: translateY(calc(100% - 12px));
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  background: linear-gradient(
+    to top,
+    var(--theme-bg-elevated) 0%,
+    var(--theme-bg-elevated) 20%,
+    transparent 100%
+  );
+  border-top: 1px solid var(--theme-border-primary);
+  z-index: 1000;
+  overflow: hidden;
+}
+
+/* Принудительно показываем футер */
+.auto-hide-footer.visible {
+  transform: translateY(0) !important;
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
+  margin: 0 8px;
+}
+
+/* Показываем футер при наведении или когда видим */
+.auto-hide-footer:hover,
+.auto-hide-footer.visible {
+  transform: translateY(0);
+}
+
+/* Градиентная полоска сверху */
+.auto-hide-footer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 30px; /* Same as visible state */
+  right: 30px; /* Same as visible state */
+  height: 3px;
+  background: linear-gradient(90deg, 
+    #3b82f6, #8b5cf6, #06b6d4, #10b981, #f59e0b, #ef4444
+  );
+  background-size: 200% 100%;
+  animation: gradientShift 3s ease-in-out infinite;
+  z-index: 1001;
+  transition: border-radius 0.4s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 0; /* Straight when hidden */
+  margin: 0;
+}
+
+/* Анимация полоски при разворачивании футера */
+.auto-hide-footer.visible::before {
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  /* left и right остаются теми же - 20px */
+}
+
+/* Анимация градиентной полоски */
+@keyframes gradientShift {
+  0%, 100% { 
+    background-position: 0% 50%; 
+  }
+  50% { 
+    background-position: 100% 50%; 
+  }
+}
+
+/* Индикатор прогресса прокрутки */
+.scroll-progress-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--color-primary-500), var(--color-primary-400));
+  transition: width 0.1s ease;
+  z-index: 1002;
+}
+
+/* Скрываем футер */
+.auto-hide-footer.hidden {
+  transform: translateY(calc(100% - 12px)) !important;
+}
+
+/* Принудительно скрываем если не видим */
+.auto-hide-footer:not(.visible):not(:hover) {
+  transform: translateY(calc(100% - 12px)) !important;
+}
+
+/* Стили для отключенного автоскрытия */
+.auto-hide-footer.auto-hide-disabled {
+  transform: translateY(0) !important;
+  border-radius: 0;
+  box-shadow: none;
+  margin: 0;
+}
+
+.auto-hide-footer.auto-hide-disabled::before {
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  margin: 0;
+  left: 30px; /* Same as other states */
+  right: 30px; /* Same as other states */
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+  .auto-hide-footer {
+    height: 50px;
+    transform: translateY(calc(100% - 8px));
+  }
+  
+  .auto-hide-footer.hidden {
+    transform: translateY(calc(100% - 8px));
+  }
+  
+  .auto-hide-footer.visible {
+    margin: 0 4px;
+  }
+  
+  .auto-hide-footer.auto-hide-disabled {
+    margin: 0;
+  }
+  
+  .auto-hide-footer::before {
+    height: 2px;
+    left: 4px; /* Mobile margin */
+    right: 4px; /* Mobile margin */
+  }
+  
+  .auto-hide-footer.visible::before {
+    margin: 0 4px;
+    left: 4px; /* Mobile margin */
+    right: 4px; /* Mobile margin */
+  }
+  
+  .auto-hide-footer.auto-hide-disabled::before {
+    margin: 0;
+    left: 4px; /* Same as visible state on mobile */
+    right: 4px; /* Same as visible state on mobile */
+  }
+  
+  .scroll-progress-bar {
+    height: 1px;
+  }
+}
+
+@media (max-width: 480px) {
+  .auto-hide-footer {
+    height: 45px;
+    transform: translateY(calc(100% - 6px));
+  }
+  
+  .auto-hide-footer.hidden {
+    transform: translateY(calc(100% - 6px));
+  }
+}
+
 /* Правый блок с разделителем */
 .footer-right-section {
   display: flex;
