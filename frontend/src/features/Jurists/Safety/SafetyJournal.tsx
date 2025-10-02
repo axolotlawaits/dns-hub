@@ -29,6 +29,16 @@ interface UserInfo {
   isManager: boolean;
 }
 
+interface ResponsibleEmployeeType {
+  employee_id: string
+  employee_name: string
+}
+
+interface ResponsibilitiesType {
+  ot: ResponsibleEmployeeType[]
+  pb: ResponsibleEmployeeType[]
+}
+
 interface BranchWithJournals {
   branch_id: string;
   branch_name: string;
@@ -40,6 +50,7 @@ interface BranchWithJournals {
   branch_address: string;
   city_name: string;
   journals: JournalInfo[];
+  responsibilities: ResponsibilitiesType
 }
 
 interface JournalFile {
@@ -302,8 +313,8 @@ const LocalJournalTable = function LocalJournalTable({
     <Paper withBorder radius="md" p="lg" style={{ background: 'var(--theme-bg-primary)' }}>
       <Stack gap="md">
         {/* Заголовок филиала */}
-        <Group justify="space-between" align="center">
-          <Group gap="md">
+        <Group justify="space-between" align="center" wrap='nowrap'>
+          <Group gap="md" wrap='nowrap'>
                   <Box style={STYLES.branchIcon}>
               🏢
             </Box>
@@ -314,7 +325,7 @@ const LocalJournalTable = function LocalJournalTable({
               </Text>
 
 
-              <Group gap="xs">
+              <Group gap="xs" wrap='nowrap'>
                 <Badge size="sm" variant="outline" color="blue">
                   {branch.rrs_name}
                 </Badge>
@@ -340,16 +351,32 @@ const LocalJournalTable = function LocalJournalTable({
                       <Divider />
                       <Stack gap="xs">
                         <Text size="xs" fw={500} c="blue">По пожарной безопасности:</Text>
-                        <Text size="xs" c="dimmed">Информация будет добавлена</Text>
+                        <Stack>
+                          {branch.responsibilities.pb.length > 0 ? branch.responsibilities.pb.map(emp => {
+                            return (
+                              <Text size="xs" c="dimmed">{emp.employee_name}</Text>
+                            )
+                          })
+                          :
+                            <Text size="xs" c="dimmed">Информация будет добавлена</Text>
+                          }
+                        </Stack>
                       </Stack>
                       <Stack gap="xs">
                         <Text size="xs" fw={500} c="green">По охране труда:</Text>
-                        <Text size="xs" c="dimmed">Информация будет добавлена</Text>
+                          {branch.responsibilities.ot.length > 0 ? branch.responsibilities.ot.map(emp => {
+                            return (
+                              <Text size="xs" c="dimmed">{emp.employee_name}</Text>
+                            )
+                          })
+                          :
+                            <Text size="xs" c="dimmed">Информация будет добавлена</Text>
+                          }
                       </Stack>
                     </Stack>
                   </Popover.Dropdown>
                 </Popover>
-                <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }} truncate="end">
                 {branch.branch_address}
               </Text>
               </Group>
@@ -688,7 +715,7 @@ export default function SafetyJournal() {
 
   // Функция валидации файлов
   const validateFile = useCallback((file: File): { valid: boolean; error?: string } => {
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    const maxSize = 50 * 1024 * 1024; //50mb
     const allowedExtensions = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.jpg', '.jpeg', '.png', '.gif'];
     const allowedMimeTypes = [
       'application/pdf',
@@ -1265,7 +1292,7 @@ export default function SafetyJournal() {
       <Box
         style={{
           background: 'var(--theme-bg-primary)',
-          minHeight: '100vh'
+          minHeight: '50vh'
         }}
       >
         {loading && <LoadingOverlay visible />}
