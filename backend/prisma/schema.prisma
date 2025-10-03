@@ -531,6 +531,49 @@ model RadioStream {
 
   @@map("RadioStream")
 }
+// Модель приложения в магазине
+model App {
+  id            String        @id @default(uuid())
+  name          String        // Название приложения
+  category      AppCategory   // Категория приложения
+  appType       AppType       // Тип приложения
+  description   String?       // Описание приложения
+  icon          String?       // Путь к иконке
+  isActive      Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  
+  // Связи
+  versions      AppVersion[]  // Версии приложения
+  
+  @@index([category])
+  @@index([appType])
+  @@index([isActive])
+  @@index([createdAt])
+}
+
+// Модель версии приложения
+model AppVersion {
+  id          String   @id @default(uuid())
+  appId       String   // ID приложения
+  version     String   // Версия (например, "1.0.0")
+  fileName    String   // Имя файла
+  filePath    String   // Путь к файлу
+  fileSize    Int      // Размер файла в байтах
+  description String?  // Описание изменений в версии
+  isActive    Boolean  @default(true) // Активная версия
+  downloadCount Int    @default(0) // Количество скачиваний
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Связи
+  app         App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+  
+  @@index([appId])
+  @@index([version])
+  @@index([isActive])
+  @@index([createdAt])
+}
 
 enum Role {
   DEVELOPER
@@ -579,5 +622,22 @@ enum RocTypeByTerm {
 enum Activity {
   On
   Off
+}
+
+enum AppCategory {
+  MOBILE      // Мобильные приложения
+  DESKTOP     // Десктопные приложения
+  UTILITY     // Утилиты
+  TOOL        // Инструменты
+}
+
+enum AppType {
+  ANDROID_APK // Android APK
+  WINDOWS_EXE // Windows EXE
+  WINDOWS_MSI // Windows MSI
+  MACOS_DMG   // macOS DMG
+  LINUX_DEB   // Linux DEB
+  LINUX_RPM   // Linux RPM
+  ARCHIVE     // Архив (ZIP, RAR)
 }
 

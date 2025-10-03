@@ -106,7 +106,7 @@ const AttachmentCard = React.memo(function AttachmentCard({
       <ActionIcon
         component="a"
         href={fileUrl}
-        download
+        download={fileName}
         variant="light"
         color="blue"
         onClick={(e) => e.stopPropagation()}
@@ -118,21 +118,18 @@ const AttachmentCard = React.memo(function AttachmentCard({
       <Group justify="flex-start" align="center">
         <Group gap={12} align="center">
           {isImageFile ? (
-            <Image 
-              src={fileUrl} 
-              h={70} 
-              w={100} 
-              fit="contain" 
-              radius="sm" 
-              alt={fileName}
-              onError={(e) => {
-                console.error('Ошибка загрузки изображения в AttachmentCard:', fileUrl);
-                console.error('Исходный путь:', att.source);
-                console.error('Нормализованный путь:', normalizedPath);
-                // Заменяем на placeholder при ошибке
-                e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjcwIiB2aWV3Qm94PSIwIDAgMTAwIDcwIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHdpZHRoPSIxMDAiIGhlaWdodD0iNzAiIGZpbGw9IiNmNWY1ZjUiLz48dGV4dCB4PSI1MCIgeT0iNDAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzk5OTk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+0JjQt9C+0LHRgNCw0LbQsCDRgdC+0LfQtNCwPC90ZXh0Pjwvc3ZnPg==';
-              }}
-            />
+          <Image 
+            src={fileUrl} 
+            h={70} 
+            w={100} 
+            fit="contain" 
+            radius="sm" 
+            alt={fileName}
+            onError={(e) => {
+              // Заменяем на placeholder при ошибке
+              e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjcwIiB2aWV3Qm94PSIwIDAgMTAwIDcwIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHdpZHRoPSIxMDAiIGhlaWdodD0iNzAiIGZpbGw9IiNmNWY1ZjUiLz48dGV4dCB4PSI1MCIgeT0iNDAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzk5OTk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+0JjQt9C+0LHRgNCw0LbQsCDRgdC+0LfQtNCwPC90ZXh0Pjwvc3ZnPg==';
+            }}
+          />
           ) : (
             <Box
               style={{
@@ -348,6 +345,7 @@ const RKList: React.FC = () => {
   const [filePreviewData, setFilePreviewData] = useState<{ files: string[], currentIndex: number } | null>(null);
   const [constructionDocuments, setConstructionDocuments] = useState<Record<string, File[]>>({});
   const [existingDocuments, setExistingDocuments] = useState<Record<string, any[]>>({});
+  const [removedDocuments, setRemovedDocuments] = useState<string[]>([]);
 
   const maskSizeXY = useCallback((raw: string) => {
     const input = String(raw || '').toLowerCase();
@@ -474,7 +472,6 @@ const RKList: React.FC = () => {
   }, [fetchInitialData]);
 
   const handleRrsChange = useCallback((value: string) => {
-    console.log('Изменение РРС:', value);
     setRkForm(prev => ({ 
       ...prev, 
       rrs: value, 
@@ -682,21 +679,19 @@ const RKList: React.FC = () => {
     
     // Инициализируем constructionDocuments на основе существующих данных
     const existingAttachments = (rk as any).attachments || (rk as any).rkAttachment || [];
-    console.log('🔍 Existing attachments:', existingAttachments);
     const constructionDocuments: Record<string, File[]> = {};
     const existingDocumentsMap: Record<string, any[]> = {};
     
     // Группируем документы по родительским конструкциям
     existingAttachments.forEach((attachment: any) => {
       if (attachment.typeAttachment === 'CONSTRUCTION') {
-        // Это конструкция - создаем пустой массив для документов
+        // Это конструкция - создаем пустой массив для новых документов
         constructionDocuments[attachment.id] = [];
         existingDocumentsMap[attachment.id] = [];
         
         // Добавляем дочерние документы, если они есть
         if (attachment.childAttachments && attachment.childAttachments.length > 0) {
-          console.log(`🔍 Construction ${attachment.id} has ${attachment.childAttachments.length} child attachments:`, attachment.childAttachments);
-          existingDocumentsMap[attachment.id] = attachment.childAttachments;
+          existingDocumentsMap[attachment.id] = [...attachment.childAttachments];
         }
       } else if (attachment.parentAttachmentId) {
         // Это документ - добавляем к родительской конструкции
@@ -706,14 +701,22 @@ const RKList: React.FC = () => {
         if (!existingDocumentsMap[attachment.parentAttachmentId]) {
           existingDocumentsMap[attachment.parentAttachmentId] = [];
         }
-        // Добавляем существующий документ
-        existingDocumentsMap[attachment.parentAttachmentId].push(attachment);
+        // Проверяем, не добавлен ли уже этот документ
+        const isAlreadyAdded = existingDocumentsMap[attachment.parentAttachmentId].some((doc: any) => doc.id === attachment.id);
+        if (!isAlreadyAdded) {
+          existingDocumentsMap[attachment.parentAttachmentId].push(attachment);
+        }
       }
     });
     
-    // Сохраняем существующие документы в состоянии для передачи в форму
-    console.log('🔍 Final constructionDocuments:', constructionDocuments);
-    console.log('🔍 Final existingDocumentsMap:', existingDocumentsMap);
+    // Убираем дублирование документов в existingDocumentsMap
+    Object.keys(existingDocumentsMap).forEach(constructionId => {
+      const docs = existingDocumentsMap[constructionId];
+      const uniqueDocs = docs.filter((doc: any, index: number, self: any[]) => 
+        index === self.findIndex((d: any) => d.id === doc.id)
+      );
+      existingDocumentsMap[constructionId] = uniqueDocs;
+    });
     setConstructionDocuments(constructionDocuments);
     setExistingDocuments(existingDocumentsMap);
     
@@ -775,13 +778,16 @@ const RKList: React.FC = () => {
       // Prepare metadata for newly added files (source is File)
       const attachmentsMeta = values.attachments
         .filter(att => att.source instanceof File)
-        .map(att => ({
-          sizeXY: att.meta?.sizeXY ?? '',
-          clarification: att.meta?.clarification ?? '',
-          typeStructureId: att.meta?.typeStructureId || '',
-          approvalStatusId: att.meta?.approvalStatusId || '',
-          agreedTo: att.meta?.agreedTo || '',
-        }));
+        .map(att => {
+          return {
+            typeAttachment: 'CONSTRUCTION' as const,
+            sizeXY: att.meta?.sizeXY ?? '',
+            clarification: att.meta?.clarification ?? '',
+            typeStructureId: att.meta?.typeStructureId || '',
+            approvalStatusId: att.meta?.approvalStatusId || '',
+            agreedTo: att.meta?.agreedTo || '',
+          };
+        });
 
       // Add construction files first (with metadata)
       values.attachments.forEach(attachment => {
@@ -790,18 +796,37 @@ const RKList: React.FC = () => {
         }
       });
 
-      // Add document files after construction files (without metadata)
-      Object.entries(constructionDocuments).forEach(([, documents]) => {
+      // Add document files after construction files (with metadata linking to constructions)
+      const documentsMeta: Array<{ parentConstructionIndex: number }> = [];
+      let constructionIndex = 0;
+      
+      Object.entries(constructionDocuments).forEach(([constructionId, documents]) => {
+        // Находим индекс конструкции в массиве attachments
+        const parentIndex = values.attachments.findIndex(att => att.id === constructionId);
+        if (parentIndex === -1) {
+          // Если это новая конструкция, используем порядковый номер
+          constructionIndex++;
+        }
+        
         documents.forEach((doc) => {
           formData.append('files', doc);
+          documentsMeta.push({
+            parentConstructionIndex: parentIndex !== -1 ? parentIndex : constructionIndex - 1
+          });
         });
       });
 
       // For create vs edit, backend expects different field names
       if (mode === 'create') {
         formData.append('attachmentsMeta', JSON.stringify(attachmentsMeta));
+        if (documentsMeta.length > 0) {
+          formData.append('documentsMeta', JSON.stringify(documentsMeta));
+        }
       } else {
         formData.append('newAttachmentsMeta', JSON.stringify(attachmentsMeta));
+        if (documentsMeta.length > 0) {
+          formData.append('newDocumentsMeta', JSON.stringify(documentsMeta));
+        }
         formData.append('userUpdatedId', user.id);
 
         // Обновление метаданных существующих вложений
@@ -809,6 +834,7 @@ const RKList: React.FC = () => {
           .filter(att => !(att.source instanceof File) && att.id)
           .map(att => ({
             id: att.id as string,
+            typeAttachment: 'CONSTRUCTION' as const,
             sizeXY: att.meta?.sizeXY ?? undefined,
             clarification: att.meta?.clarification ?? undefined,
             typeStructureId: att.meta?.typeStructureId ?? undefined,
@@ -820,16 +846,15 @@ const RKList: React.FC = () => {
         }
       }
 
-      values.attachments.forEach(attachment => {
-        if (attachment.source instanceof File) {
-          formData.append('files', attachment.source);
-        }
-      });
-
       // Примечание: обновление метаданных существующих вложений пока не поддержано бекендом
 
       if (mode === 'edit' && values.removedAttachments?.length) {
         formData.append('removedAttachments', JSON.stringify(values.removedAttachments));
+      }
+      
+      // Добавляем удаленные документы
+      if (mode === 'edit' && removedDocuments.length > 0) {
+        formData.append('removedDocuments', JSON.stringify(removedDocuments));
       }
 
       const url = mode === 'create' ? `${API}/add/rk` : `${API}/add/rk/${selectedRK!.id}`;
@@ -857,7 +882,6 @@ const RKList: React.FC = () => {
       }
 
       setRkForm(DEFAULT_RK_FORM);
-      setConstructionDocuments({});
       modals[mode][1].close();
       showNotification('success', mode === 'create' ? 'Запись успешно добавлена' : 'Запись успешно обновлена');
     } catch (error) {
@@ -867,7 +891,7 @@ const RKList: React.FC = () => {
     } finally {
       setFileUploading(false);
     }
-  }, [user, selectedRK, modals, showNotification]);
+  }, [user, selectedRK, modals, showNotification, constructionDocuments, removedDocuments, fetchData]);
 
   
 
@@ -1153,22 +1177,20 @@ return (
                     e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.05)';
                   }}
                 >
-                  <Group align="flex-start" gap="xl" wrap="nowrap">
-                    {/* Левая часть - основная информация */}
-                    <Stack gap="md" style={{ flex: 1, minWidth: '400px' }}>
-                      {/* Заголовок карточки */}
-                      <Group justify="space-between" align="flex-start">
+                  <Stack gap="md">
+                    {/* Верхняя часть - основная информация филиала */}
+                    <Group justify="space-between" align="flex-start">
                       <Group gap="12px" align="center">
                         <Box
                           style={{
-                            width: '50px',
-                            height: '50px',
+                            width: '40px',
+                            height: '40px',
                             background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
-                            borderRadius: '12px',
+                            borderRadius: '10px',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            fontSize: '24px'
+                            fontSize: '20px'
                           }}
                         >
                           🏢
@@ -1176,16 +1198,16 @@ return (
                         <Box>
                           <Text 
                             fw={700} 
-                            size="xl"
+                            size="lg"
                             style={{ 
                               color: 'var(--theme-text-primary)',
-                              marginBottom: '4px'
+                              marginBottom: '2px'
                             }}
                           >
                             {rk.branch?.name || 'Филиал не указан'}
                           </Text>
                           <Text 
-                            size="md" 
+                            size="sm" 
                             style={{ 
                               color: 'var(--theme-text-secondary)',
                               fontWeight: '500'
@@ -1267,39 +1289,37 @@ return (
                       </Group>
                     </Group>
 
-                      {/* Основная информация */}
-                      <Stack gap="md">
-                        <Group gap="12px" align="center">
-                          <Text size="md" fw={600} style={{ color: 'var(--theme-text-secondary)', minWidth: '80px' }}>
-                            Город:
-                          </Text>
-                          <Text size="md" style={{ color: 'var(--theme-text-primary)' }}>
-                            {rk.branch?.city || 'не указан'}
-                          </Text>
-                        </Group>
+                    {/* Основная информация */}
+                    <Stack gap="md">
+                      <Group gap="12px" align="center">
+                        <Text size="md" fw={600} style={{ color: 'var(--theme-text-secondary)', minWidth: '80px' }}>
+                          Город:
+                        </Text>
+                        <Text size="md" style={{ color: 'var(--theme-text-primary)' }}>
+                          {rk.branch?.city || 'не указан'}
+                        </Text>
+                      </Group>
+                      <Group gap="12px" align="flex-start">
+                        <Text size="md" fw={600} style={{ color: 'var(--theme-text-secondary)', minWidth: '80px' }}>
+                          Адрес:
+                        </Text>
+                        <Text size="md" style={{ color: 'var(--theme-text-primary)' }}>
+                          {rk.branch?.address || 'не указан'} {rk.branch?.code}
+                        </Text>
+                      </Group>
+                      {rk.branch?.userData && rk.branch.userData.length > 0 && (
                         <Group gap="12px" align="flex-start">
                           <Text size="md" fw={600} style={{ color: 'var(--theme-text-secondary)', minWidth: '80px' }}>
-                            Адрес:
+                            Контакты:
                           </Text>
                           <Text size="md" style={{ color: 'var(--theme-text-primary)' }}>
-                            {rk.branch?.address || 'не указан'} {rk.branch?.code}
+                            {rk.branch.userData.map(u => u.fio).join(', ')}
                           </Text>
                         </Group>
-                        {rk.branch?.userData && rk.branch.userData.length > 0 && (
-                          <Group gap="12px" align="flex-start">
-                            <Text size="md" fw={600} style={{ color: 'var(--theme-text-secondary)', minWidth: '80px' }}>
-                              Контакты:
-                            </Text>
-                            <Text size="md" style={{ color: 'var(--theme-text-primary)' }}>
-                              {rk.branch.userData.map(u => u.fio).join(', ')}
-                            </Text>
-                          </Group>
-                        )}
-                      </Stack>
+                      )}
                     </Stack>
 
-                    {/* Правая часть - вложения в два ряда */}
-                    <Stack gap="lg" style={{ minWidth: '400px', maxWidth: '500px' }}>
+                    {/* Нижняя часть - конструкции в горизонтальном ряду */}
                         {Array.isArray(rk.rkAttachment) && rk.rkAttachment.length > 0 && (() => {
                           // Группируем вложения по конструкциям
                           const constructions = rk.rkAttachment.filter((a: any) => a.typeAttachment === 'CONSTRUCTION');
@@ -1319,22 +1339,34 @@ return (
                           const unassignedDocuments = documents.filter((doc: any) => !doc.parentAttachmentId);
                           
                           return (
-                            <>
+                            <div 
+                              style={{
+                                display: 'flex',
+                                gap: '16px',
+                                overflowX: 'auto',
+                                padding: '8px 0 16px 0',
+                                scrollbarWidth: 'thin',
+                                scrollbarColor: 'var(--color-blue-400) var(--theme-bg-secondary)',
+                              }}
+                              className="construction-cards-slider"
+                            >
                               {/* Группы конструкций с их документами */}
                               {constructionGroups.map((group, groupIndex) => (
                                 <Box 
                                   key={groupIndex}
                                   style={{
                                     background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
-                                    borderRadius: '20px',
-                                    padding: '24px',
-                                    border: '1px solid var(--theme-border)',
-                                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
-                                    marginBottom: '24px',
-                                    position: 'relative',
-                                    backdropFilter: 'blur(10px)',
-                                    WebkitBackdropFilter: 'blur(10px)',
-                                    overflow: 'hidden'
+                    borderRadius: '16px',
+                    padding: '16px',
+                    border: '1px solid var(--theme-border)',
+                    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.04)',
+                    position: 'relative',
+                    backdropFilter: 'blur(10px)',
+                    WebkitBackdropFilter: 'blur(10px)',
+                    overflow: 'hidden',
+                    minWidth: '280px',
+                    maxWidth: '350px',
+                    flex: '0 0 auto'
                                   }}
                                 >
                                   {/* Декоративная полоса сверху */}
@@ -1397,18 +1429,18 @@ return (
                                     <Box style={{ flex: 1 }}>
                                       <Text size="xl" fw={700} style={{ color: 'var(--theme-text-primary)', marginBottom: '4px' }}>
                                         {group.construction.typeStructure?.name || 'Конструкция'}
-                                      </Text>
+                                    </Text>
                                     </Box>
                                   </Group>
                                   
                                   {/* Конструкция */}
                                   <Box style={{ marginBottom: '16px' }}>
-                                    <AttachmentCard
+                                      <AttachmentCard
                                       key={group.construction.id}
                                       att={group.construction as any}
-                                      apiBase={API}
-                                      onOpenFilePreview={openFilePreview}
-                                    />
+                                        apiBase={API}
+                                        onOpenFilePreview={openFilePreview}
+                                      />
                                   </Box>
                                   
                                   {/* Документы этой конструкции */}
@@ -1467,7 +1499,7 @@ return (
                                         </Box>
                                         <Text size="md" fw={600} style={{ color: 'var(--theme-text-primary)' }}>
                                           Документы к конструкции:
-                                        </Text>
+                                      </Text>
                                         <Box
                                           style={{
                                             background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(37, 99, 235, 0.1))',
@@ -1485,6 +1517,7 @@ return (
                                       <Group gap="8px" wrap="wrap">
                                         {group.documents.slice(0, 4).map((doc: any, docIndex: number) => {
                                           const sourcePath = String(doc.source || '');
+                                          const fileName = sourcePath.split('/').pop() || 'Документ';
                                           const normalizedPath = sourcePath
                                             .replace(/\\/g, '/')
                                             .replace(/\/+/g, '/')
@@ -1493,6 +1526,7 @@ return (
                                           return (
                                             <Box
                                               key={docIndex}
+                                              title={fileName}
                                               style={{
                                                 width: '100px',
                                                 height: '80px',
@@ -1523,7 +1557,7 @@ return (
                                             >
                                               <img
                                                 src={fileUrl}
-                                                alt={doc.source?.split('/').pop() || 'Документ'}
+                                                alt={fileName}
                                                 style={{
                                                   width: '100%',
                                                   height: '100%',
@@ -1572,6 +1606,33 @@ return (
                                                   boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
                                                 }}
                                               />
+                                              {/* Название файла */}
+                                              <Box
+                                                style={{
+                                                  position: 'absolute',
+                                                  bottom: '0',
+                                                  left: '0',
+                                                  right: '0',
+                                                  background: 'linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.7) 100%)',
+                                                  padding: '4px 6px 6px 6px',
+                                                  borderRadius: '0 0 12px 12px'
+                                                }}
+                                              >
+                                                <Text
+                                                  size="xs"
+                                                  style={{
+                                                    color: 'white',
+                                                    textAlign: 'center',
+                                                    lineHeight: 1.2,
+                                                    wordBreak: 'break-word',
+                                                    fontSize: '10px',
+                                                    fontWeight: '500',
+                                                    textShadow: '0 1px 2px rgba(0, 0, 0, 0.5)'
+                                                  }}
+                                                >
+                                                  {fileName.length > 15 ? fileName.substring(0, 15) + '...' : fileName}
+                                                </Text>
+                                              </Box>
                                             </Box>
                                           );
                                         })}
@@ -1602,17 +1663,17 @@ return (
                                               +{group.documents.length - 4}
                                             </Text>
                                           </Box>
-                                        )}
-                                      </Group>
-                                    </Box>
-                                  )}
+                                    )}
+                                  </Group>
+                                </Box>
+                              )}
                                 </Box>
                               ))}
                               
                               {/* Непривязанные документы */}
                               {unassignedDocuments.length > 0 && (
-                                <Box
-                                  style={{
+                                    <Box
+                                      style={{
                                     background: 'var(--theme-bg-elevated)',
                                     borderRadius: '16px',
                                     padding: '20px',
@@ -1641,7 +1702,7 @@ return (
                                     <Box style={{ flex: 1 }}>
                                       <Text size="xl" fw={700} style={{ color: 'var(--theme-text-primary)' }}>
                                         Другие документы
-                                      </Text>
+                                    </Text>
                                       <Text size="sm" style={{ color: 'var(--theme-text-secondary)', marginTop: '4px' }}>
                                         📎 {unassignedDocuments.length} документов без привязки к конструкции
                                       </Text>
@@ -1662,6 +1723,7 @@ return (
                                   <Group gap="12px" wrap="wrap">
                                     {unassignedDocuments.slice(0, 4).map((att: any, index: number) => {
                                       const sourcePath = String(att.source || '');
+                                      const fileName = sourcePath.split('/').pop() || 'Документ';
                                       const normalizedPath = sourcePath
                                         .replace(/\\/g, '/')
                                         .replace(/\/+/g, '/')
@@ -1670,6 +1732,7 @@ return (
                                       return (
                                         <Box
                                           key={index}
+                                          title={fileName}
                                           style={{
                                             width: '100px',
                                             height: '80px',
@@ -1706,7 +1769,7 @@ return (
                                         >
                                           <img
                                             src={fileUrl}
-                                            alt={`Документ ${index + 1}`}
+                                            alt={fileName}
                                             style={{
                                               width: '100%',
                                               height: '100%',
@@ -1746,6 +1809,33 @@ return (
                                               boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
                                             }}
                                           />
+                                          {/* Название файла */}
+                                          <Box
+                                            style={{
+                                              position: 'absolute',
+                                              bottom: '0',
+                                              left: '0',
+                                              right: '0',
+                                              background: 'linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.7) 100%)',
+                                              padding: '4px 6px 6px 6px',
+                                              borderRadius: '0 0 12px 12px'
+                                            }}
+                                          >
+                                            <Text
+                                              size="xs"
+                                              style={{
+                                                color: 'white',
+                                                textAlign: 'center',
+                                                lineHeight: 1.2,
+                                                wordBreak: 'break-word',
+                                                fontSize: '10px',
+                                                fontWeight: '500',
+                                                textShadow: '0 1px 2px rgba(0, 0, 0, 0.5)'
+                                              }}
+                                            >
+                                              {fileName.length > 15 ? fileName.substring(0, 15) + '...' : fileName}
+                                            </Text>
+                                          </Box>
                                         </Box>
                                       );
                                     })}
@@ -1774,17 +1864,16 @@ return (
                                       >
                                         <Text size="sm" fw={600} style={{ color: 'var(--color-gray-600)' }}>
                                           +{unassignedDocuments.length - 4}
-                                        </Text>
+                                      </Text>
                                       </Box>
                                     )}
                                   </Group>
                                 </Box>
                               )}
-                        </>
-                      );
-                    })()}
-                    </Stack>
-                  </Group>
+                            </div>
+                          );
+                        })()}
+                  </Stack>
 
                   {/* Футер карточки */}
                   <Box 
@@ -1872,6 +1961,7 @@ return (
           setRkForm(DEFAULT_RK_FORM);
           setConstructionDocuments({});
           setExistingDocuments({});
+          setRemovedDocuments([]);
           modals.edit[1].close();
         }}
         title="Редактировать конструкцию"
@@ -1889,6 +1979,18 @@ return (
         attachmentLabel="📎 Документы к конструкциям"
         attachmentAccept=".pdf,.doc,.docx,.xls,.xlsx,.txt"
         existingDocuments={existingDocuments}
+        onDeleteExistingDocument={(fileId, documentId) => {
+          // Удаляем документ из existingDocuments
+          setExistingDocuments(prev => {
+            const newDocs = { ...prev };
+            if (newDocs[fileId]) {
+              newDocs[fileId] = newDocs[fileId].filter((doc: any) => doc.id !== documentId);
+            }
+            return newDocs;
+          });
+          // Добавляем ID в список удаленных документов
+          setRemovedDocuments(prev => [...prev, documentId]);
+        }}
         fileCardTitle="Конструкция"
         size="95vw"
       />
@@ -1931,9 +2033,9 @@ return (
         initialValues={{}}
         viewExtraContent={() => (
           imagePreviewSrc ? (
-            <Image src={imagePreviewSrc} radius="sm" h={window.innerHeight ? Math.floor(window.innerHeight * 0.75) : 700} fit="contain" alt="attachment" />
-          ) : (
-            <Text size="sm" c="dimmed">Нет изображения</Text>
+          <Image src={imagePreviewSrc} radius="sm" h={window.innerHeight ? Math.floor(window.innerHeight * 0.75) : 700} fit="contain" alt="attachment" />
+        ) : (
+          <Text size="sm" c="dimmed">Нет изображения</Text>
           )
         )}
         size="90vw"

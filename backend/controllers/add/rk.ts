@@ -273,12 +273,19 @@ export const createRK = async (req: Request, res: Response, next: NextFunction) 
 
     // Парсинг метаданных вложений (включая поля, перенесенные в RKAttachment)
     let attachmentsMeta: Array<{ sizeXY: string; clarification: string; typeStructureId?: string; approvalStatusId?: string; agreedTo?: string } > = [];
+    let documentsMeta: Array<{ parentConstructionIndex: number }> = [];
+    
     try {
       attachmentsMeta = req.body.attachmentsMeta 
         ? JSON.parse(req.body.attachmentsMeta)
         : [];
       
+      documentsMeta = req.body.documentsMeta
+        ? JSON.parse(req.body.documentsMeta)
+        : [];
+      
       console.log('Parsed attachments meta:', attachmentsMeta);
+      console.log('Parsed documents meta:', documentsMeta);
       
       // Проверяем, что количество файлов с метаданными совпадает с количеством метаданных
       // Файлы без метаданных (документы) будут обработаны отдельно
@@ -337,36 +344,45 @@ export const createRK = async (req: Request, res: Response, next: NextFunction) 
         );
       }
       
-      // Создаем документы без метаданных (они будут связаны с последней созданной конструкцией)
+      // Создаем документы с привязкой к конструкциям
       if (filesWithoutMeta.length > 0) {
-        // Сначала получаем ID последней созданной конструкции
-        const lastConstruction = await prisma.rKAttachment.findFirst({
+        // Получаем все созданные конструкции в порядке создания
+        const constructions = await prisma.rKAttachment.findMany({
           where: { 
             recordId: newRK.id,
             typeAttachment: 'CONSTRUCTION'
           },
-          orderBy: { createdAt: 'desc' }
+          orderBy: { createdAt: 'asc' }
         });
         
-        if (lastConstruction) {
-          // Создаем документы, связанные с последней конструкцией
-          for (const file of filesWithoutMeta) {
-            await prisma.rKAttachment.create({
-              data: {
-                userAddId: req.body.userAddId,
-                source: file.path,
-                type: file.mimetype,
-                typeAttachment: 'DOCUMENT',
-                sizeXY: '',
-                clarification: '',
-                recordId: newRK.id,
-                typeStructureId: undefined,
-                approvalStatusId: undefined,
-                agreedTo: undefined,
-                parentAttachmentId: lastConstruction.id,
-              } as any
-            });
+        // Создаем документы с привязкой к конкретным конструкциям
+        for (let i = 0; i < filesWithoutMeta.length; i++) {
+          const file = filesWithoutMeta[i];
+          const docMeta = documentsMeta[i];
+          
+          let parentConstructionId = null;
+          if (docMeta && constructions[docMeta.parentConstructionIndex]) {
+            parentConstructionId = constructions[docMeta.parentConstructionIndex].id;
+          } else if (constructions.length > 0) {
+            // Fallback: привязываем к последней конструкции
+            parentConstructionId = constructions[constructions.length - 1].id;
           }
+          
+          await prisma.rKAttachment.create({
+            data: {
+              userAddId: req.body.userAddId,
+              source: file.path,
+              type: file.mimetype,
+              typeAttachment: 'DOCUMENT',
+              sizeXY: '',
+              clarification: '',
+              recordId: newRK.id,
+              typeStructureId: undefined,
+              approvalStatusId: undefined,
+              agreedTo: undefined,
+              parentAttachmentId: parentConstructionId,
+            } as any
+          });
         }
       }
     }
@@ -437,7 +453,19 @@ export const updateRK = async (req: Request, res: Response, next: NextFunction) 
       console.error('Error parsing removedAttachments:', e);
     }
 
+    // Обработка удаленных документов
+    let documentsToDelete: string[] = [];
+    try {
+      documentsToDelete = body.removedDocuments
+        ? JSON.parse(body.removedDocuments)
+        : [];
+    } catch (e) {
+      console.error('Error parsing removedDocuments:', e);
+    }
+
     let newAttachmentsMeta: Array<{ typeAttachment?: 'CONSTRUCTION' | 'DOCUMENT'; sizeXY?: string; clarification?: string; typeStructureId?: string; approvalStatusId?: string; agreedTo?: string }> = [];
+    let newDocumentsMeta: Array<{ parentConstructionIndex: number }> = [];
+    
     try {
       newAttachmentsMeta = body.newAttachmentsMeta
         ? JSON.parse(body.newAttachmentsMeta)
@@ -445,17 +473,80 @@ export const updateRK = async (req: Request, res: Response, next: NextFunction) 
     } catch (e) {
       console.error('Error parsing newAttachmentsMeta:', e);
     }
+    
+    try {
+      newDocumentsMeta = body.newDocumentsMeta
+        ? JSON.parse(body.newDocumentsMeta)
+        : [];
+    } catch (e) {
+      console.error('Error parsing newDocumentsMeta:', e);
+    }
 
     await deleteRKAttachments(attachmentsToDelete, rkId);
+    
+    // Удаляем документы
+    if (documentsToDelete.length > 0) {
+      await deleteRKAttachments(documentsToDelete, rkId);
+    }
 
     if (Array.isArray(files) && files.length > 0) {
       const userAddId = body.userAddId || body.userUpdatedId || 'unknown';
-      await processRKAttachments(
-        files as Express.Multer.File[],
-        rkId,
-        userAddId,
-        newAttachmentsMeta
-      );
+      
+      // Разделяем файлы на конструкции и документы
+      const filesWithMeta = files.slice(0, newAttachmentsMeta.length);
+      const filesWithoutMeta = files.slice(newAttachmentsMeta.length);
+      
+      // Создаем конструкции с метаданными
+      if (filesWithMeta.length > 0) {
+        await processRKAttachments(
+          filesWithMeta as Express.Multer.File[],
+          rkId,
+          userAddId,
+          newAttachmentsMeta
+        );
+      }
+      
+      // Создаем документы с привязкой к конструкциям
+      if (filesWithoutMeta.length > 0) {
+        // Получаем все конструкции для данной записи в порядке создания
+        const constructions = await prisma.rKAttachment.findMany({
+          where: { 
+            recordId: rkId,
+            typeAttachment: 'CONSTRUCTION'
+          },
+          orderBy: { createdAt: 'asc' }
+        });
+        
+        // Создаем документы с привязкой к конкретным конструкциям
+        for (let i = 0; i < filesWithoutMeta.length; i++) {
+          const file = filesWithoutMeta[i];
+          const docMeta = newDocumentsMeta[i];
+          
+          let parentConstructionId = null;
+          if (docMeta && constructions[docMeta.parentConstructionIndex]) {
+            parentConstructionId = constructions[docMeta.parentConstructionIndex].id;
+          } else if (constructions.length > 0) {
+            // Fallback: привязываем к последней конструкции
+            parentConstructionId = constructions[constructions.length - 1].id;
+          }
+          
+          await prisma.rKAttachment.create({
+            data: {
+              userAddId,
+              source: file.path,
+              type: file.mimetype,
+              typeAttachment: 'DOCUMENT',
+              sizeXY: '',
+              clarification: '',
+              recordId: rkId,
+              typeStructureId: undefined,
+              approvalStatusId: undefined,
+              agreedTo: undefined,
+              parentAttachmentId: parentConstructionId,
+            } as any
+          });
+        }
+      }
     }
 
     // Обновление метаданных существующих вложений (без новых файлов)

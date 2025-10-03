@@ -1,132 +1,282 @@
 /* ========================================
    СОВРЕМЕННЫЙ ДИЗАЙН DNS RADIO
+   ПО ВСЕМ ТРЕБОВАНИЯМ DESIGNSYSTEM.CSS
    ======================================== */
 
+/* === ОСНОВНОЙ КОНТЕЙНЕР === */
 .radio-container {
   width: 100%;
   max-width: none;
   margin: 0;
   padding-bottom: 100px; /* Отступ снизу чтобы контент не обрезался футером */
+  background-color: var(--theme-bg-primary);
+  color: var(--theme-text-primary);
+  font-family: var(--font-family-primary);
+  line-height: var(--line-height-normal);
+  transition: var(--transition-colors);
 }
 
-/* Заголовок страницы */
+/* === ЗАГОЛОВОК СТРАНИЦЫ === */
 .radio-header {
   margin-bottom: var(--space-3);
+  background: linear-gradient(135deg, var(--theme-bg-elevated) 0%, rgba(255, 255, 255, 0.05) 100%);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  box-shadow: var(--theme-shadow-sm);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: var(--transition-all);
 }
 
-/* Навигация по вкладкам */
+.radio-header:hover {
+  box-shadow: var(--theme-shadow-md);
+  transform: translateY(-1px);
+  border-color: var(--color-primary-300);
+}
+
+/* === НАВИГАЦИЯ ПО ВКЛАДКАМ === */
 .radio-navigation {
   background: var(--theme-bg-elevated);
   border: 1px solid var(--theme-border);
+  border-radius: var(--radius-xl);
   margin-bottom: var(--space-4);
+  box-shadow: var(--theme-shadow-sm);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: var(--transition-all);
+}
+
+.radio-navigation:hover {
+  box-shadow: var(--theme-shadow-md);
+  border-color: var(--color-primary-200);
 }
 
 .radio-tabs-list {
   background: transparent;
   border: none;
+  padding: var(--space-2);
 }
 
 .radio-tab-item {
-  border-radius: var(--radius-md);
-  font-weight: 500;
+  border-radius: var(--radius-lg);
+  font-weight: var(--font-weight-medium);
   transition: var(--transition-all);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
   font-size: var(--font-size-sm);
   color: var(--theme-text-primary);
+  position: relative;
+  overflow: hidden;
+}
+
+.radio-tab-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  transition: left 0.5s ease;
+}
+
+.radio-tab-item:hover::before {
+  left: 100%;
 }
 
 .radio-tab-item:hover {
-  background: var(--theme-bg-hover);
+  background: var(--theme-hover-bg);
   transform: translateY(-1px);
+  box-shadow: var(--theme-shadow-sm);
+  border-color: var(--color-primary-200);
 }
 
 .radio-tab-item[data-active="true"] {
   background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600));
-  color: white;
+  color: var(--theme-text-inverse);
   box-shadow: var(--theme-shadow-md);
+  font-weight: var(--font-weight-semibold);
+  border: 1px solid var(--color-primary-400);
+}
+
+.radio-tab-item[data-active="true"]:hover {
+  background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700));
+  transform: translateY(-2px);
+  box-shadow: var(--theme-shadow-lg);
 }
 
 .radio-tab-item[data-active="false"] {
   color: var(--theme-text-secondary);
   background: transparent;
+  border: 1px solid transparent;
 }
 
-/* Контент вкладок */
+/* === КОНТЕНТ ВКЛАДОК === */
 .radio-content {
   background: var(--theme-bg-elevated);
   border: 1px solid var(--theme-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-6);
+  border-radius: var(--radius-xl);
+  padding: var(--space-8);
   box-shadow: var(--theme-shadow-sm);
   transition: var(--transition-all);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  position: relative;
+  overflow: hidden;
+}
+
+.radio-content::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--color-primary-500), var(--color-primary-600), var(--color-primary-500));
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
 }
 
 .radio-content:hover {
-  box-shadow: var(--theme-shadow-md);
-  transform: translateY(-1px);
+  box-shadow: var(--theme-shadow-lg);
+  transform: translateY(-2px);
+  border-color: var(--color-primary-300);
 }
 
-/* Статистические карточки */
+/* === СТАТИСТИЧЕСКИЕ КАРТОЧКИ === */
 .radio-stats-card {
   background: var(--theme-bg-elevated);
   border: 1px solid var(--theme-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-4);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
   transition: var(--transition-all);
   box-shadow: var(--theme-shadow-sm);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  position: relative;
+  overflow: hidden;
+}
+
+.radio-stats-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--color-primary-500), var(--color-primary-600));
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
 }
 
 .radio-stats-card:hover {
-  box-shadow: var(--theme-shadow-md);
-  transform: translateY(-2px);
+  box-shadow: var(--theme-shadow-lg);
+  transform: translateY(-3px);
   border-color: var(--color-primary-300);
+  background: linear-gradient(135deg, var(--theme-bg-elevated) 0%, rgba(59, 130, 246, 0.02) 100%);
 }
 
-/* Карточки потоков */
+/* === КАРТОЧКИ ПОТОКОВ === */
 .radio-stream-card {
   background: var(--theme-bg-elevated);
   border: 1px solid var(--theme-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-4);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
   transition: var(--transition-all);
   box-shadow: var(--theme-shadow-sm);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  position: relative;
+  overflow: hidden;
+}
+
+.radio-stream-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--color-success), #059669);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
 }
 
 .radio-stream-card:hover {
-  box-shadow: var(--theme-shadow-md);
-  transform: translateY(-2px);
-  border-color: var(--color-primary-300);
+  box-shadow: var(--theme-shadow-lg);
+  transform: translateY(-3px);
+  border-color: var(--color-success);
+  background: linear-gradient(135deg, var(--theme-bg-elevated) 0%, rgba(16, 185, 129, 0.02) 100%);
 }
 
-/* Карточки устройств */
+/* === КАРТОЧКИ УСТРОЙСТВ === */
 .radio-device-card {
   background: var(--theme-bg-elevated);
   border: 1px solid var(--theme-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-4);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
   transition: var(--transition-all);
   box-shadow: var(--theme-shadow-sm);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  position: relative;
+  overflow: hidden;
+}
+
+.radio-device-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--color-warning), #f59e0b);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
 }
 
 .radio-device-card:hover {
-  box-shadow: var(--theme-shadow-md);
-  transform: translateY(-2px);
-  border-color: var(--color-primary-300);
+  box-shadow: var(--theme-shadow-lg);
+  transform: translateY(-3px);
+  border-color: var(--color-warning);
+  background: linear-gradient(135deg, var(--theme-bg-elevated) 0%, rgba(245, 158, 11, 0.02) 100%);
 }
 
-/* Кнопки действий */
+/* === КНОПКИ ДЕЙСТВИЙ === */
 .radio-action-button {
   background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600));
   border: none;
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   transition: var(--transition-all);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
+  color: var(--theme-text-inverse);
+  box-shadow: var(--theme-shadow-sm);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  position: relative;
+  overflow: hidden;
+}
+
+.radio-action-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.radio-action-button:hover::before {
+  left: 100%;
 }
 
 .radio-action-button:hover {
   background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700));
-  transform: translateY(-1px);
-  box-shadow: var(--theme-shadow-md);
+  transform: translateY(-2px);
+  box-shadow: var(--theme-shadow-lg);
+}
+
+.radio-action-button:active {
+  transform: translateY(0);
+  box-shadow: var(--theme-shadow-sm);
 }
 
 .radio-secondary-button {
@@ -134,60 +284,90 @@
   border: 1px solid var(--theme-border);
   color: var(--theme-text-primary);
   transition: var(--transition-all);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
+  font-weight: var(--font-weight-medium);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .radio-secondary-button:hover {
-  background: var(--theme-bg-hover);
+  background: var(--theme-hover-bg);
   border-color: var(--color-primary-300);
   transform: translateY(-1px);
   box-shadow: var(--theme-shadow-sm);
+  color: var(--theme-text-primary);
 }
 
-/* Статус индикаторы */
+.radio-secondary-button:active {
+  transform: translateY(0);
+  box-shadow: var(--theme-shadow-sm);
+}
+
+/* === СТАТУС ИНДИКАТОРЫ === */
 .radio-status-online {
   background: linear-gradient(135deg, var(--color-success), #059669);
-  color: white;
-  padding: var(--space-1) var(--space-2);
+  color: var(--theme-text-inverse);
+  padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-full);
   font-size: var(--font-size-xs);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
+  box-shadow: var(--theme-shadow-sm);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: var(--transition-all);
+}
+
+.radio-status-online:hover {
+  transform: scale(1.05);
+  box-shadow: var(--theme-shadow-md);
 }
 
 .radio-status-offline {
   background: linear-gradient(135deg, var(--color-gray-500), var(--color-gray-600));
-  color: white;
-  padding: var(--space-1) var(--space-2);
+  color: var(--theme-text-inverse);
+  padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-full);
   font-size: var(--font-size-xs);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
+  box-shadow: var(--theme-shadow-sm);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: var(--transition-all);
+}
+
+.radio-status-offline:hover {
+  transform: scale(1.05);
+  box-shadow: var(--theme-shadow-md);
 }
 
 .radio-status-active {
   background: linear-gradient(135deg, var(--color-success), #059669);
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   display: inline-block;
+  box-shadow: var(--theme-shadow-sm);
+  animation: pulse 2s infinite;
 }
 
 .radio-status-inactive {
   background: linear-gradient(135deg, var(--color-error), #dc2626);
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   display: inline-block;
+  box-shadow: var(--theme-shadow-sm);
 }
 
-/* Анимации */
+/* === АНИМАЦИИ === */
 .radio-container {
-  animation: fadeInUp 0.6s ease-out;
+  animation: fadeInUp 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @keyframes fadeInUp {
   from {
     opacity: 0;
-    transform: translateY(30px);
+    transform: translateY(40px);
   }
   to {
     opacity: 1;
@@ -195,9 +375,45 @@
   }
 }
 
-/* Адаптивность */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* === АДАПТИВНОСТЬ === */
+@media (max-width: 1200px) {
+  .radio-content {
+    padding: var(--space-6);
+  }
+  
+  .radio-stats-card,
+  .radio-stream-card,
+  .radio-device-card {
+    padding: var(--space-5);
+  }
+}
+
 @media (max-width: 768px) {
   .radio-container {
+    padding: var(--space-4);
+  }
+  
+  .radio-header {
     padding: var(--space-4);
   }
   
@@ -208,7 +424,12 @@
   .radio-stats-card,
   .radio-stream-card,
   .radio-device-card {
-    padding: var(--space-3);
+    padding: var(--space-4);
+  }
+  
+  .radio-tab-item {
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--font-size-xs);
   }
 }
 
@@ -217,6 +438,10 @@
     padding: var(--space-2);
   }
   
+  .radio-header {
+    padding: var(--space-3);
+  }
+  
   .radio-content {
     padding: var(--space-3);
   }
@@ -224,11 +449,16 @@
   .radio-stats-card,
   .radio-stream-card,
   .radio-device-card {
+    padding: var(--space-3);
+  }
+  
+  .radio-tab-item {
     padding: var(--space-2);
+    font-size: var(--font-size-xs);
   }
 }
 
-/* Темная тема */
+/* === ТЕМНАЯ ТЕМА === */
 [data-mantine-color-scheme="dark"] .radio-navigation,
 [data-mantine-color-scheme="dark"] .radio-content,
 [data-mantine-color-scheme="dark"] .radio-stats-card,
@@ -236,11 +466,83 @@
 [data-mantine-color-scheme="dark"] .radio-device-card {
   background: rgba(30, 30, 30, 0.95);
   border-color: var(--theme-border);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+[data-mantine-color-scheme="dark"] .radio-header {
+  background: linear-gradient(135deg, rgba(30, 30, 30, 0.95) 0%, rgba(20, 20, 20, 0.8) 100%);
+  border-color: var(--theme-border);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
 [data-mantine-color-scheme="dark"] .radio-content:hover,
 [data-mantine-color-scheme="dark"] .radio-stats-card:hover,
 [data-mantine-color-scheme="dark"] .radio-stream-card:hover,
 [data-mantine-color-scheme="dark"] .radio-device-card:hover {
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  background: linear-gradient(135deg, rgba(30, 30, 30, 0.98) 0%, rgba(40, 40, 40, 0.95) 100%);
+}
+
+[data-mantine-color-scheme="dark"] .radio-tab-item:hover {
+  background: rgba(40, 40, 40, 0.8);
+  border-color: var(--color-primary-400);
+}
+
+[data-mantine-color-scheme="dark"] .radio-secondary-button {
+  background: rgba(40, 40, 40, 0.8);
+  border-color: var(--theme-border);
+  color: var(--theme-text-primary);
+}
+
+[data-mantine-color-scheme="dark"] .radio-secondary-button:hover {
+  background: rgba(50, 50, 50, 0.9);
+  border-color: var(--color-primary-400);
+}
+
+/* === ДОПОЛНИТЕЛЬНЫЕ СТИЛИ === */
+.radio-loading-overlay {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.7) 100%);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+[data-mantine-color-scheme="dark"] .radio-loading-overlay {
+  background: linear-gradient(135deg, rgba(30, 30, 30, 0.9) 0%, rgba(20, 20, 20, 0.7) 100%);
+}
+
+.radio-progress-bar {
+  background: linear-gradient(90deg, var(--color-primary-500), var(--color-primary-600));
+  border-radius: var(--radius-full);
+  box-shadow: var(--theme-shadow-sm);
+  transition: var(--transition-all);
+}
+
+.radio-progress-bar:hover {
+  box-shadow: var(--theme-shadow-md);
+  transform: scale(1.02);
+}
+
+/* === ФОКУС СТИЛИ === */
+.radio-tab-item:focus-visible,
+.radio-action-button:focus-visible,
+.radio-secondary-button:focus-visible {
+  outline: 2px solid var(--theme-border-focus);
+  outline-offset: 2px;
+}
+
+/* === АНИМАЦИИ ЗАГРУЗКИ === */
+.radio-skeleton {
+  background: linear-gradient(90deg, var(--theme-bg-secondary) 25%, var(--theme-bg-hover) 50%, var(--theme-bg-secondary) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-md);
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }

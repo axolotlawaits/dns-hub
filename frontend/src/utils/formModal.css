@@ -1149,6 +1149,123 @@
   }
 }
 
+/* ========================================
+   СЛАЙДЕР КОНСТРУКЦИЙ
+   ======================================== */
+
+.construction-cards-slider {
+  /* Webkit браузеры (Chrome, Safari, Edge) */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(59, 130, 246, 0.6) rgba(0, 0, 0, 0.1);
+}
+
+.construction-cards-slider::-webkit-scrollbar {
+  height: 8px;
+}
+
+.construction-cards-slider::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+  margin: 0 8px;
+}
+
+.construction-cards-slider::-webkit-scrollbar-thumb {
+  background: linear-gradient(90deg, rgba(59, 130, 246, 0.6), rgba(37, 99, 235, 0.8));
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.construction-cards-slider::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(90deg, rgba(59, 130, 246, 0.8), rgba(37, 99, 235, 1));
+  transform: scaleY(1.2);
+}
+
+.construction-cards-slider::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Плавная анимация появления карточек */
+.construction-cards-slider > div {
+  animation: slideInFromRight 0.4s ease-out;
+}
+
+@keyframes slideInFromRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Эффект при наведении на карточку */
+.construction-cards-slider > div:hover {
+  transform: translateY(-2px);
+  transition: transform 0.2s ease;
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+  .construction-cards-slider > div {
+    min-width: 320px;
+    max-width: 380px;
+  }
+}
+
+/* Стили для вертикального отображения конструкций в форме */
+.construction-cards-vertical > div {
+  animation: slideInFromTop 0.4s ease-out;
+}
+
+@keyframes slideInFromTop {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.construction-cards-vertical > div:hover {
+  transform: translateY(-2px);
+  transition: transform 0.2s ease;
+}
+
+/* Стили для секции карточек конструкций в нижней части */
+.construction-cards-section {
+  border-top: 2px solid rgba(59, 130, 246, 0.1);
+  padding-top: 24px;
+  margin-top: 24px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.02) 0%, rgba(37, 99, 235, 0.02) 100%);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.construction-cards-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--theme-text-primary);
+}
+
+/* Улучшенные стили для карточек в слайдере */
+.construction-cards-slider > div {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 12px;
+}
+
+.construction-cards-slider > div:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 12px 32px rgba(59, 130, 246, 0.15);
+}
+
 @media (max-width: 768px) {
   .form-modal .field-group-3 .field-item {
     flex: 1 1 100%;

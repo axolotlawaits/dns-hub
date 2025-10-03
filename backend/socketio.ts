@@ -91,20 +91,30 @@ export class SocketIOService {
 
       socket.on('pong', () => {
         const conn = this.connections.get(socket.id);
-        if (conn) conn.lastActivity = new Date();
+        if (conn) {
+          conn.lastActivity = new Date();
+          console.log(`[Socket.IO] pong received from deviceId=${conn.deviceId || 'unknown'}`);
+        }
       });
 
       socket.on('heartbeat', (payload: any) => {
         const conn = this.connections.get(socket.id);
         if (conn) {
           conn.lastActivity = new Date();
-          console.log(`[Socket.IO] heartbeat received from deviceId=${payload?.deviceId}`);
+          // Используем deviceId из соединения, если он не передан в payload
+          const deviceId = payload?.deviceId || conn.deviceId || 'unknown';
+          console.log(`[Socket.IO] heartbeat received from deviceId=${deviceId}, payload:`, payload);
         }
       });
 
-      socket.onAny(() => {
+      socket.onAny((eventName, ...args) => {
         const conn = this.connections.get(socket.id);
         if (conn) conn.lastActivity = new Date();
+        
+        // Логируем только определенные события для отладки
+        if (eventName === 'heartbeat' || eventName === 'pong' || eventName === 'ping') {
+          console.log(`[Socket.IO] Event '${eventName}' received from socketId=${socket.id}, deviceId=${conn?.deviceId || 'unknown'}`);
+        }
       });
 
       socket.on('disconnect', (reason) => {
