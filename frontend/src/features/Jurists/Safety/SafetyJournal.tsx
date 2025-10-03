@@ -158,7 +158,26 @@ const LocalJournalTable = function LocalJournalTable({
             {journals.map((journal) => (
               <tr key={journal.id} className='table-row' onClick={() => onViewFile(journal)}>
                 <td className='table-cell'>
-                  <Text size="sm" fw={500}>
+                  {journal.journal_type === 'ОТ' ?
+                    <IconShield 
+                      size={16}
+                      style={{
+                        position: 'absolute',
+                        top: 30,
+                        left: 0,
+                      }}
+                    />
+                  :
+                    <IconFlame 
+                      size={16}
+                      style={{
+                        position: 'absolute',
+                        top: 30,
+                        left: 0,
+                      }}
+                    />
+                  }
+                  <Text size="sm" fw={500} truncate='end'>
                     {journal.journal_title}
                   </Text>
                 </td>
