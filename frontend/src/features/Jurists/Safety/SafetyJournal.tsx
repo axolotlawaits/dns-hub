@@ -72,7 +72,7 @@ interface JournalInfo {
   journal_id: string;
   branch_journal_id?: string; // ID журнала филиала для внешнего API
   journal_title: string;
-  journal_type: 'labor_protection' | 'fire_safety';
+  journal_type: 'ОТ' | 'ПБ';
   branch_id: string;
   branch_name: string;
   status: 'approved' | 'pending' | 'rejected' | 'under_review';
@@ -1138,7 +1138,7 @@ export default function SafetyJournal() {
       result = result.map(branch => ({
       ...branch,
       journals: branch.journals.filter(journal => {
-        if (activeTab === 'labor_protection' || activeTab === 'fire_safety') {
+        if (activeTab === 'ОТ' || activeTab === 'ПБ') {
           return journal.journal_type === activeTab;
         }
         return journal.status === activeTab;
@@ -1264,8 +1264,8 @@ export default function SafetyJournal() {
       acc.total++;
       
       // Подсчет по типам
-      if (journal.journal_type === 'labor_protection') acc.labor_protection++;
-      if (journal.journal_type === 'fire_safety') acc.fire_safety++;
+      if (journal.journal_type === 'ОТ') acc.labor_protection++;
+      if (journal.journal_type === 'ПБ') acc.fire_safety++;
       
       // Подсчет по статусам
       if (journal.status === 'pending') acc.pending++;
