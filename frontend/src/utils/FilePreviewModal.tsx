@@ -1,4 +1,4 @@
-import { Modal, Image, Loader, Stack, Text, Group, Paper, Box, ActionIcon, Badge, Tooltip, Button } from '@mantine/core';
+import { Modal, Image, Loader, Stack, Text, Group, Paper, Box, ActionIcon, Tooltip, Button } from '@mantine/core';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { API } from '../config/constants';
 import { IconFile, IconFileText, IconFileTypePdf, IconPhoto, IconMusic, IconVideo, IconDownload, IconChevronLeft, IconChevronRight, IconX, IconTrash } from '@tabler/icons-react';
@@ -442,7 +442,7 @@ export const FilePreviewModal = ({
                 }
               }}
             >
-              <Group gap="12px" align="center">
+              <Group gap="12px" align="center" w={200}>
                 <Box
                   style={{
                     width: '32px',
@@ -463,6 +463,7 @@ export const FilePreviewModal = ({
                 </Box>
                 <Box style={{ flex: 1, minWidth: 0 }}>
                   <Text
+                    truncate="end"
                     style={{
                       color: isActive ? 'white' : 'var(--theme-text-primary)',
                       fontWeight: '600',
@@ -475,6 +476,7 @@ export const FilePreviewModal = ({
                     {src}
                   </Text>
                   <Text
+                    truncate="end"
                     style={{
                       color: isActive ? 'rgba(255, 255, 255, 0.8)' : 'var(--theme-text-secondary)',
                       fontSize: '12px',
@@ -484,18 +486,6 @@ export const FilePreviewModal = ({
                     {ext.toUpperCase()}
                   </Text>
                 </Box>
-                {isActive && (
-                  <Badge
-                    size="sm"
-                    style={{
-                      background: 'rgba(255, 255, 255, 0.2)',
-                      color: 'white',
-                      border: 'none'
-                    }}
-                  >
-                    Активный
-                  </Badge>
-                )}
               </Group>
             </Box>
         );
@@ -593,20 +583,6 @@ export const FilePreviewModal = ({
       return (
         <Box
           className="image-container"
-          style={{
-            background: 'var(--theme-bg-elevated)',
-            borderRadius: '16px',
-            border: '1px solid var(--theme-border-primary)',
-            padding: '20px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '100%',
-            width: '100%',
-            overflow: 'hidden',
-            position: 'relative',
-            minHeight: '400px'
-          }}
         >
           <AuthImage
             src={fileUrl}

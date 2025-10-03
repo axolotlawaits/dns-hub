@@ -78,6 +78,7 @@
   min-width: 120px;
   max-width: 300px;
   line-height: 1.5;
+  position: relative;
 }
 
 .table-cell:last-child {

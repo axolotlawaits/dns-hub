@@ -5,14 +5,18 @@ import { useAccessContext } from '../../../hooks/useAccessContext';
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { notificationSystem } from '../../../utils/Push';
 import FloatingActionButton from '../../../components/FloatingActionButton';
-import { Button, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Paper, Badge, Tabs, Tooltip, Alert, Divider, Select, Pagination, Popover, Card, ThemeIcon, Accordion } from '@mantine/core';
+import { Button, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Paper, Badge, Tabs, Tooltip, Alert, Divider, Select, Pagination, Popover, Card, ThemeIcon, Accordion, Modal } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
-import { IconClock, IconFileText, IconChevronDown, IconChevronUp, IconUpload, IconFilter, IconShield, IconFlame, IconCircleCheck, IconCircleX, IconAlertCircle, IconUsers, IconX, IconFile, IconCheck, IconRefresh } from '@tabler/icons-react';
+import { IconClock, IconFileText, IconChevronDown, IconChevronUp, IconUpload, IconFilter, IconShield, IconFlame, IconCircleCheck, IconCircleX, IconAlertCircle, IconUsers, IconX, IconFile, IconCheck, IconRefresh, IconQrcode } from '@tabler/icons-react';
 import { FilePreviewModal } from '../../../utils/FilePreviewModal';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { DndProviderWrapper } from '../../../utils/dnd';
 import { type ColumnFiltersState, type SortingState } from '@tanstack/react-table';
+import { Image } from '@mantine/core'
+import tgBotQRImage from '../../../assets/images/tg_bot_journals.webp'
+import tgBotQRImageDark from '../../../assets/images/tg_bot_journals_black.webp'
+import { useThemeContext } from '../../../hooks/useThemeContext';
 
 // Интерфейсы для работы с API
 interface UserInfo {
@@ -29,6 +33,16 @@ interface UserInfo {
   isManager: boolean;
 }
 
+interface ResponsibleEmployeeType {
+  employee_id: string
+  employee_name: string
+}
+
+interface ResponsibilitiesType {
+  ot: ResponsibleEmployeeType[]
+  pb: ResponsibleEmployeeType[]
+}
+
 interface BranchWithJournals {
   branch_id: string;
   branch_name: string;
@@ -40,6 +54,7 @@ interface BranchWithJournals {
   branch_address: string;
   city_name: string;
   journals: JournalInfo[];
+  responsibilities: ResponsibilitiesType
 }
 
 interface JournalFile {
@@ -57,7 +72,7 @@ interface JournalInfo {
   journal_id: string;
   branch_journal_id?: string; // ID журнала филиала для внешнего API
   journal_title: string;
-  journal_type: 'labor_protection' | 'fire_safety';
+  journal_type: 'ОТ' | 'ПБ';
   branch_id: string;
   branch_name: string;
   status: 'approved' | 'pending' | 'rejected' | 'under_review';
@@ -143,7 +158,26 @@ const LocalJournalTable = function LocalJournalTable({
             {journals.map((journal) => (
               <tr key={journal.id} className='table-row' onClick={() => onViewFile(journal)}>
                 <td className='table-cell'>
-                  <Text size="sm" fw={500}>
+                  {journal.journal_type === 'ОТ' ?
+                    <IconShield 
+                      size={16}
+                      style={{
+                        position: 'absolute',
+                        top: 10,
+                        left: 0,
+                      }}
+                    />
+                  :
+                    <IconFlame 
+                      size={16}
+                      style={{
+                        position: 'absolute',
+                        top: 10,
+                        left: 0,
+                      }}
+                    />
+                  }
+                  <Text size="sm" fw={500} truncate='end'>
                     {journal.journal_title}
                   </Text>
                 </td>
@@ -302,8 +336,8 @@ const LocalJournalTable = function LocalJournalTable({
     <Paper withBorder radius="md" p="lg" style={{ background: 'var(--theme-bg-primary)' }}>
       <Stack gap="md">
         {/* Заголовок филиала */}
-        <Group justify="space-between" align="center">
-          <Group gap="md">
+        <Group justify="space-between" align="center" wrap='nowrap'>
+          <Group gap="md" wrap='nowrap'>
                   <Box style={STYLES.branchIcon}>
               🏢
             </Box>
@@ -314,7 +348,7 @@ const LocalJournalTable = function LocalJournalTable({
               </Text>
 
 
-              <Group gap="xs">
+              <Group gap="xs" wrap='nowrap'>
                 <Badge size="sm" variant="outline" color="blue">
                   {branch.rrs_name}
                 </Badge>
@@ -340,16 +374,32 @@ const LocalJournalTable = function LocalJournalTable({
                       <Divider />
                       <Stack gap="xs">
                         <Text size="xs" fw={500} c="blue">По пожарной безопасности:</Text>
-                        <Text size="xs" c="dimmed">Информация будет добавлена</Text>
+                        <Stack>
+                          {branch.responsibilities.pb.length > 0 ? branch.responsibilities.pb.map(emp => {
+                            return (
+                              <Text size="xs" c="dimmed">{emp.employee_name}</Text>
+                            )
+                          })
+                          :
+                            <Text size="xs" c="dimmed">Информация будет добавлена</Text>
+                          }
+                        </Stack>
                       </Stack>
                       <Stack gap="xs">
                         <Text size="xs" fw={500} c="green">По охране труда:</Text>
-                        <Text size="xs" c="dimmed">Информация будет добавлена</Text>
+                          {branch.responsibilities.ot.length > 0 ? branch.responsibilities.ot.map(emp => {
+                            return (
+                              <Text size="xs" c="dimmed">{emp.employee_name}</Text>
+                            )
+                          })
+                          :
+                            <Text size="xs" c="dimmed">Информация будет добавлена</Text>
+                          }
                       </Stack>
                     </Stack>
                   </Popover.Dropdown>
                 </Popover>
-                <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
+                <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }} truncate="end">
                 {branch.branch_address}
               </Text>
               </Group>
@@ -408,8 +458,9 @@ const LocalJournalTable = function LocalJournalTable({
 export default function SafetyJournal() {
   const { user, token, logout } = useUserContext();
   const { access } = useAccessContext();
+  const { isDark } = useThemeContext()
   const { setHeader, clearHeader } = usePageHeader();
-  
+
   // Объединенное состояние для лучшей производительности
   const [state, setState] = useState({
     branches: [] as BranchWithJournals[],
@@ -453,6 +504,7 @@ export default function SafetyJournal() {
   const [journalFiles, setJournalFiles] = useState<any[]>([]);
   const [fileViewOpened, { open: openFileView, close: closeFileView }] = useDisclosure(false);
   const [deleteJournalOpened, { close: closeDeleteJournal }] = useDisclosure(false);
+  const [qrOpened, { open: qrOpen, close: qrClose }] = useDisclosure(false)
   
   // Фильтры для филиалов
   const [branchFilters, setBranchFilters] = useState({
@@ -688,7 +740,7 @@ export default function SafetyJournal() {
 
   // Функция валидации файлов
   const validateFile = useCallback((file: File): { valid: boolean; error?: string } => {
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    const maxSize = 50 * 1024 * 1024; //50mb
     const allowedExtensions = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.jpg', '.jpeg', '.png', '.gif'];
     const allowedMimeTypes = [
       'application/pdf',
@@ -1105,7 +1157,7 @@ export default function SafetyJournal() {
       result = result.map(branch => ({
       ...branch,
       journals: branch.journals.filter(journal => {
-        if (activeTab === 'labor_protection' || activeTab === 'fire_safety') {
+        if (activeTab === 'ОТ' || activeTab === 'ПБ') {
           return journal.journal_type === activeTab;
         }
         return journal.status === activeTab;
@@ -1231,8 +1283,8 @@ export default function SafetyJournal() {
       acc.total++;
       
       // Подсчет по типам
-      if (journal.journal_type === 'labor_protection') acc.labor_protection++;
-      if (journal.journal_type === 'fire_safety') acc.fire_safety++;
+      if (journal.journal_type === 'ОТ') acc.labor_protection++;
+      if (journal.journal_type === 'ПБ') acc.fire_safety++;
       
       // Подсчет по статусам
       if (journal.status === 'pending') acc.pending++;
@@ -1265,7 +1317,7 @@ export default function SafetyJournal() {
       <Box
         style={{
           background: 'var(--theme-bg-primary)',
-          minHeight: '100vh'
+          minHeight: '50vh'
         }}
       >
         {loading && <LoadingOverlay visible />}
@@ -1291,7 +1343,7 @@ export default function SafetyJournal() {
           <Paper withBorder radius="md" p="md" style={{ background: 'var(--theme-bg-elevated)' }}>
           <Stack gap="md">
         {/* Вкладки */}
-              <Tabs value={activeTab} onChange={(value) => setActiveTab(value || 'all')}>
+              <Tabs value={activeTab} onChange={(value) => {setActiveTab(value || 'all'), setBranchPagination( { ...branchPagination, page: 1 })}}>
           <Tabs.List>
             <Tabs.Tab value="all" leftSection={<IconFileText size={16} />}>
               Все журналы ({stats.total})
@@ -1540,7 +1592,26 @@ export default function SafetyJournal() {
 
       {/* Floating Action Button */}
       <FloatingActionButton />
-
+      <ActionIcon variant="filled" size={50} aria-label="Settings" onClick={qrOpen}
+        style={{  
+          position: 'fixed',
+          bottom: '150px',
+          right: '40px',
+          zIndex: '1000',
+          pointerEvents: 'auto'
+        }}
+      >
+        <IconQrcode style={{ width: '85%', height: '85%' }} stroke={1.5} />
+      </ActionIcon>
+      <Modal opened={qrOpened} onClose={qrClose} title="QR-код телеграм бота" centered zIndex={99999} size="auto">
+        <Image
+          radius="md"
+          h={200}
+          w="auto"
+          fit="contain"
+          src={isDark ? tgBotQRImage : tgBotQRImageDark}
+        />
+      </Modal>
       </Box>
     </DndProviderWrapper>
   );

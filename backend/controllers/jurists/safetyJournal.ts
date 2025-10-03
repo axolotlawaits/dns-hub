@@ -178,7 +178,7 @@ export const getBranchesWithJournals = async (req: Request, res: Response) => {
           
           return {
             ...journal,
-            journal_type: determineJournalType(journal.journal_title),
+            journal_type: journal.journal_type,
             files_count: activeFilesCount,
             is_current: isCurrent, // Флаг актуальности журнала
             // Используем id как branch_journal_id для загрузки файлов
@@ -204,45 +204,6 @@ export const getBranchesWithJournals = async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Ошибка получения филиалов с журналами' });
   }
 };
-
-// Функция для определения типа журнала по названию
-function determineJournalType(journalTitle: string): 'labor_protection' | 'fire_safety' {
-  const title = journalTitle.toLowerCase();
-  
-  // Ключевые слова для охраны труда
-  const laborProtectionKeywords = [
-    'охрана труда',
-    'инструктаж',
-    'электробезопасность',
-    'соут',
-    'инструкция'
-  ];
-  
-  // Ключевые слова для пожарной безопасности
-  const fireSafetyKeywords = [
-    'пожар',
-    'противопожарный',
-    'огнетушитель',
-    'противоаварийный',
-    'тренировка'
-  ];
-  
-  // Проверяем ключевые слова
-  for (const keyword of laborProtectionKeywords) {
-    if (title.includes(keyword)) {
-      return 'labor_protection';
-    }
-  }
-  
-  for (const keyword of fireSafetyKeywords) {
-    if (title.includes(keyword)) {
-      return 'fire_safety';
-    }
-  }
-  
-  // По умолчанию считаем охраной труда
-  return 'labor_protection';
-}
 
 // Функция для получения количества файлов журнала
 async function getJournalFilesCount(journalId: string, token: string): Promise<number> {
