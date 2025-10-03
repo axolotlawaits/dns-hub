@@ -1348,10 +1348,10 @@ export default function SafetyJournal() {
             <Tabs.Tab value="all" leftSection={<IconFileText size={16} />}>
               Все журналы ({stats.total})
             </Tabs.Tab>
-                  <Tabs.Tab value="labor_protection" leftSection={<IconShield size={16} />}>
+                  <Tabs.Tab value="ОТ" leftSection={<IconShield size={16} />}>
               Охрана труда ({stats.labor_protection || 0})
             </Tabs.Tab>
-                  <Tabs.Tab value="fire_safety" leftSection={<IconFlame size={16} />}>
+                  <Tabs.Tab value="ПБ" leftSection={<IconFlame size={16} />}>
               Пожарная безопасность ({stats.fire_safety || 0})
             </Tabs.Tab>
             <Tabs.Tab value="pending" leftSection={<IconClock size={16} />}>
