@@ -163,7 +163,7 @@ const LocalJournalTable = function LocalJournalTable({
                       size={16}
                       style={{
                         position: 'absolute',
-                        top: 30,
+                        top: 10,
                         left: 0,
                       }}
                     />
@@ -172,7 +172,7 @@ const LocalJournalTable = function LocalJournalTable({
                       size={16}
                       style={{
                         position: 'absolute',
-                        top: 30,
+                        top: 10,
                         left: 0,
                       }}
                     />
