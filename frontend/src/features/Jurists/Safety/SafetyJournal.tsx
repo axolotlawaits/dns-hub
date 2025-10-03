@@ -5,14 +5,18 @@ import { useAccessContext } from '../../../hooks/useAccessContext';
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { notificationSystem } from '../../../utils/Push';
 import FloatingActionButton from '../../../components/FloatingActionButton';
-import { Button, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Paper, Badge, Tabs, Tooltip, Alert, Divider, Select, Pagination, Popover, Card, ThemeIcon, Accordion } from '@mantine/core';
+import { Button, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Paper, Badge, Tabs, Tooltip, Alert, Divider, Select, Pagination, Popover, Card, ThemeIcon, Accordion, Modal } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
-import { IconClock, IconFileText, IconChevronDown, IconChevronUp, IconUpload, IconFilter, IconShield, IconFlame, IconCircleCheck, IconCircleX, IconAlertCircle, IconUsers, IconX, IconFile, IconCheck, IconRefresh } from '@tabler/icons-react';
+import { IconClock, IconFileText, IconChevronDown, IconChevronUp, IconUpload, IconFilter, IconShield, IconFlame, IconCircleCheck, IconCircleX, IconAlertCircle, IconUsers, IconX, IconFile, IconCheck, IconRefresh, IconQrcode } from '@tabler/icons-react';
 import { FilePreviewModal } from '../../../utils/FilePreviewModal';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { DndProviderWrapper } from '../../../utils/dnd';
 import { type ColumnFiltersState, type SortingState } from '@tanstack/react-table';
+import { Image } from '@mantine/core'
+import tgBotQRImage from '../../../assets/images/tg_bot_journals.webp'
+import tgBotQRImageDark from '../../../assets/images/tg_bot_journals_black.webp'
+import { useThemeContext } from '../../../hooks/useThemeContext';
 
 // Интерфейсы для работы с API
 interface UserInfo {
@@ -435,8 +439,9 @@ const LocalJournalTable = function LocalJournalTable({
 export default function SafetyJournal() {
   const { user, token, logout } = useUserContext();
   const { access } = useAccessContext();
+  const { isDark } = useThemeContext()
   const { setHeader, clearHeader } = usePageHeader();
-  
+
   // Объединенное состояние для лучшей производительности
   const [state, setState] = useState({
     branches: [] as BranchWithJournals[],
@@ -480,6 +485,7 @@ export default function SafetyJournal() {
   const [journalFiles, setJournalFiles] = useState<any[]>([]);
   const [fileViewOpened, { open: openFileView, close: closeFileView }] = useDisclosure(false);
   const [deleteJournalOpened, { close: closeDeleteJournal }] = useDisclosure(false);
+  const [qrOpened, { open: qrOpen, close: qrClose }] = useDisclosure(false)
   
   // Фильтры для филиалов
   const [branchFilters, setBranchFilters] = useState({
@@ -1567,7 +1573,26 @@ export default function SafetyJournal() {
 
       {/* Floating Action Button */}
       <FloatingActionButton />
-
+      <ActionIcon variant="filled" size={50} aria-label="Settings" onClick={qrOpen}
+        style={{  
+          position: 'fixed',
+          bottom: '150px',
+          right: '40px',
+          zIndex: '1000',
+          pointerEvents: 'auto'
+        }}
+      >
+        <IconQrcode style={{ width: '85%', height: '85%' }} stroke={1.5} />
+      </ActionIcon>
+      <Modal opened={qrOpened} onClose={qrClose} title="QR-код телеграм бота" centered zIndex={99999} size="auto">
+        <Image
+          radius="md"
+          h={200}
+          w="auto"
+          fit="contain"
+          src={isDark ? tgBotQRImage : tgBotQRImageDark}
+        />
+      </Modal>
       </Box>
     </DndProviderWrapper>
   );

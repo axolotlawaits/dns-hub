@@ -1,9 +1,8 @@
-import { Modal, Image, Loader, Stack, Text, Group, Paper, Box, ActionIcon, Badge, Tooltip, Button } from '@mantine/core';
+import { Modal, Image, Loader, Stack, Text, Group, Paper, Box, ActionIcon, Tooltip, Button } from '@mantine/core';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { API } from '../config/constants';
 import { IconFile, IconFileText, IconFileTypePdf, IconPhoto, IconMusic, IconVideo, IconDownload, IconChevronLeft, IconChevronRight, IconX, IconTrash } from '@tabler/icons-react';
 import './FilePreviewModal.css';
-import { truncateText } from './format';
 
 // Компонент для загрузки файлов с заголовками авторизации
   const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: any) => {
