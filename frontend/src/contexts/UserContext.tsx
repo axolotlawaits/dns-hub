@@ -1,4 +1,4 @@
-import { createContext, useState } from "react";
+import { createContext, useEffect, useState } from "react";
 import { API } from "../config/constants";
 
 export type User = {
@@ -59,6 +59,22 @@ export const UserContextProvider = ({ children }: Props) => {
       return storedToken;
     }
   });
+
+  const refreshUserData = async () => {
+    if (user) {
+      const response = await fetch(`${API}/user/${user.id}`)
+      const json = await response.json()
+      if (response.ok) {
+        setUser(json.user)
+        localStorage.setItem('user', JSON.stringify(json.user))
+        localStorage.setItem('token', json.token)
+      }
+    }
+  }
+
+  useEffect(() => {
+    refreshUserData()
+  }, [])
 
   const login = (user: User, token: string) => {
     setUser(user);
