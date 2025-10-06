@@ -107,7 +107,7 @@ export const login = async (req: Request, res: Response): Promise<any> => {
       const groupName = getGroupName?.group?.name
       const userUuid = getUserUuid?.uuid
 
-      const payload = { userId: newUser.id, userUuid, positionName: newUser.position, groupName }
+      const payload = { userId: newUser.id, userUuid, positionName: newUser.position, groupName, userRole: newUser.role }
       const token = jwt.sign(payload, accessPrivateKey, { algorithm: 'RS256', expiresIn: '30m' })
       const refreshToken = jwt.sign(payload, refreshPrivateKey, { algorithm: 'RS256', expiresIn: '90d' })
 
@@ -133,7 +133,7 @@ export const login = async (req: Request, res: Response): Promise<any> => {
     const groupName = getGroupName?.group?.name
     const userUuid = getUserUuid?.uuid
 
-    const payload = { userId: user.id, userUuid, positionName: user.position, groupName }
+    const payload = { userId: user.id, userUuid, positionName: user.position, groupName, userRole: user.role }
 
     const token = jwt.sign(payload, accessPrivateKey, { algorithm: 'RS256', expiresIn: '30m' })
     const refreshToken = jwt.sign(payload, refreshPrivateKey, { algorithm: 'RS256', expiresIn: '90d' })
@@ -199,6 +199,41 @@ export const updateUser = async (req: Request, res: Response): Promise<any> => {
     res.status(200).json(user)
   } else {
     res.status(400).json({error: 'не удалась обновить пользователя'})
+  }
+}
+
+export const getUserData = async (req: Request, res: Response): Promise<any> => {
+  const userId = req.params.id
+
+  const user = await prisma.user.findUnique({ where: { id: userId }})
+
+  if (user) {
+    const getGroupName = await prisma.position.findUnique({
+      where: {name: user.position},
+      select: {group: {select: {name: true}}}
+    })
+    const getUserUuid = await prisma.userData.findUnique({
+      where: { email: user.email },
+      select: { uuid: true }
+    })
+
+    const groupName = getGroupName?.group?.name
+    const userUuid = getUserUuid?.uuid
+
+    const payload = { userId: user.id, userUuid, positionName: user.position, groupName, userRole: user.role }
+    const token = jwt.sign(payload, accessPrivateKey, { algorithm: 'RS256', expiresIn: '30m' })
+    const refreshToken = jwt.sign(payload, refreshPrivateKey, { algorithm: 'RS256', expiresIn: '90d' })
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'strict',      
+      maxAge: 90 * 24 * 60 * 60 * 1000
+    })
+
+    res.status(200).json({user, token})
+  } else {
+    res.status(400).json({error: 'не удалась найти пользователя'})
   }
 }
 
