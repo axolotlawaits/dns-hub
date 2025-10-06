@@ -13,7 +13,20 @@ const storage = multer.diskStorage({
     cb(null, uploadDir);
   },
   filename: function (req, file, cb) {
-    cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));
+    // Сохраняем оригинальное название файла
+    let originalName = file.originalname;
+    
+    // Проверяем, есть ли проблемы с кодировкой (mojibake)
+    if (/Ð|Ñ|Ð|Ñ|Ð|Ñ|Ð|Ñ|Ð|Ñ|Ð|Ñ|Ð|Ñ|Ð|Ñ|Ð|Ñ|Ð|Ñ|Ð|Ñ|Ð|Ñ|Ð|Ñ|Ð|Ñ|Ð|Ñ|Ð|Ñ/.test(originalName)) {
+      try {
+        // Пытаемся исправить mojibake
+        originalName = Buffer.from(originalName, 'latin1').toString('utf8');
+      } catch (e) {
+        // Если не получается, оставляем как есть
+      }
+    }
+    
+    cb(null, originalName);
   },
 });
 

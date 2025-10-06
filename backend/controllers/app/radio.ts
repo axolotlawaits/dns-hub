@@ -586,7 +586,7 @@ export const actionGetDeviceStatus = async (req: Request, res: Response) => {
     let parsedData = result.data;
     if (typeof result.data === 'string') {
       try {
-        // Parse string like '{batteryLevel=100, isPlaying=false, currentMonth=09-2025, currentWifiSSID=Не подключено, currentWifiBSSID=}'
+        // Parse string like '{batteryLevel=100, isPlaying=false, currentMonth=09-2025, currentWifiSSID=Не подключено, currentWifiBSSID=, appVersion=1.0}'
         const dataString = result.data.replace(/[{}]/g, '');
         const pairs = dataString.split(', ');
         const parsed: any = {};
@@ -614,6 +614,21 @@ export const actionGetDeviceStatus = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error getting device status:', error);
     res.status(500).json({ success: false, error: 'Ошибка получения статуса устройства' });
+  }
+};
+
+// Получение версии приложения с устройства
+export const actionGetAppVersion = async (req: Request, res: Response) => {
+  try {
+    const { deviceId } = req.params as any;
+    const socketService = SocketIOService.getInstance();
+    const result = await socketService.sendToDeviceWithAck(deviceId, 'device_get_app_version');
+    if (!result.ok) return res.json({ success: false, error: result.error || 'DEVICE_OFFLINE' });
+    
+    res.json({ success: true, data: { appVersion: result.data } });
+  } catch (error) {
+    console.error('Error getting app version:', error);
+    res.status(500).json({ success: false, error: 'Ошибка получения версии приложения' });
   }
 };
 

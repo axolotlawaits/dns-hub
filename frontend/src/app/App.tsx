@@ -17,6 +17,7 @@ import Navigation from '../components/Navigation';
 import { SlideAdmin } from '../components/SlideAdmin';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
+import FloatingActionButton from '../components/FloatingActionButton';
 import Accounting from '../features/Accounting/Accounting';
 import Ad from '../features/Ad/Ad';
 import Aho from '../features/AHO/Aho';
@@ -52,6 +53,7 @@ import NoAccess from '../components/NoAccess';
 import Bookmarks from './Bookmarks';
 import Notification from './Notification';
 import Radio from '../features/Retail/Radio/Radio';
+import AppStore from '../features/Retail/AppStore/AppStore';
 
 function App() {
   const { user } = useUserContext();
@@ -162,9 +164,11 @@ function App() {
                 <Route path='/supply/loaders' element={<LoadersHome />} />
                 <Route path='/supply/loaders/route/:id' element={<RouteComponent />} />
                 <Route path='/retail/radio' element={<Radio />} />
+                <Route path='/retail/app-store' element={<AppStore />} />
               </Routes>
             </AppShell.Main>
             <Footer />
+            <FloatingActionButton />
           </AppShell>
         } />
         <Route path="/login" element={<Login />} />

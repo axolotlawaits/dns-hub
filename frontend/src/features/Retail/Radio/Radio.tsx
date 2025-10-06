@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
-import {Container,Title,Paper,Text,Button,Group,Stack,Modal,LoadingOverlay, TextInput, Tabs, Card, Box, ThemeIcon, Progress} from '@mantine/core';
+import {Container,Title,Paper,Text,Button,Group,Stack,Modal,LoadingOverlay, Tabs, Card, Box, Progress} from '@mantine/core';
 import { TimeInput } from '@mantine/dates';
-import {  IconUpload,  IconMusic,  IconClock,  IconDeviceMobile,  IconBuilding, IconEdit, IconCheck, IconRefresh, IconPower, IconBattery, IconWifi, IconCalendar, IconPlayerPlay, IconPlayerPause, IconWifiOff, IconX, IconRadio } from '@tabler/icons-react';
+import {  IconUpload,  IconMusic,  IconClock,  IconDeviceMobile,  IconBuilding, IconEdit, IconCheck, IconRefresh, IconPower, IconBattery, IconWifi, IconCalendar, IconPlayerPlay, IconPlayerPause, IconWifiOff, IconX, IconRadio, IconDownload, IconAlertCircle } from '@tabler/icons-react';
 import { notificationSystem } from '../../../utils/Push';
 import { API } from '../../../config/constants';
 import { DynamicFormModal, FormField } from '../../../utils/formModal';
 import { DndProviderWrapper } from '../../../utils/dnd';
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
+import { useUserContext } from '../../../hooks/useUserContext';
+import { useAccessContext } from '../../../hooks/useAccessContext';
 import './Radio.css';
 import '../../../app/styles/DesignSystem.css';
 
@@ -62,8 +64,35 @@ interface Stats {
   totalMusicFiles: number;
 }
 
+// Интерфейсы для системы обновлений
+interface AppVersion {
+  id: string;
+  version: string;
+  fileName: string;
+  fileSize: number;
+  description?: string;
+  isActive: boolean;
+  downloadCount: number;
+  createdAt: string;
+}
+
+interface App {
+  id: string;
+  name: string;
+  category: 'MOBILE' | 'DESKTOP' | 'UTILITY' | 'TOOL';
+  appType: 'ANDROID_APK' | 'WINDOWS_EXE' | 'WINDOWS_MSI' | 'MACOS_DMG' | 'LINUX_DEB' | 'LINUX_RPM' | 'ARCHIVE';
+  description?: string;
+  icon?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  versions: AppVersion[];
+}
+
 const RadioAdmin: React.FC = () => {
   const { setHeader, clearHeader } = usePageHeader();
+  const { user } = useUserContext();
+  const { access } = useAccessContext();
   const [branchesWithDevices, setBranchesWithDevices] = useState<BranchWithDevices[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -87,6 +116,7 @@ const RadioAdmin: React.FC = () => {
   // Device Management Modal
   const [deviceModalOpen, setDeviceModalOpen] = useState(false);
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
+
   const [deviceStatus, setDeviceStatus] = useState<any>(null);
   const [deviceTime, setDeviceTime] = useState<string>('');
   const [manualTime, setManualTime] = useState<string>('');
@@ -94,7 +124,52 @@ const RadioAdmin: React.FC = () => {
   const [loadingDeviceAction, setLoadingDeviceAction] = useState<string | null>(null);
   const [editingPlaybackTime, setEditingPlaybackTime] = useState({ timeFrom: '', timeUntil: '' });
 
+  
+  // Состояния для обновления устройства
+  const [deviceUpdateAvailable, setDeviceUpdateAvailable] = useState<App | null>(null);
+  const [updatingDevice, setUpdatingDevice] = useState(false);
+  const [deviceAppVersion, setDeviceAppVersion] = useState<string>('');
+  const [deviceUpdates, setDeviceUpdates] = useState<Record<string, App | null>>({});
+
   const API_BASE = useMemo(() => `${API}/radio`, []);
+
+  // Определяем права доступа на основе роли пользователя
+  const isAdminOrDeveloper = useMemo(() => {
+    return user ? ['DEVELOPER', 'ADMIN'].includes(user.role) : false;
+  }, [user]);
+
+  const isSupervisorOrEmployee = useMemo(() => {
+    return user ? ['SUPERVISOR', 'EMPLOYEE'].includes(user.role) : false;
+  }, [user]);
+
+  // Определяем доступ к Radio на основе групп доступа
+  const radioAccess = useMemo(() => {
+    if (!access || access.length === 0) return null;
+    
+    // Ищем доступ к Radio (toolId: dd6ec264-4e8c-477a-b2d6-c62a956422c0)
+    const radioToolAccess = access.find(tool => 
+      tool.link === '/radio' || tool.toolId === 'dd6ec264-4e8c-477a-b2d6-c62a956422c0'
+    );
+    
+    return radioToolAccess?.accessLevel || null;
+  }, [access]);
+
+  // Определяем финальные права доступа с учетом ролей и групп доступа
+  const hasFullAccess = useMemo(() => {
+    // Если есть полный доступ через группы доступа
+    if (radioAccess === 'FULL') return true;
+    // Если админ или разработчик
+    if (isAdminOrDeveloper) return true;
+    return false;
+  }, [radioAccess, isAdminOrDeveloper]);
+
+  const hasReadOnlyAccess = useMemo(() => {
+    // Если есть доступ только для чтения через группы доступа
+    if (radioAccess === 'READONLY') return true;
+    // Если супервизор или сотрудник без полного доступа
+    if (isSupervisorOrEmployee && radioAccess !== 'FULL') return true;
+    return false;
+  }, [radioAccess, isSupervisorOrEmployee]);
 
   // Функция для форматирования месяца (09-2025 -> Сентябрь 2025)
   const formatMonth = useCallback((monthStr: string) => {
@@ -117,11 +192,21 @@ const RadioAdmin: React.FC = () => {
     return monthStr; // Возвращаем исходную строку, если формат не распознан
   }, []);
 
-  // Мемоизация текущего филиала пользователя
+  // Мемоизация устройств в зависимости от роли пользователя и групп доступа
   const currentBranchDevices = useMemo(() => {
-    // Предполагаем, что первый филиал - это текущий пользователь
-    return branchesWithDevices[0]?.devices || [];
-  }, [branchesWithDevices]);
+    if (hasFullAccess) {
+      // Полный доступ - видим все устройства всех филиалов
+      return branchesWithDevices.flatMap(branch => branch.devices);
+    } else if (hasReadOnlyAccess && user) {
+      // Доступ только для чтения - видим только устройства своего филиала
+      const userBranch = branchesWithDevices.find(branch => 
+        branch.branch.name === user.branch || 
+        branch.branch.uuid === user.branch
+      );
+      return userBranch?.devices || [];
+    }
+    return [];
+  }, [branchesWithDevices, hasFullAccess, hasReadOnlyAccess, user]);
 
 
   // Проверка состояния музыки
@@ -326,6 +411,183 @@ const RadioAdmin: React.FC = () => {
     }
   }, [API_BASE]);
 
+
+  const formatFileSize = useCallback((bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }, []);
+
+  // Функция для проверки обновлений для всех устройств
+  const checkAllDevicesUpdates = useCallback(async () => {
+    try {
+      // Получаем все приложения из AppStore
+      const response = await fetch(`${API}/retail/app-store`);
+      const data = await response.json();
+      
+      if (data.success && data.apps) {
+        // Ищем приложения для Android
+        const androidApps = data.apps.filter((app: App) => 
+          app.appType === 'ANDROID_APK' && 
+          app.isActive && 
+          app.versions && 
+          app.versions.length > 0
+        );
+        
+        // Проверяем обновления для каждого устройства
+        const updates: Record<string, App | null> = {};
+        
+        for (const branchWithDevices of branchesWithDevices) {
+          for (const device of branchWithDevices.devices) {
+            // Проверяем, что устройство онлайн
+            const isOnline = !!statusMap[device.id];
+            
+            if (!isOnline) {
+              // Если устройство офлайн, не предлагаем обновления
+              updates[device.id] = null;
+              continue;
+            }
+            
+            // Ищем доступное обновление для устройства
+            const availableApp = androidApps.find((app: App) => {
+              const latestVersion = app.versions[0]?.version;
+              const currentVersion = device.app;
+              if (!latestVersion || !currentVersion) return false;
+              
+              // Правильное сравнение версий: обновление доступно, если версия в AppStore больше текущей
+              return compareVersions(latestVersion, currentVersion) > 0;
+            });
+            
+            updates[device.id] = availableApp || null;
+          }
+        }
+        
+        setDeviceUpdates(updates);
+      }
+    } catch (error) {
+      console.error('Ошибка при проверке обновлений для всех устройств:', error);
+    }
+  }, [branchesWithDevices, statusMap]);
+
+  // Функция для сравнения версий
+  const compareVersions = (version1: string, version2: string): number => {
+    // Убираем суффиксы типа -DEBUG, -RELEASE и т.д.
+    const cleanVersion1 = version1.replace(/[-_].*$/, '');
+    const cleanVersion2 = version2.replace(/[-_].*$/, '');
+    
+    const v1Parts = cleanVersion1.split('.').map(Number);
+    const v2Parts = cleanVersion2.split('.').map(Number);
+    
+    const maxLength = Math.max(v1Parts.length, v2Parts.length);
+    
+    for (let i = 0; i < maxLength; i++) {
+      const v1Part = v1Parts[i] || 0;
+      const v2Part = v2Parts[i] || 0;
+      
+      if (v1Part > v2Part) return 1;
+      if (v1Part < v2Part) return -1;
+    }
+    
+    return 0;
+  };
+
+  // Функции для обновления устройства
+  const checkDeviceUpdate = useCallback(async (device: Device) => {
+    try {
+      // Проверяем, что устройство онлайн
+      const isOnline = !!statusMap[device.id];
+      
+      if (!isOnline) {
+        // Если устройство офлайн, не предлагаем обновления
+        setDeviceUpdateAvailable(null);
+        setDeviceUpdates(prev => ({ ...prev, [device.id]: null }));
+        return null;
+      }
+      
+      // Получаем все приложения из AppStore
+      const response = await fetch(`${API}/retail/app-store`);
+      const data = await response.json();
+      
+      if (data.success && data.apps) {
+        // Ищем приложения для Android (предполагаем, что устройство Android)
+        const androidApps = data.apps.filter((app: App) => 
+          app.appType === 'ANDROID_APK' && 
+          app.isActive && 
+          app.versions && 
+          app.versions.length > 0
+        );
+        
+        // Используем реальную версию приложения с устройства, если она доступна
+        const currentAppVersion = deviceAppVersion || device.app;
+        const availableApp = androidApps.find((app: App) => {
+          const latestVersion = app.versions[0]?.version;
+          if (!latestVersion || !currentAppVersion) return false;
+          
+          // Правильное сравнение версий: обновление доступно, если версия в AppStore больше текущей
+          return compareVersions(latestVersion, currentAppVersion) > 0;
+        });
+        
+        if (availableApp) {
+          setDeviceUpdateAvailable(availableApp);
+          // Обновляем состояние для конкретного устройства
+          setDeviceUpdates(prev => ({ ...prev, [device.id]: availableApp }));
+          return availableApp;
+        } else {
+          setDeviceUpdateAvailable(null);
+          // Обновляем состояние для конкретного устройства
+          setDeviceUpdates(prev => ({ ...prev, [device.id]: null }));
+          return null;
+        }
+      }
+    } catch (error) {
+      console.error('Ошибка при проверке обновлений для устройства:', error);
+      notificationSystem.addNotification(
+        'Ошибка', 
+        'Не удалось проверить обновления для устройства', 
+        'error'
+      );
+    }
+    return null;
+  }, [deviceAppVersion, statusMap]);
+
+  const sendUpdateToDevice = useCallback(async (device: Device, app: App) => {
+    try {
+      setUpdatingDevice(true);
+      
+      // Отправляем запрос на устройство для скачивания и установки обновления
+      const response = await axios.post(`${API_BASE}/devices/${device.id}/update-app`, {
+        apkUrl: `${API}/retail/app-store/${app.id}/download`,
+        version: app.versions[0]?.version
+      });
+      
+      if (response.data.success) {
+        notificationSystem.addNotification(
+          'Успех', 
+          `Запрос на обновление отправлен на устройство ${device.name}`, 
+          'success'
+        );
+        setDeviceUpdateAvailable(null);
+      } else {
+        notificationSystem.addNotification(
+          'Ошибка', 
+          response.data.error || 'Ошибка при отправке запроса на обновление', 
+          'error'
+        );
+      }
+    } catch (error) {
+      console.error('Ошибка при отправке обновления на устройство:', error);
+      notificationSystem.addNotification(
+        'Ошибка', 
+        'Не удалось отправить запрос на обновление', 
+        'error'
+      );
+    } finally {
+      setUpdatingDevice(false);
+    }
+  }, [API_BASE]);
+
   const handleStreamSubmit = useCallback(async (values: Record<string, any>) => {
     try {
       console.log('Form values:', values);
@@ -400,25 +662,33 @@ const RadioAdmin: React.FC = () => {
     loadData();
   }, [loadData]);
 
+  // Проверяем обновления для всех устройств после загрузки данных
+  useEffect(() => {
+    if (branchesWithDevices.length > 0) {
+      checkAllDevicesUpdates();
+    }
+  }, [branchesWithDevices, checkAllDevicesUpdates]);
+
   // Устанавливаем заголовок страницы
   useEffect(() => {
+    let accessType = '';
+    if (hasFullAccess) {
+      accessType = ' (Полный доступ)';
+    } else if (hasReadOnlyAccess) {
+      accessType = ' (Только чтение)';
+    }
+    
     setHeader({
-      title: 'Админ панель DNS Radio',
-      subtitle: 'Управление радио потоками и устройствами'
+      title: `Админ панель DNS Radio${accessType}`,
+      subtitle: hasFullAccess 
+        ? 'Управление радио потоками и устройствами' 
+        : 'Просмотр устройств вашего филиала'
     });
 
     return () => clearHeader();
-  }, [setHeader, clearHeader]);
+  }, [setHeader, clearHeader, hasFullAccess, hasReadOnlyAccess]);
 
   // Device Management Functions
-  const openDeviceModal = useCallback(async (device: Device) => {
-    setSelectedDevice(device);
-    setDeviceModalOpen(true);
-    setEditingPlaybackTime({ timeFrom: device.timeFrom, timeUntil: device.timeUntil });
-    await loadDeviceStatus(device.id);
-    await loadDeviceTime(device.id);
-  }, [API_BASE]);
-
   const loadDeviceStatus = useCallback(async (deviceId: string) => {
     try {
       const response = await axios.post(`${API_BASE}/devices/${deviceId}/get-status`);
@@ -464,6 +734,32 @@ const RadioAdmin: React.FC = () => {
       // Не показываем ошибку, так как устройство может быть офлайн
     }
   }, [API_BASE]);
+
+  const loadDeviceAppVersion = useCallback(async (deviceId: string) => {
+    try {
+      const response = await axios.post(`${API_BASE}/devices/${deviceId}/get-app-version`);
+      if (response.data.success && response.data.data.appVersion) {
+        setDeviceAppVersion(response.data.data.appVersion);
+      } else {
+        setDeviceAppVersion('');
+      }
+    } catch (error: any) {
+      console.error('Error loading device app version:', error);
+      setDeviceAppVersion('');
+      // Не показываем ошибку, так как устройство может не поддерживать эту функцию
+    }
+  }, [API_BASE]);
+
+  const openDeviceModal = useCallback(async (device: Device) => {
+    setSelectedDevice(device);
+    setDeviceModalOpen(true);
+    setEditingPlaybackTime({ timeFrom: device.timeFrom, timeUntil: device.timeUntil });
+    await loadDeviceStatus(device.id);
+    await loadDeviceTime(device.id);
+    await loadDeviceAppVersion(device.id);
+    // Проверяем обновления для устройства
+    await checkDeviceUpdate(device);
+  }, [API_BASE, checkDeviceUpdate, loadDeviceAppVersion, loadDeviceStatus, loadDeviceTime]);
 
   const syncTime = useCallback(async () => {
     if (!selectedDevice) return;
@@ -679,22 +975,6 @@ const RadioAdmin: React.FC = () => {
     <DndProviderWrapper>
       <Box className="radio-container" style={{ paddingRight: 'var(--mantine-spacing-md)' }}>
         <Stack gap="lg">
-          {/* Заголовок страницы */}
-          <Box className="radio-header">
-            <Group gap="md" align="center">
-              <ThemeIcon size="lg" color="blue" variant="light" radius="xl">
-                <IconRadio size={24} />
-              </ThemeIcon>
-              <Box>
-                <Title order={2} c="var(--theme-text-primary)">
-                  DNS Radio
-          </Title>
-                <Text size="md" c="var(--theme-text-secondary)">
-                  Управление радио потоками и устройствами
-                </Text>
-              </Box>
-            </Group>
-          </Box>
 
           {/* Навигация и контент вкладок */}
           <Card shadow="sm" radius="lg" p="md" className="radio-navigation">
@@ -707,6 +987,7 @@ const RadioAdmin: React.FC = () => {
               }}
             >
               <Tabs.List grow>
+                {hasFullAccess && (
                 <Tabs.Tab 
                   value="music" 
                   leftSection={<IconMusic size={18} />}
@@ -719,6 +1000,8 @@ const RadioAdmin: React.FC = () => {
                     </Text>
                   )}
                 </Tabs.Tab>
+                )}
+                {hasFullAccess && (
                 <Tabs.Tab 
                   value="streams" 
                   leftSection={<IconRadio size={18} />}
@@ -729,6 +1012,7 @@ const RadioAdmin: React.FC = () => {
                     ({radioStreams.length})
                   </Text>
                 </Tabs.Tab>
+                )}
                 <Tabs.Tab 
                   value="devices" 
                   leftSection={<IconDeviceMobile size={18} />}
@@ -746,18 +1030,19 @@ const RadioAdmin: React.FC = () => {
               {/* Контент вкладок */}
               <Box className="radio-content" mt="md">
 
+              {hasFullAccess && (
               <Tabs.Panel value="music">
               <Stack gap="lg">
                 {/* Статистика музыки */}
             {stats && (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-                    <Paper p="md" withBorder>
+                    <Paper p="md" withBorder className="radio-stats-card">
                   <Group>
                     <div style={{
                           width: '40px',
                           height: '40px',
                           borderRadius: '8px',
-                          backgroundColor: '#9775fa',
+                          backgroundColor: 'var(--color-primary-500)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center'
@@ -765,8 +1050,20 @@ const RadioAdmin: React.FC = () => {
                           <IconMusic size={20} color="white" />
                     </div>
                     <div>
-                          <Text size="sm" c="dimmed">Музыкальных файлов</Text>
-                          <Text size="lg" fw={700}>{stats.totalMusicFiles}</Text>
+                          <Text 
+                            size="sm" 
+                            fw={500}
+                            style={{ color: 'var(--theme-text-tertiary)' }}
+                          >
+                            Музыкальных файлов
+                          </Text>
+                          <Text 
+                            size="lg" 
+                            fw={700}
+                            style={{ color: 'var(--theme-text-primary)' }}
+                          >
+                            {stats.totalMusicFiles}
+                          </Text>
                     </div>
                   </Group>
                     </Paper>
@@ -777,7 +1074,7 @@ const RadioAdmin: React.FC = () => {
                           width: '40px',
                           height: '40px',
                           borderRadius: '8px',
-                      backgroundColor: '#20c997',
+                      backgroundColor: 'var(--color-success)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center'
@@ -785,8 +1082,20 @@ const RadioAdmin: React.FC = () => {
                           <IconBuilding size={20} color="white" />
                     </div>
                     <div>
-                          <Text size="sm" c="dimmed">Филиалов</Text>
-                          <Text size="lg" fw={700}>{stats.totalBranches}</Text>
+                          <Text 
+                            size="sm" 
+                            fw={500}
+                            style={{ color: 'var(--theme-text-tertiary)' }}
+                          >
+                            Филиалов
+                          </Text>
+                          <Text 
+                            size="lg" 
+                            fw={700}
+                            style={{ color: 'var(--theme-text-primary)' }}
+                          >
+                            {stats.totalBranches}
+                          </Text>
                     </div>
                   </Group>
                     </Paper>
@@ -794,31 +1103,53 @@ const RadioAdmin: React.FC = () => {
                 )}
 
                 {/* Загрузка музыки */}
-                <Paper p="lg" withBorder>
+                <Paper p="lg" withBorder className="radio-stats-card">
                   <Group justify="space-between" mb="md">
-                    <Title order={3} size="h4">
+                    <Title 
+                      order={3} 
+                      size="h4"
+                      style={{ 
+                        color: 'var(--theme-text-primary)',
+                        fontWeight: 'var(--font-weight-semibold)',
+                        fontSize: 'var(--font-size-lg)'
+                      }}
+                    >
                       <IconUpload size={20} style={{ marginRight: 8 }} />
                       Загрузка музыкальных файлов
                     </Title>
                     <Button 
                       onClick={() => setUploadModalOpen(true)}
                       leftSection={<IconUpload size={16} />}
+                      className="radio-action-button"
                     >
                       Загрузить файлы
                     </Button>
                   </Group>
-                  <Text c="dimmed" size="sm">
+                  <Text 
+                    size="sm"
+                    style={{ color: 'var(--theme-text-secondary)' }}
+                  >
                     Загружайте MP3 файлы для воспроизведения в филиалах. 
                     Файлы автоматически сохраняются в папку retail/music/{musicStatus?.currentMonthFolder || 'текущий месяц'}.
                   </Text>
                 </Paper>
               </Stack>
               </Tabs.Panel>
+              )}
 
+              {hasFullAccess && (
               <Tabs.Panel value="streams">
               <Stack gap="lg">
                 <Group justify="space-between">
-                  <Title order={3} size="h4">
+                  <Title 
+                    order={3} 
+                    size="h4"
+                    style={{ 
+                      color: 'var(--theme-text-primary)',
+                      fontWeight: 'var(--font-weight-semibold)',
+                      fontSize: 'var(--font-size-lg)'
+                    }}
+                  >
                     <IconRadio size={20} style={{ marginRight: 8 }} />
                     Радио потоки
                   </Title>
@@ -834,7 +1165,7 @@ const RadioAdmin: React.FC = () => {
                 {radioStreams.length > 0 ? (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
                     {radioStreams.map((stream) => (
-                      <Paper key={stream.id} p="md" withBorder>
+                      <Paper key={stream.id} p="md" withBorder className="radio-stream-card">
                         <Group justify="space-between" mb="sm">
                           <Text fw={600} size="lg">
                             {stream.name}
@@ -845,14 +1176,14 @@ const RadioAdmin: React.FC = () => {
                                 width: '8px',
                                 height: '8px',
                                 borderRadius: '50%',
-                                backgroundColor: '#10b981'
+                                backgroundColor: 'var(--color-success)'
                               }} />
                             ) : (
                               <div style={{
                                 width: '8px',
                                 height: '8px',
                                 borderRadius: '50%',
-                                backgroundColor: '#ef4444'
+                                backgroundColor: 'var(--color-error)'
                               }} />
                             )}
                             <Text size="xs" c={stream.isActive ? 'green' : 'red'}>
@@ -913,19 +1244,20 @@ const RadioAdmin: React.FC = () => {
                 )}
               </Stack>
               </Tabs.Panel>
+              )}
 
               <Tabs.Panel value="devices">
               <Stack gap="lg">
                 {/* Статистика устройств */}
                 {stats && (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-                    <Paper p="md" withBorder>
+                    <Paper p="md" withBorder className="radio-stats-card">
                   <Group>
                     <div style={{
                           width: '40px',
                           height: '40px',
                           borderRadius: '8px',
-                          backgroundColor: '#339af0',
+                          backgroundColor: 'var(--color-primary-500)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center'
@@ -933,8 +1265,20 @@ const RadioAdmin: React.FC = () => {
                           <IconDeviceMobile size={20} color="white" />
                     </div>
                     <div>
-                          <Text size="sm" c="dimmed">Всего устройств</Text>
-                          <Text size="lg" fw={700}>{stats.totalDevices}</Text>
+                          <Text 
+                            size="sm" 
+                            fw={500}
+                            style={{ color: 'var(--theme-text-tertiary)' }}
+                          >
+                            Всего устройств
+                          </Text>
+                          <Text 
+                            size="lg" 
+                            fw={700}
+                            style={{ color: 'var(--theme-text-primary)' }}
+                          >
+                            {stats.totalDevices}
+                          </Text>
                     </div>
                   </Group>
                     </Paper>
@@ -945,7 +1289,7 @@ const RadioAdmin: React.FC = () => {
                           width: '40px',
                           height: '40px',
                           borderRadius: '8px',
-                          backgroundColor: '#20c997',
+                          backgroundColor: 'var(--color-success)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center'
@@ -953,8 +1297,20 @@ const RadioAdmin: React.FC = () => {
                           <IconCheck size={20} color="white" />
                     </div>
                         <div>
-                          <Text size="sm" c="dimmed">Активных</Text>
-                          <Text size="lg" fw={700}>{stats.activeDevices}</Text>
+                          <Text 
+                            size="sm" 
+                            fw={500}
+                            style={{ color: 'var(--theme-text-tertiary)' }}
+                          >
+                            Активных
+                          </Text>
+                          <Text 
+                            size="lg" 
+                            fw={700}
+                            style={{ color: 'var(--theme-text-primary)' }}
+                          >
+                            {stats.activeDevices}
+                          </Text>
                     </div>
                   </Group>
                     </Paper>
@@ -963,8 +1319,10 @@ const RadioAdmin: React.FC = () => {
 
                 {/* Устройства по филиалам */}
               <Stack gap="lg">
-                {branchesWithDevices.map((branchData) => (
-                    <Paper key={branchData.branch.uuid} p="lg" withBorder>
+                {hasFullAccess ? (
+                  // Полный доступ - видим все филиалы
+                  branchesWithDevices.map((branchData) => (
+                    <Paper key={branchData.branch.uuid} p="lg" withBorder className="radio-device-card">
                     <Group justify="space-between" mb="md">
                       <div>
                           <Title order={4} size="h5">{branchData.branch.name}</Title>
@@ -972,7 +1330,7 @@ const RadioAdmin: React.FC = () => {
                       </div>
                       <div style={{
                         padding: '6px 12px',
-                          backgroundColor: 'var(--mantine-color-blue-6)',
+                          backgroundColor: 'var(--color-primary-500)',
                         borderRadius: '20px',
                           color: 'white',
                         fontSize: '12px',
@@ -990,9 +1348,9 @@ const RadioAdmin: React.FC = () => {
                             key={device.id} 
                             style={{ 
                               padding: '16px',
-                                backgroundColor: 'var(--mantine-color-gray-0)',
+                              backgroundColor: 'var(--theme-bg-elevated)',
                               borderRadius: '8px',
-                                border: '1px solid var(--mantine-color-gray-3)',
+                              border: '1px solid var(--theme-border)',
                               cursor: 'pointer',
                                 transition: 'all 0.2s ease'
                             }}
@@ -1002,8 +1360,17 @@ const RadioAdmin: React.FC = () => {
                           >
                             <Group justify="space-between" align="center">
                               <div>
-                                  <Text fw={500} size="sm">{device.name}</Text>
-                                  <Text size="xs" c="dimmed">
+                                  <Group gap="xs" align="center">
+                                    <Text fw={500} size="sm" style={{ color: 'var(--theme-text-primary)' }}>{device.name}</Text>
+                                    {deviceUpdates[device.id] && (
+                                      <IconAlertCircle 
+                                        size={16} 
+                                        color="var(--mantine-color-orange-6)"
+                                        title={`Доступно обновление до версии ${deviceUpdates[device.id]?.versions[0]?.version}`}
+                                      />
+                                    )}
+                                  </Group>
+                                  <Text size="xs" style={{ color: 'var(--theme-text-secondary)' }}>
                                   {device.network}{device.number} • {device.os} • {device.app}
                                 </Text>
                               </div>
@@ -1011,7 +1378,7 @@ const RadioAdmin: React.FC = () => {
                               <Group gap="xs">
                                 <div style={{
                                   padding: '4px 8px',
-                                  backgroundColor: online ? '#20c997' : '#6c757d',
+                                  backgroundColor: online ? 'var(--color-success)' : 'var(--color-gray-500)',
                                   borderRadius: '12px',
                                   color: 'white',
                                   fontSize: '11px',
@@ -1020,11 +1387,11 @@ const RadioAdmin: React.FC = () => {
                                   {online ? 'Онлайн' : 'Оффлайн'}
                                 </div>
                                 
-                                  <Text size="xs" c="dimmed">
+                                  <Text size="xs" style={{ color: 'var(--theme-text-secondary)' }}>
                                   {formatTime(device.timeFrom)} - {formatTime(device.timeUntil)}
                                 </Text>
                                 
-                                  <IconEdit size={16} style={{ color: 'var(--mantine-color-gray-6)' }} />
+                                  <IconEdit size={16} style={{ color: 'var(--theme-text-secondary)' }} />
                               </Group>
                             </Group>
                           </div>
@@ -1032,19 +1399,98 @@ const RadioAdmin: React.FC = () => {
                       })}
                     </Stack>
                     </Paper>
-                ))}
+                ))
+                ) : (
+                  // Доступ только для чтения - видим только свой филиал
+                  hasReadOnlyAccess && user && (
+                    <Paper p="lg" withBorder className="radio-device-card">
+                      <Group justify="space-between" mb="md">
+                        <div>
+                          <Title order={4} size="h5">{user.branch}</Title>
+                          <Text size="sm" c="dimmed">Ваш филиал</Text>
+                        </div>
+                        <div style={{
+                          padding: '6px 12px',
+                          backgroundColor: 'var(--color-primary-500)',
+                          borderRadius: '20px',
+                          color: 'white',
+                          fontSize: '12px',
+                          fontWeight: '500'
+                        }}>
+                          {currentBranchDevices.length} устройств
+                        </div>
+                      </Group>
+
+                      <Stack gap="sm">
+                        {currentBranchDevices.map((device) => {
+                          const online = !!statusMap[device.id];
+                          return (
+                            <div 
+                              key={device.id} 
+                              style={{ 
+                                padding: '16px',
+                                backgroundColor: 'var(--theme-bg-elevated)',
+                                borderRadius: '8px',
+                                border: '1px solid var(--theme-border)',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease'
+                              }}
+                              onClick={() => openDeviceModal(device)}
+                              onMouseEnter={(e) => e.currentTarget.style.boxShadow = 'var(--mantine-shadow-sm)'}
+                              onMouseLeave={(e) => e.currentTarget.style.boxShadow = 'none'}
+                            >
+                              <Group justify="space-between" align="center">
+                                <div>
+                                  <Group gap="xs" align="center">
+                                    <Text fw={500} size="sm" style={{ color: 'var(--theme-text-primary)' }}>{device.name}</Text>
+                                    {deviceUpdates[device.id] && (
+                                      <IconAlertCircle 
+                                        size={16} 
+                                        color="var(--mantine-color-orange-6)"
+                                        title={`Доступно обновление до версии ${deviceUpdates[device.id]?.versions[0]?.version}`}
+                                      />
+                                    )}
+                                  </Group>
+                                  <Text size="xs" style={{ color: 'var(--theme-text-secondary)' }}>
+                                  {device.network}{device.number} • {device.os} • {device.app}
+                                </Text>
+                                </div>
+                                
+                                <Group gap="xs">
+                                  <div style={{
+                                    padding: '4px 8px',
+                                    backgroundColor: online ? 'var(--color-success)' : 'var(--color-gray-500)',
+                                    borderRadius: '12px',
+                                    color: 'white',
+                                    fontSize: '11px',
+                                    fontWeight: '500'
+                                  }}>
+                                    {online ? 'Онлайн' : 'Оффлайн'}
+                                  </div>
+                                  
+                                    <Text size="xs" style={{ color: 'var(--theme-text-secondary)' }}>
+                                    {formatTime(device.timeFrom)} - {formatTime(device.timeUntil)}
+                                  </Text>
+                                  
+                                    <IconEdit size={16} style={{ color: 'var(--theme-text-secondary)' }} />
+                                </Group>
+                              </Group>
+                            </div>
+                          )
+                        })}
+                      </Stack>
+                    </Paper>
+                  )
+                )}
               </Stack>
           </Stack>
               </Tabs.Panel>
+
               </Box>
             </Tabs>
           </Card>
         </Stack>
       </Box>
-
-
-
-
 
       {/* Upload Modal using DynamicFormModal */}
       <DynamicFormModal
@@ -1100,8 +1546,8 @@ const RadioAdmin: React.FC = () => {
             <Text size="xs" c="dimmed" ta="center">
               Пожалуйста, не закрывайте браузер до завершения загрузки
             </Text>
-          </Stack>
-        </Modal>
+        </Stack>
+      </Modal>
       )}
 
 
@@ -1135,6 +1581,12 @@ const RadioAdmin: React.FC = () => {
               </Text>
               <Group justify="space-between" wrap="wrap">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <Text size="sm" fw={500} style={{ color: 'var(--theme-text-secondary)' }}>Имя устройства</Text>
+                  <Text size="sm" style={{ color: 'var(--theme-text-primary)' }}>
+                    {selectedDevice.name}
+                  </Text>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <Text size="sm" fw={500} style={{ color: 'var(--theme-text-secondary)' }}>IP адрес</Text>
                   <Text size="sm" style={{ color: 'var(--theme-text-primary)' }}>
                     {selectedDevice.network}{selectedDevice.number}
@@ -1145,8 +1597,17 @@ const RadioAdmin: React.FC = () => {
                   <Text size="sm" style={{ color: 'var(--theme-text-primary)' }}>{selectedDevice.os}</Text>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <Text size="sm" fw={500} style={{ color: 'var(--theme-text-secondary)' }}>Версия приложения</Text>
-                  <Text size="sm" style={{ color: 'var(--theme-text-primary)' }}>{selectedDevice.app}</Text>
+                  <Text size="sm" fw={500} style={{ color: 'var(--theme-text-secondary)' }}>
+                    Версия приложения {deviceAppVersion ? '(с устройства)' : '(из БД)'}
+                  </Text>
+                  <Text size="sm" style={{ color: 'var(--theme-text-primary)' }}>
+                    {deviceAppVersion || selectedDevice.app}
+                    {deviceAppVersion && deviceAppVersion !== selectedDevice.app && (
+                      <Text span size="xs" c="dimmed" ml="xs">
+                        (в БД: {selectedDevice.app})
+                      </Text>
+                    )}
+                  </Text>
                 </div>
               </Group>
             </Paper>
@@ -1192,7 +1653,8 @@ const RadioAdmin: React.FC = () => {
               )}
             </Paper>
 
-            {/* Time Management */}
+            {/* Time Management - Закомментировано */}
+            {/* 
             <Paper p="lg" withBorder style={{
               background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
               border: '1px solid var(--theme-border)',
@@ -1277,6 +1739,7 @@ const RadioAdmin: React.FC = () => {
                 </Group>
               </Stack>
             </Paper>
+            */}
 
             {/* Playback Time Settings */}
             <Paper p="lg" withBorder style={{
@@ -1335,6 +1798,120 @@ const RadioAdmin: React.FC = () => {
                 </Button>
               </Stack>
             </Paper>
+
+            {/* App Update Section */}
+            <Paper p="lg" withBorder style={{
+              background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
+              border: '1px solid var(--theme-border)',
+              borderRadius: '12px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+            }}>
+              <Text fw={600} mb="md" size="lg" style={{ color: 'var(--theme-text-primary)' }}>
+                📱 Обновление приложения
+              </Text>
+              
+              {!selectedDevice || !statusMap[selectedDevice.id] ? (
+                <Stack gap="sm" align="center">
+                  <IconWifiOff size={32} color="var(--mantine-color-gray-6)" />
+                  <Text size="md" fw={500} c="dimmed">
+                    Устройство офлайн
+                  </Text>
+                  <Text size="sm" c="dimmed" ta="center">
+                    Проверка обновлений доступна только для онлайн устройств
+                  </Text>
+                </Stack>
+              ) : deviceUpdateAvailable ? (
+                <Stack gap="md">
+                  <Paper p="md" withBorder radius="md" style={{ 
+                    backgroundColor: 'var(--mantine-color-blue-0)',
+                    border: '1px solid var(--mantine-color-blue-3)'
+                  }}>
+                    <Group justify="space-between" mb="sm">
+                      <div>
+                        <Text fw={600} size="md" c="blue">
+                          Доступно обновление!
+                        </Text>
+                        <Text size="sm" c="dimmed">
+                          Текущая версия: {deviceAppVersion || selectedDevice?.app}
+                        </Text>
+                      </div>
+                      <IconAlertCircle size={24} color="var(--mantine-color-blue-6)" />
+                    </Group>
+                    
+                    <Stack gap="xs">
+                      <Group justify="space-between">
+                        <Text size="sm" fw={500}>
+                          {deviceUpdateAvailable.name}
+                        </Text>
+                        <Text size="sm" c="blue" fw={500}>
+                          v{deviceUpdateAvailable.versions[0]?.version}
+                        </Text>
+                      </Group>
+                      
+                      {deviceUpdateAvailable.versions[0]?.description && (
+                        <Paper p="sm" withBorder radius="md" style={{ backgroundColor: 'white' }}>
+                          <Text size="sm" c="dimmed">
+                            {deviceUpdateAvailable.versions[0].description}
+                          </Text>
+                        </Paper>
+                      )}
+                      
+                      <Group justify="space-between">
+                        <Text size="sm" c="dimmed">
+                          Размер: {formatFileSize(deviceUpdateAvailable.versions[0]?.fileSize || 0)}
+                        </Text>
+                        <Text size="sm" c="dimmed">
+                          {new Date(deviceUpdateAvailable.versions[0]?.createdAt || '').toLocaleDateString('ru-RU')}
+                        </Text>
+                      </Group>
+                    </Stack>
+                  </Paper>
+                  
+                  <Button
+                    fullWidth
+                    size="md"
+                    leftSection={<IconDownload size={16} />}
+                    onClick={() => selectedDevice && sendUpdateToDevice(selectedDevice, deviceUpdateAvailable)}
+                    loading={updatingDevice}
+                    style={{
+                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontWeight: '500',
+                      boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    {updatingDevice ? 'Отправка запроса...' : 'Обновить приложение на устройстве'}
+                  </Button>
+                  
+                  <Text size="xs" c="dimmed" ta="center">
+                    Устройство автоматически скачает и установит обновление
+                  </Text>
+                </Stack>
+              ) : (
+                <Stack gap="sm" align="center">
+                  <IconCheck size={32} color="var(--mantine-color-green-6)" />
+                  <Text size="md" fw={500} c="green">
+                    Приложение актуально
+                  </Text>
+                  <Text size="sm" c="dimmed" ta="center">
+                    Текущая версия: {deviceAppVersion || selectedDevice?.app}
+                  </Text>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    leftSection={<IconRefresh size={14} />}
+                    disabled={!selectedDevice || !statusMap[selectedDevice.id]}
+                    onClick={() => selectedDevice && checkDeviceUpdate(selectedDevice)}
+                  >
+                    Проверить обновления
+                  </Button>
+                </Stack>
+              )}
+            </Paper>
+
             {/* Device Actions */}
             <Paper p="lg" withBorder style={{
               background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
@@ -1421,6 +1998,7 @@ const RadioAdmin: React.FC = () => {
         cancelButtonText="Отмена"
         size="lg"
       />
+
     </DndProviderWrapper>
   );
 };

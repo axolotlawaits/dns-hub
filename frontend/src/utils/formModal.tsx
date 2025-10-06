@@ -4,32 +4,81 @@ import { useState, useEffect, useCallback, useMemo, useRef, JSX, memo } from 're
 import dayjs from 'dayjs';
 import { API } from '../config/constants';
 import { FileDropZone } from './dnd';
-import { IconFile, IconFileTypePdf, IconFileTypeDoc, IconFileTypeXls, IconFileTypePpt, IconFileTypeZip, IconPhoto, IconFileTypeJs, IconFileTypeHtml, IconFileTypeCss, IconFileTypeTxt, IconFileTypeCsv, IconX, IconUpload } from '@tabler/icons-react';
+import { IconFile, IconFileTypePdf, IconFileTypeDoc, IconFileTypeXls, IconFileTypePpt, IconFileTypeZip, IconPhoto, IconFileTypeJs, IconFileTypeHtml, IconFileTypeCss, IconFileTypeTxt, IconFileTypeCsv, IconX, IconUpload, IconVideo, IconMusic, IconFileText } from '@tabler/icons-react';
 import { FilePreviewModal } from './FilePreviewModal';
 import './formModal.css';
 
 // Constants for optimization
 const FILE_ICON_MAP = {
+  // Изображения
   jpg: IconPhoto,
   jpeg: IconPhoto,
   png: IconPhoto,
   gif: IconPhoto,
+  bmp: IconPhoto,
+  svg: IconPhoto,
+  webp: IconPhoto,
+  ico: IconPhoto,
+  
+  // Документы
   pdf: IconFileTypePdf,
   doc: IconFileTypeDoc,
   docx: IconFileTypeDoc,
+  rtf: IconFileTypeDoc,
+  
+  // Таблицы
   xls: IconFileTypeXls,
   xlsx: IconFileTypeXls,
+  ods: IconFileTypeXls,
+  
+  // Презентации
+  ppt: IconFileTypePpt,
+  pptx: IconFileTypePpt,
+  odp: IconFileTypePpt,
+  
+  // Архивы
   zip: IconFileTypeZip,
   rar: IconFileTypeZip,
   tar: IconFileTypeZip,
   gz: IconFileTypeZip,
-  ppt: IconFileTypePpt,
-  pptx: IconFileTypePpt,
-  js: IconFileTypeJs,
-  html: IconFileTypeHtml,
-  css: IconFileTypeCss,
+  '7z': IconFileTypeZip,
+  
+  // Видео
+  mp4: IconVideo,
+  avi: IconVideo,
+  mkv: IconVideo,
+  mov: IconVideo,
+  wmv: IconVideo,
+  flv: IconVideo,
+  webm: IconVideo,
+  
+  // Аудио
+  mp3: IconMusic,
+  wav: IconMusic,
+  flac: IconMusic,
+  aac: IconMusic,
+  ogg: IconMusic,
+  
+  // Текстовые файлы
   txt: IconFileTypeTxt,
+  md: IconFileText,
+  
+  // Данные
   csv: IconFileTypeCsv,
+  json: IconFileTypeJs,
+  xml: IconFileTypeHtml,
+  
+  // Код
+  js: IconFileTypeJs,
+  ts: IconFileTypeJs,
+  jsx: IconFileTypeJs,
+  tsx: IconFileTypeJs,
+  html: IconFileTypeHtml,
+  htm: IconFileTypeHtml,
+  css: IconFileTypeCss,
+  scss: IconFileTypeCss,
+  sass: IconFileTypeCss,
+  less: IconFileTypeCss,
 } as const;
 
 const ICON_SIZE = 20;
@@ -170,6 +219,7 @@ interface DynamicFormModalProps {
   attachmentLabel?: string;
   attachmentAccept?: string;
   existingDocuments?: Record<string, any[]>;
+  onDeleteExistingDocument?: (fileId: string, documentId: string) => void;
   // Настройка заголовка карточки файла
   fileCardTitle?: string;
 }
@@ -181,13 +231,33 @@ const getFileIcon = (fileName: string): JSX.Element => {
   return IconComponent ? <IconComponent size={ICON_SIZE} /> : <IconFile size={ICON_SIZE} />;
 };
 
+const isImageFile = (fileName: string): boolean => {
+  const extension = fileName.split('.').pop()?.toLowerCase();
+  const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'webp', 'ico'];
+  return imageExtensions.includes(extension || '');
+};
+
 const FileUploadComponent = memo(({ 
   onFilesDrop, 
   attachments, 
   onRemoveAttachment, 
   withDnd = false,
-  hidePreview = false
-}: FileUploadProps & { hidePreview?: boolean }) => {
+  hidePreview = false,
+  accept = "*"
+}: FileUploadProps & { hidePreview?: boolean; accept?: string }) => {
+
+  // Функция для генерации текста поддерживаемых форматов
+  const getSupportedFormatsText = (acceptString: string) => {
+    if (acceptString === "*") return "Все типы файлов";
+    
+    const formats = acceptString.split(',').map(f => f.trim());
+    const extensions = formats
+      .filter(f => f.startsWith('.'))
+      .map(f => f.substring(1).toUpperCase());
+    
+    if (extensions.length === 0) return "Все типы файлов";
+    return `Поддерживаются: ${extensions.join(', ')}`;
+  };
 
   const renderAttachment = (attachment: FileAttachment) => {
     const originalName = typeof attachment.source === 'string'
@@ -239,29 +309,59 @@ const FileUploadComponent = memo(({
               padding: '8px'
             }}>
             {typeof attachment.source === 'string' ? (
-                <img 
-                  src={previewUrl} 
-                  alt={originalName} 
-                  style={{ 
-                    height: 60, 
-                    width: 100, 
-                    objectFit: 'contain', 
+                isImageFile(originalName) ? (
+                  <img 
+                    src={previewUrl} 
+                    alt={originalName} 
+                    style={{ 
+                      height: 60, 
+                      width: 100, 
+                      objectFit: 'contain', 
+                      borderRadius: '8px',
+                      display: 'block'
+                    }} 
+                  />
+                ) : (
+                  <div style={{
+                    height: 60,
+                    width: 100,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'var(--theme-bg-secondary)',
                     borderRadius: '8px',
-                    display: 'block'
-                  }} 
-                />
+                    border: '1px solid var(--theme-border)'
+                  }}>
+                    {getFileIcon(originalName)}
+                  </div>
+                )
               ) : (
-                <img 
-                  src={URL.createObjectURL(attachment.source as File)} 
-                  alt={originalName} 
-                  style={{ 
-                    height: 60, 
-                    width: 100, 
-                    objectFit: 'contain', 
+                isImageFile(originalName) ? (
+                  <img 
+                    src={URL.createObjectURL(attachment.source as File)} 
+                    alt={originalName} 
+                    style={{ 
+                      height: 60, 
+                      width: 100, 
+                      objectFit: 'contain', 
+                      borderRadius: '8px',
+                      display: 'block'
+                    }} 
+                  />
+                ) : (
+                  <div style={{
+                    height: 60,
+                    width: 100,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'var(--theme-bg-secondary)',
                     borderRadius: '8px',
-                    display: 'block'
-                  }} 
-                />
+                    border: '1px solid var(--theme-border)'
+                  }}>
+                    {getFileIcon(originalName)}
+                  </div>
+                )
               )}
               {/* Индикатор успеха */}
               <div style={{
@@ -382,16 +482,16 @@ const FileUploadComponent = memo(({
               Перетащите файл сюда или нажмите для выбора
             </Text>
             <Text size="xs" c="dimmed" ta="center">
-              Поддерживаются: MP3, WAV, OGG, MP4, FLAC
+              {getSupportedFormatsText(accept)}
             </Text>
           </Stack>
         </Stack>
         
-        <input
-          type="file"
-          multiple
-          accept="audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/mp4,audio/flac,.mp3,.wav,.ogg,.mp4,.flac"
-          onChange={(e) => e.target.files && onFilesDrop(Array.from(e.target.files))}
+      <input
+        type="file"
+        multiple
+        accept={accept}
+        onChange={(e) => e.target.files && onFilesDrop(Array.from(e.target.files))}
           style={{
             position: 'absolute',
             top: 0,
@@ -426,7 +526,9 @@ const FileFieldsCard = memo(({
   attachmentLabel,
   attachmentAccept,
   existingDocuments,
-  fileCardTitle = "Конструкция"
+  onDeleteExistingDocument,
+  fileCardTitle = "Файл",
+  handleMetaChangeFor
 }: { 
   file: any; 
   index: number; 
@@ -438,14 +540,41 @@ const FileFieldsCard = memo(({
   attachmentLabel?: string;
   attachmentAccept?: string;
   existingDocuments?: any[];
+  onDeleteExistingDocument?: (fileId: string, documentId: string) => void;
   fileCardTitle?: string;
+  handleMetaChangeFor?: (fieldName: string) => (id: string | undefined, meta: Record<string, any>) => void;
 }) => {
   const renderFileField = (field: FileFieldConfig) => {
-    const fieldPath = `attachments.${index}.meta.${field.name}`;
     const fieldValue = form.values.attachments?.[index]?.meta?.[field.name] || '';
 
     const handleChange = (value: any) => {
-      setFieldValue(fieldPath, value);
+      if (handleMetaChangeFor) {
+        // Используем handleMetaChangeFor для более стабильного обновления
+        const metaUpdate = { [field.name]: value };
+
+        // Используем существующий механизм обновления мета-данных
+        const handleMetaChange = handleMetaChangeFor('attachments');
+        handleMetaChange(file.id, metaUpdate);
+      } else {
+        // Fallback к старому методу
+        const currentAttachments = form.values.attachments || [];
+        const updatedAttachments = currentAttachments.map((att: any, idx: number) => {
+          if (idx === index) {
+            return {
+              ...att,
+              meta: {
+                ...att.meta,
+                [field.name]: value
+              }
+            };
+          }
+          return att;
+        });
+        
+        
+        setFieldValue('attachments', updatedAttachments);
+      }
+      
       field.onChange?.(value);
     };
 
@@ -535,7 +664,11 @@ const FileFieldsCard = memo(({
 
   const fileId = file.id || `file-${index}`;
   const fileAttachmentsList = fileAttachments?.[fileId] || [];
-  const existingDocsList = existingDocuments || [];
+  // existingDocuments может быть объектом {constructionId: [documents]} или массивом
+  const existingDocsList = Array.isArray(existingDocuments) 
+    ? existingDocuments 
+    : existingDocuments?.[fileId] || [];
+  
 
   return (
     <Card 
@@ -560,7 +693,7 @@ const FileFieldsCard = memo(({
             boxShadow: '0 0 8px rgba(59, 130, 246, 0.5)'
           }} />
           <Text size="lg" fw={700} c="var(--theme-text-primary)" style={{ letterSpacing: '0.5px' }}>
-            {fileCardTitle} #{index + 1}
+            {file.fileName || file.source?.name || `${fileCardTitle} #${index + 1}`}
           </Text>
         </Group>
         
@@ -599,29 +732,59 @@ const FileFieldsCard = memo(({
                 padding: '8px'
               }}>
                 {typeof file.source === 'string' ? (
-                  <img 
-                    src={`${API}/${String(file.source).replace(/\\/g, '/')}`} 
-                    alt={String(file.source).split('\\').pop() || 'Файл'} 
-                    style={{ 
-                      height: 60, 
-                      width: 100, 
-                      objectFit: 'contain', 
+                  isImageFile(String(file.source).split('\\').pop() || '') ? (
+                    <img 
+                      src={`${API}/${String(file.source).replace(/\\/g, '/')}`} 
+                      alt={String(file.source).split('\\').pop() || 'Файл'} 
+                      style={{ 
+                        height: 60, 
+                        width: 100, 
+                        objectFit: 'contain', 
+                        borderRadius: '8px',
+                        display: 'block'
+                      }} 
+                    />
+                  ) : (
+                    <div style={{
+                      height: 60,
+                      width: 100,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: 'var(--theme-bg-secondary)',
                       borderRadius: '8px',
-                      display: 'block'
-                    }} 
-                  />
+                      border: '1px solid var(--theme-border)'
+                    }}>
+                      {getFileIcon(String(file.source).split('\\').pop() || '')}
+                    </div>
+                  )
                 ) : (
-                  <img 
-                    src={URL.createObjectURL(file.source as File)} 
-                    alt={(file.source as File).name} 
-                    style={{ 
-                      height: 60, 
-                      width: 100, 
-                      objectFit: 'contain', 
+                  isImageFile((file.source as File).name) ? (
+                    <img 
+                      src={URL.createObjectURL(file.source as File)} 
+                      alt={(file.source as File).name} 
+                      style={{ 
+                        height: 60, 
+                        width: 100, 
+                        objectFit: 'contain', 
+                        borderRadius: '8px',
+                        display: 'block'
+                      }} 
+                    />
+                  ) : (
+                    <div style={{
+                      height: 60,
+                      width: 100,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: 'var(--theme-bg-secondary)',
                       borderRadius: '8px',
-                      display: 'block'
-                    }} 
-                  />
+                      border: '1px solid var(--theme-border)'
+                    }}>
+                      {getFileIcon((file.source as File).name)}
+                    </div>
+                  )
                 )}
                 {/* Индикатор успеха */}
                 <div style={{
@@ -781,7 +944,7 @@ const FileFieldsCard = memo(({
                             position: 'relative'
                           }}
                         >
-                          <Group justify="space-between" align="center">
+                            <Group justify="space-between" align="center">
                             <Group gap="sm" align="center" style={{ flex: 1 }}>
                               <div style={{
                                 width: '32px',
@@ -806,9 +969,25 @@ const FileFieldsCard = memo(({
                                 </Text>
                               </div>
                             </Group>
-                            <Badge color="green" variant="light" size="xs">
-                              Существует
-                            </Badge>
+                            <Group gap="xs" align="center">
+                              <Badge color="green" variant="light" size="xs">
+                                Существует
+                              </Badge>
+                              {onDeleteExistingDocument && (
+                                <Button
+                                  size="xs"
+                                  variant="subtle"
+                                  color="red"
+                                  onClick={() => onDeleteExistingDocument(fileId, doc.id)}
+                                  style={{
+                                    minWidth: 'auto',
+                                    padding: '4px 8px'
+                                  }}
+                                >
+                                  🗑️
+                                </Button>
+                              )}
+                            </Group>
                           </Group>
                         </Card>
                       ))}
@@ -907,7 +1086,8 @@ export const DynamicFormModal = ({
   attachmentLabel,
   attachmentAccept,
   existingDocuments,
-  fileCardTitle = 'Конструкция'
+  onDeleteExistingDocument,
+  fileCardTitle = 'Файл'
 }: DynamicFormModalProps) => {
   const [previewId, setPreviewId] = useState<string | null>(null);
   
@@ -969,8 +1149,12 @@ export const DynamicFormModal = ({
     (fieldName: string) => (id: string | undefined, meta: Record<string, any>) => {
       setAttachmentsMap(prev => {
         const current = prev[fieldName] || [];
-        const updated = current.map(att => att.id === id ? { ...att, meta } : att);
+        const updated = current.map(att => 
+          att.id === id ? { ...att, meta: { ...att.meta, ...meta } } : att
+        );
         const next = { ...prev, [fieldName]: updated };
+        
+        
         form.setFieldValue(fieldName, updated);
         return next;
       });
@@ -985,20 +1169,37 @@ export const DynamicFormModal = ({
   }, [onClose]);
 
   const handleFileDropFor = useCallback((fieldName: string) => (files: File[]) => {
-    const newAttachments = files.map((file, idx) => ({
-      id: `temp-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 8)}`,
-      userAdd: initialValues?.userAdd || '',
-      source: file,
-      meta: {},
-    }));
+    // Получаем конфигурацию полей для данного типа файла
+    const fileField = fields.find(f => f.name === fieldName && f.type === 'file');
+    const fileFields = fileField?.fileFields || [];
+    
+    const newAttachments = files.map((file, idx) => {
+      // Инициализируем мета-данные с пустыми значениями для всех полей
+      const initialMeta: Record<string, any> = {};
+      fileFields.forEach(field => {
+        initialMeta[field.name] = '';
+      });
+      
+      const newAttachment = {
+        id: `temp-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 8)}`,
+        userAdd: initialValues?.userAdd || '',
+        source: file,
+        meta: initialMeta,
+      };
+      
+      
+      return newAttachment;
+    });
     setAttachmentsMap(prev => {
       const current = prev[fieldName] || [];
       const nextList = [...current, ...newAttachments];
       const next = { ...prev, [fieldName]: nextList };
+      
+      
       form.setFieldValue(fieldName, nextList);
       return next;
     });
-  }, [initialValues?.userAdd, form]);
+  }, [initialValues?.userAdd, form, fields]);
 
   const handleRemoveAttachmentFor = useCallback((fieldName: string) => (id: string | undefined) => {
     setAttachmentsMap(prev => {
@@ -1173,28 +1374,8 @@ export const DynamicFormModal = ({
               fileFields={field.fileFields || []}
               onMetaChange={handleMetaChangeFor(field.name)}
               hidePreview={true}
+              accept={field.accept || "*"}
             />
-            {/* Рендерим поля для каждого файла в отдельной карточке */}
-            {attachmentsMap[field.name] && attachmentsMap[field.name].length > 0 && (
-              <Stack gap="md" mt="md">
-                {attachmentsMap[field.name].map((file: any, index: number) => (
-                  <FileFieldsCard
-                    key={file.id || index}
-                    file={file}
-                    index={index}
-                    fileFields={field.fileFields || []}
-                    form={form}
-                    setFieldValue={form.setFieldValue}
-                    fileAttachments={fileAttachments}
-                    onFileAttachmentsChange={onFileAttachmentsChange}
-                    attachmentLabel={attachmentLabel}
-                    attachmentAccept={attachmentAccept}
-                    fileCardTitle={fileCardTitle}
-                    existingDocuments={existingDocuments?.[file.id] || []}
-                  />
-                ))}
-              </Stack>
-            )}
           </div>
         );
       case 'boolean':
@@ -1246,7 +1427,7 @@ export const DynamicFormModal = ({
       : attachment.source.name;
     const normalized = typeof attachment.source === 'string' ? String(attachment.source).replace(/\\/g, '/') : '';
     const fileUrl = `${API}/${normalized}`;
-    const isImage = typeof attachment.source === 'string' && /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(normalized);
+    const isImage = isImageFile(fileName);
     const fileId = attachment.id || `temp-${fileName}-${Math.random().toString(36).slice(2, 11)}`;
     return (
       <Card key={fileId} p="sm" withBorder className="file-card">
@@ -1429,12 +1610,64 @@ export const DynamicFormModal = ({
                   : renderField(fieldOrGroup)
               )}
               {error && <Alert color="red">{error}</Alert>}
+              
+              {/* Рендерим карточки конструкций в нижней части формы */}
+              {fields.some(field => field.type === 'file') && (
+                <div className="construction-cards-section">
+                  {fields
+                    .filter(field => field.type === 'file')
+                    .map(field => (
+                      attachmentsMap[field.name] && attachmentsMap[field.name].length > 0 && (
+                        <div key={`${field.name}-cards`} style={{ marginBottom: '24px' }}>
+                          <Text fw={600} size="lg" mb="md" style={{ color: 'var(--theme-text-primary)' }}>
+                            📋 {field.label} ({attachmentsMap[field.name].length})
+                          </Text>
+                          <div 
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '16px',
+                              padding: '8px 0 16px 0',
+                            }}
+                            className="construction-cards-vertical"
+                          >
+                            {attachmentsMap[field.name].map((file: any, index: number) => (
+                              <div
+                                key={file.id || index}
+                                style={{
+                                  width: '100%'
+                                }}
+                              >
+                                <FileFieldsCard
+                                  file={file}
+                                  index={index}
+                                  fileFields={field.fileFields || []}
+                                  form={form}
+                                  setFieldValue={form.setFieldValue}
+                                  fileAttachments={fileAttachments}
+                                  onFileAttachmentsChange={onFileAttachmentsChange}
+                                  attachmentLabel={attachmentLabel}
+                                  attachmentAccept={attachmentAccept}
+                                  fileCardTitle={fileCardTitle}
+                                  existingDocuments={existingDocuments?.[file.id] || []}
+                                  onDeleteExistingDocument={onDeleteExistingDocument}
+                                  handleMetaChangeFor={handleMetaChangeFor}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    ))
+                  }
+                </div>
+              )}
             </Stack>
           </form>
         );
       }
     }
-  }, [mode, viewFieldsConfig, initialValues, renderViewField, renderAttachmentCard, onClose, onConfirm, form, onSubmit, fields, renderField, error, hideDefaultViewAttachments, viewExtraContent]);
+  }, [mode, viewFieldsConfig, initialValues, renderViewField, renderAttachmentCard, onClose, onConfirm, form, onSubmit, fields, renderField, renderFieldGroup, groupFields, error, hideDefaultViewAttachments, viewExtraContent, attachmentsMap, fileAttachments, onFileAttachmentsChange, attachmentLabel, attachmentAccept, fileCardTitle, existingDocuments, onDeleteExistingDocument]);
 
   return (
     <>

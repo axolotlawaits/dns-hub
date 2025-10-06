@@ -26,6 +26,7 @@ import mediaRouter from './routes/add/media.js'
 import rkRouter from './routes/add/rk.js'
 import sliderRouter from './routes/add/slider.js'
 import printServiceRouter from './routes/retail/printService.js'
+import appStoreRouter from './routes/retail/appStore.js'
 import scannerRouter from './routes/scanner/scanner.js'
 import adminRouter from './routes/admin.js'
 import telegramRouter  from './routes/app/telegram.js'
@@ -67,6 +68,7 @@ const corsOptions: cors.CorsOptions = {
     }
   },
   credentials: true,
+  exposedHeaders: ['Content-Disposition', 'Content-Type', 'Content-Length']
 }
 
 // const corsOptions = {
@@ -106,6 +108,7 @@ app.use('/hub-api/search', searchRouter)
 app.use('/hub-api/navigation', navigationRouter);
 app.use('/hub-api/type', typeRouter);
 app.use('/hub-api/retail/print-service', printServiceRouter);
+app.use('/hub-api/retail/app-store', appStoreRouter);
 app.use('/hub-api/scanner', scannerRouter);
 app.use('/hub-api/jurists/safety', safetyJournalRouter);
 /* loader (mb fix later) */

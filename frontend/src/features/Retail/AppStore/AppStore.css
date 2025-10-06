@@ -1,0 +1,255 @@
+/* App Store Container */
+.app-store-container {
+  padding: 0;
+  background: var(--theme-bg-primary);
+  min-height: 100vh;
+}
+
+/* Filters */
+.app-store-filters {
+  background: var(--theme-bg-elevated);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--theme-shadow-md);
+  border: 1px solid var(--theme-border);
+}
+
+/* App Cards */
+.app-card {
+  background: var(--theme-bg-elevated);
+  border-radius: var(--radius-2xl);
+  border: 1px solid var(--theme-border);
+  transition: var(--transition-all);
+  overflow: hidden;
+  position: relative;
+  box-shadow: var(--theme-shadow-sm);
+}
+
+.app-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--theme-shadow-xl);
+  border-color: var(--color-primary-300);
+}
+
+.app-card-header {
+  background: var(--theme-bg-tertiary);
+  border-bottom: 1px solid var(--theme-border);
+}
+
+.app-icon {
+  background: linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-700) 100%);
+  box-shadow: var(--theme-shadow-md);
+  border-radius: var(--radius-xl);
+  transition: var(--transition-all);
+}
+
+.app-card:hover .app-icon {
+  transform: scale(1.05);
+  box-shadow: var(--theme-shadow-lg);
+}
+
+/* Download Button */
+.download-button {
+  background: linear-gradient(135deg, var(--color-success) 0%, #059669 100%);
+  border: none;
+  border-radius: var(--radius-xl);
+  font-weight: var(--font-weight-semibold);
+  box-shadow: var(--theme-shadow-md);
+  transition: var(--transition-all);
+}
+
+.download-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--theme-shadow-lg);
+}
+
+.download-button:disabled {
+  background: var(--color-gray-400);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* Badges */
+.app-card .mantine-Badge-root {
+  border-radius: var(--radius-lg);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xs);
+}
+
+/* Text Styles */
+.app-card .mantine-Text-root[data-fw="600"] {
+  color: var(--theme-text-primary);
+  font-weight: var(--font-weight-bold);
+}
+
+.app-card .mantine-Text-root[data-c="dimmed"] {
+  color: var(--theme-text-secondary);
+}
+
+/* Grid Responsive */
+@media (max-width: 768px) {
+  .app-store-container {
+    padding: var(--space-2);
+  }
+  
+  .app-card {
+    margin-bottom: var(--space-4);
+  }
+}
+
+/* Empty State */
+.app-store-container .mantine-Center-root {
+  padding: var(--space-16) var(--space-8);
+}
+
+.app-store-container .mantine-Center-root .mantine-Stack-root {
+  text-align: center;
+}
+
+/* Menu Dropdown - используем стили из DesignSystem.css */
+.app-card .mantine-Menu-dropdown {
+  background: var(--theme-bg-elevated) !important;
+  border: 1px solid var(--theme-border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--theme-shadow-lg) !important;
+  backdrop-filter: blur(8px) !important;
+  padding: var(--space-2) !important;
+}
+
+.app-card .mantine-Menu-item {
+  background: transparent !important;
+  border-radius: var(--radius-md) !important;
+  padding: var(--space-3) var(--space-4) !important;
+  margin: var(--space-1) 0 !important;
+  transition: var(--transition-all) !important;
+  color: var(--theme-text-primary) !important;
+  font-weight: var(--font-weight-medium) !important;
+  font-size: var(--font-size-sm) !important;
+}
+
+.app-card .mantine-Menu-item:hover {
+  background: var(--theme-hover-bg) !important;
+  color: var(--theme-text-primary) !important;
+  transform: translateX(4px) !important;
+  box-shadow: var(--theme-shadow-sm) !important;
+}
+
+/* Loading Overlay */
+.app-store-container .mantine-LoadingOverlay-root {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(4px);
+}
+
+
+/* Divider */
+.app-card .mantine-Divider-root {
+  border-color: var(--theme-border);
+}
+
+/* Stats in Cards */
+.app-card .mantine-Group-root[data-gap="xs"] {
+  color: var(--theme-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.app-card .mantine-Group-root[data-gap="xs"] .mantine-Text-root {
+  font-size: var(--font-size-sm);
+}
+
+/* Hover Effects */
+.app-card:hover .mantine-Text-root[data-fw="600"] {
+  color: var(--color-primary-600);
+}
+
+.app-card:hover .mantine-Badge-root {
+  transform: scale(1.05);
+}
+
+/* Animation for new cards */
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.app-card {
+  animation: slideInUp 0.5s ease-out;
+}
+
+/* Gradient Backgrounds for Categories */
+.app-card[data-category="MOBILE"] .app-icon {
+  background: linear-gradient(135deg, var(--color-info) 0%, #1d4ed8 100%);
+}
+
+.app-card[data-category="DESKTOP"] .app-icon {
+  background: linear-gradient(135deg, var(--color-success) 0%, #059669 100%);
+}
+
+.app-card[data-category="UTILITY"] .app-icon {
+  background: linear-gradient(135deg, var(--color-warning) 0%, #d97706 100%);
+}
+
+.app-card[data-category="TOOL"] .app-icon {
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+}
+
+/* Description Toggle Button */
+.description-toggle-button {
+  background: var(--theme-bg-tertiary) !important;
+  border: 1px solid var(--theme-border) !important;
+  color: var(--theme-text-secondary) !important;
+  font-weight: var(--font-weight-medium) !important;
+  transition: var(--transition-all) !important;
+  border-radius: var(--radius-md) !important;
+}
+
+.description-toggle-button:hover {
+  background: var(--theme-hover-bg) !important;
+  color: var(--theme-text-primary) !important;
+  border-color: var(--color-primary-300) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: var(--theme-shadow-sm) !important;
+}
+
+/* Description Content */
+.description-content {
+  background: var(--theme-bg-secondary) !important;
+  border: 1px solid var(--theme-border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--theme-shadow-sm) !important;
+  transition: var(--transition-all) !important;
+}
+
+.description-content .mantine-Text-root {
+  color: var(--theme-text-secondary) !important;
+  font-size: var(--font-size-sm) !important;
+  line-height: 1.6 !important;
+}
+
+/* Collapse Animation */
+.mantine-Collapse-root {
+  transition: height var(--transition-normal) ease !important;
+}
+
+/* Theme Icon in Description Button */
+.description-toggle-button .mantine-ThemeIcon-root {
+  background: var(--color-primary-100) !important;
+  color: var(--color-primary-600) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+/* Hover effects for description elements */
+.app-card:hover .description-toggle-button {
+  background: var(--theme-bg-elevated) !important;
+  border-color: var(--color-primary-400) !important;
+}
+
+.app-card:hover .description-content {
+  border-color: var(--color-primary-200) !important;
+  box-shadow: var(--theme-shadow-md) !important;
+}
+
