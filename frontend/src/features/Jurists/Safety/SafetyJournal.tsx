@@ -1343,7 +1343,7 @@ export default function SafetyJournal() {
           <Paper withBorder radius="md" p="md" style={{ background: 'var(--theme-bg-elevated)' }}>
           <Stack gap="md">
         {/* Вкладки */}
-              <Tabs value={activeTab} onChange={(value) => {setActiveTab(value || 'all'), setBranchPagination( { ...branchPagination, page: 1 })}}>
+              <Tabs value={activeTab} onChange={(value) => {setActiveTab(value || 'all'), setBranchPagination( prev => ({ ...prev, page: 1 }))}}>
           <Tabs.List>
             <Tabs.Tab value="all" leftSection={<IconFileText size={16} />}>
               Все журналы ({stats.total})
