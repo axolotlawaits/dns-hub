@@ -598,6 +598,8 @@ export const makeBranchJournalDecision = async (req: Request, res: Response) => 
     
     // Получаем status из req.body или из FormData
     let status = req.body?.status;
+    let comment = req.body.comment;
+
     if (!status && req.body && typeof req.body === 'object') {
       // Если status не найден в req.body, попробуем найти его в других полях
       status = req.body.status || req.body.decision;
@@ -608,6 +610,7 @@ export const makeBranchJournalDecision = async (req: Request, res: Response) => 
 
     console.log('Making branch journal decision:', {
       branchJournalId,
+      comment,
       status,
       userId,
       positionName,
@@ -638,6 +641,7 @@ export const makeBranchJournalDecision = async (req: Request, res: Response) => 
       const formData = new FormData();
       formData.append('status', status);
       formData.append('decision', status);
+      comment && formData.append('comment', comment)
       formData.append('user_id', userId);
       formData.append('branch_journal_id', branchJournalId);
       
@@ -650,6 +654,7 @@ export const makeBranchJournalDecision = async (req: Request, res: Response) => 
         url: `${EXTERNAL_API_URL}/branch_journals/${branchJournalId}/decision`,
         formData: {
           status: status,
+          comment: comment,
           decision: status,
           user_id: userId,
           branch_journal_id: branchJournalId,

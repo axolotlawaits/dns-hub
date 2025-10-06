@@ -5,7 +5,7 @@ import { useAccessContext } from '../../../hooks/useAccessContext';
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { notificationSystem } from '../../../utils/Push';
 import FloatingActionButton from '../../../components/FloatingActionButton';
-import { Button, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Paper, Badge, Tabs, Tooltip, Alert, Divider, Select, Pagination, Popover, Card, ThemeIcon, Accordion, Modal } from '@mantine/core';
+import { Button, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Paper, Badge, Tabs, Tooltip, Alert, Divider, Select, Pagination, Popover, Card, ThemeIcon, Accordion, Modal, Textarea } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
 import { IconClock, IconFileText, IconChevronDown, IconChevronUp, IconUpload, IconFilter, IconShield, IconFlame, IconCircleCheck, IconCircleX, IconAlertCircle, IconUsers, IconX, IconFile, IconCheck, IconRefresh, IconQrcode } from '@tabler/icons-react';
@@ -132,13 +132,17 @@ const LocalJournalTable = function LocalJournalTable({
 }: {
   journals: SafetyJournal[];
   onApproveJournal: (journal: SafetyJournal) => void;
-  onRejectJournal: (journal: SafetyJournal) => void;
+  onRejectJournal: (journal: SafetyJournal, status: 'rejected', rejectMessage: string) => void;
   onUnderReviewJournal: (journal: SafetyJournal) => void;
   onViewFile: (journal: SafetyJournal) => void;
   onUploadFiles: (journal: SafetyJournal) => void;
   canManageStatuses: boolean;
 }) {
   console.log('LocalJournalTable rendering with journals:', journals.map(j => ({ id: j.id, status: j.status })));
+
+  const [rejectModalOpen, setRejectModalOpen] = useState<string | null>(null)
+  const [rejectMessage, setRejectMessage] = useState('')
+  console.log(journals)
   return (
     <Card shadow="sm" radius="lg" padding="md" className="table-container">
       <Box style={{ overflowX: 'auto', position: 'relative' }}>
@@ -156,7 +160,7 @@ const LocalJournalTable = function LocalJournalTable({
           </thead>
           <tbody>
             {journals.map((journal) => (
-              <tr key={journal.id} className='table-row' onClick={() => onViewFile(journal)}>
+              <tr key={journal.id} className='table-row'>
                 <td className='table-cell'>
                   {journal.journal_type === 'ОТ' ?
                     <IconShield 
@@ -201,7 +205,7 @@ const LocalJournalTable = function LocalJournalTable({
                     {journal.filled_at ? dayjs(journal.filled_at).format('YYYY-MM-DD') : '-'}
                   </Text>
                 </td>
-                <td className='table-cell'>
+                <td className='table-cell' onClick={() => onViewFile(journal)}>
                   <Group gap="xs" align="center">
                     {journal.files && journal.files.length > 0 ? (
                       <>
@@ -267,12 +271,26 @@ const LocalJournalTable = function LocalJournalTable({
                                 variant={journal.status === 'rejected' ? 'filled' : 'light'} 
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  onRejectJournal(journal);
+                                  setRejectModalOpen(journal.id);
                                 }}
                               >
                                 <IconX size={14} />
                               </ActionIcon>
                             </Tooltip>
+                            <Modal opened={journal.id === rejectModalOpen} onClose={() => setRejectModalOpen(null)} title='Укажите причину' centered zIndex={99999}>
+                              <Stack>
+                                <Textarea
+                                  placeholder="Комментарий..."
+                                  value={rejectMessage}
+                                  onChange={(e) => setRejectMessage(e.currentTarget.value)}
+                                />
+                                <Group grow>
+                                  <Button onClick={() => setRejectModalOpen(null)} variant='light'>Отмена</Button>
+                                  <Button onClick={() => {onRejectJournal(journal, 'rejected', rejectMessage), setRejectModalOpen(null)}}>Подтвердить</Button>
+                                </Group>
+                                
+                              </Stack>
+                            </Modal>
                             <Tooltip label="На проверке">
                               <ActionIcon 
                                 size="sm" 
@@ -316,7 +334,7 @@ const LocalJournalTable = function LocalJournalTable({
   }: { 
     branch: Branch;
     onApproveJournal: (journal: SafetyJournal) => void;
-    onRejectJournal: (journal: SafetyJournal) => void;
+    onRejectJournal: (journal: SafetyJournal, status: 'rejected', rejectMessage: string) => void;
     onUnderReviewJournal: (journal: SafetyJournal) => void;
     onViewFile: (journal: SafetyJournal) => void;
     onUploadFiles: (journal: SafetyJournal) => void;
@@ -598,7 +616,7 @@ export default function SafetyJournal() {
   }, [token, logout]);
 
   // Смена статуса журнала (по правам FULL)
-  const handleChangeStatus = useCallback(async (journal: SafetyJournal, status: 'approved' | 'rejected' | 'under_review') => {
+  const handleChangeStatus = useCallback(async (journal: SafetyJournal, status: 'approved' | 'rejected' | 'under_review', rejectMessage? : string) => {
     console.log('handleChangeStatus called with:', { journalId: journal.id, status });
     try {
       const journalId = journal.branch_journal_id || journal.id;
@@ -607,7 +625,7 @@ export default function SafetyJournal() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, comment: rejectMessage }),
       });
 
       if (response.ok) {
@@ -649,6 +667,7 @@ export default function SafetyJournal() {
       notificationSystem.addNotification('Ошибка', 'Ошибка соединения с сервером', 'error');
     }
   }, [fetchWithAuth, setState]);
+
   // Загрузка данных
   const loadBranchesWithJournals = useCallback(async () => {
     try {
@@ -1478,7 +1497,7 @@ export default function SafetyJournal() {
                 key={branch.branch_id}
                 branch={branch}
                 onApproveJournal={(journal) => handleChangeStatus(journal, 'approved')}
-                onRejectJournal={(journal) => handleChangeStatus(journal, 'rejected')}
+                onRejectJournal={handleChangeStatus}
                 onUnderReviewJournal={(journal) => handleChangeStatus(journal, 'under_review')}
                 onViewFile={handleViewFiles}
                 onUploadFiles={handleUploadFiles}
