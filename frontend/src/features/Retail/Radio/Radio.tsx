@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
-import {Container,Title,Paper,Text,Button,Group,Stack,Modal,LoadingOverlay, Tabs, Card, Box, Progress} from '@mantine/core';
+import {Container,Title,Paper,Text,Button,Group,Stack,Modal,LoadingOverlay, Tabs, Box, Progress} from '@mantine/core';
 import { TimeInput } from '@mantine/dates';
 import {  IconUpload,  IconMusic,  IconClock,  IconDeviceMobile,  IconBuilding, IconEdit, IconCheck, IconRefresh, IconPower, IconBattery, IconWifi, IconCalendar, IconPlayerPlay, IconPlayerPause, IconWifiOff, IconX, IconRadio, IconDownload, IconAlertCircle } from '@tabler/icons-react';
 import { notificationSystem } from '../../../utils/Push';
@@ -898,12 +898,43 @@ const RadioAdmin: React.FC = () => {
     // Фильтруем только валидные файлы
     const validFiles = extractedFiles.filter((file: any) => {
       console.log('Checking file:', file, 'has name:', file?.name, 'is file:', file instanceof File);
-      return file && file.name;
+      
+      if (!file || !file.name) {
+        return false;
+      }
+      
+      // Проверяем размер файла (максимум 50MB)
+      const maxSize = 50 * 1024 * 1024; // 50MB
+      if (file.size > maxSize) {
+        console.warn(`File ${file.name} is too large: ${file.size} bytes (max: ${maxSize})`);
+        return false;
+      }
+      
+      // Проверяем тип файла (только MP3)
+      const allowedTypes = ['audio/mpeg', 'audio/mp3', 'audio/mpeg3'];
+      const fileExtension = file.name.toLowerCase().split('.').pop();
+      if (!allowedTypes.includes(file.type) && fileExtension !== 'mp3') {
+        console.warn(`File ${file.name} has unsupported type: ${file.type}`);
+        return false;
+      }
+      
+      return true;
     });
     console.log('Valid files to upload:', validFiles.length);
 
+    // Показываем информацию о фильтрации файлов
+    const filteredCount = extractedFiles.length - validFiles.length;
+    if (filteredCount > 0) {
+      notificationSystem.addNotification(
+        'Информация', 
+        `${filteredCount} файлов отфильтровано (неподдерживаемый формат или слишком большой размер)`, 
+        'info'
+      );
+    }
+
     if (validFiles.length === 0) {
       console.log('No valid files to upload');
+      notificationSystem.addNotification('Ошибка', 'Нет валидных файлов для загрузки', 'error');
       return;
     }
 
@@ -911,41 +942,108 @@ const RadioAdmin: React.FC = () => {
     console.log('API_BASE:', API_BASE);
 
     setIsUploading(true);
-      setUploadProgress(0);
+    setUploadProgress(0);
 
     try {
-      // Загружаем файлы последовательно, а не параллельно
-      for (let i = 0; i < validFiles.length; i++) {
-        const file = validFiles[i];
+      let successCount = 0;
+      let errorCount = 0;
+      const errors: string[] = [];
 
-        const formData = new FormData();
-        formData.append('music', file);
+      // Загружаем файлы пакетами по 5 файлов для снижения нагрузки на сервер
+      const batchSize = 5;
+      const totalBatches = Math.ceil(validFiles.length / batchSize);
+      
+      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+        const startIndex = batchIndex * batchSize;
+        const endIndex = Math.min(startIndex + batchSize, validFiles.length);
+        const batchFiles = validFiles.slice(startIndex, endIndex);
+        
+        console.log(`Processing batch ${batchIndex + 1}/${totalBatches} (files ${startIndex + 1}-${endIndex})`);
+        
+        // Загружаем файлы в пакете последовательно
+        for (let i = 0; i < batchFiles.length; i++) {
+          const file = batchFiles[i];
+          const globalIndex = startIndex + i;
 
-        console.log(`Sending file ${i + 1}/${validFiles.length}:`, file.name, 'to:', `${API_BASE}/upload`);
+          try {
+            const formData = new FormData();
+            formData.append('music', file);
 
-        const response = await axios.post(`${API_BASE}/upload`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
+            console.log(`Sending file ${globalIndex + 1}/${validFiles.length}:`, file.name, 'to:', `${API_BASE}/upload`);
+
+            const response = await axios.post(`${API_BASE}/upload`, formData, {
+              headers: { 'Content-Type': 'multipart/form-data' },
+              timeout: 30000, // 30 секунд таймаут
+              maxContentLength: 100 * 1024 * 1024, // 100MB максимум
+              maxBodyLength: 100 * 1024 * 1024 // 100MB максимум
+            });
+            
+            console.log('Upload response:', response.data);
+            
+            if (response.data && response.data.success) {
+              successCount++;
+            } else {
+              errorCount++;
+              errors.push(`${file.name}: ${response.data?.message || 'Неизвестная ошибка'}`);
+            }
+            
+          } catch (fileError: any) {
+            errorCount++;
+            console.error(`Error uploading file ${file.name}:`, fileError);
+            
+            if (fileError.response) {
+              // Сервер ответил с ошибкой
+              const errorMessage = fileError.response.data?.message || 
+                                  fileError.response.data?.error || 
+                                  `HTTP ${fileError.response.status}: ${fileError.response.statusText}`;
+              errors.push(`${file.name}: ${errorMessage}`);
+            } else if (fileError.request) {
+              // Запрос был отправлен, но ответа не получено
+              errors.push(`${file.name}: Нет ответа от сервера`);
+            } else {
+              // Ошибка при настройке запроса
+              errors.push(`${file.name}: ${fileError.message}`);
+            }
+          }
+          
+          // Обновляем прогресс
+          setUploadProgress(Math.round(((globalIndex + 1) / validFiles.length) * 100));
+          
+          // Небольшая задержка между загрузками для стабильности
+          if (globalIndex < validFiles.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
+        }
         
-        console.log('Upload response:', response.data);
-        
-        // Обновляем прогресс
-        setUploadProgress(Math.round(((i + 1) / validFiles.length) * 100));
-        
-        // Небольшая задержка между загрузками для стабильности
-        if (i < validFiles.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+        // Задержка между пакетами
+        if (batchIndex < totalBatches - 1) {
+          console.log(`Waiting before next batch...`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
       }
 
-      setSelectedFiles([]);
-      setUploadModalOpen(false);
-      
-      setTimeout(loadData, 1000);
-    } catch (err) {
-      console.error('Error uploading files:', err);
+      // Показываем результат загрузки
+      if (successCount > 0 && errorCount === 0) {
+        notificationSystem.addNotification('Успех', `Все ${successCount} файлов загружены успешно`, 'success');
+        setSelectedFiles([]);
+        setUploadModalOpen(false);
+        setTimeout(loadData, 1000);
+      } else if (successCount > 0 && errorCount > 0) {
+        notificationSystem.addNotification(
+          'Частичный успех', 
+          `Загружено ${successCount} из ${validFiles.length} файлов. Ошибок: ${errorCount}`, 
+          'warning'
+        );
+        console.error('Upload errors:', errors);
+        setTimeout(loadData, 1000);
+      } else {
+        notificationSystem.addNotification('Ошибка', `Не удалось загрузить ни одного файла. Ошибок: ${errorCount}`, 'error');
+        console.error('All uploads failed:', errors);
+      }
 
-      try { notificationSystem.addNotification('Ошибка', 'Ошибка загрузки файлов', 'error'); } catch {}
+    } catch (err: any) {
+      console.error('Critical error during upload process:', err);
+      notificationSystem.addNotification('Критическая ошибка', 'Произошла критическая ошибка при загрузке файлов', 'error');
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
@@ -973,11 +1071,21 @@ const RadioAdmin: React.FC = () => {
 
   return (
     <DndProviderWrapper>
-      <Box className="radio-container" style={{ paddingRight: 'var(--mantine-spacing-md)' }}>
-        <Stack gap="lg">
-
-          {/* Навигация и контент вкладок */}
-          <Card shadow="sm" radius="lg" p="md" className="radio-navigation">
+      <Box className="radio-container">
+        <Stack gap="md">
+          {/* Навигация без внутренней шапки */}
+          <Paper 
+            className="radio-navigation" 
+            p="md" 
+            radius="lg" 
+            shadow="sm"
+            style={{
+              background: 'var(--theme-bg-elevated)',
+              border: '1px solid var(--theme-border)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)'
+            }}
+          >
             <Tabs 
               defaultValue="music"
               variant="pills"
@@ -990,8 +1098,15 @@ const RadioAdmin: React.FC = () => {
                 {hasFullAccess && (
                 <Tabs.Tab 
                   value="music" 
-                  leftSection={<IconMusic size={18} />}
+                  leftSection={<IconMusic size={20} />}
                   className="radio-tab-item"
+                  style={{
+                    borderRadius: 'var(--radius-lg)',
+                    fontWeight: 'var(--font-weight-medium)',
+                    transition: 'var(--transition-all)',
+                    padding: 'var(--space-3) var(--space-4)',
+                    fontSize: 'var(--font-size-sm)'
+                  }}
                 >
                   Музыка
                   {stats && (
@@ -1004,8 +1119,15 @@ const RadioAdmin: React.FC = () => {
                 {hasFullAccess && (
                 <Tabs.Tab 
                   value="streams" 
-                  leftSection={<IconRadio size={18} />}
+                  leftSection={<IconRadio size={20} />}
                   className="radio-tab-item"
+                  style={{
+                    borderRadius: 'var(--radius-lg)',
+                    fontWeight: 'var(--font-weight-medium)',
+                    transition: 'var(--transition-all)',
+                    padding: 'var(--space-3) var(--space-4)',
+                    fontSize: 'var(--font-size-sm)'
+                  }}
                 >
                   Потоки
                   <Text span size="xs" c="dimmed" ml="xs">
@@ -1015,8 +1137,15 @@ const RadioAdmin: React.FC = () => {
                 )}
                 <Tabs.Tab 
                   value="devices" 
-                  leftSection={<IconDeviceMobile size={18} />}
+                  leftSection={<IconDeviceMobile size={20} />}
                   className="radio-tab-item"
+                  style={{
+                    borderRadius: 'var(--radius-lg)',
+                    fontWeight: 'var(--font-weight-medium)',
+                    transition: 'var(--transition-all)',
+                    padding: 'var(--space-3) var(--space-4)',
+                    fontSize: 'var(--font-size-sm)'
+                  }}
                 >
                   Устройства
                   {stats && (
@@ -1027,40 +1156,101 @@ const RadioAdmin: React.FC = () => {
                 </Tabs.Tab>
               </Tabs.List>
 
-              {/* Контент вкладок */}
-              <Box className="radio-content" mt="md">
+              {/* Современный контент вкладок */}
+              <Box 
+                className="radio-content" 
+                mt="md"
+                p="md"
+                style={{
+                  background: 'var(--theme-bg-elevated)',
+                  border: '1px solid var(--theme-border)',
+                  borderRadius: 'var(--radius-lg)',
+                  boxShadow: 'var(--theme-shadow-sm)',
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)',
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}
+              >
+                {/* Декоративная полоса сверху */}
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '3px',
+                  background: 'linear-gradient(90deg, var(--color-primary-500), var(--color-primary-600), var(--color-primary-500))',
+                  borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0'
+                }} />
 
               {hasFullAccess && (
               <Tabs.Panel value="music">
-              <Stack gap="lg">
+              <Stack gap="md">
                 {/* Статистика музыки */}
             {stats && (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-                    <Paper p="md" withBorder className="radio-stats-card">
-                  <Group>
                     <div style={{
-                          width: '40px',
-                          height: '40px',
-                          borderRadius: '8px',
-                          backgroundColor: 'var(--color-primary-500)',
+                    display: 'grid', 
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
+                    gap: 'var(--space-4)',
+                    marginBottom: 'var(--space-4)'
+                  }}>
+                    <Paper 
+                      p="md" 
+                      radius="lg" 
+                      shadow="sm"
+                      className="radio-stats-card"
+                      style={{
+                        background: 'var(--theme-bg-elevated)',
+                        border: '1px solid var(--theme-border)',
+                        backdropFilter: 'blur(8px)',
+                        WebkitBackdropFilter: 'blur(8px)',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        transition: 'var(--transition-all)'
+                      }}
+                    >
+                      {/* Декоративная полоса */}
+                      <div style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: '3px',
+                        background: 'linear-gradient(90deg, var(--color-primary-500), var(--color-primary-600))',
+                        borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0'
+                      }} />
+                      
+                      <Group gap="lg">
+                        <div style={{
+                          width: '56px',
+                          height: '56px',
+                          borderRadius: 'var(--radius-lg)',
+                          background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center'
+                          justifyContent: 'center',
+                          boxShadow: 'var(--theme-shadow-md)'
                     }}>
-                          <IconMusic size={20} color="white" />
+                          <IconMusic size={28} color="white" />
                     </div>
                     <div>
                           <Text 
                             size="sm" 
                             fw={500}
-                            style={{ color: 'var(--theme-text-tertiary)' }}
+                            style={{ 
+                              color: 'var(--theme-text-secondary)',
+                              marginBottom: 'var(--space-1)'
+                            }}
                           >
                             Музыкальных файлов
                           </Text>
                           <Text 
-                            size="lg" 
+                            size="xl" 
                             fw={700}
-                            style={{ color: 'var(--theme-text-primary)' }}
+                            style={{ 
+                              color: 'var(--theme-text-primary)',
+                              fontSize: 'var(--font-size-xl)'
+                            }}
                           >
                             {stats.totalMusicFiles}
                           </Text>
@@ -1068,31 +1258,63 @@ const RadioAdmin: React.FC = () => {
                   </Group>
                     </Paper>
                     
-                    <Paper p="md" withBorder>
-                  <Group>
+                    <Paper 
+                      p="md" 
+                      radius="lg" 
+                      shadow="sm"
+                      className="radio-stats-card"
+                      style={{
+                        background: 'var(--theme-bg-elevated)',
+                        border: '1px solid var(--theme-border)',
+                        backdropFilter: 'blur(8px)',
+                        WebkitBackdropFilter: 'blur(8px)',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        transition: 'var(--transition-all)'
+                      }}
+                    >
+                      {/* Декоративная полоса */}
                     <div style={{
-                          width: '40px',
-                          height: '40px',
-                          borderRadius: '8px',
-                      backgroundColor: 'var(--color-success)',
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: '3px',
+                        background: 'linear-gradient(90deg, var(--color-warning), #f59e0b)',
+                        borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0'
+                      }} />
+                      
+                      <Group gap="lg">
+                        <div style={{
+                          width: '56px',
+                          height: '56px',
+                          borderRadius: 'var(--radius-lg)',
+                          background: 'linear-gradient(135deg, var(--color-warning), #f59e0b)',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center'
+                          justifyContent: 'center',
+                          boxShadow: 'var(--theme-shadow-md)'
                     }}>
-                          <IconBuilding size={20} color="white" />
+                          <IconBuilding size={28} color="white" />
                     </div>
                     <div>
                           <Text 
                             size="sm" 
                             fw={500}
-                            style={{ color: 'var(--theme-text-tertiary)' }}
+                            style={{ 
+                              color: 'var(--theme-text-secondary)',
+                              marginBottom: 'var(--space-1)'
+                            }}
                           >
                             Филиалов
                           </Text>
                           <Text 
-                            size="lg" 
+                            size="xl" 
                             fw={700}
-                            style={{ color: 'var(--theme-text-primary)' }}
+                            style={{ 
+                              color: 'var(--theme-text-primary)',
+                              fontSize: 'var(--font-size-xl)'
+                            }}
                           >
                             {stats.totalBranches}
                           </Text>
@@ -1102,36 +1324,79 @@ const RadioAdmin: React.FC = () => {
                 </div>
                 )}
 
-                {/* Загрузка музыки */}
-                <Paper p="lg" withBorder className="radio-stats-card">
+                {/* Секция загрузки музыки */}
+                <Paper 
+                  p="md" 
+                  radius="lg" 
+                  shadow="sm"
+                  className="radio-stats-card"
+                  style={{
+                    background: 'var(--theme-bg-elevated)',
+                    border: '1px solid var(--theme-border)',
+                    backdropFilter: 'blur(8px)',
+                    WebkitBackdropFilter: 'blur(8px)',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    transition: 'var(--transition-all)'
+                  }}
+                >
+                  {/* Декоративная полоса */}
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: '3px',
+                    background: 'linear-gradient(90deg, var(--color-primary-500), var(--color-primary-600))',
+                    borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0'
+                  }} />
+                  
                   <Group justify="space-between" mb="md">
+                    <div>
                     <Title 
                       order={3} 
                       size="h4"
                       style={{ 
                         color: 'var(--theme-text-primary)',
-                        fontWeight: 'var(--font-weight-semibold)',
-                        fontSize: 'var(--font-size-lg)'
-                      }}
-                    >
-                      <IconUpload size={20} style={{ marginRight: 8 }} />
+                          fontWeight: 'var(--font-weight-bold)',
+                          fontSize: 'var(--font-size-xl)',
+                          marginBottom: 'var(--space-2)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 'var(--space-2)'
+                        }}
+                      >
+                        <IconUpload size={24} />
                       Загрузка музыкальных файлов
                     </Title>
+                      <Text 
+                        size="sm"
+                        style={{ 
+                          color: 'var(--theme-text-secondary)',
+                          fontWeight: 'var(--font-weight-medium)'
+                        }}
+                      >
+                        Загружайте MP3 файлы для воспроизведения в филиалах. 
+                        Файлы автоматически сохраняются в папку retail/music/{musicStatus?.currentMonthFolder || 'текущий месяц'}.
+                      </Text>
+                    </div>
                     <Button 
                       onClick={() => setUploadModalOpen(true)}
-                      leftSection={<IconUpload size={16} />}
+                      leftSection={<IconUpload size={20} />}
                       className="radio-action-button"
+                      size="lg"
+                      style={{
+                        background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
+                        border: 'none',
+                        fontWeight: 'var(--font-weight-semibold)',
+                        borderRadius: 'var(--radius-lg)',
+                        boxShadow: 'var(--theme-shadow-md)',
+                        transition: 'var(--transition-all)'
+                      }}
                     >
                       Загрузить файлы
                     </Button>
                   </Group>
-                  <Text 
-                    size="sm"
-                    style={{ color: 'var(--theme-text-secondary)' }}
-                  >
-                    Загружайте MP3 файлы для воспроизведения в филиалах. 
-                    Файлы автоматически сохраняются в папку retail/music/{musicStatus?.currentMonthFolder || 'текущий месяц'}.
-                  </Text>
                 </Paper>
               </Stack>
               </Tabs.Panel>
@@ -1139,33 +1404,88 @@ const RadioAdmin: React.FC = () => {
 
               {hasFullAccess && (
               <Tabs.Panel value="streams">
-              <Stack gap="lg">
-                <Group justify="space-between">
+              <Stack gap="md">
+                <Group justify="space-between" mb="md">
+                  <div>
                   <Title 
                     order={3} 
                     size="h4"
                     style={{ 
                       color: 'var(--theme-text-primary)',
-                      fontWeight: 'var(--font-weight-semibold)',
-                      fontSize: 'var(--font-size-lg)'
-                    }}
-                  >
-                    <IconRadio size={20} style={{ marginRight: 8 }} />
+                        fontWeight: 'var(--font-weight-bold)',
+                        fontSize: 'var(--font-size-xl)',
+                        marginBottom: 'var(--space-2)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 'var(--space-2)'
+                      }}
+                    >
+                      <IconRadio size={24} />
                     Радио потоки
                   </Title>
+                    <Text 
+                      size="sm"
+                      style={{ 
+                        color: 'var(--theme-text-secondary)',
+                        fontWeight: 'var(--font-weight-medium)'
+                      }}
+                    >
+                      Управление радио потоками для различных типов филиалов
+                    </Text>
+                  </div>
                   <Button 
                     onClick={handleCreateStream}
-                    leftSection={<IconMusic size={16} />}
-                    variant="outline"
+                    leftSection={<IconMusic size={20} />}
+                    className="radio-action-button"
+                    size="lg"
+                    style={{
+                      background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
+                      border: 'none',
+                      fontWeight: 'var(--font-weight-semibold)',
+                      borderRadius: 'var(--radius-lg)',
+                      boxShadow: 'var(--theme-shadow-md)',
+                      transition: 'var(--transition-all)'
+                    }}
                   >
                     Добавить поток
                   </Button>
                 </Group>
                 
                 {radioStreams.length > 0 ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+                  <div style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', 
+                    gap: 'var(--space-4)'
+                  }}>
                     {radioStreams.map((stream) => (
-                      <Paper key={stream.id} p="md" withBorder className="radio-stream-card">
+                      <Paper 
+                        key={stream.id} 
+                        p="md" 
+                        radius="lg" 
+                        shadow="sm"
+                        className="radio-stream-card"
+                        style={{
+                          background: 'var(--theme-bg-elevated)',
+                          border: '1px solid var(--theme-border)',
+                          backdropFilter: 'blur(8px)',
+                          WebkitBackdropFilter: 'blur(8px)',
+                          position: 'relative',
+                          overflow: 'hidden',
+                          transition: 'var(--transition-all)'
+                        }}
+                      >
+                        {/* Декоративная полоса */}
+                        <div style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          height: '3px',
+                          background: stream.isActive 
+                            ? 'linear-gradient(90deg, var(--color-success), #059669)'
+                            : 'linear-gradient(90deg, var(--color-gray-500), var(--color-gray-600))',
+                          borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0'
+                        }} />
                         <Group justify="space-between" mb="sm">
                           <Text fw={600} size="lg">
                             {stream.name}
@@ -1247,22 +1567,53 @@ const RadioAdmin: React.FC = () => {
               )}
 
               <Tabs.Panel value="devices">
-              <Stack gap="lg">
+              <Stack gap="md">
                 {/* Статистика устройств */}
                 {stats && (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-                    <Paper p="md" withBorder className="radio-stats-card">
-                  <Group>
                     <div style={{
-                          width: '40px',
-                          height: '40px',
-                          borderRadius: '8px',
-                          backgroundColor: 'var(--color-primary-500)',
+                    display: 'grid', 
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
+                    gap: 'var(--space-4)',
+                    marginBottom: 'var(--space-4)'
+                  }}>
+                    <Paper 
+                      p="md" 
+                      radius="lg" 
+                      shadow="sm"
+                      className="radio-stats-card"
+                      style={{
+                        background: 'var(--theme-bg-elevated)',
+                        border: '1px solid var(--theme-border)',
+                        backdropFilter: 'blur(8px)',
+                        WebkitBackdropFilter: 'blur(8px)',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        transition: 'var(--transition-all)'
+                      }}
+                    >
+                      {/* Декоративная полоса */}
+                      <div style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: '3px',
+                        background: 'linear-gradient(90deg, var(--color-primary-500), var(--color-primary-600))',
+                        borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0'
+                      }} />
+                      
+                      <Group gap="lg">
+                        <div style={{
+                          width: '56px',
+                          height: '56px',
+                          borderRadius: 'var(--radius-lg)',
+                          background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center'
+                          justifyContent: 'center',
+                          boxShadow: 'var(--theme-shadow-md)'
                     }}>
-                          <IconDeviceMobile size={20} color="white" />
+                          <IconDeviceMobile size={28} color="white" />
                     </div>
                     <div>
                           <Text 
@@ -1283,31 +1634,63 @@ const RadioAdmin: React.FC = () => {
                   </Group>
                     </Paper>
                     
-                    <Paper p="md" withBorder>
-                  <Group>
+                    <Paper 
+                      p="md" 
+                      radius="lg" 
+                      shadow="sm"
+                      className="radio-stats-card"
+                      style={{
+                        background: 'var(--theme-bg-elevated)',
+                        border: '1px solid var(--theme-border)',
+                        backdropFilter: 'blur(8px)',
+                        WebkitBackdropFilter: 'blur(8px)',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        transition: 'var(--transition-all)'
+                      }}
+                    >
+                      {/* Декоративная полоса */}
                     <div style={{
-                          width: '40px',
-                          height: '40px',
-                          borderRadius: '8px',
-                          backgroundColor: 'var(--color-success)',
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: '3px',
+                        background: 'linear-gradient(90deg, var(--color-success), #059669)',
+                        borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0'
+                      }} />
+                      
+                      <Group gap="lg">
+                        <div style={{
+                          width: '56px',
+                          height: '56px',
+                          borderRadius: 'var(--radius-lg)',
+                          background: 'linear-gradient(135deg, var(--color-success), #059669)',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center'
+                          justifyContent: 'center',
+                          boxShadow: 'var(--theme-shadow-md)'
                     }}>
-                          <IconCheck size={20} color="white" />
+                          <IconCheck size={28} color="white" />
                     </div>
                         <div>
                           <Text 
                             size="sm" 
                             fw={500}
-                            style={{ color: 'var(--theme-text-tertiary)' }}
+                            style={{ 
+                              color: 'var(--theme-text-secondary)',
+                              marginBottom: 'var(--space-1)'
+                            }}
                           >
                             Активных
                           </Text>
                           <Text 
-                            size="lg" 
+                            size="xl" 
                             fw={700}
-                            style={{ color: 'var(--theme-text-primary)' }}
+                            style={{ 
+                              color: 'var(--theme-text-primary)',
+                              fontSize: 'var(--font-size-xl)'
+                            }}
                           >
                             {stats.activeDevices}
                           </Text>
@@ -1318,11 +1701,11 @@ const RadioAdmin: React.FC = () => {
             )}
 
                 {/* Устройства по филиалам */}
-              <Stack gap="lg">
+              <Stack gap="md">
                 {hasFullAccess ? (
                   // Полный доступ - видим все филиалы
                   branchesWithDevices.map((branchData) => (
-                    <Paper key={branchData.branch.uuid} p="lg" withBorder className="radio-device-card">
+                    <Paper key={branchData.branch.uuid} p="md" withBorder className="radio-device-card">
                     <Group justify="space-between" mb="md">
                       <div>
                           <Title order={4} size="h5">{branchData.branch.name}</Title>
@@ -1403,7 +1786,7 @@ const RadioAdmin: React.FC = () => {
                 ) : (
                   // Доступ только для чтения - видим только свой филиал
                   hasReadOnlyAccess && user && (
-                    <Paper p="lg" withBorder className="radio-device-card">
+                    <Paper p="md" withBorder className="radio-device-card">
                       <Group justify="space-between" mb="md">
                         <div>
                           <Title order={4} size="h5">{user.branch}</Title>
@@ -1488,7 +1871,7 @@ const RadioAdmin: React.FC = () => {
 
               </Box>
             </Tabs>
-          </Card>
+          </Paper>
         </Stack>
       </Box>
 

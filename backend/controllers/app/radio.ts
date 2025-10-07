@@ -131,19 +131,21 @@ export const uploadMusic = async (req: Request, res: Response): Promise<any> => 
     }
     
     const folderName = getCurrentMonthFolder();
-    const musicPath = ensureMusicFolder(folderName);
-    
     const fileName = req.file.originalname;
-    const filePath = path.join(musicPath, fileName);
+    const filePath = req.file.path; // Файл уже в правильном месте благодаря middleware
     
-    // Просто перезаписываем файл, если он уже существует
-    if (fs.existsSync(filePath)) {
-      console.log(`File ${fileName} already exists, overwriting...`);
-      fs.unlinkSync(filePath); // Удаляем старый файл
+    console.log('File details:', {
+      originalName: req.file.originalname,
+      filePath: filePath,
+      fileExists: fs.existsSync(filePath),
+      fileSize: req.file.size
+    });
+    
+    // Проверяем, что файл существует
+    if (!fs.existsSync(filePath)) {
+      console.error('File does not exist:', filePath);
+      return res.status(500).json({ error: 'Файл не найден' });
     }
-    
-    // Перемещаем файл в папку музыки
-    fs.renameSync(req.file.path, filePath);
     
     return res.status(200).json({ 
       success: true, 
@@ -745,29 +747,12 @@ export const createRadioStream = async (req: Request, res: Response): Promise<an
       console.log('File path:', req.file.path);
       console.log('File exists:', fs.existsSync(req.file.path));
       
-      // Перемещаем файл из temp в stream папку
-      const tempPath = req.file.path;
-      const streamDir = './public/retail/radio/stream';
-      const finalPath = path.join(streamDir, req.file.filename);
-      
-      console.log('Temp path:', tempPath);
-      console.log('Final path:', finalPath);
-      
-      // Создаем папку stream если её нет
-      if (!fs.existsSync(streamDir)) {
-        console.log('Creating stream directory:', streamDir);
-        fs.mkdirSync(streamDir, { recursive: true });
-      }
-      
-      // Перемещаем файл
-      try {
-        fs.renameSync(tempPath, finalPath);
-        console.log('File moved successfully to:', finalPath);
-        // Сохраняем только имя файла с расширением
+      // Файл уже в правильном месте благодаря middleware
+      if (fs.existsSync(req.file.path)) {
         attachmentPath = req.file.filename;
         console.log('Attachment path set to:', attachmentPath);
-      } catch (error) {
-        console.error('Error moving file:', error);
+      } else {
+        console.error('File does not exist at path:', req.file.path);
         attachmentPath = null;
       }
     } else {
@@ -813,14 +798,8 @@ export const uploadStreamRoll = async (req: Request, res: Response): Promise<any
       return res.status(400).json({ error: 'ID потока обязателен' });
     }
 
-    // Создаем папку для потоков
-    const streamPath = ensureStreamFolder();
-
     const fileName = req.file.originalname;
-    const filePath = path.join(streamPath, fileName);
-
-    // Перемещаем файл из временной папки в папку потоков
-    fs.renameSync(req.file.path, filePath);
+    const filePath = req.file.path; // Файл уже в правильном месте благодаря middleware
 
     // Обновляем запись в базе данных - записываем название файла
     const stream = await prisma.radioStream.update({

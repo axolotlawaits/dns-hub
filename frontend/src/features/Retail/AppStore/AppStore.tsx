@@ -43,6 +43,7 @@ const AppStore: React.FC = () => {
   
   // Модальные окна
   const [createAppModalOpen, setCreateAppModalOpen] = useState(false);
+  const [editAppModalOpen, setEditAppModalOpen] = useState(false);
   const [uploadVersionModalOpen, setUploadVersionModalOpen] = useState(false);
   const [deleteAppModalOpen, setDeleteAppModalOpen] = useState(false);
 
@@ -123,6 +124,32 @@ const AppStore: React.FC = () => {
     } catch (error) {
       console.error('Ошибка создания приложения:', error);
       notificationSystem.addNotification('Ошибка', 'Ошибка при создании приложения', 'error');
+    }
+  };
+
+  // Редактирование приложения
+  const handleEditApp = async (values: any) => {
+    if (!selectedApp) return;
+
+    try {
+      const response = await fetch(`${API}/retail/app-store/${selectedApp.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(values)
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        notificationSystem.addNotification('Успех', 'Приложение обновлено успешно', 'success');
+        setEditAppModalOpen(false);
+        loadApps();
+      } else {
+        notificationSystem.addNotification('Ошибка', data.message, 'error');
+      }
+    } catch (error) {
+      console.error('Ошибка обновления приложения:', error);
+      notificationSystem.addNotification('Ошибка', 'Ошибка при обновлении приложения', 'error');
     }
   };
 
@@ -375,7 +402,8 @@ const AppStore: React.FC = () => {
                           <Menu.Item
                             leftSection={<IconEdit size={14} />}
                             onClick={() => {
-                              notificationSystem.addNotification('Информация', 'Редактирование приложения будет добавлено в следующей версии', 'info');
+                              setSelectedApp(app);
+                              setEditAppModalOpen(true);
                             }}
                           >
                             Редактировать
@@ -582,6 +610,68 @@ const AppStore: React.FC = () => {
             }}
             onSubmit={handleCreateApp}
             submitButtonText="Создать"
+            cancelButtonText="Отмена"
+            size="md"
+          />
+        )}
+
+        {/* Модальное окно редактирования приложения - только для пользователей с правами */}
+        {hasManageAccess && (
+          <DynamicFormModal
+            opened={editAppModalOpen}
+            onClose={() => setEditAppModalOpen(false)}
+            title={`Редактировать приложение - ${selectedApp?.name}`}
+            mode="edit"
+            fields={[
+              {
+                name: 'name',
+                label: 'Название',
+                type: 'text',
+                required: true,
+                placeholder: 'Введите название приложения'
+              },
+              {
+                name: 'description',
+                label: 'Описание',
+                type: 'textarea',
+                placeholder: 'Описание приложения'
+              },
+              {
+                name: 'category',
+                label: 'Категория',
+                type: 'select',
+                required: true,
+                options: [
+                  { value: 'MOBILE', label: 'Мобильное приложение' },
+                  { value: 'DESKTOP', label: 'Десктопное приложение' },
+                  { value: 'UTILITY', label: 'Утилита' },
+                  { value: 'TOOL', label: 'Инструмент' }
+                ]
+              },
+              {
+                name: 'appType',
+                label: 'Тип приложения',
+                type: 'select',
+                required: true,
+                options: [
+                  { value: 'ANDROID_APK', label: 'Android APK' },
+                  { value: 'WINDOWS_EXE', label: 'Windows EXE' },
+                  { value: 'WINDOWS_MSI', label: 'Windows MSI' },
+                  { value: 'MACOS_DMG', label: 'macOS DMG' },
+                  { value: 'LINUX_DEB', label: 'Linux DEB' },
+                  { value: 'LINUX_RPM', label: 'Linux RPM' },
+                  { value: 'ARCHIVE', label: 'Архив' }
+                ]
+              },
+              {
+                name: 'isActive',
+                label: 'Активно',
+                type: 'boolean'
+              }
+            ]}
+            initialValues={selectedApp || {}}
+            onSubmit={handleEditApp}
+            submitButtonText="Сохранить"
             cancelButtonText="Отмена"
             size="md"
           />
