@@ -150,7 +150,7 @@ const LocalJournalTable = function LocalJournalTable({
             <tr className='table-header-row'>
               <th className='table-header-cell' style={{ width: '300px' }}>Журнал</th>
               <th className='table-header-cell' style={{ width: '120px' }}>Статус</th>
-              <th className='table-header-cell' style={{ width: '180px' }}>Дата последней проверки</th>
+              <th className='table-header-cell' style={{ width: '180px' }}>Дата предоставления на проверку</th>
               <th className='table-header-cell' style={{ width: '200px' }}>Файл для проверки</th>
               {canManageStatuses && (
                 <th className='table-header-cell' style={{ width: '200px' }}>Управление статусом</th>
@@ -1419,7 +1419,7 @@ export default function SafetyJournal() {
                       <Select
                         label="РРС"
                         placeholder="Выберите РРС"
-                        data={rrsOptions}
+                        data={rrsOptions.sort((a, b) => a.label.localeCompare(b.label))}
                         value={branchFilters.rrs}
                         onChange={handleRrsFilterChange}
                         clearable
@@ -1428,7 +1428,7 @@ export default function SafetyJournal() {
                       <Select
                         label="Филиал"
                         placeholder="Выберите филиал"
-                        data={branchOptions}
+                        data={branchOptions.sort((a, b) => a.label.localeCompare(b.label))}
                         value={branchFilters.branch}
                         onChange={handleBranchFilterChange}
                         clearable

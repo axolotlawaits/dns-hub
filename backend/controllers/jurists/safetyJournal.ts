@@ -595,8 +595,8 @@ export const makeBranchJournalDecision = async (req: Request, res: Response) => 
     }
 
     // Проверяем статус согласно API схеме
-    if (!status || !['approved', 'rejected', 'under_review'].includes(status)) {
-      return res.status(400).json({ message: 'Неверный статус. Допустимые значения: approved, rejected, under_review' });
+    if (!status || !['approved', 'rejected', 'under_review', 'pending'].includes(status)) {
+      return res.status(400).json({ message: 'Неверный статус. Допустимые значения: approved, rejected, under_review, pending' });
     }
 
     // Отправляем запрос во внешний API для обновления статуса
