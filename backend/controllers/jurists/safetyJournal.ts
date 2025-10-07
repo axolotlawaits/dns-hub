@@ -278,10 +278,27 @@ export const uploadFile = async (req: Request, res: Response) => {
     const { branchJournalId } = req.body;
     const file = req.file;
 
+    // Исправляем кодировку имени файла
+    let correctedFileName = file?.originalname;
+    if (file?.originalname) {
+      try {
+        // Пытаемся исправить кодировку имени файла
+        correctedFileName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+        console.log('File name encoding correction:', {
+          original: file.originalname,
+          corrected: correctedFileName
+        });
+      } catch (encodingError) {
+        console.warn('Could not correct file name encoding:', encodingError);
+        correctedFileName = file.originalname;
+      }
+    }
+
     console.log('Upload file request:', {
       branchJournalId,
       file: file ? {
         originalname: file.originalname,
+        correctedName: correctedFileName,
         mimetype: file.mimetype,
         size: file.size,
         bufferLength: file.buffer?.length,
@@ -336,9 +353,10 @@ export const uploadFile = async (req: Request, res: Response) => {
     }
 
     // Специальная проверка для PDF файлов
-    if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
+    if (file.mimetype === 'application/pdf' || (correctedFileName && correctedFileName.toLowerCase().endsWith('.pdf'))) {
       console.log('PDF file detected, performing additional checks:', {
-        fileName: file.originalname,
+        fileName: correctedFileName,
+        originalFileName: file.originalname,
         mimetype: file.mimetype,
         size: file.size,
         bufferLength: file.buffer.length
@@ -348,7 +366,8 @@ export const uploadFile = async (req: Request, res: Response) => {
       const pdfHeader = file.buffer.slice(0, 4).toString();
       if (pdfHeader !== '%PDF') {
         console.error('Invalid PDF file - missing PDF header:', {
-          fileName: file.originalname,
+          fileName: correctedFileName,
+          originalFileName: file.originalname,
           header: pdfHeader,
           expectedHeader: '%PDF'
         });
@@ -360,7 +379,8 @@ export const uploadFile = async (req: Request, res: Response) => {
 
     console.log('Preparing to upload file to external API:', {
       url: `${EXTERNAL_API_URL}/files/`,
-      fileName: file.originalname,
+      fileName: correctedFileName,
+      originalFileName: file.originalname,
       fileSize: file.size,
       bufferLength: file.buffer.length,
       branchJournalId,
@@ -373,10 +393,10 @@ export const uploadFile = async (req: Request, res: Response) => {
     
     try {
       formData.append('file', file.buffer, {
-        filename: file.originalname,
+        filename: correctedFileName, // Используем исправленное имя файла
         contentType: file.mimetype
       });
-      console.log('FormData created successfully');
+      console.log('FormData created successfully with corrected filename:', correctedFileName);
     } catch (formDataError: any) {
       console.error('Error creating FormData:', formDataError);
       return res.status(500).json({ 
