@@ -516,6 +516,7 @@ export default function SafetyJournal() {
   // Модальные окна
   const [filePreviewOpened, { close: closeFilePreview }] = useDisclosure(false);
   const [fileUploadOpened, { open: openFileUpload, close: closeFileUpload }] = useDisclosure(false);
+  const [fileUploadLoading, setFileUploadLoading] = useState(false);
   const [selectedJournal, setSelectedJournal] = useState<SafetyJournal | null>(null);
   const [journalFiles, setJournalFiles] = useState<any[]>([]);
   const [fileViewOpened, { open: openFileView, close: closeFileView }] = useDisclosure(false);
@@ -814,6 +815,7 @@ export default function SafetyJournal() {
   const handleFileUpload = useCallback(async (values: Record<string, any>) => {
     if (!selectedJournal) return;
 
+    setFileUploadLoading(true);
     try {
       // Извлекаем файлы из структуры DynamicFormModal
       const fileAttachments = values.files || [];
@@ -953,6 +955,8 @@ export default function SafetyJournal() {
       
     } catch (err) {
       notificationSystem.addNotification('Ошибка', 'Ошибка соединения с сервером', 'error');
+    } finally {
+      setFileUploadLoading(false);
     }
   }, [selectedJournal, fetchWithAuth, closeFileUpload, validateFile]);
 
@@ -1598,6 +1602,8 @@ export default function SafetyJournal() {
         ]}
         initialValues={{ files: [] }}
         onSubmit={handleFileUpload}
+        submitButtonText="Загрузить"
+        loading={fileUploadLoading}
       />
 
       {/* Модальное окно подтверждения удаления журнала */}

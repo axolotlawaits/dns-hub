@@ -129,8 +129,7 @@
 .form-modal .file-card {
   border: 1px solid var(--theme-border);
   border-radius: var(--radius-md);
-  padding: var(--space-3);
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-1);
   background: var(--theme-bg-secondary);
   transition: var(--transition-all);
   width: 100%;

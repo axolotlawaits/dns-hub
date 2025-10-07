@@ -213,6 +213,7 @@ interface DynamicFormModalProps {
   hideButtons?: boolean;
   size?: string | number;
   fullScreen?: boolean;
+  loading?: boolean;
   // Универсальная поддержка дополнительных вложений к файлам
   fileAttachments?: Record<string, File[]>;
   onFileAttachmentsChange?: (fileId: string, attachments: File[]) => void;
@@ -1081,6 +1082,7 @@ export const DynamicFormModal = ({
   hideButtons = false,
   size = 'md',
   fullScreen = false,
+  loading = false,
   fileAttachments,
   onFileAttachmentsChange,
   attachmentLabel,
@@ -1745,6 +1747,7 @@ export const DynamicFormModal = ({
           <Button 
             type="submit"
             color={mode === 'delete' ? 'red' : undefined}
+            loading={loading}
             onClick={() => {
               if (mode === 'delete' && onConfirm) {
                 onConfirm();
