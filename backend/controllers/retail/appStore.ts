@@ -192,10 +192,26 @@ export const uploadAppVersion = async (req: Request, res: Response): Promise<voi
     const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
     const newFileName = `${appName}_v${version}_${currentDate}${fileExtension}`;
     
-    // Перемещаем файл из temp в целевую папку
+    // Копируем файл из temp в целевую папку (избегаем cross-device link ошибки)
     const tempFilePath = req.file.path;
     const finalFilePath = path.join(uploadDir, newFileName);
-    fs.renameSync(tempFilePath, finalFilePath);
+    
+    try {
+      // Сначала пытаемся переместить (быстрее)
+      fs.renameSync(tempFilePath, finalFilePath);
+      console.log('File moved successfully from', tempFilePath, 'to', finalFilePath);
+    } catch (renameError: any) {
+      console.log('Rename failed, trying copy:', renameError.message);
+      // Если перемещение не удалось (cross-device link), копируем
+      try {
+        fs.copyFileSync(tempFilePath, finalFilePath);
+        fs.unlinkSync(tempFilePath); // Удаляем временный файл после копирования
+        console.log('File copied successfully from', tempFilePath, 'to', finalFilePath);
+      } catch (copyError: any) {
+        console.error('Error copying file:', copyError);
+        throw new Error(`Ошибка при сохранении файла: ${copyError.message}`);
+      }
+    }
 
     // Деактивируем все предыдущие версии
     await prisma.appVersion.updateMany({

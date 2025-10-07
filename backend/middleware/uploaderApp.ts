@@ -2,16 +2,24 @@ import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
 
-// Создаем папку temp если её нет
-const tempDir = './temp';
-if (!fs.existsSync(tempDir)) {
-  fs.mkdirSync(tempDir, { recursive: true });
+// Создаем базовую папку для приложений
+const appBase = './public/retail/app';
+if (!fs.existsSync(appBase)) {
+  fs.mkdirSync(appBase, { recursive: true });
 }
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    // Временная директория для приёма файла; контроллер переместит в нужную папку
-    cb(null, tempDir);
+    // Для загрузки версий приложений - используем temp, но контроллер будет копировать, а не перемещать
+    if (req.path.includes('/versions')) {
+      const tempDir = './temp';
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+      cb(null, tempDir);
+    } else {
+      cb(new Error(`Неизвестный маршрут для загрузки файлов: ${req.path}`), '');
+    }
   },
   filename: function (req, file, cb) {
     // Используем оригинальное имя файла
