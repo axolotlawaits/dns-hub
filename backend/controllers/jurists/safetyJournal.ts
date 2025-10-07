@@ -278,12 +278,47 @@ export const uploadFile = async (req: Request, res: Response) => {
     const { branchJournalId } = req.body;
     const file = req.file;
 
+    // Исправляем кодировку имени файла
+    let correctedFileName = file?.originalname;
+    if (file?.originalname) {
+      try {
+        // Пытаемся исправить кодировку имени файла
+        correctedFileName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+        console.log('File name encoding correction:', {
+          original: file.originalname,
+          corrected: correctedFileName
+        });
+      } catch (encodingError) {
+        console.warn('Could not correct file name encoding:', encodingError);
+        correctedFileName = file.originalname;
+      }
+    }
+
+    console.log('Upload file request:', {
+      branchJournalId,
+      file: file ? {
+        originalname: file.originalname,
+        correctedName: correctedFileName,
+        mimetype: file.mimetype,
+        size: file.size,
+        bufferLength: file.buffer?.length,
+        encoding: file.encoding,
+        fieldname: file.fieldname
+      } : null,
+      body: req.body,
+      headers: {
+        'content-type': req.headers['content-type'],
+        'content-length': req.headers['content-length']
+      }
+    });
 
     if (!file) {
+      console.log('No file provided');
       return res.status(400).json({ message: 'Файл не предоставлен' });
     }
 
     if (!branchJournalId) {
+      console.log('No branchJournalId provided');
       return res.status(400).json({ message: 'ID журнала филиала не предоставлен' });
     }
 
@@ -295,35 +330,137 @@ export const uploadFile = async (req: Request, res: Response) => {
     const token = getAuthToken(req);
     
     if (!token) {
+      console.log('No auth token found');
       return res.status(401).json({ message: 'Токен авторизации не найден' });
     }
+
+    // Проверяем валидность файла
+    if (!file.buffer || file.buffer.length === 0) {
+      console.error('File buffer is empty or invalid:', {
+        bufferExists: !!file.buffer,
+        bufferLength: file.buffer?.length,
+        fileName: file.originalname
+      });
+      return res.status(400).json({ message: 'Файл поврежден или пуст' });
+    }
+
+    if (file.size !== file.buffer.length) {
+      console.warn('File size mismatch:', {
+        declaredSize: file.size,
+        bufferLength: file.buffer.length,
+        fileName: file.originalname
+      });
+    }
+
+    // Специальная проверка для PDF файлов
+    if (file.mimetype === 'application/pdf' || (correctedFileName && correctedFileName.toLowerCase().endsWith('.pdf'))) {
+      console.log('PDF file detected, performing additional checks:', {
+        fileName: correctedFileName,
+        originalFileName: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size,
+        bufferLength: file.buffer.length
+      });
+
+      // Проверяем PDF заголовок
+      const pdfHeader = file.buffer.slice(0, 4).toString();
+      if (pdfHeader !== '%PDF') {
+        console.error('Invalid PDF file - missing PDF header:', {
+          fileName: correctedFileName,
+          originalFileName: file.originalname,
+          header: pdfHeader,
+          expectedHeader: '%PDF'
+        });
+        return res.status(400).json({ message: 'Некорректный PDF файл' });
+      }
+
+      console.log('PDF file validation passed');
+    }
+
+    console.log('Preparing to upload file to external API:', {
+      url: `${EXTERNAL_API_URL}/files/`,
+      fileName: correctedFileName,
+      originalFileName: file.originalname,
+      fileSize: file.size,
+      bufferLength: file.buffer.length,
+      branchJournalId,
+      mimetype: file.mimetype
+    });
 
     // Создаем FormData для отправки файла
     const formData = new FormData();
     formData.append('branchJournalId', branchJournalId);
-    formData.append('file', file.buffer, {
-      filename: file.originalname,
-      contentType: file.mimetype
-    });
+    
+    try {
+      formData.append('file', file.buffer, {
+        filename: correctedFileName, // Используем исправленное имя файла
+        contentType: file.mimetype
+      });
+      console.log('FormData created successfully with corrected filename:', correctedFileName);
+    } catch (formDataError: any) {
+      console.error('Error creating FormData:', formDataError);
+      return res.status(500).json({ 
+        message: 'Ошибка при подготовке файла для загрузки',
+        details: formDataError.message
+      });
+    }
 
     const url = `${EXTERNAL_API_URL}/files/`;
+
+    console.log('Sending request to external API:', {
+      url,
+      headers: {
+        ...formData.getHeaders(),
+        'Authorization': `Bearer ${token.substring(0, 20)}...` // Скрываем полный токен
+      },
+      timeout: 30000,
+      maxContentLength: 50 * 1024 * 1024,
+      maxBodyLength: 50 * 1024 * 1024
+    });
 
     const response = await axios.post(url, formData, {
       headers: {
         ...formData.getHeaders(),
         'Authorization': `Bearer ${token}`
-      }
+      },
+      timeout: 30000, // 30 секунд таймаут
+      maxContentLength: 50 * 1024 * 1024, // 50MB
+      maxBodyLength: 50 * 1024 * 1024 // 50MB
+    });
+
+    console.log('File uploaded successfully:', {
+      status: response.status,
+      data: response.data
     });
 
     res.json(response.data);
   } catch (error: any) {
-    console.error('Error uploading file:', error);
+    console.error('Error uploading file:', {
+      message: error.message,
+      code: error.code,
+      response: error.response ? {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        data: error.response.data
+      } : null
+    });
+
     if (error.response) {
       console.error('External API error:', error.response.status, error.response.data);
-      res.status(error.response.status).json(error.response.data);
+      res.status(error.response.status).json({
+        message: 'Ошибка внешнего API',
+        details: error.response.data,
+        status: error.response.status
+      });
+    } else if (error.code === 'ECONNABORTED') {
+      console.error('Request timeout');
+      res.status(408).json({ message: 'Превышено время ожидания загрузки файла' });
     } else {
       console.error('Network or other error:', error.message);
-      res.status(500).json({ message: 'Ошибка загрузки файла' });
+      res.status(500).json({ 
+        message: 'Ошибка загрузки файла',
+        details: error.message
+      });
     }
   }
 };
