@@ -92,7 +92,7 @@ type Branch = BranchWithJournals;
 // Константы для статусов журналов
 const JOURNAL_STATUS = {
   approved: { label: 'Одобрен', icon: IconCircleCheck, color: 'green' },
-  pending: { label: 'На рассмотрении', icon: IconClock, color: 'yellow' },
+  pending: { label: 'В ожидании файлов', icon: IconClock, color: 'yellow' },
   rejected: { label: 'Отклонен', icon: IconCircleX, color: 'red' },
   under_review: { label: 'На проверке', icon: IconAlertCircle, color: 'blue' }
 };
@@ -151,6 +151,7 @@ const LocalJournalTable = function LocalJournalTable({
               <th className='table-header-cell' style={{ width: '300px' }}>Журнал</th>
               <th className='table-header-cell' style={{ width: '120px' }}>Статус</th>
               <th className='table-header-cell' style={{ width: '180px' }}>Дата предоставления на проверку</th>
+              <th className='table-header-cell' style={{ width: '150px' }}>Период</th>
               <th className='table-header-cell' style={{ width: '200px' }}>Файл для проверки</th>
               {canManageStatuses && (
                 <th className='table-header-cell' style={{ width: '200px' }}>Управление статусом</th>
@@ -201,6 +202,13 @@ const LocalJournalTable = function LocalJournalTable({
                 <td className='table-cell'>
                   <Text size="sm" c="dimmed">
                     {journal.filled_at ? dayjs(journal.filled_at).format('YYYY-MM-DD') : '-'}
+                  </Text>
+                </td>
+                <td className='table-cell'>
+                  <Text size="sm" c="dimmed">
+                    {journal.period_start && journal.period_end && 
+                      `${dayjs(journal.period_start).format('YYYY-MM-DD')} - ${dayjs(journal.period_end).format('YYYY-MM-DD')}`
+                    }
                   </Text>
                 </td>
                 <td className='table-cell' onClick={() => onViewFile(journal)}>
@@ -1378,7 +1386,7 @@ export default function SafetyJournal() {
               Пожарная безопасность ({stats.fire_safety || 0})
             </Tabs.Tab>
             <Tabs.Tab value="pending" leftSection={<IconClock size={16} />}>
-              На рассмотрении ({stats.pending})
+              В ожидании файлов ({stats.pending})
             </Tabs.Tab>
                   <Tabs.Tab value="approved" leftSection={<IconCircleCheck size={16} />}>
               Одобрено ({stats.approved})
