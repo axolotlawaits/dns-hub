@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
-import {Container,Title,Paper,Text,Button,Group,Stack,Modal,LoadingOverlay, Tabs, Card, Box, Progress} from '@mantine/core';
+import {Container,Title,Paper,Text,Button,Group,Stack,Modal,LoadingOverlay, Tabs, Box, Progress} from '@mantine/core';
 import { TimeInput } from '@mantine/dates';
 import {  IconUpload,  IconMusic,  IconClock,  IconDeviceMobile,  IconBuilding, IconEdit, IconCheck, IconRefresh, IconPower, IconBattery, IconWifi, IconCalendar, IconPlayerPlay, IconPlayerPause, IconWifiOff, IconX, IconRadio, IconDownload, IconAlertCircle } from '@tabler/icons-react';
 import { notificationSystem } from '../../../utils/Push';
@@ -973,11 +973,21 @@ const RadioAdmin: React.FC = () => {
 
   return (
     <DndProviderWrapper>
-      <Box className="radio-container" style={{ paddingRight: 'var(--mantine-spacing-md)' }}>
-        <Stack gap="lg">
-
-          {/* Навигация и контент вкладок */}
-          <Card shadow="sm" radius="lg" p="md" className="radio-navigation">
+      <Box className="radio-container">
+        <Stack gap="md">
+          {/* Навигация без внутренней шапки */}
+          <Paper 
+            className="radio-navigation" 
+            p="md" 
+            radius="lg" 
+            shadow="sm"
+            style={{
+              background: 'var(--theme-bg-elevated)',
+              border: '1px solid var(--theme-border)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)'
+            }}
+          >
             <Tabs 
               defaultValue="music"
               variant="pills"
@@ -990,8 +1000,15 @@ const RadioAdmin: React.FC = () => {
                 {hasFullAccess && (
                 <Tabs.Tab 
                   value="music" 
-                  leftSection={<IconMusic size={18} />}
+                  leftSection={<IconMusic size={20} />}
                   className="radio-tab-item"
+                  style={{
+                    borderRadius: 'var(--radius-lg)',
+                    fontWeight: 'var(--font-weight-medium)',
+                    transition: 'var(--transition-all)',
+                    padding: 'var(--space-3) var(--space-4)',
+                    fontSize: 'var(--font-size-sm)'
+                  }}
                 >
                   Музыка
                   {stats && (
@@ -1004,8 +1021,15 @@ const RadioAdmin: React.FC = () => {
                 {hasFullAccess && (
                 <Tabs.Tab 
                   value="streams" 
-                  leftSection={<IconRadio size={18} />}
+                  leftSection={<IconRadio size={20} />}
                   className="radio-tab-item"
+                  style={{
+                    borderRadius: 'var(--radius-lg)',
+                    fontWeight: 'var(--font-weight-medium)',
+                    transition: 'var(--transition-all)',
+                    padding: 'var(--space-3) var(--space-4)',
+                    fontSize: 'var(--font-size-sm)'
+                  }}
                 >
                   Потоки
                   <Text span size="xs" c="dimmed" ml="xs">
@@ -1015,8 +1039,15 @@ const RadioAdmin: React.FC = () => {
                 )}
                 <Tabs.Tab 
                   value="devices" 
-                  leftSection={<IconDeviceMobile size={18} />}
+                  leftSection={<IconDeviceMobile size={20} />}
                   className="radio-tab-item"
+                  style={{
+                    borderRadius: 'var(--radius-lg)',
+                    fontWeight: 'var(--font-weight-medium)',
+                    transition: 'var(--transition-all)',
+                    padding: 'var(--space-3) var(--space-4)',
+                    fontSize: 'var(--font-size-sm)'
+                  }}
                 >
                   Устройства
                   {stats && (
@@ -1027,40 +1058,101 @@ const RadioAdmin: React.FC = () => {
                 </Tabs.Tab>
               </Tabs.List>
 
-              {/* Контент вкладок */}
-              <Box className="radio-content" mt="md">
+              {/* Современный контент вкладок */}
+              <Box 
+                className="radio-content" 
+                mt="md"
+                p="md"
+                style={{
+                  background: 'var(--theme-bg-elevated)',
+                  border: '1px solid var(--theme-border)',
+                  borderRadius: 'var(--radius-lg)',
+                  boxShadow: 'var(--theme-shadow-sm)',
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)',
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}
+              >
+                {/* Декоративная полоса сверху */}
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '3px',
+                  background: 'linear-gradient(90deg, var(--color-primary-500), var(--color-primary-600), var(--color-primary-500))',
+                  borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0'
+                }} />
 
               {hasFullAccess && (
               <Tabs.Panel value="music">
-              <Stack gap="lg">
+              <Stack gap="md">
                 {/* Статистика музыки */}
             {stats && (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-                    <Paper p="md" withBorder className="radio-stats-card">
-                  <Group>
                     <div style={{
-                          width: '40px',
-                          height: '40px',
-                          borderRadius: '8px',
-                          backgroundColor: 'var(--color-primary-500)',
+                    display: 'grid', 
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
+                    gap: 'var(--space-4)',
+                    marginBottom: 'var(--space-4)'
+                  }}>
+                    <Paper 
+                      p="md" 
+                      radius="lg" 
+                      shadow="sm"
+                      className="radio-stats-card"
+                      style={{
+                        background: 'var(--theme-bg-elevated)',
+                        border: '1px solid var(--theme-border)',
+                        backdropFilter: 'blur(8px)',
+                        WebkitBackdropFilter: 'blur(8px)',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        transition: 'var(--transition-all)'
+                      }}
+                    >
+                      {/* Декоративная полоса */}
+                      <div style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: '3px',
+                        background: 'linear-gradient(90deg, var(--color-primary-500), var(--color-primary-600))',
+                        borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0'
+                      }} />
+                      
+                      <Group gap="lg">
+                        <div style={{
+                          width: '56px',
+                          height: '56px',
+                          borderRadius: 'var(--radius-lg)',
+                          background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center'
+                          justifyContent: 'center',
+                          boxShadow: 'var(--theme-shadow-md)'
                     }}>
-                          <IconMusic size={20} color="white" />
+                          <IconMusic size={28} color="white" />
                     </div>
                     <div>
                           <Text 
                             size="sm" 
                             fw={500}
-                            style={{ color: 'var(--theme-text-tertiary)' }}
+                            style={{ 
+                              color: 'var(--theme-text-secondary)',
+                              marginBottom: 'var(--space-1)'
+                            }}
                           >
                             Музыкальных файлов
                           </Text>
                           <Text 
-                            size="lg" 
+                            size="xl" 
                             fw={700}
-                            style={{ color: 'var(--theme-text-primary)' }}
+                            style={{ 
+                              color: 'var(--theme-text-primary)',
+                              fontSize: 'var(--font-size-xl)'
+                            }}
                           >
                             {stats.totalMusicFiles}
                           </Text>
@@ -1068,31 +1160,63 @@ const RadioAdmin: React.FC = () => {
                   </Group>
                     </Paper>
                     
-                    <Paper p="md" withBorder>
-                  <Group>
+                    <Paper 
+                      p="md" 
+                      radius="lg" 
+                      shadow="sm"
+                      className="radio-stats-card"
+                      style={{
+                        background: 'var(--theme-bg-elevated)',
+                        border: '1px solid var(--theme-border)',
+                        backdropFilter: 'blur(8px)',
+                        WebkitBackdropFilter: 'blur(8px)',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        transition: 'var(--transition-all)'
+                      }}
+                    >
+                      {/* Декоративная полоса */}
                     <div style={{
-                          width: '40px',
-                          height: '40px',
-                          borderRadius: '8px',
-                      backgroundColor: 'var(--color-success)',
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: '3px',
+                        background: 'linear-gradient(90deg, var(--color-warning), #f59e0b)',
+                        borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0'
+                      }} />
+                      
+                      <Group gap="lg">
+                        <div style={{
+                          width: '56px',
+                          height: '56px',
+                          borderRadius: 'var(--radius-lg)',
+                          background: 'linear-gradient(135deg, var(--color-warning), #f59e0b)',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center'
+                          justifyContent: 'center',
+                          boxShadow: 'var(--theme-shadow-md)'
                     }}>
-                          <IconBuilding size={20} color="white" />
+                          <IconBuilding size={28} color="white" />
                     </div>
                     <div>
                           <Text 
                             size="sm" 
                             fw={500}
-                            style={{ color: 'var(--theme-text-tertiary)' }}
+                            style={{ 
+                              color: 'var(--theme-text-secondary)',
+                              marginBottom: 'var(--space-1)'
+                            }}
                           >
                             Филиалов
                           </Text>
                           <Text 
-                            size="lg" 
+                            size="xl" 
                             fw={700}
-                            style={{ color: 'var(--theme-text-primary)' }}
+                            style={{ 
+                              color: 'var(--theme-text-primary)',
+                              fontSize: 'var(--font-size-xl)'
+                            }}
                           >
                             {stats.totalBranches}
                           </Text>
@@ -1102,36 +1226,79 @@ const RadioAdmin: React.FC = () => {
                 </div>
                 )}
 
-                {/* Загрузка музыки */}
-                <Paper p="lg" withBorder className="radio-stats-card">
+                {/* Секция загрузки музыки */}
+                <Paper 
+                  p="md" 
+                  radius="lg" 
+                  shadow="sm"
+                  className="radio-stats-card"
+                  style={{
+                    background: 'var(--theme-bg-elevated)',
+                    border: '1px solid var(--theme-border)',
+                    backdropFilter: 'blur(8px)',
+                    WebkitBackdropFilter: 'blur(8px)',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    transition: 'var(--transition-all)'
+                  }}
+                >
+                  {/* Декоративная полоса */}
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: '3px',
+                    background: 'linear-gradient(90deg, var(--color-primary-500), var(--color-primary-600))',
+                    borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0'
+                  }} />
+                  
                   <Group justify="space-between" mb="md">
+                    <div>
                     <Title 
                       order={3} 
                       size="h4"
                       style={{ 
                         color: 'var(--theme-text-primary)',
-                        fontWeight: 'var(--font-weight-semibold)',
-                        fontSize: 'var(--font-size-lg)'
-                      }}
-                    >
-                      <IconUpload size={20} style={{ marginRight: 8 }} />
+                          fontWeight: 'var(--font-weight-bold)',
+                          fontSize: 'var(--font-size-xl)',
+                          marginBottom: 'var(--space-2)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 'var(--space-2)'
+                        }}
+                      >
+                        <IconUpload size={24} />
                       Загрузка музыкальных файлов
                     </Title>
+                      <Text 
+                        size="sm"
+                        style={{ 
+                          color: 'var(--theme-text-secondary)',
+                          fontWeight: 'var(--font-weight-medium)'
+                        }}
+                      >
+                        Загружайте MP3 файлы для воспроизведения в филиалах. 
+                        Файлы автоматически сохраняются в папку retail/music/{musicStatus?.currentMonthFolder || 'текущий месяц'}.
+                      </Text>
+                    </div>
                     <Button 
                       onClick={() => setUploadModalOpen(true)}
-                      leftSection={<IconUpload size={16} />}
+                      leftSection={<IconUpload size={20} />}
                       className="radio-action-button"
+                      size="lg"
+                      style={{
+                        background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
+                        border: 'none',
+                        fontWeight: 'var(--font-weight-semibold)',
+                        borderRadius: 'var(--radius-lg)',
+                        boxShadow: 'var(--theme-shadow-md)',
+                        transition: 'var(--transition-all)'
+                      }}
                     >
                       Загрузить файлы
                     </Button>
                   </Group>
-                  <Text 
-                    size="sm"
-                    style={{ color: 'var(--theme-text-secondary)' }}
-                  >
-                    Загружайте MP3 файлы для воспроизведения в филиалах. 
-                    Файлы автоматически сохраняются в папку retail/music/{musicStatus?.currentMonthFolder || 'текущий месяц'}.
-                  </Text>
                 </Paper>
               </Stack>
               </Tabs.Panel>
@@ -1139,33 +1306,88 @@ const RadioAdmin: React.FC = () => {
 
               {hasFullAccess && (
               <Tabs.Panel value="streams">
-              <Stack gap="lg">
-                <Group justify="space-between">
+              <Stack gap="md">
+                <Group justify="space-between" mb="md">
+                  <div>
                   <Title 
                     order={3} 
                     size="h4"
                     style={{ 
                       color: 'var(--theme-text-primary)',
-                      fontWeight: 'var(--font-weight-semibold)',
-                      fontSize: 'var(--font-size-lg)'
-                    }}
-                  >
-                    <IconRadio size={20} style={{ marginRight: 8 }} />
+                        fontWeight: 'var(--font-weight-bold)',
+                        fontSize: 'var(--font-size-xl)',
+                        marginBottom: 'var(--space-2)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 'var(--space-2)'
+                      }}
+                    >
+                      <IconRadio size={24} />
                     Радио потоки
                   </Title>
+                    <Text 
+                      size="sm"
+                      style={{ 
+                        color: 'var(--theme-text-secondary)',
+                        fontWeight: 'var(--font-weight-medium)'
+                      }}
+                    >
+                      Управление радио потоками для различных типов филиалов
+                    </Text>
+                  </div>
                   <Button 
                     onClick={handleCreateStream}
-                    leftSection={<IconMusic size={16} />}
-                    variant="outline"
+                    leftSection={<IconMusic size={20} />}
+                    className="radio-action-button"
+                    size="lg"
+                    style={{
+                      background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
+                      border: 'none',
+                      fontWeight: 'var(--font-weight-semibold)',
+                      borderRadius: 'var(--radius-lg)',
+                      boxShadow: 'var(--theme-shadow-md)',
+                      transition: 'var(--transition-all)'
+                    }}
                   >
                     Добавить поток
                   </Button>
                 </Group>
                 
                 {radioStreams.length > 0 ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+                  <div style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', 
+                    gap: 'var(--space-4)'
+                  }}>
                     {radioStreams.map((stream) => (
-                      <Paper key={stream.id} p="md" withBorder className="radio-stream-card">
+                      <Paper 
+                        key={stream.id} 
+                        p="md" 
+                        radius="lg" 
+                        shadow="sm"
+                        className="radio-stream-card"
+                        style={{
+                          background: 'var(--theme-bg-elevated)',
+                          border: '1px solid var(--theme-border)',
+                          backdropFilter: 'blur(8px)',
+                          WebkitBackdropFilter: 'blur(8px)',
+                          position: 'relative',
+                          overflow: 'hidden',
+                          transition: 'var(--transition-all)'
+                        }}
+                      >
+                        {/* Декоративная полоса */}
+                        <div style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          height: '3px',
+                          background: stream.isActive 
+                            ? 'linear-gradient(90deg, var(--color-success), #059669)'
+                            : 'linear-gradient(90deg, var(--color-gray-500), var(--color-gray-600))',
+                          borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0'
+                        }} />
                         <Group justify="space-between" mb="sm">
                           <Text fw={600} size="lg">
                             {stream.name}
@@ -1247,22 +1469,53 @@ const RadioAdmin: React.FC = () => {
               )}
 
               <Tabs.Panel value="devices">
-              <Stack gap="lg">
+              <Stack gap="md">
                 {/* Статистика устройств */}
                 {stats && (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-                    <Paper p="md" withBorder className="radio-stats-card">
-                  <Group>
                     <div style={{
-                          width: '40px',
-                          height: '40px',
-                          borderRadius: '8px',
-                          backgroundColor: 'var(--color-primary-500)',
+                    display: 'grid', 
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
+                    gap: 'var(--space-4)',
+                    marginBottom: 'var(--space-4)'
+                  }}>
+                    <Paper 
+                      p="md" 
+                      radius="lg" 
+                      shadow="sm"
+                      className="radio-stats-card"
+                      style={{
+                        background: 'var(--theme-bg-elevated)',
+                        border: '1px solid var(--theme-border)',
+                        backdropFilter: 'blur(8px)',
+                        WebkitBackdropFilter: 'blur(8px)',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        transition: 'var(--transition-all)'
+                      }}
+                    >
+                      {/* Декоративная полоса */}
+                      <div style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: '3px',
+                        background: 'linear-gradient(90deg, var(--color-primary-500), var(--color-primary-600))',
+                        borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0'
+                      }} />
+                      
+                      <Group gap="lg">
+                        <div style={{
+                          width: '56px',
+                          height: '56px',
+                          borderRadius: 'var(--radius-lg)',
+                          background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center'
+                          justifyContent: 'center',
+                          boxShadow: 'var(--theme-shadow-md)'
                     }}>
-                          <IconDeviceMobile size={20} color="white" />
+                          <IconDeviceMobile size={28} color="white" />
                     </div>
                     <div>
                           <Text 
@@ -1283,31 +1536,63 @@ const RadioAdmin: React.FC = () => {
                   </Group>
                     </Paper>
                     
-                    <Paper p="md" withBorder>
-                  <Group>
+                    <Paper 
+                      p="md" 
+                      radius="lg" 
+                      shadow="sm"
+                      className="radio-stats-card"
+                      style={{
+                        background: 'var(--theme-bg-elevated)',
+                        border: '1px solid var(--theme-border)',
+                        backdropFilter: 'blur(8px)',
+                        WebkitBackdropFilter: 'blur(8px)',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        transition: 'var(--transition-all)'
+                      }}
+                    >
+                      {/* Декоративная полоса */}
                     <div style={{
-                          width: '40px',
-                          height: '40px',
-                          borderRadius: '8px',
-                          backgroundColor: 'var(--color-success)',
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: '3px',
+                        background: 'linear-gradient(90deg, var(--color-success), #059669)',
+                        borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0'
+                      }} />
+                      
+                      <Group gap="lg">
+                        <div style={{
+                          width: '56px',
+                          height: '56px',
+                          borderRadius: 'var(--radius-lg)',
+                          background: 'linear-gradient(135deg, var(--color-success), #059669)',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center'
+                          justifyContent: 'center',
+                          boxShadow: 'var(--theme-shadow-md)'
                     }}>
-                          <IconCheck size={20} color="white" />
+                          <IconCheck size={28} color="white" />
                     </div>
                         <div>
                           <Text 
                             size="sm" 
                             fw={500}
-                            style={{ color: 'var(--theme-text-tertiary)' }}
+                            style={{ 
+                              color: 'var(--theme-text-secondary)',
+                              marginBottom: 'var(--space-1)'
+                            }}
                           >
                             Активных
                           </Text>
                           <Text 
-                            size="lg" 
+                            size="xl" 
                             fw={700}
-                            style={{ color: 'var(--theme-text-primary)' }}
+                            style={{ 
+                              color: 'var(--theme-text-primary)',
+                              fontSize: 'var(--font-size-xl)'
+                            }}
                           >
                             {stats.activeDevices}
                           </Text>
@@ -1318,11 +1603,11 @@ const RadioAdmin: React.FC = () => {
             )}
 
                 {/* Устройства по филиалам */}
-              <Stack gap="lg">
+              <Stack gap="md">
                 {hasFullAccess ? (
                   // Полный доступ - видим все филиалы
                   branchesWithDevices.map((branchData) => (
-                    <Paper key={branchData.branch.uuid} p="lg" withBorder className="radio-device-card">
+                    <Paper key={branchData.branch.uuid} p="md" withBorder className="radio-device-card">
                     <Group justify="space-between" mb="md">
                       <div>
                           <Title order={4} size="h5">{branchData.branch.name}</Title>
@@ -1403,7 +1688,7 @@ const RadioAdmin: React.FC = () => {
                 ) : (
                   // Доступ только для чтения - видим только свой филиал
                   hasReadOnlyAccess && user && (
-                    <Paper p="lg" withBorder className="radio-device-card">
+                    <Paper p="md" withBorder className="radio-device-card">
                       <Group justify="space-between" mb="md">
                         <div>
                           <Title order={4} size="h5">{user.branch}</Title>
@@ -1488,7 +1773,7 @@ const RadioAdmin: React.FC = () => {
 
               </Box>
             </Tabs>
-          </Card>
+          </Paper>
         </Stack>
       </Box>
 
