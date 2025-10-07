@@ -14,14 +14,34 @@ const streamBase = './public/retail/radio/stream';
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    // Временная директория для приёма файла; контроллер переместит в нужную папку
-    const tempDir = './temp';
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true });
+    let targetDir: string;
+    
+    // Для загрузки музыки - сразу в папку текущего месяца
+    if (req.path === '/upload' || req.path.includes('/upload')) {
+      const currentDate = new Date();
+      const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+      const year = currentDate.getFullYear();
+      const folderName = `${month}-${year}`;
+      targetDir = `./public/retail/radio/music/${folderName}`;
     }
-    cb(null, tempDir);
+    // Для загрузки потоков - в папку stream
+    else if (req.path.includes('/streams')) {
+      targetDir = './public/retail/radio/stream';
+    }
+    // Если маршрут не распознан - ошибка
+    else {
+      return cb(new Error(`Неизвестный маршрут для загрузки файлов: ${req.path}`), '');
+    }
+    
+    // Создаем директорию если её нет
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+    
+    cb(null, targetDir);
   },
   filename: function (req, file, cb) {
+    // Используем оригинальное имя файла
     cb(null, file.originalname);
   },
 });

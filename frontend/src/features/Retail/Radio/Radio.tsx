@@ -898,12 +898,43 @@ const RadioAdmin: React.FC = () => {
     // Фильтруем только валидные файлы
     const validFiles = extractedFiles.filter((file: any) => {
       console.log('Checking file:', file, 'has name:', file?.name, 'is file:', file instanceof File);
-      return file && file.name;
+      
+      if (!file || !file.name) {
+        return false;
+      }
+      
+      // Проверяем размер файла (максимум 50MB)
+      const maxSize = 50 * 1024 * 1024; // 50MB
+      if (file.size > maxSize) {
+        console.warn(`File ${file.name} is too large: ${file.size} bytes (max: ${maxSize})`);
+        return false;
+      }
+      
+      // Проверяем тип файла (только MP3)
+      const allowedTypes = ['audio/mpeg', 'audio/mp3', 'audio/mpeg3'];
+      const fileExtension = file.name.toLowerCase().split('.').pop();
+      if (!allowedTypes.includes(file.type) && fileExtension !== 'mp3') {
+        console.warn(`File ${file.name} has unsupported type: ${file.type}`);
+        return false;
+      }
+      
+      return true;
     });
     console.log('Valid files to upload:', validFiles.length);
 
+    // Показываем информацию о фильтрации файлов
+    const filteredCount = extractedFiles.length - validFiles.length;
+    if (filteredCount > 0) {
+      notificationSystem.addNotification(
+        'Информация', 
+        `${filteredCount} файлов отфильтровано (неподдерживаемый формат или слишком большой размер)`, 
+        'info'
+      );
+    }
+
     if (validFiles.length === 0) {
       console.log('No valid files to upload');
+      notificationSystem.addNotification('Ошибка', 'Нет валидных файлов для загрузки', 'error');
       return;
     }
 
@@ -911,41 +942,108 @@ const RadioAdmin: React.FC = () => {
     console.log('API_BASE:', API_BASE);
 
     setIsUploading(true);
-      setUploadProgress(0);
+    setUploadProgress(0);
 
     try {
-      // Загружаем файлы последовательно, а не параллельно
-      for (let i = 0; i < validFiles.length; i++) {
-        const file = validFiles[i];
+      let successCount = 0;
+      let errorCount = 0;
+      const errors: string[] = [];
 
-        const formData = new FormData();
-        formData.append('music', file);
+      // Загружаем файлы пакетами по 5 файлов для снижения нагрузки на сервер
+      const batchSize = 5;
+      const totalBatches = Math.ceil(validFiles.length / batchSize);
+      
+      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+        const startIndex = batchIndex * batchSize;
+        const endIndex = Math.min(startIndex + batchSize, validFiles.length);
+        const batchFiles = validFiles.slice(startIndex, endIndex);
+        
+        console.log(`Processing batch ${batchIndex + 1}/${totalBatches} (files ${startIndex + 1}-${endIndex})`);
+        
+        // Загружаем файлы в пакете последовательно
+        for (let i = 0; i < batchFiles.length; i++) {
+          const file = batchFiles[i];
+          const globalIndex = startIndex + i;
 
-        console.log(`Sending file ${i + 1}/${validFiles.length}:`, file.name, 'to:', `${API_BASE}/upload`);
+          try {
+            const formData = new FormData();
+            formData.append('music', file);
 
-        const response = await axios.post(`${API_BASE}/upload`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
+            console.log(`Sending file ${globalIndex + 1}/${validFiles.length}:`, file.name, 'to:', `${API_BASE}/upload`);
+
+            const response = await axios.post(`${API_BASE}/upload`, formData, {
+              headers: { 'Content-Type': 'multipart/form-data' },
+              timeout: 30000, // 30 секунд таймаут
+              maxContentLength: 100 * 1024 * 1024, // 100MB максимум
+              maxBodyLength: 100 * 1024 * 1024 // 100MB максимум
+            });
+            
+            console.log('Upload response:', response.data);
+            
+            if (response.data && response.data.success) {
+              successCount++;
+            } else {
+              errorCount++;
+              errors.push(`${file.name}: ${response.data?.message || 'Неизвестная ошибка'}`);
+            }
+            
+          } catch (fileError: any) {
+            errorCount++;
+            console.error(`Error uploading file ${file.name}:`, fileError);
+            
+            if (fileError.response) {
+              // Сервер ответил с ошибкой
+              const errorMessage = fileError.response.data?.message || 
+                                  fileError.response.data?.error || 
+                                  `HTTP ${fileError.response.status}: ${fileError.response.statusText}`;
+              errors.push(`${file.name}: ${errorMessage}`);
+            } else if (fileError.request) {
+              // Запрос был отправлен, но ответа не получено
+              errors.push(`${file.name}: Нет ответа от сервера`);
+            } else {
+              // Ошибка при настройке запроса
+              errors.push(`${file.name}: ${fileError.message}`);
+            }
+          }
+          
+          // Обновляем прогресс
+          setUploadProgress(Math.round(((globalIndex + 1) / validFiles.length) * 100));
+          
+          // Небольшая задержка между загрузками для стабильности
+          if (globalIndex < validFiles.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
+        }
         
-        console.log('Upload response:', response.data);
-        
-        // Обновляем прогресс
-        setUploadProgress(Math.round(((i + 1) / validFiles.length) * 100));
-        
-        // Небольшая задержка между загрузками для стабильности
-        if (i < validFiles.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+        // Задержка между пакетами
+        if (batchIndex < totalBatches - 1) {
+          console.log(`Waiting before next batch...`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
       }
 
-      setSelectedFiles([]);
-      setUploadModalOpen(false);
-      
-      setTimeout(loadData, 1000);
-    } catch (err) {
-      console.error('Error uploading files:', err);
+      // Показываем результат загрузки
+      if (successCount > 0 && errorCount === 0) {
+        notificationSystem.addNotification('Успех', `Все ${successCount} файлов загружены успешно`, 'success');
+        setSelectedFiles([]);
+        setUploadModalOpen(false);
+        setTimeout(loadData, 1000);
+      } else if (successCount > 0 && errorCount > 0) {
+        notificationSystem.addNotification(
+          'Частичный успех', 
+          `Загружено ${successCount} из ${validFiles.length} файлов. Ошибок: ${errorCount}`, 
+          'warning'
+        );
+        console.error('Upload errors:', errors);
+        setTimeout(loadData, 1000);
+      } else {
+        notificationSystem.addNotification('Ошибка', `Не удалось загрузить ни одного файла. Ошибок: ${errorCount}`, 'error');
+        console.error('All uploads failed:', errors);
+      }
 
-      try { notificationSystem.addNotification('Ошибка', 'Ошибка загрузки файлов', 'error'); } catch {}
+    } catch (err: any) {
+      console.error('Critical error during upload process:', err);
+      notificationSystem.addNotification('Критическая ошибка', 'Произошла критическая ошибка при загрузке файлов', 'error');
     } finally {
       setIsUploading(false);
       setUploadProgress(0);

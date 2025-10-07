@@ -666,8 +666,7 @@ const AppStore: React.FC = () => {
               {
                 name: 'isActive',
                 label: 'Активно',
-                type: 'checkbox',
-                description: 'Включить/выключить приложение'
+                type: 'boolean'
               }
             ]}
             initialValues={selectedApp || {}}
