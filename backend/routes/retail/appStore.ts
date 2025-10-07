@@ -1,5 +1,5 @@
 import express, { Request, Response, NextFunction } from 'express';
-import uploadApp from '../../middleware/uploaderApp';
+import uploadApp from '../../middleware/uploaderApp.js';
 import { 
   createApp, 
   getApps, 
@@ -10,7 +10,7 @@ import {
   getAppFiles,
   updateApp, 
   deleteApp 
-} from '../../controllers/retail/appStore';
+} from '../../controllers/retail/appStore.js';
 
 const router = express.Router();
 
