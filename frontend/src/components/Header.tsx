@@ -24,8 +24,6 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
   const { header } = usePageHeader();
   const [searchOpened, { open: openSearch, close: closeSearch }] = useDisclosure(false);
 
-  // Отладка
-  console.log('Header render - header:', header);
 
   const onLogout = () => {
     localStorage.removeItem('user');

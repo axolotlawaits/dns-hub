@@ -138,11 +138,10 @@ const LocalJournalTable = function LocalJournalTable({
   onUploadFiles: (journal: SafetyJournal) => void;
   canManageStatuses: boolean;
 }) {
-  console.log('LocalJournalTable rendering with journals:', journals.map(j => ({ id: j.id, status: j.status })));
 
   const [rejectModalOpen, setRejectModalOpen] = useState<string | null>(null)
   const [rejectMessage, setRejectMessage] = useState('')
-  console.log(journals)
+  
   return (
     <Card shadow="sm" radius="lg" padding="md" className="table-container">
       <Box style={{ overflowX: 'auto', position: 'relative' }}>
@@ -188,7 +187,6 @@ const LocalJournalTable = function LocalJournalTable({
                 <td className='table-cell'>
                   <Group gap="xs" align="center">
                     {(() => {
-                      console.log('Rendering status cell for journal:', journal.id, 'status:', journal.status);
                       const statusInfo = JOURNAL_STATUS[journal.status as keyof typeof JOURNAL_STATUS];
                       const IconComponent = statusInfo?.icon;
                       return (
@@ -702,11 +700,30 @@ export default function SafetyJournal() {
 
       if (response.ok) {
         const data = await response.json();
-        updateState({ 
-          branches: data.branches || [], 
-          userInfo, 
-          loading: false 
-        });
+        
+        // Если API недоступен, показываем сообщение об ошибке
+        if (data.apiUnavailable) {
+          updateState({ 
+            branches: [], 
+            userInfo, 
+            loading: false,
+            error: data.error || 'Внешний API недоступен'
+          });
+        } else {
+          // Простая сортировка журналов по алфавиту на frontend
+          const sortedBranches = (data.branches || []).map((branch: any) => ({
+            ...branch,
+            journals: [...(branch.journals || [])].sort((a: any, b: any) => {
+              return a.journal_title.localeCompare(b.journal_title, 'ru');
+            })
+          }));
+          
+          updateState({ 
+            branches: sortedBranches, 
+            userInfo, 
+            loading: false 
+          });
+        }
       } else {
         let errorMessage = 'Ошибка загрузки филиалов с журналами';
         try {
@@ -1184,24 +1201,7 @@ export default function SafetyJournal() {
     })).filter(branch => branch.journals.length > 0); // Скрываем филиалы без журналов
     }
     
-    // Сортируем журналы: загруженные (с файлами) в начале списка
-    result = result.map(branch => ({
-      ...branch,
-      journals: branch.journals.sort((a, b) => {
-        // Журналы с файлами (загруженные) идут первыми
-        const aHasFiles = a.files && a.files.length > 0 && a.files.some(file => !file.is_deleted);
-        const bHasFiles = b.files && b.files.length > 0 && b.files.some(file => !file.is_deleted);
-        
-        if (aHasFiles && !bHasFiles) return -1; // a идет первым
-        if (!aHasFiles && bHasFiles) return 1;  // b идет первым
-        
-        // Если оба имеют файлы или оба не имеют, сортируем по дате заполнения
-        const aDate = a.filled_at ? new Date(a.filled_at).getTime() : 0;
-        const bDate = b.filled_at ? new Date(b.filled_at).getTime() : 0;
-        
-        return bDate - aDate; // Более новые сверху
-      })
-    }));
+    // Сортировка журналов теперь происходит на backend
     
     return result;
   }, [branches, activeTab, branchFilters, state.forceUpdate]);
@@ -1577,6 +1577,7 @@ export default function SafetyJournal() {
         attachments={journalFiles}
         initialIndex={0}
         onDeleteFile={canManageStatuses ? handleDeleteFile : undefined}
+        requireAuth={true} // Для SafetyJournal требуется передача токена
       />
 
       {/* Модальное окно для загрузки файлов */}

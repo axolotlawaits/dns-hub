@@ -1,7 +1,8 @@
 import { Modal, Image, Loader, Stack, Text, Group, Paper, Box, ActionIcon, Tooltip, Button } from '@mantine/core';
+import { Carousel } from '@mantine/carousel';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { API } from '../config/constants';
-import { IconFile, IconFileText, IconFileTypePdf, IconPhoto, IconMusic, IconVideo, IconDownload, IconChevronLeft, IconChevronRight, IconX, IconTrash } from '@tabler/icons-react';
+import { IconFile, IconFileText, IconFileTypePdf, IconPhoto, IconMusic, IconVideo, IconDownload, IconChevronLeft, IconChevronRight, IconX, IconTrash, IconExternalLink } from '@tabler/icons-react';
 import './FilePreviewModal.css';
 
 // Компонент для загрузки файлов с заголовками авторизации
@@ -99,6 +100,7 @@ interface FilePreviewModalProps {
   attachments: Attachment[];
   initialIndex?: number;
   onDeleteFile?: (fileId: string) => Promise<void>;
+  requireAuth?: boolean; // Флаг для SafetyJournal - требует передачи токена
 }
 
 const SUPPORTED_IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
@@ -131,6 +133,7 @@ export const FilePreviewModal = ({
   attachments,
   initialIndex = 0,
   onDeleteFile,
+  requireAuth = false,
 }: FilePreviewModalProps) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [loading, setLoading] = useState(true);
@@ -219,23 +222,92 @@ export const FilePreviewModal = ({
   const handleNext = useCallback(() => {
     setCurrentIndex(prev => {
       const nextIndex = prev < attachments.length - 1 ? prev + 1 : prev;
-      return nextIndex;
+      if (nextIndex !== prev) {
+        setLoading(true);
+        // Небольшая задержка для плавного перехода
+        setTimeout(() => {
+          setCurrentIndex(nextIndex);
+        }, 50);
+      }
+      return prev; // Возвращаем текущий индекс, так как обновление происходит в setTimeout
     });
-    setLoading(true);
   }, [attachments.length]);
 
   const handlePrev = useCallback(() => {
     setCurrentIndex(prev => {
       const prevIndex = prev > 0 ? prev - 1 : prev;
-      return prevIndex;
+      if (prevIndex !== prev) {
+        setLoading(true);
+        // Небольшая задержка для плавного перехода
+        setTimeout(() => {
+          setCurrentIndex(prevIndex);
+        }, 50);
+      }
+      return prev; // Возвращаем текущий индекс, так как обновление происходит в setTimeout
     });
-    setLoading(true);
   }, []);
 
   const handleFileSelect = (index: number) => {
-    setCurrentIndex(index);
+    if (index === currentIndex) return; // Не переключаем если уже выбран этот файл
+    
     setLoading(true);
+    // Небольшая задержка для плавного перехода
+    setTimeout(() => {
+      setCurrentIndex(index);
+    }, 50);
   };
+
+  // Функция для открытия файла в новой вкладке с токеном авторизации
+  const openInNewTab = useCallback(async () => {
+    if (!currentAttachment) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      if (!token && requireAuth) {
+        console.error('Токен авторизации не найден');
+        return;
+      }
+
+      // Для всех файлов скачиваем и создаем blob URL для лучшего UX
+      if (fileUrl.startsWith('http')) {
+        const headers: Record<string, string> = {};
+        
+        // Добавляем токен авторизации если требуется
+        if (requireAuth && token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        const response = await fetch(fileUrl, { headers });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        
+        // Открываем blob URL в новой вкладке
+        window.open(blobUrl, '_blank');
+        
+        // Очищаем blob URL через некоторое время для освобождения памяти
+        setTimeout(() => {
+          URL.revokeObjectURL(blobUrl);
+        }, 60000); // 1 минута
+      } else {
+        // Для локальных файлов или других протоколов открываем напрямую
+        window.open(fileUrl, '_blank');
+      }
+    } catch (error) {
+      console.error('Ошибка при открытии файла в новой вкладке:', error);
+      // Fallback: пытаемся открыть напрямую
+      try {
+        window.open(fileUrl, '_blank');
+      } catch (fallbackError) {
+        console.error('Fallback также не сработал:', fallbackError);
+      }
+    }
+  }, [currentAttachment, fileUrl, requireAuth]);
+
 
   useEffect(() => {
     if (!opened) {
@@ -326,93 +398,65 @@ export const FilePreviewModal = ({
   }, [currentAttachment, fileUrl, isText]);
 
 
-  const FileNavigation = () => (
-    <Group justify="space-between" align="center" className="file-navigation">
-      <ActionIcon
-        size="xl"
-        radius="xl"
-        disabled={currentIndex <= 0}
-        onClick={handlePrev}
-        style={{
-          background: currentIndex <= 0 
-            ? 'var(--theme-bg-secondary)' 
-            : 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
-          color: currentIndex <= 0 ? 'var(--theme-text-disabled)' : 'white',
-          border: 'none',
-          opacity: currentIndex <= 0 ? 0.5 : 1,
-          cursor: currentIndex <= 0 ? 'not-allowed' : 'pointer'
-        }}
-      >
-        <IconChevronLeft size={20} />
-      </ActionIcon>
-      
-      <Box
-        style={{
-          background: 'var(--theme-bg-elevated)',
-          borderRadius: '20px',
-          padding: '8px 20px',
-          border: '1px solid var(--theme-border-primary)'
-        }}
-      >
-        <Text 
-          style={{
-            fontWeight: '600',
-            color: 'var(--theme-text-primary)',
-            fontSize: '14px'
-          }}
-        >
-        {currentIndex + 1} из {attachments.length}
-      </Text>
-      </Box>
-      
-      <ActionIcon
-        size="xl"
-        radius="xl"
-        disabled={currentIndex >= attachments.length - 1}
-        onClick={handleNext}
-        style={{
-          background: currentIndex >= attachments.length - 1 
-            ? 'var(--theme-bg-secondary)' 
-            : 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
-          color: currentIndex >= attachments.length - 1 ? 'var(--theme-text-disabled)' : 'white',
-          border: 'none',
-          opacity: currentIndex >= attachments.length - 1 ? 0.5 : 1,
-          cursor: currentIndex >= attachments.length - 1 ? 'not-allowed' : 'pointer'
-        }}
-      >
-        <IconChevronRight size={20} />
-      </ActionIcon>
-    </Group>
-  );
 
   const FileSelector = () => (
     <Box className="file-selector">
-      <Text 
-        style={{ 
-          fontSize: '16px', 
-          fontWeight: '600',
-          color: 'var(--theme-text-primary)',
-          marginBottom: '12px'
+      <Carousel
+        withIndicators={false}
+        withControls={attachments.length > 3}
+        slideSize="200px"
+        slideGap="12px"
+        styles={{
+          control: {
+            background: 'var(--theme-bg-elevated)',
+            border: '1px solid var(--theme-border-primary)',
+            color: 'var(--theme-text-primary)',
+            '&:hover': {
+              background: 'var(--theme-bg-secondary)',
+            }
+          },
+          indicator: {
+            background: 'var(--theme-border-primary)',
+            '&[data-active]': {
+              background: 'var(--color-primary-500)',
+            }
+          }
         }}
       >
-        Файлы ({attachments.length})
-      </Text>
-      <Group gap="12px" wrap="wrap">
       {attachments.map((attachment, index) => {
-        const src = typeof attachment.source === 'string'
-          ? attachment.source.split('\\').pop() || attachment.source.split('/').pop() || 'Файл'
-          : attachment.source.name;
+        const src = attachment.name || 
+          (typeof attachment.source === 'string'
+            ? (() => {
+                // Извлекаем имя файла из пути или URL
+                const path = attachment.source;
+                
+                // Если это URL с параметрами, убираем их
+                const cleanPath = path.split('?')[0];
+                
+                // Разбиваем по слешам и берем последнюю часть
+                const pathParts = cleanPath.split(/[\\\/]/);
+                let fileName = pathParts[pathParts.length - 1];
+                
+                // Если последняя часть пустая или это ID (только цифры/буквы), берем предпоследнюю
+                if (!fileName || fileName.length < 3 || /^[a-f0-9-]+$/i.test(fileName)) {
+                  fileName = pathParts[pathParts.length - 2] || 'Файл';
+                }
+                
+                // Декодируем URL
+                return decodeURIComponent(fileName);
+              })()
+            : attachment.source.name);
           
           const ext = typeof attachment.source === 'string'
-            ? attachment.source.split('.').pop()?.toLowerCase() || ''
+            ? src.split('.').pop()?.toLowerCase() || ''
             : attachment.source.name.split('.').pop()?.toLowerCase() || '';
           
           const FileIcon = getFileIcon(ext);
           const isActive = currentIndex === index;
           
         return (
+          <Carousel.Slide key={attachment.id || `attachment-${index}`}>
             <Box
-            key={attachment.id || `attachment-${index}`}
             onClick={() => handleFileSelect(index)}
               style={{
                 background: isActive 
@@ -488,9 +532,10 @@ export const FilePreviewModal = ({
                 </Box>
               </Group>
             </Box>
+          </Carousel.Slide>
         );
       })}
-    </Group>
+      </Carousel>
     </Box>
   );
 
@@ -584,22 +629,56 @@ export const FilePreviewModal = ({
         <Box
           className="image-container"
         >
+          {/* Кнопка для открытия в новой вкладке */}
+          <Group justify="space-between" align="center">
+            {/* Подсчет "4 из 5" слева */}
+            <Box
+              style={{
+                background: 'var(--theme-bg-elevated)',
+                borderRadius: '20px',
+                padding: '8px 20px',
+                border: '1px solid var(--theme-border-primary)'
+              }}
+            >
+              <Text 
+                style={{
+                  fontWeight: '600',
+                  color: 'var(--theme-text-primary)',
+                  fontSize: '14px'
+                }}
+              >
+                {currentIndex + 1} из {attachments.length}
+              </Text>
+            </Box>
+
+            {/* Кнопка "Открыть в новой вкладке" справа */}
+            <Button
+              variant="outline"
+              size="sm"
+              leftSection={<IconExternalLink size={16} />}
+              onClick={openInNewTab}
+              style={{
+                background: 'var(--theme-bg-secondary)',
+                border: '1px solid var(--theme-border-primary)',
+                color: 'var(--theme-text-primary)'
+              }}
+            >
+              Открыть в новой вкладке
+            </Button>
+          </Group>
+          
           <AuthImage
             src={fileUrl}
             alt={fileName}
             fit="contain"
             onMimeTypeDetected={setFileMimeType}
             style={{
-              maxWidth: '100%',
-              maxHeight: '100%',
-              width: 'auto',
-              height: 'auto',
+              width: '100%',
+              height: '100%',
               borderRadius: '8px',
               boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)',
               objectFit: 'contain',
-              objectPosition: 'center',
-              display: 'block',
-              margin: '0 auto'
+              objectPosition: 'center'
             }}
             onLoad={() => setLoading(false)}
             onError={() => setError(true)}
@@ -611,15 +690,46 @@ export const FilePreviewModal = ({
     if (isPdf) {
       return (
         <Box
-          style={{
-            background: 'var(--theme-bg-elevated)',
-            borderRadius: '16px',
-            border: '1px solid var(--theme-border-primary)',
-            padding: '20px',
-            minHeight: '400px',
-            overflow: 'hidden'
-          }}
+          className="image-container"
         >
+          {/* Кнопка для открытия в новой вкладке */}
+          <Group justify="space-between" align="center">
+            {/* Подсчет "4 из 5" слева */}
+            <Box
+              style={{
+                background: 'var(--theme-bg-elevated)',
+                borderRadius: '20px',
+                padding: '8px 20px',
+                border: '1px solid var(--theme-border-primary)'
+              }}
+            >
+              <Text 
+                style={{
+                  fontWeight: '600',
+                  color: 'var(--theme-text-primary)',
+                  fontSize: '14px'
+                }}
+              >
+                {currentIndex + 1} из {attachments.length}
+              </Text>
+            </Box>
+
+            {/* Кнопка "Открыть в новой вкладке" справа */}
+            <Button
+              variant="outline"
+              size="sm"
+              leftSection={<IconExternalLink size={16} />}
+              onClick={openInNewTab}
+              style={{
+                background: 'var(--theme-bg-secondary)',
+                border: '1px solid var(--theme-border-primary)',
+                color: 'var(--theme-text-primary)'
+              }}
+            >
+              Открыть в новой вкладке
+            </Button>
+          </Group>
+          
           <AuthFileLoader 
             src={fileUrl} 
             onMimeTypeDetected={setFileMimeType}
@@ -632,11 +742,10 @@ export const FilePreviewModal = ({
                 src={`${blobUrl}#toolbar=0&navpanes=0`}
                 style={{
                   width: '100%',
-                  height: 'calc(100vh - 350px)',
-                  border: 'none',
-                  minHeight: 400,
+                  height: '100%',
                   borderRadius: '8px',
-                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)'
+                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)',
+                  border: 'none'
                 }}
               />
             )}
@@ -648,26 +757,58 @@ export const FilePreviewModal = ({
     if (isText) {
       return (
         <Box
-          style={{
-            background: 'var(--theme-bg-elevated)',
-            borderRadius: '16px',
-            border: '1px solid var(--theme-border-primary)',
-            padding: '20px',
-            minHeight: '400px',
-            overflow: 'hidden'
-          }}
+          className="image-container"
         >
+          {/* Кнопка для открытия в новой вкладке */}
+          <Group justify="space-between" align="center">
+            {/* Подсчет "4 из 5" слева */}
+            <Box
+              style={{
+                background: 'var(--theme-bg-elevated)',
+                borderRadius: '20px',
+                padding: '8px 20px',
+                border: '1px solid var(--theme-border-primary)'
+              }}
+            >
+              <Text 
+                style={{
+                  fontWeight: '600',
+                  color: 'var(--theme-text-primary)',
+                  fontSize: '14px'
+                }}
+              >
+                {currentIndex + 1} из {attachments.length}
+              </Text>
+            </Box>
+
+            {/* Кнопка "Открыть в новой вкладке" справа */}
+            <Button
+              variant="outline"
+              size="sm"
+              leftSection={<IconExternalLink size={16} />}
+              onClick={openInNewTab}
+              style={{
+                background: 'var(--theme-bg-secondary)',
+                border: '1px solid var(--theme-border-primary)',
+                color: 'var(--theme-text-primary)'
+              }}
+            >
+              Открыть в новой вкладке
+            </Button>
+          </Group>
+          
           <Paper 
             withBorder 
             p="md" 
             style={{
-            width: '100%',
-            height: 'calc(100vh - 300px)',
-            overflow: 'auto',
-            whiteSpace: 'pre-wrap',
-            fontFamily: 'monospace',
+              width: '100%',
+              height: '100%',
+              overflow: 'auto',
+              whiteSpace: 'pre-wrap',
+              fontFamily: 'monospace',
               backgroundColor: 'var(--theme-bg-primary)',
               borderRadius: '8px',
+              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)',
               border: '1px solid var(--theme-border-secondary)'
             }}
           >
@@ -687,25 +828,58 @@ export const FilePreviewModal = ({
     if (isAudio) {
       return (
         <Box
-          style={{
-            background: 'var(--theme-bg-elevated)',
-            borderRadius: '16px',
-            border: '1px solid var(--theme-border-primary)',
-            padding: '40px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: '400px'
-          }}
+          className="image-container"
         >
+          {/* Кнопка для открытия в новой вкладке */}
+          <Group justify="space-between" align="center">
+            {/* Подсчет "4 из 5" слева */}
+            <Box
+              style={{
+                background: 'var(--theme-bg-elevated)',
+                borderRadius: '20px',
+                padding: '8px 20px',
+                border: '1px solid var(--theme-border-primary)'
+              }}
+            >
+              <Text 
+                style={{
+                  fontWeight: '600',
+                  color: 'var(--theme-text-primary)',
+                  fontSize: '14px'
+                }}
+              >
+                {currentIndex + 1} из {attachments.length}
+              </Text>
+            </Box>
+
+            {/* Кнопка "Открыть в новой вкладке" справа */}
+            <Button
+              variant="outline"
+              size="sm"
+              leftSection={<IconExternalLink size={16} />}
+              onClick={openInNewTab}
+              style={{
+                background: 'var(--theme-bg-secondary)',
+                border: '1px solid var(--theme-border-primary)',
+                color: 'var(--theme-text-primary)'
+              }}
+            >
+              Открыть в новой вкладке
+            </Button>
+          </Group>
+          
           <Box
             style={{
               width: '100%',
-              maxWidth: '400px',
+              height: '100%',
               background: 'var(--theme-bg-primary)',
-              borderRadius: '12px',
+              borderRadius: '8px',
               padding: '20px',
-              border: '1px solid var(--theme-border-secondary)'
+              border: '1px solid var(--theme-border-secondary)',
+              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
             }}
           >
             <AuthFileLoader 
@@ -735,18 +909,46 @@ export const FilePreviewModal = ({
     if (isVideo) {
       return (
         <Box
-          style={{
-            background: 'var(--theme-bg-elevated)',
-            borderRadius: '16px',
-            border: '1px solid var(--theme-border-primary)',
-            padding: '20px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: '400px',
-            overflow: 'hidden'
-          }}
+          className="image-container"
         >
+          {/* Кнопка для открытия в новой вкладке */}
+          <Group justify="space-between" align="center">
+            {/* Подсчет "4 из 5" слева */}
+            <Box
+              style={{
+                background: 'var(--theme-bg-elevated)',
+                borderRadius: '20px',
+                padding: '8px 20px',
+                border: '1px solid var(--theme-border-primary)'
+              }}
+            >
+              <Text 
+                style={{
+                  fontWeight: '600',
+                  color: 'var(--theme-text-primary)',
+                  fontSize: '14px'
+                }}
+              >
+                {currentIndex + 1} из {attachments.length}
+              </Text>
+            </Box>
+
+            {/* Кнопка "Открыть в новой вкладке" справа */}
+            <Button
+              variant="outline"
+              size="sm"
+              leftSection={<IconExternalLink size={16} />}
+              onClick={openInNewTab}
+              style={{
+                background: 'var(--theme-bg-secondary)',
+                border: '1px solid var(--theme-border-primary)',
+                color: 'var(--theme-text-primary)'
+              }}
+            >
+              Открыть в новой вкладке
+            </Button>
+          </Group>
+          
           <AuthFileLoader 
             src={fileUrl} 
             onMimeTypeDetected={setFileMimeType}
@@ -757,8 +959,8 @@ export const FilePreviewModal = ({
               <video
                 controls
                 style={{ 
-                  maxWidth: '100%', 
-                  maxHeight: 'calc(100vh - 300px)',
+                  width: '100%',
+                  height: '100%',
                   borderRadius: '8px',
                   boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)'
                 }}
@@ -785,6 +987,43 @@ export const FilePreviewModal = ({
             overflow: 'hidden'
           }}
         >
+          <Group justify="space-between" align="center">
+            {/* Подсчет "4 из 5" слева */}
+            <Box
+              style={{
+                background: 'var(--theme-bg-elevated)',
+                borderRadius: '20px',
+                padding: '8px 20px',
+                border: '1px solid var(--theme-border-primary)'
+              }}
+            >
+              <Text 
+                style={{
+                  fontWeight: '600',
+                  color: 'var(--theme-text-primary)',
+                  fontSize: '14px'
+                }}
+              >
+                {currentIndex + 1} из {attachments.length}
+              </Text>
+            </Box>
+
+            {/* Кнопка "Открыть в новой вкладке" справа */}
+            <Button
+              variant="outline"
+              size="sm"
+              leftSection={<IconExternalLink size={16} />}
+              onClick={openInNewTab}
+              style={{
+                background: 'var(--theme-bg-secondary)',
+                border: '1px solid var(--theme-border-primary)',
+                color: 'var(--theme-text-primary)'
+              }}
+            >
+              Открыть в новой вкладке
+            </Button>
+          </Group>
+          
           <AuthFileLoader 
             src={fileUrl} 
             onMimeTypeDetected={setFileMimeType}
@@ -858,16 +1097,6 @@ export const FilePreviewModal = ({
         >
           Используйте кнопку "Скачать файл" для просмотра
         </Text>
-        <Button
-          variant="light"
-          color="blue"
-          mt="md"
-          onClick={() => {
-            window.open(fileUrl, '_blank');
-          }}
-        >
-          Открыть в новой вкладке
-        </Button>
       </Box>
     );
   };
@@ -899,7 +1128,7 @@ export const FilePreviewModal = ({
       <Box
         style={{
           background: 'var(--theme-bg-primary)',
-          minHeight: '100vh',
+          height: '100vh',
           display: 'flex',
           flexDirection: 'column'
         }}
@@ -957,15 +1186,6 @@ export const FilePreviewModal = ({
                   }}
                 >
                   {fileName}
-                </Text>
-                <Text 
-                  style={{ 
-                    color: 'rgba(255, 255, 255, 0.8)', 
-                    fontSize: '14px',
-                    marginTop: '4px'
-                  }}
-                >
-                  {fileExt.toUpperCase()} • {currentIndex + 1} из {attachments.length}
                 </Text>
               </Box>
             </Group>
@@ -1064,27 +1284,94 @@ export const FilePreviewModal = ({
           </Group>
         </Box>
 
-        {/* Основной контент */}
-        <Box style={{ flex: 1, padding: '24px' }}>
-          <Stack gap="md" style={{ height: '100%' }}>
-            {renderContent()}
+        {/* Основной контент с кнопками навигации */}
+        <Box 
+          style={{ 
+            flex: 1,
+            padding: '24px', 
+            position: 'relative',
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: 0 // Важно для правильной работы flex
+          }}
+        >
+          {/* Кнопка "Назад" слева */}
+          <ActionIcon
+            size="xl"
+            radius="xl"
+            disabled={currentIndex <= 0}
+            onClick={handlePrev}
+            style={{
+              position: 'absolute',
+              left: '40px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              zIndex: 10,
+              background: currentIndex <= 0 
+                ? 'var(--theme-bg-secondary)' 
+                : 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
+              color: currentIndex <= 0 ? 'var(--theme-text-disabled)' : 'white',
+              border: 'none',
+              opacity: currentIndex <= 0 ? 0.5 : 1,
+              cursor: currentIndex <= 0 ? 'not-allowed' : 'pointer',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
+            }}
+          >
+            <IconChevronLeft size={20} />
+          </ActionIcon>
+
+          {/* Кнопка "Вперед" справа */}
+          <ActionIcon
+            size="xl"
+            radius="xl"
+            disabled={currentIndex >= attachments.length - 1}
+            onClick={handleNext}
+            style={{
+              position: 'absolute',
+              right: '40px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              zIndex: 10,
+              background: currentIndex >= attachments.length - 1 
+                ? 'var(--theme-bg-secondary)' 
+                : 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
+              color: currentIndex >= attachments.length - 1 ? 'var(--theme-text-disabled)' : 'white',
+              border: 'none',
+              opacity: currentIndex >= attachments.length - 1 ? 0.5 : 1,
+              cursor: currentIndex >= attachments.length - 1 ? 'not-allowed' : 'pointer',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
+            }}
+          >
+            <IconChevronRight size={20} />
+          </ActionIcon>
+
+          <Stack gap="md" style={{ flex: 1, minHeight: 0 }}>
+            <Box className="content-wrapper" style={{ 
+              flex: 1, 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              minHeight: 0,
+              maxHeight: '100%',
+              overflow: 'hidden'
+            }}>
+              {renderContent()}
+            </Box>
           </Stack>
         </Box>
 
-        {/* Нижняя панель с навигацией */}
+        {/* Нижняя панель с файлами */}
         <Box
           style={{
             background: 'var(--theme-bg-elevated)',
             borderTop: '1px solid var(--theme-border-primary)',
             padding: '20px 24px'
-      }}
-    >
-      <Stack gap="md">
-        <FileSelector />
-        <FileNavigation />
-      </Stack>
+          }}
+        >
+          <FileSelector />
         </Box>
       </Box>
+
     </Modal>
   );
 };

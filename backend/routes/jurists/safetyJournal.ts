@@ -10,7 +10,8 @@ import {
   deleteFile,
   makeBranchJournalDecision,
   testExternalApi,
-  getJournalFilesList
+  getJournalFilesList,
+  proxyFile
 } from '../../controllers/jurists/safetyJournal.js';
 import { authenticateToken } from '../../middleware/auth.js';
 
@@ -49,7 +50,7 @@ router.get('/files/:fileId', getFileMetadata as any);
 // Скачивание файла
 router.get('/files/:fileId/download', downloadFile as any);
 
-// Просмотр файла
+// Просмотр файла (с аутентификацией)
 router.get('/files/:fileId/view', viewFile as any);
 
 // Удаление файла
@@ -57,5 +58,8 @@ router.delete('/files/:fileId', deleteFile as any);
 
 // Принятие решения по журналу филиала
 router.patch('/branch_journals/:branchJournalId/decision', upload.none(), makeBranchJournalDecision as any);
+
+// Прокси для открытия файлов в новом окне
+router.get('/proxy-file', proxyFile as any);
 
 export default router;

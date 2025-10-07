@@ -155,7 +155,6 @@ export const getBranchesWithJournals = async (req: Request, res: Response) => {
     
     // Проверяем доступ к jurists/safety (для информации, но не блокируем)
     const hasFullAccess = await checkSafetyJournalAccess(userId, positionName, groupName);
-    console.log('User has full access to safety journal:', hasFullAccess);
     
     // Получаем филиалы из внешнего API
     const branchesResponse = await axios.get(`${EXTERNAL_API_URL}/me/branches_with_journals`, {
@@ -185,7 +184,7 @@ export const getBranchesWithJournals = async (req: Request, res: Response) => {
             branch_journal_id: journal.id
           };
         });
-        
+
         return {
           ...apiBranch,
           branch_address: localBranch?.address || apiBranch.branch_address || '',
@@ -201,7 +200,18 @@ export const getBranchesWithJournals = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error getting branches with journals:', error);
-    res.status(500).json({ message: 'Ошибка получения филиалов с журналами' });
+    
+    // Если внешний API недоступен, возвращаем пустой список с информацией об ошибке
+    if ((error as any).code === 'ECONNREFUSED' || (error as any).message?.includes('ECONNREFUSED')) {
+      res.json({ 
+        branches: [],
+        hasFullAccess: false,
+        error: 'Внешний API недоступен. Данные не могут быть загружены.',
+        apiUnavailable: true
+      });
+    } else {
+      res.status(500).json({ message: 'Ошибка получения филиалов с журналами' });
+    }
   }
 };
 
@@ -220,8 +230,6 @@ async function getJournalFiles(journalId: string, token: string): Promise<any[]>
   try {
     const EXTERNAL_API_URL = process.env.EXTERNAL_API_URL || 'http://10.0.128.95:8000/api/v1';
     
-    console.log(`Trying to get files for journal ${journalId}`);
-    
     // Попробуем разные эндпоинты для получения файлов
     const endpoints = [
       `${EXTERNAL_API_URL}/files/?branch_journal_id=${journalId}`,
@@ -233,7 +241,6 @@ async function getJournalFiles(journalId: string, token: string): Promise<any[]>
     
     for (const endpoint of endpoints) {
       try {
-        console.log(`Trying endpoint: ${endpoint}`);
         const response = await axios.get(endpoint, {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -241,15 +248,13 @@ async function getJournalFiles(journalId: string, token: string): Promise<any[]>
           }
         });
         
-        console.log(`Files found via ${endpoint}:`, response.data);
         return response.data.files || response.data || [];
       } catch (endpointError: any) {
-        console.log(`Endpoint ${endpoint} failed:`, endpointError.response?.status, endpointError.response?.data);
+        // Продолжаем попытки с другими эндпоинтами
       }
     }
     
     // Если все эндпоинты не сработали, возвращаем пустой массив
-    console.log(`No files found for journal ${journalId} via any endpoint`);
     return [];
   } catch (error: any) {
     console.error(`Error getting files for journal ${journalId}:`, error.response?.data || error.message);
@@ -273,15 +278,6 @@ export const uploadFile = async (req: Request, res: Response) => {
     const { branchJournalId } = req.body;
     const file = req.file;
 
-    console.log('Upload file request:', {
-      branchJournalId,
-      fileName: file?.originalname,
-      fileSize: file?.size,
-      fileMimetype: file?.mimetype,
-      externalApiUrl: EXTERNAL_API_URL,
-      hasFile: !!file,
-      hasBuffer: !!file?.buffer
-    });
 
     if (!file) {
       return res.status(400).json({ message: 'Файл не предоставлен' });
@@ -297,10 +293,8 @@ export const uploadFile = async (req: Request, res: Response) => {
     }
 
     const token = getAuthToken(req);
-    console.log('Auth token:', token ? 'present' : 'missing');
     
     if (!token) {
-      console.error('No auth token found');
       return res.status(401).json({ message: 'Токен авторизации не найден' });
     }
 
@@ -313,13 +307,6 @@ export const uploadFile = async (req: Request, res: Response) => {
     });
 
     const url = `${EXTERNAL_API_URL}/files/`;
-    console.log('Sending file to:', url);
-    console.log('FormData headers:', formData.getHeaders());
-    console.log('BranchJournalId being sent:', branchJournalId);
-    console.log('FormData contents:', {
-      branchJournalId: branchJournalId,
-      file: file ? 'present' : 'missing'
-    });
 
     const response = await axios.post(url, formData, {
       headers: {
@@ -328,8 +315,6 @@ export const uploadFile = async (req: Request, res: Response) => {
       }
     });
 
-    console.log('File upload successful:', response.status);
-    console.log('External API response data:', response.data);
     res.json(response.data);
   } catch (error: any) {
     console.error('Error uploading file:', error);
@@ -373,7 +358,6 @@ export const deleteFile = async (req: Request, res: Response) => {
     // Проверяем доступ к jurists/safety
     const hasAccess = await checkSafetyJournalAccess(userId, positionName, groupName);
     if (!hasAccess) {
-      console.log('User does not have access to safety journal for file deletion');
       return res.status(403).json({ message: 'Недостаточно прав для удаления файла' });
     }
 
@@ -474,16 +458,9 @@ export const viewFile = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'ID файла не предоставлен' });
     }
     
-    console.log('Viewing file with ID:', fileId);
-    
     const EXTERNAL_API_URL = process.env.EXTERNAL_API_URL || 'http://10.0.128.95:8000/api/v1';
     
-    // Теперь fileId должен быть реальным ID файла
-    console.log('Viewing file with file ID:', fileId);
-    
     const fileUrl = `${EXTERNAL_API_URL}/files/${fileId}/view`;
-    
-    console.log('Trying to view file:', fileUrl);
     
     // Сначала проверим, доступен ли файл (без stream)
     try {
@@ -492,9 +469,7 @@ export const viewFile = async (req: Request, res: Response) => {
           'Authorization': `Bearer ${token}`
         }
       });
-      console.log('File is accessible, content-type:', testResponse.headers['content-type']);
     } catch (testError: any) {
-      console.error('File test failed:', testError.response?.data || testError.message);
       throw testError;
     }
     
@@ -608,15 +583,6 @@ export const makeBranchJournalDecision = async (req: Request, res: Response) => 
     const { userId, positionName, groupName } = (req as any).token;
     const token = getAuthToken(req);
 
-    console.log('Making branch journal decision:', {
-      branchJournalId,
-      comment,
-      status,
-      userId,
-      positionName,
-      groupName,
-      body: req.body
-    });
 
     if (!token) {
       return res.status(401).json({ message: 'Токен авторизации не найден' });
@@ -625,13 +591,11 @@ export const makeBranchJournalDecision = async (req: Request, res: Response) => 
     // Проверяем доступ к jurists/safety
     const hasAccess = await checkSafetyJournalAccess(userId, positionName, groupName);
     if (!hasAccess) {
-      console.log('User does not have access to safety journal');
       return res.status(403).json({ message: 'Недостаточно прав для изменения статуса журнала' });
     }
 
     // Проверяем статус согласно API схеме
     if (!status || !['approved', 'rejected', 'under_review'].includes(status)) {
-      console.log('Invalid status:', status);
       return res.status(400).json({ message: 'Неверный статус. Допустимые значения: approved, rejected, under_review' });
     }
 
@@ -650,17 +614,6 @@ export const makeBranchJournalDecision = async (req: Request, res: Response) => 
         formData.append('inspector', 'true');
       }
 
-      console.log('Sending FormData request to external API:', {
-        url: `${EXTERNAL_API_URL}/branch_journals/${branchJournalId}/decision`,
-        formData: {
-          status: status,
-          comment: comment,
-          decision: status,
-          user_id: userId,
-          branch_journal_id: branchJournalId,
-          inspector: hasAccess ? 'true' : 'false'
-        }
-      });
 
       const externalResponse = await axios.patch(
         `${EXTERNAL_API_URL}/branch_journals/${branchJournalId}/decision`,
@@ -672,8 +625,6 @@ export const makeBranchJournalDecision = async (req: Request, res: Response) => 
           }
         }
       );
-
-      console.log('External API response:', externalResponse.status, externalResponse.data);
 
       res.json({ 
         message: `Журнал ${status === 'approved' ? 'одобрен' : status === 'rejected' ? 'отклонен' : 'возвращен на рассмотрение'}`,
@@ -710,5 +661,72 @@ export const makeBranchJournalDecision = async (req: Request, res: Response) => 
   } catch (error) {
     console.error('Error making branch journal decision:', error);
     res.status(500).json({ message: 'Ошибка принятия решения по журналу' });
+  }
+};
+
+// Прокси для открытия файлов в новом окне с токеном
+export const proxyFile = async (req: Request, res: Response) => {
+  try {
+    const { url } = req.query;
+    const token = getAuthToken(req);
+    
+    if (!url || typeof url !== 'string') {
+      return res.status(400).json({ message: 'URL не предоставлен' });
+    }
+    
+    if (!token) {
+      return res.status(401).json({ message: 'Токен авторизации не найден' });
+    }
+
+    // Получаем файл с токеном авторизации
+    const response = await axios.get(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': '*/*',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      },
+      responseType: 'stream',
+      timeout: 30000
+    });
+
+    // Устанавливаем заголовки для просмотра файла
+    const contentType = response.headers['content-type'] || 'application/octet-stream';
+    const contentDisposition = response.headers['content-disposition'] || 'inline';
+    const contentLength = response.headers['content-length'];
+
+    res.set({
+      'Content-Type': contentType,
+      'Content-Disposition': contentDisposition,
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+
+    if (contentLength) {
+      res.set('Content-Length', contentLength);
+    }
+    
+    // Добавляем CORS заголовки для iframe
+    res.set({
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET',
+      'Access-Control-Allow-Headers': 'Authorization, Content-Type'
+    });
+    
+    response.data.pipe(res);
+  } catch (error: any) {
+    console.error('Error proxying file:', error);
+    if (error.response) {
+      res.status(error.response.status).json({
+        error: 'Ошибка получения файла',
+        message: error.response.data?.message || 'Файл недоступен',
+        status: error.response.status
+      });
+    } else {
+      res.status(500).json({ 
+        error: 'Ошибка проксирования файла',
+        message: error.message 
+      });
+    }
   }
 };
