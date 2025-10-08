@@ -1565,7 +1565,7 @@ export default function SafetyJournal() {
         onClose={closeFileView}
         attachments={journalFiles}
         initialIndex={0}
-        onDeleteFile={canManageStatuses ? handleDeleteFile : undefined}
+        onDeleteFile={handleDeleteFile} // Кнопка удаления доступна всем пользователям
         requireAuth={true} // Для SafetyJournal требуется передача токена
       />
 

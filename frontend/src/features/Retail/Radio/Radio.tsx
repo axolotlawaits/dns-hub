@@ -551,14 +551,33 @@ const RadioAdmin: React.FC = () => {
     
     const maxLength = Math.max(v1Parts.length, v2Parts.length);
     
+    console.log('compareVersions:', {
+      version1,
+      version2,
+      cleanVersion1,
+      cleanVersion2,
+      v1Parts,
+      v2Parts,
+      maxLength
+    });
+    
     for (let i = 0; i < maxLength; i++) {
       const v1Part = v1Parts[i] || 0;
       const v2Part = v2Parts[i] || 0;
       
-      if (v1Part > v2Part) return 1;
-      if (v1Part < v2Part) return -1;
+      console.log(`Comparing part ${i}: ${v1Part} vs ${v2Part}`);
+      
+      if (v1Part > v2Part) {
+        console.log('Result: 1 (version1 > version2)');
+        return 1;
+      }
+      if (v1Part < v2Part) {
+        console.log('Result: -1 (version1 < version2)');
+        return -1;
+      }
     }
     
+    console.log('Result: 0 (versions equal)');
     return 0;
   };
 
@@ -590,12 +609,29 @@ const RadioAdmin: React.FC = () => {
         
         // Используем реальную версию приложения с устройства, если она доступна
         const currentAppVersion = deviceAppVersion || device.app;
+        console.log('Checking device update:', {
+          deviceId: device.id,
+          deviceAppVersion,
+          deviceApp: device.app,
+          currentAppVersion,
+          androidAppsCount: androidApps.length
+        });
+        
         const availableApp = androidApps.find((app: App) => {
           const latestVersion = app.versions[0]?.version;
           if (!latestVersion || !currentAppVersion) return false;
           
+          const comparison = compareVersions(latestVersion, currentAppVersion);
+          console.log('Version comparison:', {
+            appName: app.name,
+            latestVersion,
+            currentAppVersion,
+            comparison,
+            shouldUpdate: comparison > 0
+          });
+          
           // Правильное сравнение версий: обновление доступно, если версия в AppStore больше текущей
-          return compareVersions(latestVersion, currentAppVersion) > 0;
+          return comparison > 0;
         });
         
         if (availableApp) {
