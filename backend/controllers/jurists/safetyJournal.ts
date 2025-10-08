@@ -525,11 +525,8 @@ export const deleteFile = async (req: Request, res: Response) => {
     const { fileId } = req.params;
     const { userId, positionName, groupName } = (req as any).token;
 
-    // Проверяем доступ к jurists/safety
-    const hasAccess = await checkSafetyJournalAccess(userId, positionName, groupName);
-    if (!hasAccess) {
-      return res.status(403).json({ message: 'Недостаточно прав для удаления файла' });
-    }
+    // Удаление файлов доступно всем пользователям (не требует проверки прав)
+    console.log('File deletion allowed for all users:', { userId, positionName, groupName, fileId });
 
     const response = await axios.delete(`${EXTERNAL_API_URL}/files/${fileId}`, {
       headers: createAuthHeaders(getAuthToken(req))

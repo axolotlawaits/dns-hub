@@ -546,8 +546,21 @@ const RadioAdmin: React.FC = () => {
     const cleanVersion1 = version1.replace(/[-_].*$/, '');
     const cleanVersion2 = version2.replace(/[-_].*$/, '');
     
+    // Проверяем, что версии содержат хотя бы одну цифру
+    if (!cleanVersion1 || !cleanVersion2 || 
+        !/\d/.test(cleanVersion1) || !/\d/.test(cleanVersion2)) {
+      console.log('compareVersions: Invalid version format, returning 0');
+      return 0;
+    }
+    
     const v1Parts = cleanVersion1.split('.').map(Number);
     const v2Parts = cleanVersion2.split('.').map(Number);
+    
+    // Проверяем, что все части версий являются числами
+    if (v1Parts.some(isNaN) || v2Parts.some(isNaN)) {
+      console.log('compareVersions: Non-numeric version parts, returning 0');
+      return 0;
+    }
     
     const maxLength = Math.max(v1Parts.length, v2Parts.length);
     
@@ -608,7 +621,8 @@ const RadioAdmin: React.FC = () => {
         );
         
         // Используем реальную версию приложения с устройства, если она доступна
-        const currentAppVersion = deviceAppVersion || device.app;
+        // Если версия не указана, не предлагаем обновления
+        const currentAppVersion = deviceAppVersion;
         console.log('Checking device update:', {
           deviceId: device.id,
           deviceAppVersion,
@@ -616,6 +630,12 @@ const RadioAdmin: React.FC = () => {
           currentAppVersion,
           androidAppsCount: androidApps.length
         });
+        
+        // Если версия приложения неизвестна, не предлагаем обновления
+        if (!currentAppVersion || currentAppVersion.trim() === '') {
+          console.log('Device app version unknown, skipping update check');
+          return null;
+        }
         
         const availableApp = androidApps.find((app: App) => {
           const latestVersion = app.versions[0]?.version;
@@ -712,7 +732,7 @@ const RadioAdmin: React.FC = () => {
         if (fileAttachment && fileAttachment.source) {
           console.log('Adding file to FormData:', fileAttachment);
           formData.append('attachment', fileAttachment.source);
-        } else {
+      } else {
           console.log('File attachment is invalid:', fileAttachment);
         }
       } else {
@@ -1052,7 +1072,7 @@ const RadioAdmin: React.FC = () => {
     console.log('API_BASE:', API_BASE);
 
     setIsUploading(true);
-    setUploadProgress(0);
+      setUploadProgress(0);
 
     try {
       let successCount = 0;
@@ -1076,19 +1096,19 @@ const RadioAdmin: React.FC = () => {
           const globalIndex = startIndex + i;
 
           try {
-            const formData = new FormData();
-            formData.append('music', file);
+        const formData = new FormData();
+        formData.append('music', file);
 
             console.log(`Sending file ${globalIndex + 1}/${validFiles.length}:`, file.name, 'to:', `${API_BASE}/upload`);
 
-            const response = await axios.post(`${API_BASE}/upload`, formData, {
+        const response = await axios.post(`${API_BASE}/upload`, formData, {
               headers: { 'Content-Type': 'multipart/form-data' },
               timeout: 30000, // 30 секунд таймаут
               maxContentLength: 100 * 1024 * 1024, // 100MB максимум
               maxBodyLength: 100 * 1024 * 1024 // 100MB максимум
-            });
-            
-            console.log('Upload response:', response.data);
+        });
+        
+        console.log('Upload response:', response.data);
             
             if (response.data && response.data.success) {
               successCount++;
@@ -1115,11 +1135,11 @@ const RadioAdmin: React.FC = () => {
               errors.push(`${file.name}: ${fileError.message}`);
             }
           }
-          
-          // Обновляем прогресс
+        
+        // Обновляем прогресс
           setUploadProgress(Math.round(((globalIndex + 1) / validFiles.length) * 100));
-          
-          // Небольшая задержка между загрузками для стабильности
+        
+        // Небольшая задержка между загрузками для стабильности
           if (globalIndex < validFiles.length - 1) {
             await new Promise(resolve => setTimeout(resolve, 200));
           }
@@ -1135,9 +1155,9 @@ const RadioAdmin: React.FC = () => {
       // Показываем результат загрузки
       if (successCount > 0 && errorCount === 0) {
         notificationSystem.addNotification('Успех', `Все ${successCount} файлов загружены успешно`, 'success');
-        setSelectedFiles([]);
-        setUploadModalOpen(false);
-        setTimeout(loadData, 1000);
+      setSelectedFiles([]);
+      setUploadModalOpen(false);
+      setTimeout(loadData, 1000);
       } else if (successCount > 0 && errorCount > 0) {
         notificationSystem.addNotification(
           'Частичный успех', 
@@ -1622,48 +1642,59 @@ const RadioAdmin: React.FC = () => {
                           </Group>
                         </Group>
                         
-                        <Stack gap="xs">
-                          <Text size="sm" c="dimmed">
-                            Тип филиала: <Text span fw={500}>{stream.branchTypeOfDist}</Text>
-                          </Text>
-                          <Text size="sm" c="dimmed">
-                            Частота: <Text span fw={500}>каждые {stream.frequencySongs} песен</Text>
-                          </Text>
-                          <Text size="sm" c="dimmed">
-                            Громкость: <Text span fw={500}>{stream.volumeLevel}%</Text>
-                          </Text>
-                          <Text size="sm" c="dimmed">
-                            Плавность: <Text span fw={500}>{stream.fadeInDuration}с</Text>
-                          </Text>
-                          {stream.attachment && (
+                        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                          <Stack gap="xs" style={{ flex: 1 }}>
                             <Text size="sm" c="dimmed">
-                              Файл: <Text span fw={500}>{decodeRussianFileName(stream.attachment)}</Text>
+                              Тип филиала: <Text span fw={500}>{stream.branchTypeOfDist}</Text>
                             </Text>
-                          )}
-                          <Text size="xs" c="dimmed">
-                            Создан: {new Date(stream.createdAt).toLocaleDateString('ru-RU')}
-                          </Text>
-                        </Stack>
-                        
-                        <Group justify="flex-end" mt="md">
-                          <Button
-                            variant="light"
-                            size="xs"
-                            leftSection={<IconEdit size={14} />}
-                            onClick={() => handleEditStream(stream)}
-                          >
-                            Редактировать
-                          </Button>
-                          <Button
-                            variant="light"
-                            color="red"
-                            size="xs"
-                            leftSection={<IconX size={14} />}
-                            onClick={() => handleDeleteStream(stream)}
-                          >
-                            Удалить
-                          </Button>
-                        </Group>
+                            <Text size="sm" c="dimmed">
+                              Частота: <Text span fw={500}>каждые {stream.frequencySongs} песен</Text>
+                            </Text>
+                            <Text size="sm" c="dimmed">
+                              Громкость: <Text span fw={500}>{stream.volumeLevel}%</Text>
+                            </Text>
+                            <Text size="sm" c="dimmed">
+                              Плавность: <Text span fw={500}>{stream.fadeInDuration}с</Text>
+                            </Text>
+                            <Text size="sm" c="dimmed">
+                              Период: <Text span fw={500}>
+                                {new Date(stream.startDate).toLocaleDateString('ru-RU')} - {
+                                  stream.endDate 
+                                    ? new Date(stream.endDate).toLocaleDateString('ru-RU')
+                                    : 'бессрочная'
+                                }
+                              </Text>
+                            </Text>
+                            {stream.attachment && (
+                              <Text size="sm" c="dimmed">
+                                Файл: <Text span fw={500}>{decodeRussianFileName(stream.attachment)}</Text>
+                              </Text>
+                            )}
+                            <Text size="xs" c="dimmed">
+                              Создан: {new Date(stream.createdAt).toLocaleDateString('ru-RU')}
+                            </Text>
+                          </Stack>
+                          
+                          <Group justify="flex-end" mt="md" style={{ marginTop: 'auto' }}>
+                            <Button
+                              variant="light"
+                              size="xs"
+                              leftSection={<IconEdit size={14} />}
+                              onClick={() => handleEditStream(stream)}
+                            >
+                              Редактировать
+                            </Button>
+                            <Button
+                              variant="light"
+                              color="red"
+                              size="xs"
+                              leftSection={<IconX size={14} />}
+                              onClick={() => handleDeleteStream(stream)}
+                            >
+                              Удалить
+                            </Button>
+                          </Group>
+                        </div>
                       </Paper>
                     ))}
                   </div>
