@@ -947,7 +947,7 @@ export default function SafetyJournal() {
         notificationSystem.addNotification('Успех', 'Файлы успешно загружены. Статус изменен на "На проверке"', 'success');
       }
       
-      // Отправляем статус на сервер после успешной загрузки файлов
+      // Отправляем статус на сервер после успешной загрузки файлов (для всех пользователей)
       try {
         const formData = new FormData();
         formData.append('status', 'under_review');

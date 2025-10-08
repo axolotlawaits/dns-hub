@@ -27,6 +27,25 @@ const createAuthHeaders = (token: string | null) => {
   };
 };
 
+// Функция для проверки доступа к изменению статуса при загрузке файлов
+const checkFileUploadStatusChangeAccess = async (userId: string, positionName: string, groupName: string, newStatus: string): Promise<boolean> => {
+  try {
+    console.log('Checking file upload status change access for:', { userId, positionName, groupName, newStatus });
+    
+    // Разрешаем изменение статуса на "under_review" для всех пользователей при загрузке файлов
+    if (newStatus === 'under_review') {
+      console.log('Status change to under_review allowed for all users during file upload');
+      return true;
+    }
+    
+    // Для других статусов используем обычную проверку прав
+    return await checkSafetyJournalAccess(userId, positionName, groupName);
+  } catch (error) {
+    console.error('Error checking file upload status change access:', error);
+    return false;
+  }
+};
+
 // Функция для проверки доступа к jurists/safety (только для управления статусами)
 const checkSafetyJournalAccess = async (userId: string, positionName: string, groupName: string): Promise<boolean> => {
   try {
@@ -739,8 +758,8 @@ export const makeBranchJournalDecision = async (req: Request, res: Response) => 
       return res.status(401).json({ message: 'Токен авторизации не найден' });
     }
 
-    // Проверяем доступ к jurists/safety
-    const hasAccess = await checkSafetyJournalAccess(userId, positionName, groupName);
+    // Проверяем доступ к изменению статуса (разрешаем under_review для всех при загрузке файлов)
+    const hasAccess = await checkFileUploadStatusChangeAccess(userId, positionName, groupName, status);
     if (!hasAccess) {
       return res.status(403).json({ message: 'Недостаточно прав для изменения статуса журнала' });
     }

@@ -11,8 +11,16 @@ export const decodeRussianFileName = (fileName: string): string => {
   try {
     // Если строка содержит искаженные русские символы, пытаемся их исправить
     if (fileName.includes('Ð') || fileName.includes('Ñ')) {
-      // Декодируем из latin1 в utf8
-      const decoded = Buffer.from(fileName, 'latin1').toString('utf8');
+      // Используем TextDecoder для декодирования из latin1 в utf8 (браузерная альтернатива Buffer)
+      const decoder = new TextDecoder('utf-8');
+      
+      // Кодируем строку как latin1, затем декодируем как utf8
+      const latin1Bytes = new Uint8Array(fileName.length);
+      for (let i = 0; i < fileName.length; i++) {
+        latin1Bytes[i] = fileName.charCodeAt(i);
+      }
+      
+      const decoded = decoder.decode(latin1Bytes);
       return decoded;
     }
     return fileName;
