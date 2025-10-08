@@ -1,6 +1,7 @@
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { decodeRussianFileName } from '../utils/format.js';
 
 const uploadDir = './public/add/slider'
 
@@ -13,20 +14,9 @@ const storage = multer.diskStorage({
     cb(null, uploadDir);
   },
   filename: function (req, file, cb) {
-    // Сохраняем оригинальное название файла
-    let originalName = file.originalname;
-    
-    // Проверяем, есть ли проблемы с кодировкой (mojibake)
-    if (/Ð|Ñ|Ð|Ñ|Ð|Ñ|Ð|Ñ|Ð|Ñ|Ð|Ñ|Ð|Ñ|Ð|Ñ|Ð|Ñ|Ð|Ñ|Ð|Ñ|Ð|Ñ|Ð|Ñ|Ð|Ñ|Ð|Ñ|Ð|Ñ/.test(originalName)) {
-      try {
-        // Пытаемся исправить mojibake
-        originalName = Buffer.from(originalName, 'latin1').toString('utf8');
-      } catch (e) {
-        // Если не получается, оставляем как есть
-      }
-    }
-    
-    cb(null, originalName);
+    // Исправляем кодировку русских символов в названии файла
+    const correctedFileName = decodeRussianFileName(file.originalname);
+    cb(null, correctedFileName);
   },
 });
 

@@ -8,6 +8,7 @@ import { API } from '../../../config/constants';
 import { DynamicFormModal, FormField } from '../../../utils/formModal';
 import { DndProviderWrapper } from '../../../utils/dnd';
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
+import { decodeRussianFileName } from '../../../utils/format';
 import { useUserContext } from '../../../hooks/useUserContext';
 import { useAccessContext } from '../../../hooks/useAccessContext';
 import './Radio.css';
@@ -255,8 +256,8 @@ const RadioAdmin: React.FC = () => {
 
 
 
-  // Конфигурация полей для формы радио потока
-  const streamFormFields: FormField[] = [
+  // Конфигурация полей для создания радио потока
+  const streamCreateFields: FormField[] = [
     {
       name: 'name',
       label: 'Название потока',
@@ -329,6 +330,74 @@ const RadioAdmin: React.FC = () => {
       accept: 'audio/mpeg,audio/mp3,.mp3',
       multiple: false,
       withDnd: true
+    }
+  ];
+
+  // Конфигурация полей для редактирования радио потока (без поля файла)
+  const streamEditFields: FormField[] = [
+    {
+      name: 'name',
+      label: 'Название потока',
+      type: 'text',
+      required: true,
+      placeholder: 'Введите название потока'
+    },
+    {
+      name: 'branchTypeOfDist',
+      label: 'Тип филиала',
+      type: 'select',
+      required: true,
+      options: [
+        { value: 'Магазин', label: 'Магазин' },
+        { value: 'Самообслуживание', label: 'Самообслуживание' },
+        { value: 'Конвеер', label: 'Конвеер' },
+        { value: 'Технопоинт', label: 'Технопоинт' }
+      ]
+    },
+    {
+      name: 'frequencySongs',
+      label: 'Каждые N песен',
+      type: 'number',
+      required: true,
+      min: 1,
+      max: 100,
+      step: '1'
+    },
+    {
+      name: 'volumeLevel',
+      label: 'Уровень громкости (%)',
+      type: 'number',
+      required: true,
+      min: 0,
+      max: 100,
+      step: '1'
+    },
+    {
+      name: 'fadeInDuration',
+      label: 'Плавное появление (сек)',
+      type: 'number',
+      required: true,
+      min: 0,
+      max: 10,
+      step: '0.1'
+    },
+    {
+      name: 'startDate',
+      label: 'Дата начала',
+      type: 'date',
+      required: true
+    },
+    {
+      name: 'endDate',
+      label: 'Дата окончания',
+      type: 'date',
+      required: false
+    },
+    {
+      name: 'isActive',
+      label: 'Активен',
+      type: 'boolean',
+      required: false
     }
   ];
 
@@ -603,10 +672,15 @@ const RadioAdmin: React.FC = () => {
       
       // Добавляем файл если он есть в values.attachment
       if (values.attachment && Array.isArray(values.attachment) && values.attachment.length > 0) {
-        console.log('Adding file to FormData:', values.attachment[0]);
-        formData.append('attachment', values.attachment[0].source);
+        const fileAttachment = values.attachment[0];
+        if (fileAttachment && fileAttachment.source) {
+          console.log('Adding file to FormData:', fileAttachment);
+          formData.append('attachment', fileAttachment.source);
+        } else {
+          console.log('File attachment is invalid:', fileAttachment);
+        }
       } else {
-        console.log('No file to add to FormData');
+        console.log('No file to add to FormData, attachment:', values.attachment);
       }
       
       if (streamModalMode === 'create') {
@@ -1527,7 +1601,7 @@ const RadioAdmin: React.FC = () => {
                           </Text>
                           {stream.attachment && (
                             <Text size="sm" c="dimmed">
-                              Файл: <Text span fw={500}>{stream.attachment}</Text>
+                              Файл: <Text span fw={500}>{decodeRussianFileName(stream.attachment)}</Text>
                             </Text>
                           )}
                           <Text size="xs" c="dimmed">
@@ -2360,8 +2434,10 @@ const RadioAdmin: React.FC = () => {
           'Удаление радио потока'
         }
         mode={streamModalMode}
-        fields={streamFormFields}
-        initialValues={selectedStream || {
+        fields={streamModalMode === 'edit' ? streamEditFields : streamCreateFields}
+        initialValues={selectedStream ? {
+          ...selectedStream
+        } : {
           name: '',
           branchTypeOfDist: '',
           frequencySongs: 5,
@@ -2369,7 +2445,8 @@ const RadioAdmin: React.FC = () => {
           fadeInDuration: 2,
           startDate: new Date().toISOString().split('T')[0],
           endDate: '',
-          isActive: true
+          isActive: true,
+          attachment: []
         }}
         onSubmit={streamModalMode === 'delete' ? undefined : handleStreamSubmit}
         onConfirm={streamModalMode === 'delete' ? handleStreamDelete : undefined}

@@ -4,6 +4,7 @@ import path from 'path';
 import { prisma } from '../../server.js';
 import { heartbeatStore } from './device.js';
 import { SocketIOService } from '../../socketio.js';
+import { decodeRussianFileName } from '../../utils/format.js';
 
 // Кэш для статистики
 const statsCache = new Map();
@@ -749,7 +750,13 @@ export const createRadioStream = async (req: Request, res: Response): Promise<an
       
       // Файл уже в правильном месте благодаря middleware
       if (fs.existsSync(req.file.path)) {
-        attachmentPath = req.file.filename;
+        // Исправляем кодировку русских символов в названии файла
+        const correctedFileName = decodeRussianFileName(req.file.originalname);
+        console.log('File name encoding correction:', {
+          original: req.file.originalname,
+          corrected: correctedFileName
+        });
+        attachmentPath = correctedFileName;
         console.log('Attachment path set to:', attachmentPath);
       } else {
         console.error('File does not exist at path:', req.file.path);
@@ -798,19 +805,25 @@ export const uploadStreamRoll = async (req: Request, res: Response): Promise<any
       return res.status(400).json({ error: 'ID потока обязателен' });
     }
 
-    const fileName = req.file.originalname;
+    // Исправляем кодировку русских символов в названии файла
+    const correctedFileName = decodeRussianFileName(req.file.originalname);
+    console.log('File name encoding correction:', {
+      original: req.file.originalname,
+      corrected: correctedFileName
+    });
+    
     const filePath = req.file.path; // Файл уже в правильном месте благодаря middleware
 
-    // Обновляем запись в базе данных - записываем название файла
+    // Обновляем запись в базе данных - записываем исправленное название файла
     const stream = await prisma.radioStream.update({
       where: { id: streamId },
-      data: { attachment: fileName }
+      data: { attachment: correctedFileName }
     });
 
     return res.status(200).json({
       success: true,
       message: 'Ролик загружен успешно',
-      fileName,
+      fileName: correctedFileName,
       streamId,
       path: filePath
     });

@@ -502,9 +502,17 @@ export default function SafetyJournal() {
 
   // Мемоизированная проверка доступа к управлению статусами
   const canManageStatuses = useMemo(() => {
-    // Проверяем доступ только через useAccessContext
-    return access.some(tool => tool.link === 'jurists/safety' && tool.accessLevel === 'FULL');
-  }, [access]);
+    // SUPERVISOR имеет полный доступ
+    if (user?.role === 'SUPERVISOR') {
+      return true;
+    }
+    
+    // Проверяем доступ через useAccessContext - только FULL доступ для управления статусами
+    return access.some(tool => 
+      tool.link === 'jurists/safety' && 
+      tool.accessLevel === 'FULL'
+    );
+  }, [access, user?.role]);
 
   // Деструктуризация для удобства
   const { branches, loading, error, activeTab } = state;
@@ -1029,7 +1037,6 @@ export default function SafetyJournal() {
         );
         
         // Обновляем данные журнала
-        let statusChanged = false;
         setState(prevState => ({
           ...prevState,
           lastUpdate: Date.now(), // Принудительное обновление
@@ -1042,20 +1049,11 @@ export default function SafetyJournal() {
                   f.file_id === fileId ? { ...f, is_deleted: true } : f
                 ).filter(f => !f.is_deleted) || [];
                 
-                // Проверяем, остались ли активные файлы
-                const hasActiveFiles = updatedFiles.length > 0;
-                const newStatus = hasActiveFiles ? j.status : 'rejected' as const;
-                
-                // Отмечаем, что статус изменился
-                if (newStatus !== j.status) {
-                  statusChanged = true;
-                }
-                
+                // Обновляем только файлы, статус не меняем при удалении файла
                 return {
                   ...j,
-                  files: updatedFiles,
-                  // Если нет активных файлов, меняем статус на "rejected"
-                  status: newStatus
+                  files: updatedFiles
+                  // Статус остается прежним - удаление файла не должно автоматически отклонять журнал
                 };
               }
               return j;
@@ -1063,28 +1061,7 @@ export default function SafetyJournal() {
           }))
         }));
         
-        // Если статус изменился на "rejected", отправляем на сервер
-        if (statusChanged && selectedJournal) {
-          try {
-            const branchJournalId = selectedJournal.branch_journal_id || selectedJournal.journal_id;
-            const formData = new FormData();
-            formData.append('status', 'rejected');
-            formData.append('decision', 'rejected');
-            
-            const statusResponse = await fetchWithAuth(`${API}/jurists/safety/branch_journals/${branchJournalId}/decision`, {
-              method: 'PATCH',
-              body: formData
-            });
-            
-            if (statusResponse.ok) {
-              console.log('Status updated to rejected successfully');
-      } else {
-              console.error('Failed to update status to rejected:', statusResponse.status);
-            }
-          } catch (err) {
-            console.error('Error updating status to rejected:', err);
-          }
-        }
+        // Статус не меняется при удалении файла - это правильное поведение
 
         // Закрываем превью после удаления файла
         closeFileView();

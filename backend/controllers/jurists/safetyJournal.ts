@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import axios from 'axios';
 import FormData from 'form-data';
 import { prisma } from '../../server.js';
+import { decodeRussianFileName } from '../../utils/format.js';
 
 // Базовый URL для внешнего API
 // ВАЖНО: Создайте файл .env в корне проекта и добавьте:
@@ -26,71 +27,93 @@ const createAuthHeaders = (token: string | null) => {
   };
 };
 
-// Функция для проверки доступа к jurists/safety
+// Функция для проверки доступа к jurists/safety (только для управления статусами)
 const checkSafetyJournalAccess = async (userId: string, positionName: string, groupName: string): Promise<boolean> => {
   try {
+    console.log('Checking safety journal access for:', { userId, positionName, groupName });
+    
+    // Сначала проверяем роль пользователя - SUPERVISOR имеет полный доступ
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true }
+    });
+
+    if (user?.role === 'SUPERVISOR') {
+      console.log('User is SUPERVISOR - full access granted');
+      return true;
+    }
+    
     // Ищем инструмент jurists/safety
     const safetyTool = await prisma.tool.findFirst({
       where: { link: 'jurists/safety' }
     });
 
     if (!safetyTool) {
+      console.log('Safety tool not found');
       return false;
     }
 
-    // Проверяем доступ на уровне пользователя
+    console.log('Safety tool found:', { id: safetyTool.id, name: safetyTool.name });
+
+    // Проверяем доступ на уровне пользователя - только FULL доступ
     const userAccess = await prisma.userToolAccess.findFirst({
       where: {
         userId: userId,
         toolId: safetyTool.id,
-        accessLevel: 'FULL'
+        accessLevel: 'FULL' // Только FULL доступ для управления статусами
       }
     });
 
     if (userAccess) {
+      console.log('User access found:', { accessLevel: userAccess.accessLevel });
       return true;
     }
 
-    // Проверяем доступ на уровне должности
+    // Проверяем доступ на уровне должности - только FULL доступ
     const position = await prisma.position.findFirst({
       where: { name: positionName }
     });
 
     if (position) {
+      console.log('Position found:', { uuid: position.uuid, name: position.name });
       const positionAccess = await prisma.positionToolAccess.findFirst({
         where: {
           positionId: position.uuid,
           toolId: safetyTool.id,
-          accessLevel: 'FULL'
+          accessLevel: 'FULL' // Только FULL доступ для управления статусами
         }
       });
 
       if (positionAccess) {
+        console.log('Position access found:', { accessLevel: positionAccess.accessLevel });
         return true;
       }
     }
 
-    // Проверяем доступ на уровне группы
+    // Проверяем доступ на уровне группы - только FULL доступ
     if (groupName) {
       const group = await prisma.group.findFirst({
         where: { name: groupName }
       });
 
       if (group) {
+        console.log('Group found:', { uuid: group.uuid, name: group.name });
         const groupAccess = await prisma.groupToolAccess.findFirst({
           where: {
             groupId: group.uuid,
             toolId: safetyTool.id,
-            accessLevel: 'FULL'
+            accessLevel: 'FULL' // Только FULL доступ для управления статусами
           }
         });
 
         if (groupAccess) {
+          console.log('Group access found:', { accessLevel: groupAccess.accessLevel });
           return true;
         }
       }
     }
 
+    console.log('No access found for safety journal management');
     return false;
   } catch (error) {
     console.error('Error checking safety journal access:', error);
@@ -279,20 +302,11 @@ export const uploadFile = async (req: Request, res: Response) => {
     const file = req.file;
 
     // Исправляем кодировку имени файла
-    let correctedFileName = file?.originalname;
-    if (file?.originalname) {
-      try {
-        // Пытаемся исправить кодировку имени файла
-        correctedFileName = Buffer.from(file.originalname, 'latin1').toString('utf8');
-        console.log('File name encoding correction:', {
-          original: file.originalname,
-          corrected: correctedFileName
-        });
-      } catch (encodingError) {
-        console.warn('Could not correct file name encoding:', encodingError);
-        correctedFileName = file.originalname;
-      }
-    }
+    const correctedFileName = decodeRussianFileName(file?.originalname || '');
+    console.log('File name encoding correction:', {
+      original: file?.originalname,
+      corrected: correctedFileName
+    });
 
     console.log('Upload file request:', {
       branchJournalId,
