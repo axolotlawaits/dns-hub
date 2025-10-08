@@ -1101,7 +1101,13 @@ export const DynamicFormModal = ({
   const initializedRef = useRef(false);
 
   // Оптимизированная функция нормализации данных
-  const buildNormalizedAttachments = useCallback((arr: any[]): FileAttachment[] => {
+  const buildNormalizedAttachments = useCallback((arr: any): FileAttachment[] => {
+    // Проверяем, что arr является массивом
+    if (!Array.isArray(arr)) {
+      console.warn('buildNormalizedAttachments received non-array:', arr);
+      return [];
+    }
+    
     return arr.map((att: any) => {
         const derivedMeta: Record<string, any> = att?.meta ? { ...att.meta } : {};
         Object.keys(att || {}).forEach((key) => {
@@ -1120,15 +1126,19 @@ export const DynamicFormModal = ({
 
       const nextMap: Record<string, FileAttachment[]> = {};
       for (const fieldName of fileFieldNames) {
-        const incoming: any[] = (initialValues as any)[fieldName] || [];
+        const incomingValue = (initialValues as any)[fieldName];
+        const incoming: any[] = Array.isArray(incomingValue) ? incomingValue : [];
         nextMap[fieldName] = buildNormalizedAttachments(incoming);
       }
 
       // Backward-compat: if generic attachments provided but no specific field had values, map to first file field
       if (fileFieldNames.length > 0) {
-        const generic: any[] = (initialValues as any).attachments
-          || (initialValues as any).rkAttachment
-          || (initialValues as any).rocAttachment
+        const attachmentsValue = (initialValues as any).attachments;
+        const rkAttachmentValue = (initialValues as any).rkAttachment;
+        const rocAttachmentValue = (initialValues as any).rocAttachment;
+        const generic: any[] = (Array.isArray(attachmentsValue) ? attachmentsValue : [])
+          || (Array.isArray(rkAttachmentValue) ? rkAttachmentValue : [])
+          || (Array.isArray(rocAttachmentValue) ? rocAttachmentValue : [])
           || [];
         if (generic.length && (!nextMap[fileFieldNames[0]] || nextMap[fileFieldNames[0]].length === 0)) {
           nextMap[fileFieldNames[0]] = buildNormalizedAttachments(generic);
