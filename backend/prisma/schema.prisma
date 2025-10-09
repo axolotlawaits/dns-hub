@@ -112,7 +112,6 @@ model Devices {
   timeUntil    String   @default("22:00")
   network      String
   number       String
-  localIP      String?  // Локальный IP устройства (для отображения)
   app          String
   os           String
   macAddress   String?  @unique

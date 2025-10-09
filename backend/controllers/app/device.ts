@@ -22,7 +22,7 @@ function hasControlChars(str: string): boolean {
 
 // Создание или обновление устройства
 export const createOrUpdateDevice = async (req: Request, res: Response): Promise<any> => {
-  const { userEmail, branchType, deviceName, vendor, network, number, app, os, deviceIP: deviceIPFromBody, ip, deviceId, deviceUuid, macAddress, localIP } = req.body;
+  const { userEmail, branchType, deviceName, vendor, network, number, app, os, deviceIP: deviceIPFromBody, ip, deviceId, deviceUuid, macAddress } = req.body;
 
   console.log('Device registration request:', {
     userEmail,
@@ -172,7 +172,6 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
         vendor: sanitizeString(vendor ?? 'DNS', 'DNS'),
         network: sanitizeString(networkIP, ''),
         number: sanitizeString(deviceNumber, '1'),
-        localIP: localIP ? sanitizeString(localIP, '') : null, // Локальный IP устройства
         app: sanitizeString(app ?? 'DNS Radio', 'DNS Radio'),
         os: sanitizeString(os ?? 'Android 14', 'Android 14'),
         macAddress: macAddress ? sanitizeString(macAddress, '') : null,
@@ -252,7 +251,6 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
             vendor: deviceData.vendor,
             network: deviceData.network,
             number: deviceData.number,
-            localIP: deviceData.localIP,
             app: deviceData.app,
             os: deviceData.os,
             macAddress: deviceData.macAddress,
@@ -326,7 +324,6 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
       if (ipParts.length === 4) {
         updateData.network = ipParts.slice(0, 3).join('.') + '.';
         updateData.number = ipParts[3];
-        updateData.localIP = currentIP;
         console.log('Updating device IP from heartbeat:', {
           deviceId,
           macAddress,

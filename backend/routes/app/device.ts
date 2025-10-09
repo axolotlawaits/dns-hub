@@ -26,8 +26,7 @@ const createDeviceSchema = z.object({
   ip: z.string().optional(),
   deviceId: z.string().optional(),
   deviceUuid: z.string().optional(),
-  macAddress: z.string().optional(),
-  localIP: z.string().optional()
+  macAddress: z.string().optional()
 });
 
 const heartbeatSchema = z.object({
