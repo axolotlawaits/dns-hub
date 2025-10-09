@@ -22,7 +22,7 @@ function hasControlChars(str: string): boolean {
 
 // Создание или обновление устройства
 export const createOrUpdateDevice = async (req: Request, res: Response): Promise<any> => {
-  const { userEmail, branchType, deviceName, vendor, network, number, app, os, deviceIP: deviceIPFromBody, ip } = req.body;
+  const { userEmail, branchType, deviceName, vendor, network, number, app, os, deviceIP: deviceIPFromBody, ip, deviceId, deviceUuid } = req.body;
 
   console.log('Device registration request:', {
     userEmail,
@@ -35,6 +35,8 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
     os,
     deviceIP: deviceIPFromBody,
     ip,
+    deviceId,
+    deviceUuid,
     'req.ip': req.ip,
     'x-forwarded-for': req.headers['x-forwarded-for'],
     'x-real-ip': req.headers['x-real-ip']
@@ -177,17 +179,56 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
       };
 
       // Ищем существующее устройство
-      const existingDevice = await tx.devices.findFirst({
-        where: {
-          branchId,
-          network: deviceData.network,
-          number: deviceData.number
-        },
-        select: { id: true }
-      });
+      let existingDevice = null;
+      
+      // Приоритет 1: По deviceId/deviceUuid (если предоставлен)
+      const deviceIdentifier = deviceId || deviceUuid;
+      if (deviceIdentifier) {
+        existingDevice = await tx.devices.findFirst({
+          where: {
+            id: deviceIdentifier
+          },
+          select: { id: true, network: true, number: true, name: true, vendor: true, os: true }
+        });
+        console.log('Search by deviceId/deviceUuid:', deviceIdentifier, 'Found:', !!existingDevice);
+      }
+      
+      // Приоритет 2: По комбинации полей (если не найден по ID)
+      if (!existingDevice) {
+        existingDevice = await tx.devices.findFirst({
+          where: {
+            branchId,
+            vendor: deviceData.vendor,
+            os: deviceData.os,
+            name: deviceData.name
+          },
+          select: { id: true, network: true, number: true, name: true, vendor: true, os: true }
+        });
+        console.log('Search by vendor+os+name: Found:', !!existingDevice);
+      }
+      
+      // Приоритет 3: Только по vendor + os (если не найден по полной комбинации)
+      if (!existingDevice) {
+        existingDevice = await tx.devices.findFirst({
+          where: {
+            branchId,
+            vendor: deviceData.vendor,
+            os: deviceData.os
+          },
+          select: { id: true, network: true, number: true, name: true, vendor: true, os: true }
+        });
+        console.log('Search by vendor+os: Found:', !!existingDevice);
+      }
 
       let device;
       if (existingDevice) {
+        console.log('Found existing device:', {
+          id: existingDevice.id,
+          oldIP: existingDevice.network + existingDevice.number,
+          newIP: deviceData.network + deviceData.number,
+          name: deviceData.name
+        });
+        
         // Обновляем существующее устройство
         device = await tx.devices.update({
           where: { id: existingDevice.id },
@@ -202,10 +243,26 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
             timeUntil: deviceData.timeUntil
           }
         });
+        
+        console.log('Device updated successfully:', {
+          id: device.id,
+          newIP: device.network + device.number
+        });
       } else {
+        console.log('Creating new device:', {
+          name: deviceData.name,
+          IP: deviceData.network + deviceData.number,
+          branchId: deviceData.branchId
+        });
+        
         // Создаем новое устройство
         device = await tx.devices.create({
           data: deviceData
+        });
+        
+        console.log('New device created:', {
+          id: device.id,
+          IP: device.network + device.number
         });
       }
 
@@ -242,6 +299,128 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
   } catch (error) {
     console.error('Error on heartbeat:', error);
     return res.status(500).json({ success: false, error: 'Heartbeat error' });
+  }
+};
+
+// Получение устройства по IP адресу
+export const getDeviceByIP = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { ip } = req.params;
+    
+    console.log('Getting device by IP:', ip);
+    
+    // Ищем устройство по IP адресу
+    let device = null;
+    
+    if (ip.includes('.')) {
+      // Если IP содержит точки, разбираем его на network и number
+      const ipParts = ip.split('.');
+      if (ipParts.length === 4) {
+        const network = ipParts.slice(0, 3).join('.') + '.';
+        const number = ipParts[3];
+        
+        device = await prisma.devices.findFirst({
+          where: {
+            AND: [
+              { network: network },
+              { number: number }
+            ]
+          },
+          include: {
+            branch: {
+              select: {
+                name: true,
+                type: true
+              }
+            }
+          }
+        });
+      }
+    }
+    
+    // Если не нашли по полному IP, попробуем найти по частичному совпадению
+    if (!device) {
+      device = await prisma.devices.findFirst({
+        where: {
+          OR: [
+            { network: { contains: ip } },
+            { number: ip }
+          ]
+        },
+        include: {
+          branch: {
+            select: {
+              name: true,
+              type: true
+            }
+          }
+        }
+      });
+    }
+
+    if (!device) {
+      console.log('Device not found by IP:', ip);
+      return res.status(404).json({ error: 'Устройство с таким IP адресом не найдено' });
+    }
+
+    console.log('Device found by IP:', {
+      id: device.id,
+      name: device.name,
+      network: device.network,
+      number: device.number,
+      fullIP: device.network + device.number,
+      branch: device.branch?.name
+    });
+
+    return res.json({
+      success: true,
+      data: device
+    });
+  } catch (error) {
+    console.error('Error fetching device by IP:', error);
+    return res.status(500).json({ error: 'Ошибка при поиске устройства по IP' });
+  }
+};
+
+// Получение устройства по ID
+export const getDeviceById = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { id } = req.params;
+    
+    console.log('Getting device by ID:', id);
+    
+    const device = await prisma.devices.findUnique({
+      where: { id },
+      include: {
+        branch: {
+          select: {
+            name: true,
+            type: true
+          }
+        }
+      }
+    });
+
+    if (!device) {
+      console.log('Device not found:', id);
+      return res.status(404).json({ error: 'Устройство не найдено' });
+    }
+
+    console.log('Device found:', {
+      id: device.id,
+      name: device.name,
+      network: device.network,
+      number: device.number,
+      branch: device.branch?.name
+    });
+
+    return res.json({
+      success: true,
+      data: device
+    });
+  } catch (error) {
+    console.error('Error fetching device by ID:', error);
+    return res.status(500).json({ error: 'Ошибка при получении устройства' });
   }
 };
 

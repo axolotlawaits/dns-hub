@@ -494,11 +494,30 @@ export const getDeviceInfo = async (req: Request, res: Response) => {
 export const actionRestartApp = async (req: Request, res: Response) => {
   try {
     const { deviceId } = req.params as any;
+    console.log('Restart app request for device:', deviceId);
+    
     const socketService = SocketIOService.getInstance();
     const result = await socketService.sendToDeviceWithAck(deviceId, 'device_restart_app');
-    if (!result.ok) return res.status(400).json({ success: false, error: result.error || 'DEVICE_OFFLINE' });
+    
+    console.log('Restart app result:', {
+      deviceId,
+      ok: result.ok,
+      error: result.error,
+      data: result.data
+    });
+    
+    if (!result.ok) {
+      console.log('Device restart failed:', result.error);
+      return res.status(400).json({ success: false, error: result.error || 'DEVICE_OFFLINE' });
+    }
+    
     const ok = (result.data as any)?.ok !== false; // по умолчанию ок, если нет явного отказа
-    if (!ok) return res.status(400).json({ success: false, error: 'RESTART_FAILED' });
+    if (!ok) {
+      console.log('Device restart rejected by device');
+      return res.status(400).json({ success: false, error: 'RESTART_FAILED' });
+    }
+    
+    console.log('Device restart successful');
     res.json({ success: true, data: result.data ?? null, message: 'Команда перезапуска отправлена' });
   } catch (error) {
     console.error('Error sending restart app:', error);

@@ -7,7 +7,9 @@ import {
   getAllDevices, 
   deleteDevice,
   heartbeat,
-  updateDeviceIP
+  updateDeviceIP,
+  getDeviceById,
+  getDeviceByIP
 } from '../../controllers/app/device.js';
 
 const createDeviceSchema = z.object({
@@ -20,7 +22,9 @@ const createDeviceSchema = z.object({
   app: z.string().optional(),
   os: z.string().optional(),
   deviceIP: z.string().optional(),
-  ip: z.string().optional()
+  ip: z.string().optional(),
+  deviceId: z.string().optional(),
+  deviceUuid: z.string().optional()
 });
 
 const heartbeatSchema = z.object({
@@ -46,8 +50,14 @@ router.post('/heartbeat', validateData(heartbeatSchema), heartbeat);
 // Обновление IP адреса устройства
 router.put('/update-ip', validateData(updateDeviceIPSchema), updateDeviceIP);
 
+// Получение устройства по IP адресу
+router.get('/ip/:ip', getDeviceByIP);
+
 // Получение устройства по branchId
 router.get('/branch/:branchId', getDeviceByBranchId);
+
+// Получение устройства по ID
+router.get('/:id', getDeviceById);
 
 // Получение всех устройств
 router.get('/all', getAllDevices);
