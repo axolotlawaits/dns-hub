@@ -148,7 +148,7 @@ function App() {
                 <Route path='/branch/:id' element={<Branch />} />
                 <Route path='/employee/:id' element={<Employee />} />
                 <Route path='/no-access' element={<NoAccess />} />
-                <Route path="/add/rk" element={<RK />} />
+
                 <Route element={<ProtectedRoute />}>
                   <Route path="/aho/meter-reading" element={<MeterReading />} />
                   <Route path="/aho/correspondence" element={<Correspondence />} />
@@ -160,6 +160,7 @@ function App() {
                   <Route path="/accounting/supply-docs" element={<SupplyDocs />} />
                   <Route path="/accounting/contracts-register" element={<Roc />} />
                   <Route path='/jurists/safety' element={<Safety />} />
+                  <Route path="/add/rk" element={<RK />} />
                   <Route path='/retail/radio' element={<Radio />} />
                 </Route>
                 <Route path='/supply/loaders' element={<LoadersHome />} />
