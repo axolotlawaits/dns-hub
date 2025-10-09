@@ -160,10 +160,10 @@ function App() {
                   <Route path="/accounting/supply-docs" element={<SupplyDocs />} />
                   <Route path="/accounting/contracts-register" element={<Roc />} />
                   <Route path='/jurists/safety' element={<Safety />} />
+                  <Route path='/retail/radio' element={<Radio />} />
                 </Route>
                 <Route path='/supply/loaders' element={<LoadersHome />} />
                 <Route path='/supply/loaders/route/:id' element={<RouteComponent />} />
-                <Route path='/retail/radio' element={<Radio />} />
                 <Route path='/retail/app-store' element={<AppStore />} />
               </Routes>
             </AppShell.Main>
