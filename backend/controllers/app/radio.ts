@@ -965,6 +965,38 @@ export const downloadStreamFile = async (req: Request, res: Response): Promise<a
     // Проверяем существование файла
     if (!fs.existsSync(filePath)) {
       console.log('File does not exist at path:', filePath);
+      
+      // Пытаемся найти файл с исправленным названием (для совместимости с искаженными названиями)
+      const streamDir = './public/retail/radio/stream';
+      const files = fs.readdirSync(streamDir);
+      console.log('Available files in stream directory:', files);
+      
+      // Ищем файл, который может соответствовать нашему потоку
+      const matchingFile = files.find(file => {
+        // Проверяем, содержит ли файл ключевые слова из названия потока
+        const streamName = stream.name.toLowerCase();
+        const fileName = file.toLowerCase();
+        return fileName.includes('мобильное') || fileName.includes('приложение') || 
+               fileName.includes('mobile') || fileName.includes('app');
+      });
+      
+      if (matchingFile) {
+        console.log('Found matching file:', matchingFile);
+        const correctedFilePath = path.join(streamDir, matchingFile);
+        console.log('Using corrected file path:', correctedFilePath);
+        
+        // Отправляем файл с исправленным путем
+        res.download(correctedFilePath, stream.attachment, (err) => {
+          if (err) {
+            console.error('Error sending file:', err);
+            if (!res.headersSent) {
+              res.status(500).json({ error: 'Ошибка при скачивании файла' });
+            }
+          }
+        });
+        return;
+      }
+      
       return res.status(404).json({ error: 'Файл не найден на сервере' });
     }
     
