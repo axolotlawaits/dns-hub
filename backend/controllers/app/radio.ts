@@ -973,11 +973,10 @@ export const downloadStreamFile = async (req: Request, res: Response): Promise<a
       
       // Ищем файл, который может соответствовать нашему потоку
       const matchingFile = files.find(file => {
-        // Проверяем, содержит ли файл ключевые слова из названия потока
-        const streamName = stream.name.toLowerCase();
-        const fileName = file.toLowerCase();
-        return fileName.includes('мобильное') || fileName.includes('приложение') || 
-               fileName.includes('mobile') || fileName.includes('app');
+        // Декодируем название файла и сравниваем с attachment из базы данных
+        const decodedFileName = decodeRussianFileName(file);
+        console.log('Comparing:', decodedFileName, 'with', stream.attachment);
+        return decodedFileName === stream.attachment;
       });
       
       if (matchingFile) {
