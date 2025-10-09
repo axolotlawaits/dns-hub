@@ -131,12 +131,22 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
         // Пытаемся получить реальный IP из заголовков (для NAT/Proxy)
         const forwardedFor = req.headers['x-forwarded-for'] as string;
         const realIP = req.headers['x-real-ip'] as string;
-        deviceIP = forwardedFor?.split(',')[0]?.trim() || realIP || req.ip || 'Unknown';
+        const clientIP = req.headers['x-client-ip'] as string;
+        const cfConnectingIP = req.headers['cf-connecting-ip'] as string;
+        
+        deviceIP = forwardedFor?.split(',')[0]?.trim() || 
+                  realIP || 
+                  clientIP || 
+                  cfConnectingIP || 
+                  req.ip || 
+                  'Unknown';
         const normalizedIP = deviceIP.replace(/^::ffff:/, '');
         
-        console.log('Device IP detection:', {
+        console.log('Device IP detection (fallback):', {
           'x-forwarded-for': forwardedFor,
           'x-real-ip': realIP,
+          'x-client-ip': clientIP,
+          'cf-connecting-ip': cfConnectingIP,
           'req.ip': req.ip,
           'final-ip': deviceIP
         });
@@ -146,6 +156,13 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
           : normalizedIP;
         deviceNumber = normalizedIP.split('.').pop() || '1';
       }
+
+      console.log('Final device IP data:', {
+        deviceIP,
+        networkIP,
+        deviceNumber,
+        fullIP: `${networkIP}${deviceNumber}`
+      });
 
       const deviceData = {
         branchId,
@@ -225,6 +242,59 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
   } catch (error) {
     console.error('Error on heartbeat:', error);
     return res.status(500).json({ success: false, error: 'Heartbeat error' });
+  }
+};
+
+// Обновление IP адреса устройства
+export const updateDeviceIP = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { deviceId, deviceIP, network, number } = req.body;
+    
+    if (!deviceId) {
+      return res.status(400).json({ error: 'deviceId обязателен' });
+    }
+
+    let networkIP = '';
+    let deviceNumber = '1';
+
+    if (deviceIP && typeof deviceIP === 'string' && deviceIP.includes('.')) {
+      // Разбираем полный IP адрес
+      const ipParts = deviceIP.split('.');
+      if (ipParts.length === 4) {
+        networkIP = ipParts.slice(0, 3).join('.') + '.';
+        deviceNumber = ipParts[3];
+      }
+    } else if (network && number) {
+      networkIP = network;
+      deviceNumber = number;
+    } else {
+      return res.status(400).json({ error: 'Необходимо указать deviceIP или network+number' });
+    }
+
+    console.log('Updating device IP:', {
+      deviceId,
+      deviceIP,
+      network: networkIP,
+      number: deviceNumber,
+      fullIP: `${networkIP}${deviceNumber}`
+    });
+
+    const updatedDevice = await prisma.devices.update({
+      where: { id: deviceId },
+      data: {
+        network: networkIP,
+        number: deviceNumber
+      }
+    });
+
+    return res.json({ 
+      success: true, 
+      data: updatedDevice,
+      message: `IP адрес обновлен на ${networkIP}${deviceNumber}`
+    });
+  } catch (error) {
+    console.error('Error updating device IP:', error);
+    return res.status(500).json({ error: 'Ошибка при обновлении IP адреса устройства' });
   }
 };
 

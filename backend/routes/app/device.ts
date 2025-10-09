@@ -6,7 +6,8 @@ import {
   getDeviceByBranchId, 
   getAllDevices, 
   deleteDevice,
-  heartbeat
+  heartbeat,
+  updateDeviceIP
 } from '../../controllers/app/device.js';
 
 const createDeviceSchema = z.object({
@@ -17,12 +18,21 @@ const createDeviceSchema = z.object({
   network: z.string().optional(),
   number: z.string().optional(),
   app: z.string().optional(),
-  os: z.string().optional()
+  os: z.string().optional(),
+  deviceIP: z.string().optional(),
+  ip: z.string().optional()
 });
 
 const heartbeatSchema = z.object({
   deviceId: z.string().min(1, 'deviceId обязателен'),
   appVersion: z.string().optional()
+});
+
+const updateDeviceIPSchema = z.object({
+  deviceId: z.string().min(1, 'deviceId обязателен'),
+  deviceIP: z.string().optional(),
+  network: z.string().optional(),
+  number: z.string().optional()
 });
 
 const router = express.Router();
@@ -32,6 +42,9 @@ router.post('/create', validateData(createDeviceSchema), createOrUpdateDevice);
 
 // Heartbeat от устройства
 router.post('/heartbeat', validateData(heartbeatSchema), heartbeat);
+
+// Обновление IP адреса устройства
+router.put('/update-ip', validateData(updateDeviceIPSchema), updateDeviceIP);
 
 // Получение устройства по branchId
 router.get('/branch/:branchId', getDeviceByBranchId);
