@@ -26,12 +26,15 @@ const createDeviceSchema = z.object({
   ip: z.string().optional(),
   deviceId: z.string().optional(),
   deviceUuid: z.string().optional(),
-  macAddress: z.string().optional()
+  macAddress: z.string().optional(),
+  localIP: z.string().optional()
 });
 
 const heartbeatSchema = z.object({
   deviceId: z.string().min(1, 'deviceId обязателен'),
-  appVersion: z.string().optional()
+  appVersion: z.string().optional(),
+  macAddress: z.string().optional(),
+  currentIP: z.string().optional()
 });
 
 const updateDeviceIPSchema = z.object({

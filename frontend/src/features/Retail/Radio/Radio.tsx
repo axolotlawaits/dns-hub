@@ -25,6 +25,7 @@ interface Device {
   activity: string;
   network: string;
   number: string;
+  localIP?: string; // Локальный IP устройства
   vendor: string;
   os: string;
   app: string;
@@ -2141,10 +2142,17 @@ const RadioAdmin: React.FC = () => {
                   </Text>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <Text size="sm" fw={500} style={{ color: 'var(--theme-text-secondary)' }}>IP адрес</Text>
-                  <Text size="sm" style={{ color: 'var(--theme-text-primary)' }}>
-                    {selectedDevice.network}{selectedDevice.number}
-                  </Text>
+                  <Text size="sm" fw={500} style={{ color: 'var(--theme-text-secondary)' }}>IP адреса</Text>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <Text size="sm" style={{ color: 'var(--theme-text-primary)' }}>
+                      🌐 Внешний: {selectedDevice.network}{selectedDevice.number}
+                    </Text>
+                    {selectedDevice.localIP && (
+                      <Text size="sm" style={{ color: 'var(--theme-text-primary)' }}>
+                        🏠 Локальный: {selectedDevice.localIP}
+                      </Text>
+                    )}
+                  </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <Text size="sm" fw={500} style={{ color: 'var(--theme-text-secondary)' }}>Операционная система</Text>

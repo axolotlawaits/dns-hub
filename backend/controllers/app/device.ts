@@ -22,7 +22,7 @@ function hasControlChars(str: string): boolean {
 
 // Создание или обновление устройства
 export const createOrUpdateDevice = async (req: Request, res: Response): Promise<any> => {
-  const { userEmail, branchType, deviceName, vendor, network, number, app, os, deviceIP: deviceIPFromBody, ip, deviceId, deviceUuid, macAddress } = req.body;
+  const { userEmail, branchType, deviceName, vendor, network, number, app, os, deviceIP: deviceIPFromBody, ip, deviceId, deviceUuid, macAddress, localIP } = req.body;
 
   console.log('Device registration request:', {
     userEmail,
@@ -172,6 +172,7 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
         vendor: sanitizeString(vendor ?? 'DNS', 'DNS'),
         network: sanitizeString(networkIP, ''),
         number: sanitizeString(deviceNumber, '1'),
+        localIP: localIP ? sanitizeString(localIP, '') : null, // Локальный IP устройства
         app: sanitizeString(app ?? 'DNS Radio', 'DNS Radio'),
         os: sanitizeString(os ?? 'Android 14', 'Android 14'),
         macAddress: macAddress ? sanitizeString(macAddress, '') : null,
@@ -251,6 +252,7 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
             vendor: deviceData.vendor,
             network: deviceData.network,
             number: deviceData.number,
+            localIP: deviceData.localIP,
             app: deviceData.app,
             os: deviceData.os,
             macAddress: deviceData.macAddress,
@@ -300,7 +302,7 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
 // Heartbeat от приложения устройства
 export const heartbeat = async (req: Request, res: Response): Promise<any> => {
   try {
-    const { deviceId, appVersion } = req.body || {};
+    const { deviceId, appVersion, macAddress, currentIP } = req.body || {};
     if (!deviceId) {
       return res.status(400).json({ success: false, error: 'deviceId обязателен' });
     }
@@ -311,15 +313,36 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
     // Обновляем heartbeat store (для быстрого доступа)
     heartbeatStore.set(deviceId, now);
 
-    // Обновляем lastSeen в базе данных
+    // Подготавливаем данные для обновления
+    const updateData: any = { lastSeen: nowDate };
+    
+    if (appVersion) {
+      updateData.app = sanitizeString(appVersion);
+    }
+    
+    // Если есть MAC адрес и текущий IP, обновляем IP адрес
+    if (macAddress && currentIP) {
+      const ipParts = currentIP.split('.');
+      if (ipParts.length === 4) {
+        updateData.network = ipParts.slice(0, 3).join('.') + '.';
+        updateData.number = ipParts[3];
+        updateData.localIP = currentIP;
+        console.log('Updating device IP from heartbeat:', {
+          deviceId,
+          macAddress,
+          currentIP,
+          network: updateData.network,
+          number: updateData.number
+        });
+      }
+    }
+
+    // Обновляем lastSeen и другие данные в базе данных
     await prisma.devices.update({ 
       where: { id: deviceId }, 
-      data: { 
-        lastSeen: nowDate,
-        ...(appVersion ? { app: sanitizeString(appVersion) } : {})
-      } 
+      data: updateData
     }).catch((error) => {
-      console.error('Error updating device lastSeen:', error);
+      console.error('Error updating device in heartbeat:', error);
     });
 
     console.log('Heartbeat received from device:', deviceId, 'at', nowDate.toISOString());

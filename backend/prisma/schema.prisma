@@ -103,20 +103,21 @@ model Branch {
 }
 
 model Devices {
-  id         String   @id @default(uuid())
-  createdAt  DateTime @default(now())
-  lastSeen   DateTime @default(now())
-  vendor     String
-  name       String
-  timeFrom   String   @default("08:00")
-  timeUntil  String   @default("22:00")
-  network    String
-  number     String
-  app        String
-  os         String
-  macAddress String?  @unique
-  branchId   String
-  branch     Branch   @relation(fields: [branchId], references: [uuid])
+  id           String   @id @default(uuid())
+  createdAt    DateTime @default(now())
+  lastSeen     DateTime @default(now())
+  vendor       String
+  name         String
+  timeFrom     String   @default("08:00")
+  timeUntil    String   @default("22:00")
+  network      String
+  number       String
+  localIP      String?  // Локальный IP устройства (для отображения)
+  app          String
+  os           String
+  macAddress   String?  @unique
+  branchId     String
+  branch       Branch   @relation(fields: [branchId], references: [uuid])
 }
 
 model Type {
