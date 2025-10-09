@@ -22,7 +22,7 @@ function hasControlChars(str: string): boolean {
 
 // Создание или обновление устройства
 export const createOrUpdateDevice = async (req: Request, res: Response): Promise<any> => {
-  const { userEmail, branchType, deviceName, vendor, network, number, app, os, deviceIP: deviceIPFromBody, ip, deviceId, deviceUuid } = req.body;
+  const { userEmail, branchType, deviceName, vendor, network, number, app, os, deviceIP: deviceIPFromBody, ip, deviceId, deviceUuid, macAddress } = req.body;
 
   console.log('Device registration request:', {
     userEmail,
@@ -174,6 +174,7 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
         number: sanitizeString(deviceNumber, '1'),
         app: sanitizeString(app ?? 'DNS Radio', 'DNS Radio'),
         os: sanitizeString(os ?? 'Android 14', 'Android 14'),
+        macAddress: macAddress ? sanitizeString(macAddress, '') : null,
         timeFrom: '08:00',
         timeUntil: '22:00'
       };
@@ -181,19 +182,32 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
       // Ищем существующее устройство
       let existingDevice = null;
       
-      // Приоритет 1: По deviceId/deviceUuid (если предоставлен)
-      const deviceIdentifier = deviceId || deviceUuid;
-      if (deviceIdentifier) {
+      // Приоритет 1: По MAC адресу (самый надежный идентификатор)
+      if (deviceData.macAddress) {
         existingDevice = await tx.devices.findFirst({
           where: {
-            id: deviceIdentifier
+            macAddress: deviceData.macAddress
           },
-          select: { id: true, network: true, number: true, name: true, vendor: true, os: true }
+          select: { id: true, network: true, number: true, name: true, vendor: true, os: true, macAddress: true }
         });
-        console.log('Search by deviceId/deviceUuid:', deviceIdentifier, 'Found:', !!existingDevice);
+        console.log('Search by MAC address:', deviceData.macAddress, 'Found:', !!existingDevice);
       }
       
-      // Приоритет 2: По комбинации полей (если не найден по ID)
+      // Приоритет 2: По deviceId/deviceUuid (если не найден по MAC)
+      if (!existingDevice) {
+        const deviceIdentifier = deviceId || deviceUuid;
+        if (deviceIdentifier) {
+          existingDevice = await tx.devices.findFirst({
+            where: {
+              id: deviceIdentifier
+            },
+            select: { id: true, network: true, number: true, name: true, vendor: true, os: true, macAddress: true }
+          });
+          console.log('Search by deviceId/deviceUuid:', deviceIdentifier, 'Found:', !!existingDevice);
+        }
+      }
+      
+      // Приоритет 3: По комбинации полей (если не найден по MAC/ID)
       if (!existingDevice) {
         existingDevice = await tx.devices.findFirst({
           where: {
@@ -202,12 +216,12 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
             os: deviceData.os,
             name: deviceData.name
           },
-          select: { id: true, network: true, number: true, name: true, vendor: true, os: true }
+          select: { id: true, network: true, number: true, name: true, vendor: true, os: true, macAddress: true }
         });
         console.log('Search by vendor+os+name: Found:', !!existingDevice);
       }
       
-      // Приоритет 3: Только по vendor + os (если не найден по полной комбинации)
+      // Приоритет 4: Только по vendor + os (если не найден по полной комбинации)
       if (!existingDevice) {
         existingDevice = await tx.devices.findFirst({
           where: {
@@ -215,7 +229,7 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
             vendor: deviceData.vendor,
             os: deviceData.os
           },
-          select: { id: true, network: true, number: true, name: true, vendor: true, os: true }
+          select: { id: true, network: true, number: true, name: true, vendor: true, os: true, macAddress: true }
         });
         console.log('Search by vendor+os: Found:', !!existingDevice);
       }
@@ -239,6 +253,7 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
             number: deviceData.number,
             app: deviceData.app,
             os: deviceData.os,
+            macAddress: deviceData.macAddress,
             timeFrom: deviceData.timeFrom,
             timeUntil: deviceData.timeUntil
           }
@@ -379,6 +394,49 @@ export const getDeviceByIP = async (req: Request, res: Response): Promise<any> =
   } catch (error) {
     console.error('Error fetching device by IP:', error);
     return res.status(500).json({ error: 'Ошибка при поиске устройства по IP' });
+  }
+};
+
+// Получение устройства по MAC адресу
+export const getDeviceByMAC = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { macAddress } = req.params;
+    
+    console.log('Getting device by MAC address:', macAddress);
+    
+    const device = await prisma.devices.findUnique({
+      where: { macAddress },
+      include: {
+        branch: {
+          select: {
+            name: true,
+            type: true
+          }
+        }
+      }
+    });
+
+    if (!device) {
+      console.log('Device not found by MAC address:', macAddress);
+      return res.status(404).json({ error: 'Устройство с таким MAC адресом не найдено' });
+    }
+
+    console.log('Device found by MAC address:', {
+      id: device.id,
+      name: device.name,
+      macAddress: device.macAddress,
+      network: device.network,
+      number: device.number,
+      branch: device.branch?.name
+    });
+
+    return res.json({
+      success: true,
+      data: device
+    });
+  } catch (error) {
+    console.error('Error fetching device by MAC address:', error);
+    return res.status(500).json({ error: 'Ошибка при поиске устройства по MAC адресу' });
   }
 };
 

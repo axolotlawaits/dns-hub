@@ -9,7 +9,8 @@ import {
   heartbeat,
   updateDeviceIP,
   getDeviceById,
-  getDeviceByIP
+  getDeviceByIP,
+  getDeviceByMAC
 } from '../../controllers/app/device.js';
 
 const createDeviceSchema = z.object({
@@ -24,7 +25,8 @@ const createDeviceSchema = z.object({
   deviceIP: z.string().optional(),
   ip: z.string().optional(),
   deviceId: z.string().optional(),
-  deviceUuid: z.string().optional()
+  deviceUuid: z.string().optional(),
+  macAddress: z.string().optional()
 });
 
 const heartbeatSchema = z.object({
@@ -52,6 +54,9 @@ router.put('/update-ip', validateData(updateDeviceIPSchema), updateDeviceIP);
 
 // Получение устройства по IP адресу
 router.get('/ip/:ip', getDeviceByIP);
+
+// Получение устройства по MAC адресу
+router.get('/mac/:macAddress', getDeviceByMAC);
 
 // Получение устройства по branchId
 router.get('/branch/:branchId', getDeviceByBranchId);
