@@ -306,11 +306,25 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
     }
 
     const now = Date.now();
+    const nowDate = new Date(now);
+    
+    // Обновляем heartbeat store (для быстрого доступа)
     heartbeatStore.set(deviceId, now);
 
-    await prisma.devices.update({ where: { id: deviceId }, data: { ...(appVersion ? { app: sanitizeString(appVersion) } : {}) } }).catch(() => {});
+    // Обновляем lastSeen в базе данных
+    await prisma.devices.update({ 
+      where: { id: deviceId }, 
+      data: { 
+        lastSeen: nowDate,
+        ...(appVersion ? { app: sanitizeString(appVersion) } : {})
+      } 
+    }).catch((error) => {
+      console.error('Error updating device lastSeen:', error);
+    });
 
-    return res.json({ success: true, serverTime: new Date(now).toISOString() });
+    console.log('Heartbeat received from device:', deviceId, 'at', nowDate.toISOString());
+
+    return res.json({ success: true, serverTime: nowDate.toISOString() });
   } catch (error) {
     console.error('Error on heartbeat:', error);
     return res.status(500).json({ success: false, error: 'Heartbeat error' });

@@ -105,6 +105,7 @@ model Branch {
 model Devices {
   id         String   @id @default(uuid())
   createdAt  DateTime @default(now())
+  lastSeen   DateTime @default(now())
   vendor     String
   name       String
   timeFrom   String   @default("08:00")

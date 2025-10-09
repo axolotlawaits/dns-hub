@@ -284,14 +284,29 @@ export const getDevicesStatus = async (req: Request, res: Response) => {
     const where: any = {};
     if (branchId) where.branchId = String(branchId);
 
-    const devices = await prisma.devices.findMany({ where, select: { id: true, branchId: true } });
+    const devices = await prisma.devices.findMany({ 
+      where, 
+      select: { id: true, branchId: true, lastSeen: true } 
+    });
     const now = Date.now();
     const ONLINE_THRESHOLD_MS = 2 * 60 * 1000;
 
     const data = devices.map((d: any) => {
+      // Приоритет: heartbeatStore (память) > lastSeen (база данных)
       const lastSeenMem = heartbeatStore.get(d.id);
-      const online = lastSeenMem ? (now - lastSeenMem <= ONLINE_THRESHOLD_MS) : false;
-      return { deviceId: d.id, branchId: d.branchId, online, lastSeen: lastSeenMem ? new Date(lastSeenMem).toISOString() : null };
+      const lastSeenDb = d.lastSeen ? new Date(d.lastSeen).getTime() : null;
+      
+      // Используем данные из памяти, если они есть, иначе из базы данных
+      const lastSeenTime = lastSeenMem || lastSeenDb;
+      const online = lastSeenTime ? (now - lastSeenTime <= ONLINE_THRESHOLD_MS) : false;
+      
+      return { 
+        deviceId: d.id, 
+        branchId: d.branchId, 
+        online, 
+        lastSeen: lastSeenTime ? new Date(lastSeenTime).toISOString() : null,
+        source: lastSeenMem ? 'memory' : (lastSeenDb ? 'database' : 'none')
+      };
     });
 
     res.json({ success: true, data });
