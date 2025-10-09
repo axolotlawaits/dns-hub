@@ -934,3 +934,54 @@ export const deleteRadioStream = async (req: Request, res: Response): Promise<an
     return res.status(500).json({ error: 'Ошибка при удалении радио потока' });
   }
 };
+
+// Скачивание файла потока
+export const downloadStreamFile = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { id } = req.params;
+    
+    console.log('Downloading stream file for ID:', id);
+    
+    // Находим поток в базе данных
+    const stream = await prisma.radioStream.findUnique({
+      where: { id }
+    });
+    
+    if (!stream) {
+      console.log('Stream not found:', id);
+      return res.status(404).json({ error: 'Поток не найден' });
+    }
+    
+    if (!stream.attachment) {
+      console.log('Stream has no attachment:', id);
+      return res.status(404).json({ error: 'Файл потока не найден' });
+    }
+    
+    // Путь к файлу
+    const filePath = path.join('./public/retail/radio/stream', stream.attachment);
+    
+    console.log('Looking for file at path:', filePath);
+    
+    // Проверяем существование файла
+    if (!fs.existsSync(filePath)) {
+      console.log('File does not exist at path:', filePath);
+      return res.status(404).json({ error: 'Файл не найден на сервере' });
+    }
+    
+    console.log('File found, sending download response');
+    
+    // Отправляем файл
+    res.download(filePath, stream.attachment, (err) => {
+      if (err) {
+        console.error('Error sending file:', err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Ошибка при скачивании файла' });
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error downloading stream file:', error);
+    return res.status(500).json({ error: 'Ошибка при скачивании файла потока' });
+  }
+};

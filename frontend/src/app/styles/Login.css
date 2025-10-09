@@ -24,6 +24,13 @@
 .login-wrapper {
   min-height: 100vh;
   width: 100%;
+  background: linear-gradient(135deg, 
+    var(--color-blue-50) 0%, 
+    var(--color-purple-50) 25%, 
+    var(--color-pink-50) 50%, 
+    var(--color-blue-100) 75%, 
+    var(--color-purple-100) 100%
+  );
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -65,6 +72,7 @@
   border: 1px solid var(--theme-border);
   position: relative;
   overflow: hidden;
+  padding-bottom: var(--space-4) !important;
 }
 
 .login-form::before {
@@ -97,19 +105,19 @@
 
 .form-content {
   width: 100%;
-  padding: var(--space-6) 0;
+  padding: var(--space-2) 0;
 }
 
 .welcome-section {
   text-align: center;
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-1);
 }
 
 .welcome-title {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   font-weight: 700;
   color: var(--theme-text-primary);
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-1);
   background: linear-gradient(135deg, var(--color-blue-600), var(--color-purple-600));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -251,6 +259,8 @@
 .user-profile-card {
   transition: var(--transition-all);
   border: 2px solid var(--theme-border);
+  margin-bottom: var(--space-2) !important;
+  padding-bottom: var(--space-3) !important;
 }
 
 .user-profile-card:hover {
@@ -365,6 +375,26 @@
   backdrop-filter: blur(4px);
 }
 
+/* Компактный индикатор загрузки в углу */
+.bg-loader-corner {
+  position: fixed;
+  top: var(--space-4);
+  left: var(--space-4);
+  padding: var(--space-2);
+  background: var(--theme-bg-elevated);
+  backdrop-filter: blur(20px);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--theme-shadow-md);
+  border: 1px solid var(--theme-border);
+  z-index: 50;
+  opacity: 0.8;
+  transition: opacity 0.3s ease;
+}
+
+.bg-loader-corner:hover {
+  opacity: 1;
+}
+
 /* Анимации */
 .login-form {
   animation: slideInUp 0.6s ease-out;
@@ -415,11 +445,12 @@
 
 @media (max-width: 480px) {
   .login-form {
-    padding: var(--space-4);
+    padding: var(--space-3);
+    padding-bottom: var(--space-2) !important;
   }
   
   .form-content {
-    padding: var(--space-4) 0;
+    padding: var(--space-1) 0;
   }
   
   .welcome-title {

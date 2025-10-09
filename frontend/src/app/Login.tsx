@@ -18,7 +18,7 @@ import {
   ThemeIcon,
   Divider
 } from '@mantine/core';
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, memo, useRef } from 'react';
 import { useUserContext } from '../hooks/useUserContext';
 import { useNavigate } from 'react-router';
 import { API } from '../config/constants';
@@ -112,7 +112,8 @@ const fetchUserInfo = async (login: string): Promise<UserInfo> => {
   }
 };
 
-const ThemeToggleButton = ({ isDark, toggleTheme }: { isDark: Boolean | null; toggleTheme: () => void }) => (
+// Оптимизированные компоненты с React.memo
+const ThemeToggleButton = memo(({ isDark, toggleTheme }: { isDark: Boolean | null; toggleTheme: () => void }) => (
   <ActionIcon 
     onClick={toggleTheme} 
     size="lg" 
@@ -123,11 +124,11 @@ const ThemeToggleButton = ({ isDark, toggleTheme }: { isDark: Boolean | null; to
   >
     {isDark ? <IconMoon size={20} /> : <IconBrightnessDown size={20} />}
   </ActionIcon>
-);
+));
 
-const UserProfileCard = ({ userInfo }: { userInfo: UserInfo }) => (
+const UserProfileCard = memo(({ userInfo }: { userInfo: UserInfo }) => (
   <Card 
-    p="xl" 
+    p="md" 
     shadow="lg" 
     radius="lg" 
     mb="xl" 
@@ -138,7 +139,7 @@ const UserProfileCard = ({ userInfo }: { userInfo: UserInfo }) => (
       textAlign: 'center'
     }}
   >
-    <Stack align="center" gap="md">
+    <Stack align="center" gap="xs">
       <Avatar 
         src={userInfo.photo} 
         size="xl" 
@@ -153,7 +154,7 @@ const UserProfileCard = ({ userInfo }: { userInfo: UserInfo }) => (
           @{userInfo.login}
         </Text>
       </Box>
-      <Group gap="xs" mt="xs">
+      <Group gap="xs" mt="xs" mb="xs">
         <ThemeIcon size="sm" color="green" variant="light">
           <IconCheck size={14} />
         </ThemeIcon>
@@ -163,9 +164,9 @@ const UserProfileCard = ({ userInfo }: { userInfo: UserInfo }) => (
       </Group>
     </Stack>
   </Card>
-);
+));
 
-const PhotoCredit = ({ photo }: { photo: PhotoInfo }) => (
+const PhotoCredit = memo(({ photo }: { photo: PhotoInfo }) => (
   <a 
     className="image-credit" 
     href={photo.author_url} 
@@ -175,7 +176,56 @@ const PhotoCredit = ({ photo }: { photo: PhotoInfo }) => (
     <div className="image-title">{photo.title}</div>
     <div className="image-author">Автор: {photo.author}</div>
   </a>
-);
+));
+
+// Оптимизированный компонент фона с немедленным доступом к форме
+const BackgroundWrapper = memo(({ 
+  photo, 
+  weatherCondition,
+  children
+}: { 
+  photo: PhotoInfo | null; 
+  weatherCondition: string;
+  children: React.ReactNode;
+}) => {
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
+
+  useEffect(() => {
+    if (!photo?.url) return;
+
+    const img = new Image();
+    img.onload = () => setImageLoaded(true);
+    img.onerror = () => setImageError(true);
+    img.src = photo.url;
+
+    return () => {
+      img.onload = null;
+      img.onerror = null;
+    };
+  }, [photo?.url]);
+
+  const backgroundStyle = useMemo(() => ({
+    backgroundImage: imageLoaded && photo?.url ? `url(${photo.url})` : undefined,
+    filter: weatherCondition === 'rain' ? 'brightness(0.8)' : 'none',
+    transition: 'background-image 0.5s ease-in-out, filter 0.3s ease'
+  }), [imageLoaded, photo?.url, weatherCondition]);
+
+  return (
+    <div className="login-wrapper" style={backgroundStyle}>
+      {/* Показываем индикатор загрузки только в углу, не блокируя форму */}
+      {!imageLoaded && !imageError && photo?.url && (
+        <div className="bg-loader-corner">
+          <Loader variant="dots" color="var(--color-blue-500)" size="sm" />
+        </div>
+      )}
+      {weatherCondition === 'rain' && <div className="weather-effect rain" />}
+      {weatherCondition === 'snow' && <div className="weather-effect snow" />}
+      {imageLoaded && photo && <PhotoCredit photo={photo} />}
+      {children}
+    </div>
+  );
+});
 
 function Login() {
   const { login: contextLogin } = useUserContext();
@@ -191,6 +241,9 @@ function Login() {
   
   const { weatherCondition } = useWeather();
   const [currentSeason, currentTimeOfDay] = useMemo(() => [getSeason(), getTimeOfDay()], []);
+  
+  // Debounce ref для поиска пользователей
+  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Загрузка сохраненных данных пользователя
   useEffect(() => {
@@ -216,15 +269,30 @@ function Login() {
     loadSavedData();
   }, []);
 
-  // Загрузка фонового изображения
+  // Оптимизированная загрузка фонового изображения с кэшированием
   useEffect(() => {
     let isMounted = true;
     const controller = new AbortController();
     
+    // Ключ для кэширования изображений
+    const cacheKey = `bg_${currentSeason}_${currentTimeOfDay}`;
+    const cachedPhoto = sessionStorage.getItem(cacheKey);
+    
     const loadBackground = async () => {
       try {
+        // Проверяем кэш
+        if (cachedPhoto) {
+          const parsedPhoto = JSON.parse(cachedPhoto);
+          if (isMounted) setCurrentPhoto(parsedPhoto);
+          return;
+        }
+        
         const photo = await fetchBackgroundImage(currentSeason, currentTimeOfDay);
-        if (isMounted) setCurrentPhoto(photo);
+        if (isMounted) {
+          setCurrentPhoto(photo);
+          // Кэшируем изображение
+          sessionStorage.setItem(cacheKey, JSON.stringify(photo));
+        }
       } catch (error) {
         console.error('Ошибка загрузки фона:', error);
       }
@@ -232,7 +300,8 @@ function Login() {
 
     loadBackground();
     
-    const backgroundTimer = setInterval(loadBackground, BACKGROUND_UPDATE_INTERVAL);
+    // Увеличиваем интервал обновления для экономии ресурсов
+    const backgroundTimer = setInterval(loadBackground, BACKGROUND_UPDATE_INTERVAL * 2);
 
     return () => {
       isMounted = false;
@@ -248,20 +317,38 @@ function Login() {
       setLdapError('');
     }, []);
 
+  // Оптимизированный debounced поиск пользователей
   const handleLoginBlur = useCallback(async () => {
     if (!userData.login.trim() || formState !== 'newUser') return;
     
-    setIsLoading(true);
-    try {
-      const info = await fetchUserInfo(userData.login);
-      setUserInfo(info);
-      localStorage.setItem(LAST_USER_INFO_KEY, JSON.stringify(info));
-    } catch (error) {
-      console.error('Ошибка загрузки данных пользователя:', error);
-    } finally {
-      setIsLoading(false);
+    // Очищаем предыдущий timeout
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
     }
+    
+    // Устанавливаем новый timeout для debounce
+    debounceTimeoutRef.current = setTimeout(async () => {
+      setIsLoading(true);
+      try {
+        const info = await fetchUserInfo(userData.login);
+        setUserInfo(info);
+        localStorage.setItem(LAST_USER_INFO_KEY, JSON.stringify(info));
+      } catch (error) {
+        console.error('Ошибка загрузки данных пользователя:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    }, 300); // 300ms debounce
   }, [userData.login, formState]);
+
+  // Очистка timeout при размонтировании
+  useEffect(() => {
+    return () => {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleLoginAsDifferentUser = useCallback(() => {
     setFormState('newUser');
@@ -305,27 +392,18 @@ function Login() {
     handleLogin();
   }, [handleLogin]);
 
-  const backgroundStyle = useMemo(() => ({
-    backgroundImage: currentPhoto?.url ? `url(${currentPhoto.url})` : undefined,
-    filter: weatherCondition === 'rain' ? 'brightness(0.8)' : 'none'
-  }), [currentPhoto?.url, weatherCondition]);
+  // Мемоизированные значения для оптимизации рендеров
+  const memoizedUserData = useMemo(() => userData, [userData.login, userData.pass]);
+  const memoizedValidationErrors = useMemo(() => validationErrors, [validationErrors?.login, validationErrors?.pass]);
+  const memoizedFormState = useMemo(() => formState, [formState]);
 
   return (
-    <div className="login-wrapper" style={backgroundStyle}>
-      {!currentPhoto && (
-        <div className="bg-loader">
-          <Loader variant="dots" color="var(--color-blue-500)" size="lg" />
-        </div>
-      )}
-      {weatherCondition === 'rain' && <div className="weather-effect rain" />}
-      {weatherCondition === 'snow' && <div className="weather-effect snow" />}
-      {currentPhoto && <PhotoCredit photo={currentPhoto} />}
-      
+    <BackgroundWrapper photo={currentPhoto} weatherCondition={weatherCondition}>
       <Container size="sm" className="login-container">
         <Paper 
           className="login-form" 
           radius="xl" 
-          p="xl"
+          p="lg"
           shadow="xl"
         >
           <Box className="form-header">
@@ -333,7 +411,7 @@ function Login() {
           </Box>
           
           <form onSubmit={handleSubmit} className="form-content">
-            <Stack gap="xl" align="center">
+            <Stack gap="md" align="center">
               <Box className="welcome-section">
                 <Title order={1} className="welcome-title" ta="center">
                   Добро пожаловать
@@ -356,7 +434,7 @@ function Login() {
               )}
               
               <Transition 
-                mounted={formState === 'knownUser' && !!userInfo} 
+                mounted={memoizedFormState === 'knownUser' && !!userInfo} 
                 transition="slide-down" 
                 duration={300}
               >
@@ -367,17 +445,17 @@ function Login() {
                 )}
               </Transition>
               
-              <Stack gap="md" w="100%">
-                {formState === 'knownUser' && userInfo ? (
+              <Stack gap="sm" w="100%">
+                {memoizedFormState === 'knownUser' && userInfo ? (
                   <>
                     <PasswordInput 
                       label="Введите пароль для входа" 
                       placeholder="Ваш пароль"
                       size="lg"
                       leftSection={<IconLock size={20} />}
-                      value={userData.pass} 
+                      value={memoizedUserData.pass} 
                       onChange={handleInputChange('pass')}
-                      error={validationErrors?.pass}
+                      error={memoizedValidationErrors?.pass}
                       required
                       autoFocus
                       className="password-input"
@@ -415,12 +493,12 @@ function Login() {
                       placeholder="Введите ваш логин"
                       size="lg"
                       leftSection={<IconUser size={20} />}
-                      value={userData.login} 
+                      value={memoizedUserData.login} 
                       onChange={handleInputChange('login')}
                       onBlur={handleLoginBlur}
-                      error={validationErrors?.login || ldapError}
+                      error={memoizedValidationErrors?.login || ldapError}
                       required 
-                      autoFocus={formState === 'newUser'}
+                      autoFocus={memoizedFormState === 'newUser'}
                       className="login-input"
                     />
                     
@@ -429,9 +507,9 @@ function Login() {
                       placeholder="Введите ваш пароль"
                       size="lg"
                       leftSection={<IconLock size={20} />}
-                      value={userData.pass} 
+                      value={memoizedUserData.pass} 
                       onChange={handleInputChange('pass')}
-                      error={validationErrors?.pass}
+                      error={memoizedValidationErrors?.pass}
                       required
                       className="password-input"
                     />
@@ -454,7 +532,7 @@ function Login() {
           </form>
         </Paper>
       </Container>
-    </div>
+    </BackgroundWrapper>
   );
 }
 
