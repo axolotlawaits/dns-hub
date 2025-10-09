@@ -42,6 +42,10 @@ import { initToolsCron } from './tasks/cron.js';
 const app = express()
 export const prisma = new PrismaClient()
 const __dirname = path.resolve()
+
+// Настройка доверия к прокси для правильного определения IP адресов
+app.set('trust proxy', true);
+
 const server = createServer(app);
 
 const socketService = SocketIOService.getInstance();

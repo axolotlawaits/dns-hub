@@ -1897,6 +1897,15 @@ const RadioAdmin: React.FC = () => {
                                   <Text size="xs" style={{ color: 'var(--theme-text-secondary)' }}>
                                   {device.network}{device.number} • {device.os} • {device.app}
                                 </Text>
+                                {user && (
+                                  <Text size="xs" style={{ 
+                                    color: 'var(--theme-text-tertiary)', 
+                                    fontStyle: 'italic',
+                                    marginTop: '2px'
+                                  }}>
+                                    👤 {user.name || user.login}
+                                  </Text>
+                                )}
                               </div>
                               
                               <Group gap="xs">
@@ -1978,6 +1987,15 @@ const RadioAdmin: React.FC = () => {
                                   <Text size="xs" style={{ color: 'var(--theme-text-secondary)' }}>
                                   {device.network}{device.number} • {device.os} • {device.app}
                                 </Text>
+                                {user && (
+                                  <Text size="xs" style={{ 
+                                    color: 'var(--theme-text-tertiary)', 
+                                    fontStyle: 'italic',
+                                    marginTop: '2px'
+                                  }}>
+                                    👤 {user.name || user.login}
+                                  </Text>
+                                )}
                                 </div>
                                 
                                 <Group gap="xs">
@@ -2100,9 +2118,21 @@ const RadioAdmin: React.FC = () => {
               borderRadius: '12px',
               boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
             }}>
-              <Text fw={600} mb="md" size="lg" style={{ color: 'var(--theme-text-primary)' }}>
-                📱 Информация об устройстве
-              </Text>
+              <Group justify="space-between" align="center" mb="md">
+                <Text fw={600} size="lg" style={{ color: 'var(--theme-text-primary)' }}>
+                  📱 Информация об устройстве
+                </Text>
+                {user && (
+                  <Text size="sm" c="dimmed" style={{ 
+                    background: 'var(--theme-bg-secondary)', 
+                    padding: '4px 8px', 
+                    borderRadius: '6px',
+                    border: '1px solid var(--theme-border)'
+                  }}>
+                    👤 {user.name || user.login}
+                  </Text>
+                )}
+              </Group>
               <Group justify="space-between" wrap="wrap">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <Text size="sm" fw={500} style={{ color: 'var(--theme-text-secondary)' }}>Имя устройства</Text>

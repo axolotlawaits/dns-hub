@@ -22,7 +22,23 @@ function hasControlChars(str: string): boolean {
 
 // Создание или обновление устройства
 export const createOrUpdateDevice = async (req: Request, res: Response): Promise<any> => {
-  const { userEmail, branchType, deviceName, vendor, network, number, app, os } = req.body;
+  const { userEmail, branchType, deviceName, vendor, network, number, app, os, deviceIP: deviceIPFromBody, ip } = req.body;
+
+  console.log('Device registration request:', {
+    userEmail,
+    branchType,
+    deviceName,
+    vendor,
+    network,
+    number,
+    app,
+    os,
+    deviceIP: deviceIPFromBody,
+    ip,
+    'req.ip': req.ip,
+    'x-forwarded-for': req.headers['x-forwarded-for'],
+    'x-real-ip': req.headers['x-real-ip']
+  });
 
   if (!userEmail || !branchType) {
     return res.status(400).json({ error: 'userEmail и branchType обязательны' });
@@ -69,18 +85,74 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
       }
 
       // Подготавливаем данные устройства
-      const deviceIP = req.ip || 'Unknown';
-      const normalizedIP = deviceIP.replace(/^::ffff:/, '');
-      const networkIP = normalizedIP.includes('.') 
-        ? normalizedIP.split('.').slice(0, 3).join('.') + '.' 
-        : normalizedIP;
+      // Приоритет: полный IP от устройства > network+number > заголовки прокси > req.ip
+      let deviceIP = 'Unknown';
+      let networkIP = '';
+      let deviceNumber = '1';
+      
+      // Проверяем, есть ли полный IP адрес от устройства
+      const fullDeviceIP = deviceIPFromBody || ip;
+      if (fullDeviceIP && typeof fullDeviceIP === 'string' && fullDeviceIP.includes('.')) {
+        // Разбираем полный IP адрес
+        const ipParts = fullDeviceIP.split('.');
+        if (ipParts.length === 4) {
+          deviceIP = fullDeviceIP;
+          networkIP = ipParts.slice(0, 3).join('.') + '.';
+          deviceNumber = ipParts[3];
+          console.log('Using full device IP:', deviceIP, '-> network:', networkIP, 'number:', deviceNumber);
+        }
+      } else if (network && number) {
+        // Используем IP адрес, отправленный устройством
+        deviceIP = `${network}${number}`;
+        networkIP = network;
+        deviceNumber = number;
+        console.log('Using device-provided IP:', deviceIP);
+      } else if (network && !number) {
+        // Если передан только network (например, "192.168.1."), извлекаем IP из req.ip
+        const forwardedFor = req.headers['x-forwarded-for'] as string;
+        const realIP = req.headers['x-real-ip'] as string;
+        const serverIP = forwardedFor?.split(',')[0]?.trim() || realIP || req.ip || 'Unknown';
+        const normalizedIP = serverIP.replace(/^::ffff:/, '');
+        
+        // Проверяем, соответствует ли serverIP переданному network
+        if (normalizedIP.startsWith(network.replace(/\.$/, ''))) {
+          deviceIP = normalizedIP;
+          networkIP = network;
+          deviceNumber = normalizedIP.split('.').pop() || '1';
+          console.log('Using server IP that matches device network:', deviceIP);
+        } else {
+          // Если не соответствует, используем переданный network + последний октет из serverIP
+          deviceIP = `${network}${normalizedIP.split('.').pop() || '1'}`;
+          networkIP = network;
+          deviceNumber = normalizedIP.split('.').pop() || '1';
+          console.log('Using device network with server IP last octet:', deviceIP);
+        }
+      } else {
+        // Пытаемся получить реальный IP из заголовков (для NAT/Proxy)
+        const forwardedFor = req.headers['x-forwarded-for'] as string;
+        const realIP = req.headers['x-real-ip'] as string;
+        deviceIP = forwardedFor?.split(',')[0]?.trim() || realIP || req.ip || 'Unknown';
+        const normalizedIP = deviceIP.replace(/^::ffff:/, '');
+        
+        console.log('Device IP detection:', {
+          'x-forwarded-for': forwardedFor,
+          'x-real-ip': realIP,
+          'req.ip': req.ip,
+          'final-ip': deviceIP
+        });
+        
+        networkIP = normalizedIP.includes('.') 
+          ? normalizedIP.split('.').slice(0, 3).join('.') + '.' 
+          : normalizedIP;
+        deviceNumber = normalizedIP.split('.').pop() || '1';
+      }
 
       const deviceData = {
         branchId,
         name: sanitizeString(deviceName ?? 'DNS Radio Device', 'DNS Radio Device'),
         vendor: sanitizeString(vendor ?? 'DNS', 'DNS'),
         network: sanitizeString(networkIP, ''),
-        number: sanitizeString(normalizedIP.split('.').pop() || '1', '1'),
+        number: sanitizeString(deviceNumber, '1'),
         app: sanitizeString(app ?? 'DNS Radio', 'DNS Radio'),
         os: sanitizeString(os ?? 'Android 14', 'Android 14'),
         timeFrom: '08:00',
