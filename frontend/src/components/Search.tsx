@@ -396,6 +396,7 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
         radius="lg"
         centered
         withCloseButton={false}
+        zIndex={2000}
         closeOnClickOutside
         closeOnEscape
         withOverlay={false}
@@ -403,15 +404,11 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
           content: {
             width: '100%',
             maxWidth: '90vw',
-            zIndex: 99999
           },
           body: {
             width: '100%',
             padding: 0
           },
-          overlay: {
-            zIndex: 99998
-          }
         }}
       >
         <Box style={{ width: '100%' }}>
