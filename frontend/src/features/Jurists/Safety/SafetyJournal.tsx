@@ -297,7 +297,7 @@ const LocalJournalTable = function LocalJournalTable({
                                 
                               </Stack>
                             </Modal>
-                            <Tooltip label="На проверке">
+                            {/* <Tooltip label="На проверке">
                               <ActionIcon 
                                 size="sm" 
                                 color="blue" 
@@ -309,7 +309,7 @@ const LocalJournalTable = function LocalJournalTable({
                               >
                                 <IconAlertCircle size={14} />
                               </ActionIcon>
-                            </Tooltip>
+                            </Tooltip> */}
                           </>
                         );
                       })()}
@@ -1411,6 +1411,7 @@ export default function SafetyJournal() {
                         data={rrsOptions.sort((a, b) => a.label.localeCompare(b.label))}
                         value={branchFilters.rrs}
                         onChange={handleRrsFilterChange}
+                        searchable
                         clearable
                         style={{ minWidth: 200 }}
                       />
@@ -1420,6 +1421,7 @@ export default function SafetyJournal() {
                         data={branchOptions.sort((a, b) => a.label.localeCompare(b.label))}
                         value={branchFilters.branch}
                         onChange={handleBranchFilterChange}
+                        searchable
                         clearable
                         disabled={!branchFilters.rrs}
                         style={{ minWidth: 200 }}

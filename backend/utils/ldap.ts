@@ -66,10 +66,6 @@ async function processLdapPhoto(photoBase64: string): Promise<Buffer> {
     }
 }
 
-// Настройки служебного LDAP-пользователя
-const LDAP_SERVICE_USER = 'video_nsk@partner.ru';
-const LDAP_SERVICE_PASSWORD = '123456789';
-
 async function createLdapClient() {
     return new Client({
         url: 'ldap://ural-dc01.partner.ru',
@@ -119,8 +115,13 @@ async function authenticateWithServiceAccount(client: Client, login: string, pas
     
     try {
         // Сначала подключаемся с служебным аккаунтом
-        console.log(`[LDAP Service Auth] Binding with service account: ${LDAP_SERVICE_USER}`);
-        await client.bind(LDAP_SERVICE_USER, LDAP_SERVICE_PASSWORD);
+		console.log(`[LDAP Service Auth] Binding with service account: ${process.env.LDAP_SERVICE_USER}`);
+		const serviceUser = process.env.LDAP_SERVICE_USER;
+		const servicePassword = process.env.LDAP_SERVICE_PASSWORD;
+		if (!serviceUser || !servicePassword) {
+			throw new Error('LDAP service account credentials are not configured');
+		}
+		await client.bind(serviceUser, servicePassword);
         console.log(`[LDAP Service Auth] ✅ Successfully bound with service account`);
         
         // Ищем пользователя

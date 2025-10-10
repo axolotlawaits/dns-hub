@@ -65,7 +65,7 @@ export const UserContextProvider = ({ children }: Props) => {
       const response = await fetch(`${API}/user/${user.id}`)
       const json = await response.json()
       if (response.ok) {
-        setUser(json.user)
+        setToken(json.token)
         localStorage.setItem('user', JSON.stringify(json.user))
         localStorage.setItem('token', json.token)
       }
