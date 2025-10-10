@@ -5,13 +5,14 @@ import { getLastUser, login, updateUserSettings, getUserSettings, updateUser, ge
 import { ldapAuth, updateUserPhoto } from '../../utils/ldap.js';
 
 const ldapLoginSchema = z.object({
-  login: z.string().min(1, 'введите логин'),
-  pass: z.string().min(1, 'введите пароль'),
+  login: z.string().min(1, 'введите логин').transform(val => val.trim()),
+  pass: z.string().min(1, 'введите пароль').transform(val => val.trim()),
 });
 
 const updatePhotoSchema = z.object({
-  login: z.string().min(1, 'введите логин'),
+  login: z.string().min(1, 'введите логин').transform(val => val.trim()),
   photo: z.string().min(1, 'введите фото в формате base64'),
+  password: z.string().min(1, 'введите пароль').transform(val => val.trim()),
 });
 
 const router = express.Router();

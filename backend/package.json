@@ -30,7 +30,7 @@
     "form-data": "^4.0.4",
     "grammy": "^1.37.0",
     "jsonwebtoken": "^9.0.2",
-    "ldapts": "^8.0.5",
+    "ldapts": "^8.0.9",
     "logger": "^0.0.1",
     "multer": "^2.0.2",
     "node-fetch": "^3.3.2",

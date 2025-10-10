@@ -69,36 +69,117 @@ async function processLdapPhoto(photoBase64: string): Promise<Buffer> {
 async function createLdapClient() {
     return new Client({
         url: 'ldap://ural-dc01.partner.ru',
+        timeout: 10000, // 10 секунд таймаут
+        connectTimeout: 5000, // 5 секунд на подключение
+        strictDN: false, // Отключаем строгую проверку DN
+        // Убираем tlsOptions для ldap:// (не ldaps://)
     });
 }
 
 async function searchUser(client: Client, login: string) {
+    console.log(`[LDAP] Searching for user: ${login}`);
+    
+    // Экранируем специальные символы в логине для безопасности
+    const escapedLogin = login.replace(/[\\*()]/g, '\\$&');
+    
     const { searchEntries } = await client.search('OU=DNS Users,DC=partner,DC=ru', {
         scope: 'sub',
-        filter: `(sAMAccountName=${login})`,
-        attributes: ['department', 'displayName', 'description', 'mail', 'thumbnailPhoto;binary', 'dn'], // Явно запрашиваем бинарные данные
+        filter: `(sAMAccountName=${escapedLogin})`,
+        attributes: ['department', 'displayName', 'description', 'mail', 'thumbnailPhoto;binary', 'dn'],
+        sizeLimit: 1, // Ограничиваем результат для безопасности
+        timeLimit: 10, // 10 секунд на поиск
     });
 
+    console.log(`[LDAP] Search completed. Found ${searchEntries.length} entries for user: ${login}`);
+
     if (searchEntries.length === 0) {
+        console.error(`[LDAP] User not found in directory: ${login}`);
         throw new Error('User not found in directory');
     }
 
+    console.log(`[LDAP] User found: ${login}, DN: ${searchEntries[0].dn}`);
     return searchEntries[0];
 }
 
 export async function ldapAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
-    const { login, pass } = req.body;
+    const { login: rawLogin, pass: rawPass } = req.body;
 
+    // Обрезаем пробелы в логине и пароле
+    const login = typeof rawLogin === 'string' ? rawLogin.trim() : rawLogin;
+    const pass = typeof rawPass === 'string' ? rawPass.trim() : rawPass;
+
+    console.log(`[LDAP Auth] Starting authentication for user: ${login}`);
+
+    // Валидация входных данных
     if (!login || !pass) {
+        console.log(`[LDAP Auth] Missing credentials - login: ${!!login}, pass: ${!!pass}`);
         res.status(400).json({ message: 'Login and password are required' });
+        return;
+    }
+
+    // Дополнительная валидация
+    if (typeof login !== 'string' || typeof pass !== 'string') {
+        console.log(`[LDAP Auth] Invalid credential types - login: ${typeof login}, pass: ${typeof pass}`);
+        res.status(400).json({ message: 'Login and password must be strings' });
+        return;
+    }
+
+    // Проверка длины и содержимого (после обрезки пробелов)
+    if (login.length < 1 || login.length > 50) {
+        console.log(`[LDAP Auth] Invalid login length: ${login.length}`);
+        res.status(400).json({ message: 'Login must be between 1 and 50 characters' });
+        return;
+    }
+
+    if (pass.length < 1 || pass.length > 128) {
+        console.log(`[LDAP Auth] Invalid password length: ${pass.length}`);
+        res.status(400).json({ message: 'Password must be between 1 and 128 characters' });
         return;
     }
 
     const client = await createLdapClient();
 
     try {
-        // Аутентификация в LDAP
-        await client.bind(`${login}@partner.ru`, pass);
+        console.log(`[LDAP Auth] Attempting to bind user: ${login} (trying @dns-shop.ru first)`);
+        
+        // Аутентификация в LDAP - пробуем разные форматы
+        let bindSuccess = false;
+        let lastError = null;
+        
+        // Попытка 1: username@dns-shop.ru (тестируем первым)
+        try {
+            await client.bind(`${login}@dns-shop.ru`, pass);
+            console.log(`[LDAP Auth] Successfully bound user: ${login}@dns-shop.ru`);
+            bindSuccess = true;
+        } catch (bindError1) {
+            lastError = bindError1;
+            console.log(`[LDAP Auth] First bind attempt failed: ${login}@dns-shop.ru`);
+            
+            // Попытка 2: username@partner.ru
+            try {
+                await client.bind(`${login}@partner.ru`, pass);
+                console.log(`[LDAP Auth] Successfully bound user: ${login}@partner.ru`);
+                bindSuccess = true;
+            } catch (bindError2) {
+                lastError = bindError2;
+                console.log(`[LDAP Auth] Second bind attempt failed: ${login}@partner.ru`);
+                
+                // Попытка 3: полный DN формат
+                try {
+                    await client.bind(`CN=${login},OU=DNS Users,DC=partner,DC=ru`, pass);
+                    console.log(`[LDAP Auth] Successfully bound user with DN format: ${login}`);
+                    bindSuccess = true;
+                } catch (bindError3) {
+                    lastError = bindError3;
+                    console.log(`[LDAP Auth] Third bind attempt failed with DN format`);
+                }
+            }
+        }
+        
+        if (!bindSuccess) {
+            throw lastError || new Error('All bind attempts failed');
+        }
+        
         const entry = await searchUser(client, login);
 
         // Получаем фото из LDAP с проверкой
@@ -158,22 +239,54 @@ export async function ldapAuth(req: Request, res: Response, next: NextFunction):
             }
         }
 
+        console.log(`[LDAP Auth] Authentication successful for user: ${login}`);
         res.locals.user = user;
         next();
     } catch (error) {
-        console.error('LDAP authentication failed:', error);
+        console.error(`[LDAP Auth] Authentication failed for user: ${login}`, error);
+        
+        let errorMessage = 'Authentication failed';
+        let errorDetails = 'Please check your credentials and try again';
+        
+        if (error instanceof Error) {
+            errorMessage = error.message;
+            
+            // Более детальные сообщения об ошибках
+            if (error.message.includes('InvalidCredentialsError')) {
+                errorDetails = 'Invalid username or password';
+            } else if (error.message.includes('User not found')) {
+                errorDetails = 'User account not found in directory';
+            } else if (error.message.includes('timeout')) {
+                errorDetails = 'Connection timeout - please try again';
+            } else if (error.message.includes('ECONNREFUSED')) {
+                errorDetails = 'Cannot connect to authentication server';
+            }
+        }
+        
         res.status(401).json({ 
-            message: error instanceof Error ? error.message : 'Authentication failed',
-            details: 'Please check your credentials and try again'
+            message: errorMessage,
+            details: errorDetails,
+            timestamp: new Date().toISOString()
         });
     } finally {
-        await client.unbind();
+        try {
+            await client.unbind();
+            console.log(`[LDAP Auth] Connection closed for user: ${login}`);
+        } catch (unbindError) {
+            console.error(`[LDAP Auth] Error closing connection for user: ${login}`, unbindError);
+        }
     }
 }
 
+
+
 export async function updateUserPhoto(req: Request, res: Response): Promise<void> {
     try {
-        const { login, photo, password } = req.body;
+        const { login: rawLogin, photo, password: rawPassword } = req.body;
+
+        // Обрезаем пробелы в логине и пароле
+        const login = typeof rawLogin === 'string' ? rawLogin.trim() : rawLogin;
+        const password = typeof rawPassword === 'string' ? rawPassword.trim() : rawPassword;
 
         // Валидация входных данных
         if (!login || !photo || !password) {
@@ -229,8 +342,44 @@ export async function updateUserPhoto(req: Request, res: Response): Promise<void
         const client = await createLdapClient();
 
         try {
-            // Аутентификация в LDAP
-            await client.bind(`${login}@partner.ru`, password);
+            // Аутентификация в LDAP - пробуем разные форматы
+            let bindSuccess = false;
+            let lastError = null;
+            
+            // Попытка 1: username@dns-shop.ru (тестируем первым)
+            try {
+                await client.bind(`${login}@dns-shop.ru`, password);
+                console.log(`[Photo Update] Successfully bound user: ${login}@dns-shop.ru`);
+                bindSuccess = true;
+            } catch (bindError1) {
+                lastError = bindError1;
+                console.log(`[Photo Update] First bind attempt failed: ${login}@dns-shop.ru`);
+                
+                // Попытка 2: username@partner.ru
+                try {
+                    await client.bind(`${login}@partner.ru`, password);
+                    console.log(`[Photo Update] Successfully bound user: ${login}@partner.ru`);
+                    bindSuccess = true;
+                } catch (bindError2) {
+                    lastError = bindError2;
+                    console.log(`[Photo Update] Second bind attempt failed: ${login}@partner.ru`);
+                    
+                    // Попытка 3: полный DN формат
+                    try {
+                        await client.bind(`CN=${login},OU=DNS Users,DC=partner,DC=ru`, password);
+                        console.log(`[Photo Update] Successfully bound user with DN format: ${login}`);
+                        bindSuccess = true;
+                    } catch (bindError3) {
+                        lastError = bindError3;
+                        console.log(`[Photo Update] Third bind attempt failed with DN format`);
+                    }
+                }
+            }
+            
+            if (!bindSuccess) {
+                throw lastError || new Error('All bind attempts failed');
+            }
+            
             const entry = await searchUser(client, login);
 
             const userDn = entry.dn;
