@@ -4,7 +4,6 @@ import {
   PasswordInput, 
   TextInput, 
   Title, 
-  Loader, 
   ActionIcon, 
   Avatar, 
   Text, 
@@ -43,22 +42,28 @@ type LoginType = { login: string; pass: string };
 type ValidationType = Partial<Record<keyof LoginType, string>>;
 type Season = 'winter' | 'spring' | 'summer' | 'autumn';
 type TimeOfDay = 'night' | 'morning' | 'day' | 'evening';
-type PhotoInfo = { url: string; title: string; author: string; author_url: string };
-type UserInfo = { photo: string; name: string; login: string };
+// PhotoInfo удален - используем только цвета фона
+type UserInfo = { photo: string | null; name: string; login: string };
 
 // Константы вынесены в отдельный блок
-const UNSPLASH_ACCESS_KEY = 'e9dGDOBpfn7xTsX3youhtzak7Ax6Sw2NvO4kJAOFsUs';
 const BACKGROUND_UPDATE_INTERVAL = 300000;
 const LAST_LOGIN_KEY = 'lastLogin';
 const LAST_USER_INFO_KEY = 'lastUserInfo';
-const DEFAULT_PHOTO_URL = 'https://images.unsplash.com/photo-1505142468610-359e7d316be0?ixlib=rb-1.2.1&auto=format&fit=crop&w=1920&q=80';
 
 // Вспомогательные функции вынесены за пределы компонента
 const getSeason = (): Season => {
   const month = new Date().getMonth();
-  return month < 2 || month > 11 ? 'winter' :
-    month < 5 ? 'spring' :
-    month < 8 ? 'summer' : 'autumn';
+  
+  // Более точное определение сезонов
+  if (month === 11 || month === 0 || month === 1) {
+    return 'winter'; // Декабрь, Январь, Февраль
+  } else if (month === 2 || month === 3 || month === 4) {
+    return 'spring'; // Март, Апрель, Май
+  } else if (month === 5 || month === 6 || month === 7) {
+    return 'summer'; // Июнь, Июль, Август
+  } else {
+    return 'autumn'; // Сентябрь, Октябрь, Ноябрь
+  }
 };
 
 const getTimeOfDay = (): TimeOfDay => {
@@ -66,29 +71,320 @@ const getTimeOfDay = (): TimeOfDay => {
   return hour < 5 ? 'night' : hour < 11 ? 'morning' : hour < 17 ? 'day' : 'evening';
 };
 
-const fetchBackgroundImage = async (season: Season, timeOfDay: TimeOfDay): Promise<PhotoInfo> => {
-  try {
-    const response = await fetch(
-      `https://api.unsplash.com/photos/random?query=${season}+${timeOfDay}+nature&orientation=landscape&content_filter=high&auto=format&fit=crop&w=1920&q=80&client_id=${UNSPLASH_ACCESS_KEY}`
-    );
-    
-    if (!response.ok) throw new Error('Ошибка загрузки фото');
-    
-    const data = await response.json();
-    return {
-      url: data.urls.full,
-      title: data.description || data.alt_description || 'Beautiful Nature',
-      author: data.user.name,
-      author_url: data.user.links.html
+// Прокси-серверы удалены - используем официальный Unsplash API
+
+// getContextualImage удалена - используем только цвета фона
+
+// Прокси-функция удалена - используем официальный Unsplash API
+
+// Функция для создания градиентного фона с извилистыми линиями
+const getContextualGradientBackground = (
+  season: Season, 
+  timeOfDay: TimeOfDay, 
+  weatherCondition: string, 
+  temperature?: number,
+  humidity?: number,
+  windSpeed?: number,
+  pressure?: number,
+  visibility?: number,
+  uvIndex?: number,
+  latitude?: number,
+  longitude?: number,
+  elevation?: number,
+  isWeekend?: boolean
+): string => {
+  console.log(`[Advanced Gradient Background] Input:`, {
+    season, timeOfDay, weatherCondition, temperature, humidity, windSpeed, 
+    pressure, visibility, uvIndex, latitude, longitude, elevation, isWeekend
+  });
+  
+  // Определяем цвета для всех линий
+  const getLineColors = () => {
+    const colors = {
+      // Основные линии
+      sun: '#FFD700',
+      temperature: '#FF6B35',
+      weather: '#4A90E2',
+      time: '#9370DB',
+      season: '#50C878',
+      
+      // Новые линии
+      humidity: '#20B2AA',      // Морская волна
+      wind: '#87CEEB',          // Небесно-голубой
+      pressure: '#DDA0DD',      // Сливовый
+      visibility: '#F0E68C',    // Хаки
+      uv: '#FF6347',            // Томатный
+      elevation: '#8B4513',     // Седло-коричневый
+      coordinates: '#FF1493',   // Глубокий розовый
+      weekend: '#32CD32'        // Лаймовый
     };
-  } catch (error) {
+
+    // Корректируем цвета в зависимости от погодных условий
+    switch (weatherCondition) {
+      case 'clear':
+        colors.sun = '#FFD700';
+        colors.weather = '#87CEEB';
+        break;
+      case 'cloudy':
+        colors.sun = '#D3D3D3';
+        colors.weather = '#708090';
+        break;
+      case 'rain':
+        colors.sun = '#708090';
+        colors.weather = '#4682B4';
+        break;
+      case 'snow':
+        colors.sun = '#F0F8FF';
+        colors.weather = '#F0F8FF';
+        break;
+    }
+
+    // Корректируем цвет температуры
+    if (temperature !== undefined) {
+      if (temperature < -10) colors.temperature = '#0000FF';
+      else if (temperature < 0) colors.temperature = '#87CEEB';
+      else if (temperature < 10) colors.temperature = '#4169E1';
+      else if (temperature < 20) colors.temperature = '#32CD32';
+      else if (temperature < 30) colors.temperature = '#FF8C00';
+      else colors.temperature = '#FF4500';
+    }
+
+    // Корректируем цвет влажности
+    if (humidity !== undefined) {
+      if (humidity < 30) colors.humidity = '#FF4500';      // Сухо - красный
+      else if (humidity < 50) colors.humidity = '#FF8C00'; // Умеренно - оранжевый
+      else if (humidity < 70) colors.humidity = '#20B2AA'; // Нормально - морская волна
+      else colors.humidity = '#0000FF';                    // Влажно - синий
+    }
+
+    // Корректируем цвет ветра
+    if (windSpeed !== undefined) {
+      if (windSpeed < 5) colors.wind = '#90EE90';          // Штиль - светло-зеленый
+      else if (windSpeed < 15) colors.wind = '#87CEEB';    // Легкий ветер - небесно-голубой
+      else if (windSpeed < 30) colors.wind = '#4169E1';    // Умеренный ветер - синий
+      else colors.wind = '#8B0000';                        // Сильный ветер - темно-красный
+    }
+
+    // Корректируем цвет давления
+    if (pressure !== undefined) {
+      if (pressure < 1000) colors.pressure = '#FF0000';    // Низкое давление - красный
+      else if (pressure < 1020) colors.pressure = '#FFA500'; // Нормальное - оранжевый
+      else colors.pressure = '#0000FF';                    // Высокое - синий
+    }
+
+    // Корректируем цвет видимости
+    if (visibility !== undefined) {
+      if (visibility < 1) colors.visibility = '#800080';   // Туман - фиолетовый
+      else if (visibility < 5) colors.visibility = '#FFA500'; // Дымка - оранжевый
+      else colors.visibility = '#00FF00';                  // Ясно - зеленый
+    }
+
+    // Корректируем цвет УФ-индекса
+    if (uvIndex !== undefined) {
+      if (uvIndex < 3) colors.uv = '#00FF00';              // Низкий - зеленый
+      else if (uvIndex < 6) colors.uv = '#FFFF00';         // Умеренный - желтый
+      else if (uvIndex < 8) colors.uv = '#FF8C00';         // Высокий - оранжевый
+      else colors.uv = '#FF0000';                          // Очень высокий - красный
+    }
+
+    // Корректируем цвет высоты
+    if (elevation !== undefined) {
+      if (elevation < 100) colors.elevation = '#228B22';   // Низменность - зеленый
+      else if (elevation < 500) colors.elevation = '#8B4513'; // Равнина - коричневый
+      else if (elevation < 1000) colors.elevation = '#A0522D'; // Холмы - сиена
+      else colors.elevation = '#FFFFFF';                   // Горы - белый
+    }
+
+    // Корректируем цвет времени
+    switch (timeOfDay) {
+      case 'night': colors.time = '#2C3E50'; break;
+      case 'morning': colors.time = '#FFB347'; break;
+      case 'day': colors.time = '#FFD700'; break;
+      case 'evening': colors.time = '#FF6347'; break;
+    }
+
+    // Корректируем цвет сезона
+    switch (season) {
+      case 'winter': colors.season = '#E8F4FD'; break;
+      case 'spring': colors.season = '#98FB98'; break;
+      case 'summer': colors.season = '#FFA500'; break;
+      case 'autumn': colors.season = '#D2691E'; break;
+    }
+
+    // Корректируем цвет дня недели
+    if (isWeekend) {
+      colors.weekend = '#FF69B4'; // Розовый для выходных
+    } else {
+      colors.weekend = '#32CD32'; // Зеленый для рабочих дней
+    }
+
+    return colors;
+  };
+
+  const colors = getLineColors();
+
+  // Создаем расширенный SVG с множеством линий
+  const svg = `<svg width="1920" height="1080" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="mainGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+<stop offset="0%" style="stop-color:${colors.season};stop-opacity:0.8" />
+<stop offset="33%" style="stop-color:${colors.time};stop-opacity:0.6" />
+<stop offset="66%" style="stop-color:${colors.weather};stop-opacity:0.7" />
+<stop offset="100%" style="stop-color:${colors.temperature};stop-opacity:0.8" />
+</linearGradient>
+<linearGradient id="humidityGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+<stop offset="0%" style="stop-color:${colors.humidity};stop-opacity:0.4" />
+<stop offset="100%" style="stop-color:${colors.humidity};stop-opacity:0.1" />
+</linearGradient>
+<linearGradient id="windGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+<stop offset="0%" style="stop-color:${colors.wind};stop-opacity:0.3" />
+<stop offset="100%" style="stop-color:${colors.wind};stop-opacity:0.1" />
+</linearGradient>
+<linearGradient id="pressureGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+<stop offset="0%" style="stop-color:${colors.pressure};stop-opacity:0.3" />
+<stop offset="100%" style="stop-color:${colors.pressure};stop-opacity:0.1" />
+</linearGradient>
+<linearGradient id="visibilityGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+<stop offset="0%" style="stop-color:${colors.visibility};stop-opacity:0.3" />
+<stop offset="100%" style="stop-color:${colors.visibility};stop-opacity:0.1" />
+</linearGradient>
+<linearGradient id="uvGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+<stop offset="0%" style="stop-color:${colors.uv};stop-opacity:0.4" />
+<stop offset="100%" style="stop-color:${colors.uv};stop-opacity:0.1" />
+</linearGradient>
+<linearGradient id="elevationGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+<stop offset="0%" style="stop-color:${colors.elevation};stop-opacity:0.3" />
+<stop offset="100%" style="stop-color:${colors.elevation};stop-opacity:0.1" />
+</linearGradient>
+<linearGradient id="coordinatesGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+<stop offset="0%" style="stop-color:${colors.coordinates};stop-opacity:0.2" />
+<stop offset="100%" style="stop-color:${colors.coordinates};stop-opacity:0.05" />
+</linearGradient>
+<linearGradient id="weekendGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+<stop offset="0%" style="stop-color:${colors.weekend};stop-opacity:0.3" />
+<stop offset="100%" style="stop-color:${colors.weekend};stop-opacity:0.1" />
+</linearGradient>
+</defs>
+<rect width="100%" height="100%" fill="url(#mainGradient)" />
+<path d="M0,80 Q200,40 400,80 T800,60 T1200,70 T1600,50 T1920,65" stroke="url(#humidityGradient)" stroke-width="2" fill="none" opacity="0.6" />
+<path d="M0,150 Q300,100 600,150 T1000,130 T1400,140 T1800,120 T1920,135" stroke="url(#windGradient)" stroke-width="3" fill="none" opacity="0.5" />
+<path d="M0,220 Q250,170 500,220 T900,200 T1300,210 T1700,190 T1920,205" stroke="url(#pressureGradient)" stroke-width="2" fill="none" opacity="0.4" />
+<path d="M0,300 Q350,250 700,300 T1100,280 T1500,290 T1900,270 T1920,285" stroke="url(#visibilityGradient)" stroke-width="2" fill="none" opacity="0.5" />
+<path d="M0,380 Q200,330 400,380 T800,360 T1200,370 T1600,350 T1920,365" stroke="url(#uvGradient)" stroke-width="3" fill="none" opacity="0.4" />
+<path d="M0,460 Q400,410 800,460 T1200,440 T1600,450 T1920,435" stroke="url(#elevationGradient)" stroke-width="2" fill="none" opacity="0.3" />
+<path d="M0,540 Q300,490 600,540 T1000,520 T1400,530 T1800,510 T1920,525" stroke="url(#coordinatesGradient)" stroke-width="1" fill="none" opacity="0.2" />
+<path d="M0,620 Q250,570 500,620 T900,600 T1300,610 T1700,590 T1920,605" stroke="url(#weekendGradient)" stroke-width="2" fill="none" opacity="0.3" />
+<circle cx="200" cy="100" r="1.5" fill="${colors.humidity}" opacity="0.4" />
+<circle cx="600" cy="200" r="2" fill="${colors.wind}" opacity="0.3" />
+<circle cx="1000" cy="300" r="1" fill="${colors.pressure}" opacity="0.4" />
+<circle cx="1400" cy="400" r="1.5" fill="${colors.visibility}" opacity="0.3" />
+<circle cx="400" cy="500" r="2" fill="${colors.uv}" opacity="0.4" />
+<circle cx="1200" cy="600" r="1" fill="${colors.elevation}" opacity="0.3" />
+<circle cx="800" cy="700" r="1.5" fill="${colors.coordinates}" opacity="0.2" />
+<circle cx="1600" cy="800" r="1" fill="${colors.weekend}" opacity="0.3" />
+</svg>`;
+
+  const dataUrl = `data:image/svg+xml;base64,${btoa(svg)}`;
+
+  console.log(`[Advanced Gradient Background] Generated gradient with colors:`, colors);
+  return dataUrl;
+};
+
+// Внешние API функции удалены - используем только локальные источники
+
+// Все API функции удалены
+
+// Все API функции удалены - используем только цвета фона
+
+// Функция для получения расширенного контекстного фона
+const getContextualBackground = (
+  season: Season, 
+  timeOfDay: TimeOfDay, 
+  weatherCondition: string, 
+  temperature: number,
+  humidity?: number,
+  windSpeed?: number,
+  pressure?: number,
+  visibility?: number,
+  uvIndex?: number,
+  latitude?: number,
+  longitude?: number,
+  elevation?: number,
+  isWeekend?: boolean
+) => {
+  const backgroundImage = getContextualGradientBackground(
+    season, timeOfDay, weatherCondition, temperature, humidity, windSpeed, 
+    pressure, visibility, uvIndex, latitude, longitude, elevation, isWeekend
+  );
+  
     return {
-      url: DEFAULT_PHOTO_URL,
-      title: 'Стандартное изображение',
-      author: 'Unsplash Community',
-      author_url: 'https://unsplash.com'
-    };
+    backgroundImage,
+    season,
+    timeOfDay,
+    weatherCondition,
+    temperature,
+    humidity,
+    windSpeed,
+    pressure,
+    visibility,
+    uvIndex,
+    latitude,
+    longitude,
+    elevation,
+    isWeekend
+  };
+};
+
+const fetchBackgroundImage = async (
+  season: Season, 
+  timeOfDay: TimeOfDay, 
+  weatherCondition: string, 
+  temperature?: number,
+  humidity?: number,
+  windSpeed?: number,
+  pressure?: number,
+  visibility?: number,
+  uvIndex?: number,
+  latitude?: number,
+  longitude?: number,
+  elevation?: number,
+  isWeekend?: boolean
+) => {
+  console.log(`[Advanced Background Gradient] Starting contextual background loading...`);
+  console.log(`[Advanced Background Gradient] Context:`, {
+    season, timeOfDay, weatherCondition, temperature, humidity, windSpeed, 
+    pressure, visibility, uvIndex, latitude, longitude, elevation, isWeekend
+  });
+  
+  // Используем реальную температуру или 0°C как fallback для зимы
+  const actualTemperature = temperature !== undefined ? temperature : 0;
+  console.log(`[Advanced Background Gradient] Using temperature: ${actualTemperature}°C (original: ${temperature}°C)`);
+  
+  const background = getContextualBackground(
+    season, timeOfDay, weatherCondition, actualTemperature, humidity, windSpeed, 
+    pressure, visibility, uvIndex, latitude, longitude, elevation, isWeekend
+  );
+  
+  console.log(`[Advanced Background Gradient] ✅ Gradient background generated successfully`);
+  console.log(`[Advanced Background Gradient] Context:`, background);
+  
+  return background;
+};
+
+// Функция для генерации инициалов из имени
+const generateInitials = (name: string): string => {
+  if (!name) return '?';
+  
+  const words = name.trim().split(/\s+/);
+  if (words.length === 1) {
+    return words[0].charAt(0).toUpperCase();
   }
+  
+  // Берем первую букву имени и первую букву фамилии
+  const firstName = words[0];
+  const lastName = words[words.length - 1];
+  
+  return (firstName.charAt(0) + lastName.charAt(0)).toUpperCase();
 };
 
 const fetchUserInfo = async (login: string): Promise<UserInfo> => {
@@ -97,15 +393,17 @@ const fetchUserInfo = async (login: string): Promise<UserInfo> => {
     if (!response.ok) throw new Error('User not found');
     
     const data = await response.json();
+    const formattedName = formatName(data.name) || login;
+    
     return {
-      photo: data.image ? `data:image/jpeg;base64,${data.image}` : `https://i.pravatar.cc/150?u=${login}`,
-      name: formatName(data.name) || login,
+      photo: data.image ? `data:image/jpeg;base64,${data.image}` : null, // null если нет фото
+      name: formattedName,
       login: data.login
     };
   } catch (error) {
     console.error('Failed to fetch user profile:', error);
     return {
-      photo: `https://i.pravatar.cc/150?u=${login}`,
+      photo: null, // null если нет фото
       name: login,
       login: login
     };
@@ -145,7 +443,15 @@ const UserProfileCard = memo(({ userInfo }: { userInfo: UserInfo }) => (
         size="xl" 
         radius="xl"
         className="user-avatar"
-      />
+        style={{
+          background: userInfo.photo ? undefined : 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
+          color: userInfo.photo ? undefined : 'white',
+          fontWeight: 'bold',
+          fontSize: '24px'
+        }}
+      >
+        {!userInfo.photo && generateInitials(userInfo.name)}
+      </Avatar>
       <Box>
         <Text size="lg" fw={600} c="var(--theme-text-primary)">
           {userInfo.name}
@@ -166,62 +472,29 @@ const UserProfileCard = memo(({ userInfo }: { userInfo: UserInfo }) => (
   </Card>
 ));
 
-const PhotoCredit = memo(({ photo }: { photo: PhotoInfo }) => (
-  <a 
-    className="image-credit" 
-    href={photo.author_url} 
-    target="_blank" 
-    rel="noopener noreferrer"
-  >
-    <div className="image-title">{photo.title}</div>
-    <div className="image-author">Автор: {photo.author}</div>
-  </a>
-));
+// PhotoCredit удален - используем только цвета фона
 
 // Оптимизированный компонент фона с немедленным доступом к форме
 const BackgroundWrapper = memo(({ 
-  photo, 
-  weatherCondition,
+  backgroundImage,
   children
 }: { 
-  photo: PhotoInfo | null; 
-  weatherCondition: string;
+  backgroundImage: string;
   children: React.ReactNode;
 }) => {
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [imageError, setImageError] = useState(false);
-
-  useEffect(() => {
-    if (!photo?.url) return;
-
-    const img = new Image();
-    img.onload = () => setImageLoaded(true);
-    img.onerror = () => setImageError(true);
-    img.src = photo.url;
-
-    return () => {
-      img.onload = null;
-      img.onerror = null;
-    };
-  }, [photo?.url]);
-
-  const backgroundStyle = useMemo(() => ({
-    backgroundImage: imageLoaded && photo?.url ? `url(${photo.url})` : undefined,
-    filter: weatherCondition === 'rain' ? 'brightness(0.8)' : 'none',
-    transition: 'background-image 0.5s ease-in-out, filter 0.3s ease'
-  }), [imageLoaded, photo?.url, weatherCondition]);
+  console.log(`[Background Wrapper] Setting background image: ${backgroundImage.substring(0, 50)}...`);
 
   return (
-    <div className="login-wrapper" style={backgroundStyle}>
-      {/* Показываем индикатор загрузки только в углу, не блокируя форму */}
-      {!imageLoaded && !imageError && photo?.url && (
-        <div className="bg-loader-corner">
-          <Loader variant="dots" color="var(--color-blue-500)" size="sm" />
-        </div>
-      )}
-      {weatherCondition === 'rain' && <div className="weather-effect rain" />}
-      {weatherCondition === 'snow' && <div className="weather-effect snow" />}
-      {imageLoaded && photo && <PhotoCredit photo={photo} />}
+    <div 
+      className="login-wrapper"
+      style={{
+        backgroundImage: `url(${backgroundImage})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        transition: 'background-image 0.5s ease-in-out'
+      }}
+    >
       {children}
     </div>
   );
@@ -235,12 +508,44 @@ function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [validationErrors, setValidationErrors] = useState<ValidationType>();
   const [ldapError, setLdapError] = useState('');
-  const [currentPhoto, setCurrentPhoto] = useState<PhotoInfo | null>(null);
+  const [currentBackground, setCurrentBackground] = useState<{backgroundImage: string} | null>(null);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [formState, setFormState] = useState<'initial' | 'knownUser' | 'newUser'>('initial');
   
-  const { weatherCondition } = useWeather();
+  const { 
+    weatherCondition, 
+    temperature, 
+    humidity,
+    windSpeed,
+    pressure,
+    visibility,
+    uvIndex,
+    latitude,
+    longitude,
+    elevation
+  } = useWeather();
   const [currentSeason, currentTimeOfDay] = useMemo(() => [getSeason(), getTimeOfDay()], []);
+  
+  // Определяем день недели
+  const isWeekend = useMemo(() => {
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    return dayOfWeek === 0 || dayOfWeek === 6; // Воскресенье или суббота
+  }, []);
+  
+  // Логируем данные погоды для отладки
+  useEffect(() => {
+    console.log(`[Weather Debug] weatherCondition: "${weatherCondition}", temperature: ${temperature}°C`);
+    console.log(`[Weather Debug] season: ${currentSeason}, timeOfDay: ${currentTimeOfDay}`);
+    console.log(`[Weather Debug] Current date: ${new Date().toLocaleDateString()}, month: ${new Date().getMonth() + 1}`);
+    
+    // Проверяем правильность определения сезона
+    const currentMonth = new Date().getMonth() + 1;
+    const expectedSeason = currentMonth === 12 || currentMonth <= 2 ? 'winter' :
+                          currentMonth >= 3 && currentMonth <= 5 ? 'spring' :
+                          currentMonth >= 6 && currentMonth <= 8 ? 'summer' : 'autumn';
+    console.log(`[Weather Debug] Expected season for month ${currentMonth}: ${expectedSeason}, actual: ${currentSeason}`);
+  }, [weatherCondition, temperature, currentSeason, currentTimeOfDay]);
   
   // Debounce ref для поиска пользователей
   const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -274,27 +579,57 @@ function Login() {
     let isMounted = true;
     const controller = new AbortController();
     
-    // Ключ для кэширования изображений
-    const cacheKey = `bg_${currentSeason}_${currentTimeOfDay}`;
-    const cachedPhoto = sessionStorage.getItem(cacheKey);
+    // Кэширование не используется для цветов фона
     
     const loadBackground = async () => {
       try {
-        // Проверяем кэш
-        if (cachedPhoto) {
-          const parsedPhoto = JSON.parse(cachedPhoto);
-          if (isMounted) setCurrentPhoto(parsedPhoto);
-          return;
-        }
+        console.log(`[Advanced Background Loader] Starting gradient background load...`);
         
-        const photo = await fetchBackgroundImage(currentSeason, currentTimeOfDay);
+        const background = await fetchBackgroundImage(
+          currentSeason, 
+          currentTimeOfDay, 
+          weatherCondition, 
+          temperature,
+          humidity,
+          windSpeed,
+          pressure,
+          visibility,
+          uvIndex,
+          latitude,
+          longitude,
+          elevation,
+          isWeekend
+        );
+        
         if (isMounted) {
-          setCurrentPhoto(photo);
-          // Кэшируем изображение
-          sessionStorage.setItem(cacheKey, JSON.stringify(photo));
+          setCurrentBackground(background);
+          console.log(`[Advanced Background Loader] Gradient background loaded successfully`);
         }
       } catch (error) {
-        console.error('Ошибка загрузки фона:', error);
+        console.error('[Advanced Background Loader] Error loading background:', error);
+        
+        // Fallback - используем текущие данные
+        const fallbackBackground = {
+          backgroundImage: getContextualGradientBackground(
+            currentSeason, 
+            currentTimeOfDay, 
+            weatherCondition, 
+            temperature || 0,
+            humidity,
+            windSpeed,
+            pressure,
+            visibility,
+            uvIndex,
+            latitude,
+            longitude,
+            elevation,
+            isWeekend
+          )
+        };
+        if (isMounted) {
+          setCurrentBackground(fallbackBackground);
+          console.log('[Advanced Background Loader] Fallback gradient background loaded');
+        }
       }
     };
 
@@ -308,7 +643,7 @@ function Login() {
       controller.abort();
       clearInterval(backgroundTimer);
     };
-  }, [currentSeason, currentTimeOfDay]);
+  }, [currentSeason, currentTimeOfDay, weatherCondition, temperature, humidity, windSpeed, pressure, visibility, uvIndex, latitude, longitude, elevation, isWeekend]);
 
   const handleInputChange = useCallback((field: keyof LoginType) => 
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -328,16 +663,16 @@ function Login() {
     
     // Устанавливаем новый timeout для debounce
     debounceTimeoutRef.current = setTimeout(async () => {
-      setIsLoading(true);
-      try {
-        const info = await fetchUserInfo(userData.login);
-        setUserInfo(info);
-        localStorage.setItem(LAST_USER_INFO_KEY, JSON.stringify(info));
-      } catch (error) {
-        console.error('Ошибка загрузки данных пользователя:', error);
-      } finally {
-        setIsLoading(false);
-      }
+    setIsLoading(true);
+    try {
+      const info = await fetchUserInfo(userData.login);
+      setUserInfo(info);
+      localStorage.setItem(LAST_USER_INFO_KEY, JSON.stringify(info));
+    } catch (error) {
+      console.error('Ошибка загрузки данных пользователя:', error);
+    } finally {
+      setIsLoading(false);
+    }
     }, 300); // 300ms debounce
   }, [userData.login, formState]);
 
@@ -398,7 +733,23 @@ function Login() {
   const memoizedFormState = useMemo(() => formState, [formState]);
 
   return (
-    <BackgroundWrapper photo={currentPhoto} weatherCondition={weatherCondition}>
+    <BackgroundWrapper 
+      backgroundImage={currentBackground?.backgroundImage || getContextualGradientBackground(
+        currentSeason, 
+        currentTimeOfDay, 
+        weatherCondition, 
+        temperature || 0,
+        humidity,
+        windSpeed,
+        pressure,
+        visibility,
+        uvIndex,
+        latitude,
+        longitude,
+        elevation,
+        isWeekend
+      )}
+    >
       <Container size="sm" className="login-container">
         <Paper 
           className="login-form" 

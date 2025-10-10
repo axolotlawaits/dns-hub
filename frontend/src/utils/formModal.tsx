@@ -117,7 +117,7 @@ const DECORATIVE_STYLES = {
 };
 
 // Types and interfaces
-export type FieldType = 'text' | 'number' | 'select' | 'selectSearch' | 'date' | 'datetime' | 'textarea' | 'file' | 'boolean';
+export type FieldType = 'text' | 'number' | 'select' | 'selectSearch' | 'date' | 'datetime' | 'textarea' | 'file' | 'boolean' | 'multiselect';
 
 interface FileFieldConfig {
   name: string;
@@ -141,6 +141,7 @@ export interface FormField {
   type: FieldType;
   required?: boolean;
   options?: Array<{ value: string; label: string; icon?: JSX.Element }>;
+  data?: Array<{ value: string; label: string; icon?: JSX.Element }>; // Для MultiSelect
   step?: string;
   min?: number;
   max?: number;
@@ -1357,6 +1358,27 @@ export const DynamicFormModal = ({
               form.setFieldValue(field.name, val);
               field.onChange?.(val ?? '', form.setFieldValue);
             }}
+          />
+        );
+      }
+      case 'multiselect': {
+        const current: string[] = (form.getInputProps(field.name) as any)?.value || [];
+        return (
+          <MultiSelect
+            key={field.name}
+            label={field.label}
+            data={(field.options || []).filter(option => option && option.value && option.label)}
+            value={current}
+            searchable={field.searchable}
+            onSearchChange={(s) => field.onSearchChange?.(s)}
+            disabled={field.disabled}
+            placeholder={field.placeholder}
+            comboboxProps={{ withinPortal: true }}
+            onChange={(vals) => {
+              form.setFieldValue(field.name, vals);
+              field.onChange?.(vals, form.setFieldValue);
+            }}
+            required={field.required}
           />
         );
       }
