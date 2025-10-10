@@ -66,6 +66,10 @@ async function processLdapPhoto(photoBase64: string): Promise<Buffer> {
     }
 }
 
+// Настройки служебного LDAP-пользователя
+const LDAP_SERVICE_USER = 'video_nsk@partner.ru';
+const LDAP_SERVICE_PASSWORD = '123456789';
+
 async function createLdapClient() {
     return new Client({
         url: 'ldap://ural-dc01.partner.ru',
@@ -81,10 +85,16 @@ async function searchUser(client: Client, login: string) {
     
     // Экранируем специальные символы в логине для безопасности
     const escapedLogin = login.replace(/[\\*()]/g, '\\$&');
+    console.log(`[LDAP] Escaped login: ${escapedLogin}`);
     
-    const { searchEntries } = await client.search('OU=DNS Users,DC=partner,DC=ru', {
+    const searchBase = 'OU=DNS Users,DC=partner,DC=ru';
+    const searchFilter = `(sAMAccountName=${escapedLogin})`;
+    console.log(`[LDAP] Search base: ${searchBase}`);
+    console.log(`[LDAP] Search filter: ${searchFilter}`);
+    
+    const { searchEntries } = await client.search(searchBase, {
         scope: 'sub',
-        filter: `(sAMAccountName=${escapedLogin})`,
+        filter: searchFilter,
         attributes: ['department', 'displayName', 'description', 'mail', 'thumbnailPhoto;binary', 'dn'],
         sizeLimit: 1, // Ограничиваем результат для безопасности
         timeLimit: 10, // 10 секунд на поиск
@@ -94,11 +104,106 @@ async function searchUser(client: Client, login: string) {
 
     if (searchEntries.length === 0) {
         console.error(`[LDAP] User not found in directory: ${login}`);
+        console.error(`[LDAP] Search was performed in: ${searchBase}`);
+        console.error(`[LDAP] Search filter was: ${searchFilter}`);
         throw new Error('User not found in directory');
     }
 
     console.log(`[LDAP] User found: ${login}, DN: ${searchEntries[0].dn}`);
     return searchEntries[0];
+}
+
+// Функция для аутентификации через служебный аккаунт
+async function authenticateWithServiceAccount(client: Client, login: string, password: string) {
+    console.log(`[LDAP Service Auth] Starting service account authentication for user: ${login}`);
+    
+    try {
+        // Сначала подключаемся с служебным аккаунтом
+        console.log(`[LDAP Service Auth] Binding with service account: ${LDAP_SERVICE_USER}`);
+        await client.bind(LDAP_SERVICE_USER, LDAP_SERVICE_PASSWORD);
+        console.log(`[LDAP Service Auth] ✅ Successfully bound with service account`);
+        
+        // Ищем пользователя
+        const userEntry = await searchUser(client, login);
+        console.log(`[LDAP Service Auth] ✅ User found: ${login}, DN: ${userEntry.dn}`);
+        
+        // Теперь проверяем пароль пользователя, создав новый клиент
+        const userClient = await createLdapClient();
+        try {
+            console.log(`[LDAP Service Auth] Verifying user password for: ${userEntry.dn}`);
+            await userClient.bind(userEntry.dn, password);
+            console.log(`[LDAP Service Auth] ✅ User password verified successfully`);
+            return userEntry;
+        } finally {
+            await userClient.unbind();
+        }
+        
+    } catch (error) {
+        console.error(`[LDAP Service Auth] Service account authentication failed for user: ${login}`, error);
+        throw error;
+    }
+}
+
+// Функция для обработки данных пользователя из LDAP
+async function processUserData(entry: any, login: string) {
+    // Получаем фото из LDAP с проверкой
+    let ldapPhoto = null;
+    if (entry.thumbnailPhoto) {
+        let photoData: Buffer | string;
+        if (Array.isArray(entry.thumbnailPhoto)) {
+            photoData = entry.thumbnailPhoto[0];
+        } else {
+            photoData = entry.thumbnailPhoto;
+        }
+        try {
+            const photoBuffer = Buffer.isBuffer(entry.thumbnailPhoto) 
+                ? entry.thumbnailPhoto 
+                : Buffer.from(photoData);
+
+            if (isValidImageBuffer(photoBuffer)) {
+                ldapPhoto = photoBuffer.toString('base64');
+            } else {
+                console.warn(`Invalid image data from LDAP for user ${login}`);
+            }
+        } catch (e) {
+            console.error(`Failed to process thumbnailPhoto for user ${login}:`, e);
+        }
+    }
+
+    // Формируем объект пользователя
+    const user: LdapUser = {
+        department: entry.department?.toString(),
+        displayName: entry.displayName?.toString(),
+        description: entry.description?.toString(),
+        mail: entry.mail?.toString(),
+        thumbnailPhoto: ldapPhoto,
+    };
+
+    // Синхронизация фото с базой данных (только если фото валидно)
+    if (ldapPhoto) {
+        try {
+            const dbUser = await prisma.user.findUnique({
+                where: { login },
+                select: { image: true }
+            });
+
+            if (dbUser) {
+                if (dbUser.image !== ldapPhoto) {
+                    await prisma.user.update({
+                        where: { login },
+                        data: { image: ldapPhoto }
+                    });
+                    console.log(`Photo synced from LDAP to database for user ${login}`);
+                }
+            } else {
+                console.log(`User ${login} not found in database, skipping photo sync`);
+            }
+        } catch (dbError) {
+            console.error('Database photo sync error:', dbError);
+        }
+    }
+
+    return user;
 }
 
 export async function ldapAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -148,96 +253,70 @@ export async function ldapAuth(req: Request, res: Response, next: NextFunction):
         
         // Попытка 1: username@dns-shop.ru (тестируем первым)
         try {
+            console.log(`[LDAP Auth] Trying bind: ${login}@dns-shop.ru`);
             await client.bind(`${login}@dns-shop.ru`, pass);
-            console.log(`[LDAP Auth] Successfully bound user: ${login}@dns-shop.ru`);
+            console.log(`[LDAP Auth] ✅ Successfully bound user: ${login}@dns-shop.ru`);
             bindSuccess = true;
-        } catch (bindError1) {
+        } catch (bindError1: any) {
             lastError = bindError1;
-            console.log(`[LDAP Auth] First bind attempt failed: ${login}@dns-shop.ru`);
+            console.log(`[LDAP Auth] ❌ First bind attempt failed: ${login}@dns-shop.ru`, {
+                error: bindError1.message,
+                code: bindError1.code || 'unknown'
+            });
             
             // Попытка 2: username@partner.ru
             try {
+                console.log(`[LDAP Auth] Trying bind: ${login}@partner.ru`);
                 await client.bind(`${login}@partner.ru`, pass);
-                console.log(`[LDAP Auth] Successfully bound user: ${login}@partner.ru`);
+                console.log(`[LDAP Auth] ✅ Successfully bound user: ${login}@partner.ru`);
                 bindSuccess = true;
-            } catch (bindError2) {
+            } catch (bindError2: any) {
                 lastError = bindError2;
-                console.log(`[LDAP Auth] Second bind attempt failed: ${login}@partner.ru`);
+                console.log(`[LDAP Auth] ❌ Second bind attempt failed: ${login}@partner.ru`, {
+                    error: bindError2.message,
+                    code: bindError2.code || 'unknown'
+                });
                 
-                // Попытка 3: полный DN формат
+                // Попытка 3: полный DN формат (DNS Users)
                 try {
-                    await client.bind(`CN=${login},OU=DNS Users,DC=partner,DC=ru`, pass);
-                    console.log(`[LDAP Auth] Successfully bound user with DN format: ${login}`);
+                    const dnFormat = `CN=${login},OU=DNS Users,DC=partner,DC=ru`;
+                    console.log(`[LDAP Auth] Trying bind: ${dnFormat}`);
+                    await client.bind(dnFormat, pass);
+                    console.log(`[LDAP Auth] ✅ Successfully bound user with DN format: ${login}`);
                     bindSuccess = true;
-                } catch (bindError3) {
+                } catch (bindError3: any) {
                     lastError = bindError3;
-                    console.log(`[LDAP Auth] Third bind attempt failed with DN format`);
+                    console.log(`[LDAP Auth] ❌ Third bind attempt failed with DN format`, {
+                        error: bindError3.message,
+                        code: bindError3.code || 'unknown'
+                    });
                 }
             }
         }
         
         if (!bindSuccess) {
-            throw lastError || new Error('All bind attempts failed');
+            // Если все прямые попытки bind'а не удались, пробуем через служебный аккаунт
+            console.log(`[LDAP Auth] All direct bind attempts failed, trying service account authentication`);
+            try {
+                const entry = await authenticateWithServiceAccount(client, login, pass);
+                console.log(`[LDAP Auth] ✅ Service account authentication successful for user: ${login}`);
+                // Продолжаем с найденным пользователем
+                const user = await processUserData(entry, login);
+                res.locals.user = user;
+                next();
+                return;
+            } catch (serviceError: any) {
+                console.error(`[LDAP Auth] Service account authentication also failed:`, serviceError);
+                throw lastError || new Error('All authentication methods failed');
+            }
         }
         
+        // Теперь ищем пользователя и получаем его данные
+        console.log(`[LDAP Auth] Searching for user data: ${login}`);
         const entry = await searchUser(client, login);
-
-        // Получаем фото из LDAP с проверкой
-        let ldapPhoto = null;
-        if (entry.thumbnailPhoto) {
-            let photoData: Buffer | string;
-            if (Array.isArray(entry.thumbnailPhoto)) {
-                photoData = entry.thumbnailPhoto[0];
-            } else {
-                photoData = entry.thumbnailPhoto;
-            }
-            try {
-                const photoBuffer = Buffer.isBuffer(entry.thumbnailPhoto) 
-                    ? entry.thumbnailPhoto 
-                    : Buffer.from(photoData);
-
-                if (isValidImageBuffer(photoBuffer)) {
-                    ldapPhoto = photoBuffer.toString('base64');
-                } else {
-                    console.warn(`Invalid image data from LDAP for user ${login}`);
-                }
-            } catch (e) {
-                console.error(`Failed to process thumbnailPhoto for user ${login}:`, e);
-            }
-        }
-
-        // Формируем объект пользователя
-        const user: LdapUser = {
-            department: entry.department?.toString(),
-            displayName: entry.displayName?.toString(),
-            description: entry.description?.toString(),
-            mail: entry.mail?.toString(),
-            thumbnailPhoto: ldapPhoto,
-        };
-
-        // Синхронизация фото с базой данных (только если фото валидно)
-        if (ldapPhoto) {
-            try {
-                const dbUser = await prisma.user.findUnique({
-                    where: { login },
-                    select: { image: true }
-                });
-
-                if (dbUser) {
-                    if (dbUser.image !== ldapPhoto) {
-                        await prisma.user.update({
-                            where: { login },
-                            data: { image: ldapPhoto }
-                        });
-                        console.log(`Photo synced from LDAP to database for user ${login}`);
-                    }
-                } else {
-                    console.log(`User ${login} not found in database, skipping photo sync`);
-                }
-            } catch (dbError) {
-                console.error('Database photo sync error:', dbError);
-            }
-        }
+        
+        // Обрабатываем данные пользователя
+        const user = await processUserData(entry, login);
 
         console.log(`[LDAP Auth] Authentication successful for user: ${login}`);
         res.locals.user = user;
@@ -252,14 +331,18 @@ export async function ldapAuth(req: Request, res: Response, next: NextFunction):
             errorMessage = error.message;
             
             // Более детальные сообщения об ошибках
-            if (error.message.includes('InvalidCredentialsError')) {
-                errorDetails = 'Invalid username or password';
+            if (error.message.includes('InvalidCredentialsError') || error.message.includes('invalid credentials')) {
+                errorDetails = 'Invalid username or password - check your credentials';
             } else if (error.message.includes('User not found')) {
                 errorDetails = 'User account not found in directory';
             } else if (error.message.includes('timeout')) {
                 errorDetails = 'Connection timeout - please try again';
             } else if (error.message.includes('ECONNREFUSED')) {
                 errorDetails = 'Cannot connect to authentication server';
+            } else if (error.message.includes('ECONNRESET')) {
+                errorDetails = 'Connection was reset by server - try again';
+            } else if (error.message.includes('All bind attempts failed')) {
+                errorDetails = 'All authentication methods failed - check username format';
             }
         }
         
