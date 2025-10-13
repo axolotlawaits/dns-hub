@@ -1584,7 +1584,7 @@ export default function SafetyJournal() {
             type: 'file',
             required: true,
             withDnd: true,
-            accept: '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif'
+            accept: "image/png, image/jpeg, image/webp, application/pdf"
           }
         ]}
         initialValues={{ files: [] }}

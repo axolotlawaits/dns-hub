@@ -82,7 +82,7 @@ export const DropZone = ({
 };
 
 // Компонент для работы с файлами
-export const FileDropZone = ({ onFilesDrop }: { onFilesDrop: (files: File[]) => void }) => {
+export const FileDropZone = ({ onFilesDrop, acceptedTypes }: { onFilesDrop: (files: File[]) => void, acceptedTypes: string }) => {
   const [{ isOver }, drop] = useDrop({
     accept: 'file',
     drop: (item: { files: File[] }) => onFilesDrop(item.files),
@@ -137,6 +137,7 @@ export const FileDropZone = ({ onFilesDrop }: { onFilesDrop: (files: File[]) => 
         multiple
         hidden
         onChange={handleFileInput}
+        accept={acceptedTypes}
       />
     </Box>
   );
