@@ -392,7 +392,7 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
         opened={opened}
         onClose={() => { handleClose(); clearData(); setText(''); }}
         title=""
-        size="90%"
+        size="lg"
         radius="lg"
         centered
         withCloseButton={false}
@@ -417,7 +417,7 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
               style={{
                 background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-600) 100%)',
                 borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0',
-                padding: 'var(--space-6)',
+                padding: 'var(--space-4)',
                 position: 'relative',
                 overflow: 'hidden'
               }}
@@ -430,14 +430,27 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
                   style={{
                     background: 'rgba(255, 255, 255, 0.2)',
                     backdropFilter: 'blur(10px)',
-                    border: '1px solid rgba(255, 255, 255, 0.3)'
+                    border: '1px solid rgba(255, 255, 255, 0.3)',
+                    '@media (max-width: 768px)': {
+                      width: '40px',
+                      height: '40px'
+                    }
                   }}
                 >
                   <IconSearch size={24} />
                 </ThemeIcon>
                 <Box style={{ flex: 1 }}>
                   <Group justify="space-between" align="center" mb="sm">
-                    <Text size="xl" fw={700} style={{ color: 'white' }}>
+                    <Text 
+                      size="xl" 
+                      fw={700} 
+                      style={{ 
+                        color: 'white',
+                        '@media (max-width: 768px)': {
+                          fontSize: '18px'
+                        }
+                      }}
+                    >
                       Поиск по системе
                     </Text>
                     <ActionIcon
@@ -496,13 +509,13 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
             {/* Контейнер с результатами */}
             <Box
               style={{ 
-                minHeight: '400px',
-                maxHeight: '600px',
+                minHeight: '300px',
+                maxHeight: '500px',
                 overflowY: 'auto',
                 background: 'var(--theme-bg-elevated)',
                 borderRadius: '0 0 var(--radius-lg) var(--radius-lg)',
                 border: '1px solid var(--theme-border-primary)',
-                padding: 'var(--space-6)',
+                padding: 'var(--space-4)',
                 boxShadow: 'var(--theme-shadow-lg)'
               }}
             >
