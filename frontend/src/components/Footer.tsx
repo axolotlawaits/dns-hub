@@ -281,6 +281,7 @@ function Footer() {
   return (
     <AppShell.Footer 
       id="footer-wrapper" 
+      data-footer
       className={`auto-hide-footer ${isScrolled ? 'scrolled' : ''} ${isFooterVisible ? 'visible' : 'hidden'} ${autoHideEnabled ? 'auto-hide-enabled' : 'auto-hide-disabled'}`}
       style={{
         '--scroll-progress': `${scrollProgress}%`

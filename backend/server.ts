@@ -25,6 +25,7 @@ import filialRouter from './routes/supply/filial.js'
 import mediaRouter from './routes/add/media.js'
 import rkRouter from './routes/add/rk.js'
 import sliderRouter from './routes/add/slider.js'
+import merchRouter from './routes/add/merch.js'
 import printServiceRouter from './routes/retail/printService.js'
 import appStoreRouter from './routes/retail/appStore.js'
 import scannerRouter from './routes/scanner/scanner.js'
@@ -56,7 +57,7 @@ export const accessPublicKey = fs.readFileSync(path.join(__dirname, 'keys/access
 export const refreshPrivateKey = fs.readFileSync(path.join(__dirname, 'keys/refresh_private.pem'), 'utf8');
 export const refreshPublicKey = fs.readFileSync(path.join(__dirname, 'keys/refresh_public.pem'), 'utf8');
 
-const allowedOrigins = process.env.NODE_ENV === 'production'  ? ['https://dns-zs.partner.ru', 'http://10.11.145.196']  : ['http://localhost:5173', 'http://10.11.145.196:5173'];
+const allowedOrigins = process.env.NODE_ENV === 'production'  ? ['https://dns-zs.partner.ru', 'http://10.11.145.196']  : ['http://localhost:5173', 'http://localhost:5174', 'http://10.11.145.196:5173', 'http://10.11.145.196:5174'];
 export const API = process.env.NODE_ENV === 'production' ? `https://dns-zs.partner.ru/hub-api` : 'http://localhost:2000/hub-api';
 export const APIWebSocket = process.env.NODE_ENV === 'production' ? `https://dns-zs.partner.ru/ws` : 'http://localhost:2000/ws';
 
@@ -107,6 +108,7 @@ app.use('/hub-api/accounting/roc', rocRouter)
 app.use('/hub-api/add/media', mediaRouter)
 app.use('/hub-api/add/rk', rkRouter)
 app.use('/hub-api/add/sliders', sliderRouter)
+app.use('/hub-api/add/merch', merchRouter)
 app.use('/hub-api/radio', adminRouter)
 app.use('/hub-api/search', searchRouter)
 app.use('/hub-api/navigation', navigationRouter);

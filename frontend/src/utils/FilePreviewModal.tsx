@@ -3,7 +3,7 @@ import { Carousel } from '@mantine/carousel';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { API } from '../config/constants';
 import { IconFile, IconFileText, IconFileTypePdf, IconPhoto, IconMusic, IconVideo, IconDownload, IconChevronLeft, IconChevronRight, IconX, IconTrash, IconExternalLink } from '@tabler/icons-react';
-import './FilePreviewModal.css';
+import './styles/FilePreviewModal.css';
 
 // Компонент для загрузки файлов с заголовками авторизации
   const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: any) => {

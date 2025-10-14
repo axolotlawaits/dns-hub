@@ -170,7 +170,7 @@ const Navigation: React.FC<NavigationProps> = ({ navOpened, toggleNav }) => {
   };
 
   return (
-    <AppShell.Navbar className={`modern-navbar ${!navOpened ? 'collapsed' : ''}`}>
+    <AppShell.Navbar className={`modern-navbar ${!navOpened ? 'collapsed' : ''}`} data-navigation>
       <div className="navbar-content">
         {/* Кнопка сворачивания */}
         <div className="navbar-header">

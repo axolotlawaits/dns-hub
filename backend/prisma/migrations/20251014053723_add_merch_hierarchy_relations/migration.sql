@@ -1,0 +1,2 @@
+-- AddForeignKey
+ALTER TABLE "Merch" ADD CONSTRAINT "Merch_parentId_fkey" FOREIGN KEY ("parentId") REFERENCES "Merch"("id") ON DELETE CASCADE ON UPDATE CASCADE;

@@ -4,7 +4,7 @@ import 'dayjs/locale/ru';
 import isBetween from 'dayjs/plugin/isBetween';
 import { TextInput, MultiSelect, Group, Text, ActionIcon, Box } from '@mantine/core';
 import { IconX, IconFilter, IconCalendar, IconList } from '@tabler/icons-react';
-import './filter.css';
+import './styles/filter.css';
 
 dayjs.locale('ru');
 dayjs.extend(isBetween);

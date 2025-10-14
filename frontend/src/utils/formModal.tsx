@@ -6,7 +6,7 @@ import { API } from '../config/constants';
 import { FileDropZone } from './dnd';
 import { IconFile, IconFileTypePdf, IconFileTypeDoc, IconFileTypeXls, IconFileTypePpt, IconFileTypeZip, IconPhoto, IconFileTypeJs, IconFileTypeHtml, IconFileTypeCss, IconFileTypeTxt, IconFileTypeCsv, IconX, IconUpload, IconVideo, IconMusic, IconFileText } from '@tabler/icons-react';
 import { FilePreviewModal } from './FilePreviewModal';
-import './formModal.css';
+import './styles/formModal.css';
 
 // Constants for optimization
 const FILE_ICON_MAP = {

@@ -37,7 +37,7 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
   };
 
   return (
-    <AppShell.Header className="modern-header">
+    <AppShell.Header className="modern-header" data-header>
       <div className="header-content">
         {/* Левая часть */}
         <div className="header-left">

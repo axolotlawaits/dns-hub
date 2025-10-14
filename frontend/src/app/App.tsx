@@ -41,6 +41,7 @@ import SupplyDocs from '../features/Accounting/SupplyDocs/SupplyDocs';
 import Roc from '../features/Accounting/Roc/Roc';
 import Media from '../features/Ad/Media/Media';
 import RK from '../features/Ad/RK/RK';
+import Merch from '../features/Ad/Merch/Merch';
 import Retail from '../features/Retail/Retail';
 import PrintService from '../features/Retail/PrintService/PrintService';
 import { Scanner } from '../features/Scanner';
@@ -54,10 +55,14 @@ import Bookmarks from './Bookmarks';
 import Notification from './Notification';
 import Radio from '../features/Retail/Radio/Radio';
 import AppStore from '../features/Retail/AppStore/AppStore';
+import VirtualPet from '../components/VirtualPet';
+import { usePetSettings } from '../hooks/usePetSettings';
+import { LogButton } from '../components/LogButton';
 
 function App() {
   const { user } = useUserContext();
   const [navOpened, { toggle: toggleNav }] = useDisclosure(true);
+  const { settings: petSettings, updateSettings: updatePetSettings } = usePetSettings();
 
   return (
     <BrowserRouter>
@@ -153,6 +158,7 @@ function App() {
                   <Route path="/aho/meter-reading" element={<MeterReading />} />
                   <Route path="/aho/correspondence" element={<Correspondence />} />
                   <Route path="/add/media" element={<Media />} />
+                  <Route path="/add/merch" element={<Merch />} />
                   <Route path='/supply/loaders' element={<LoadersHome />} />
                   <Route path='/supply/loaders/route/:id' element={<RouteComponent />} />
                   <Route path='/retail/print-service' element={<PrintService />} />
@@ -170,6 +176,11 @@ function App() {
             </AppShell.Main>
             <Footer />
             <FloatingActionButton />
+            <VirtualPet 
+              settings={petSettings} 
+              onSettingsChange={updatePetSettings} 
+            />
+            <LogButton />
           </AppShell>
         } />
         <Route path="/login" element={<Login />} />
