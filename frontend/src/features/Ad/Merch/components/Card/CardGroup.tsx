@@ -61,9 +61,7 @@ function CardGroup() {
       setSelectedCard(null);
       
       // Автоматически перезагружаем карточки после удаления
-      if (selectedId) {
-        loadCardsByCategory(selectedId);
-      }
+      refreshCards();
     } catch (error) {
       console.error('Ошибка при удалении карточки:', error);
       notificationSystem.addNotification(
@@ -86,9 +84,7 @@ function CardGroup() {
       );
       
       // Перезагружаем карточки для обновления списка
-      if (selectedId) {
-        loadCardsByCategory(selectedId);
-      }
+      refreshCards();
     } catch (error) {
       console.error('Ошибка при переключении активности:', error);
       notificationSystem.addNotification(
@@ -101,9 +97,12 @@ function CardGroup() {
 
   const refreshCards = useCallback(() => {
     if (selectedId) {
-      loadCardsByCategory(selectedId);
+      // Сбрасываем на первую страницу и перезагружаем карточки
+      setCurrentPage(1);
+      const activeFilterValue = activeFilter === 'all' ? undefined : activeFilter === 'active';
+      loadCardsByCategory(selectedId, 1, pageSize, activeFilterValue);
     }
-  }, [selectedId, loadCardsByCategory]);
+  }, [selectedId, loadCardsByCategory, activeFilter, pageSize]);
 
   if (loading) {
     return (
@@ -233,9 +232,20 @@ function CardGroup() {
                   w={100}
                 />
               </Group>
-              <Text size="sm" c="dimmed">
-                Показано {cards.length} из {pagination.total} карточек
-              </Text>
+              <Group>
+                <Text size="sm" c="dimmed">
+                  Показано {cards.length} из {pagination.total} карточек
+                </Text>
+                <Button 
+                  onClick={openAddModal}
+                  size="sm"
+                  leftSection={<IconPlus size={16} />}
+                  variant="gradient"
+                  gradient={{ from: 'blue', to: 'cyan' }}
+                >
+                  Добавить карточку
+                </Button>
+              </Group>
             </Group>
           </Box>
 
@@ -261,25 +271,6 @@ function CardGroup() {
               />
             </Box>
           )}
-          
-          {/* Кнопка добавления отображается ПОСЛЕ карточек */}
-          <Center style={{ marginTop: 30, marginBottom: 30 }}>
-            <Button 
-              onClick={openAddModal}
-              size="lg"
-              leftSection={<IconPlus size={20} />}
-              variant="gradient"
-              gradient={{ from: 'blue', to: 'cyan' }}
-              style={{
-                borderRadius: '50px',
-                padding: '12px 30px',
-                fontSize: '16px',
-                fontWeight: 600
-              }}
-            >
-              Добавить карточку
-            </Button>
-          </Center>
         </>
       ) : (
         <Center style={{ height: '400px' }}>

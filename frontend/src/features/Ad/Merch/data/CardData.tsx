@@ -75,10 +75,7 @@ export const fetchCardsByCategory = async (
         id: item.id,
         name: item.name,
         description: item.description || '',
-        imageUrls: [
-          ...(item.imageUrl ? [item.imageUrl] : []),
-          ...(item.attachments || []).map((att: any) => att.source)
-        ],
+        imageUrls: (item.attachments || []).map((att: any) => att.source),
         isActive: item.isActive,
         categoryId: categoryId,
         category: {
@@ -235,19 +232,13 @@ export const updateCard = async (id: string, cardData: Partial<{
   images?: File[]; // Добавляем поддержку новых изображений
 }>): Promise<CardItem> => {
   try {
-    const url = `${API_BASE}/categories/${id}`;
+    const url = `${API_BASE}/cards/${id}`;
     console.log(`📝 Обновляем карточку ${id}:`, cardData);
     
     const formData = new FormData();
     if (cardData.name) formData.append('name', cardData.name);
     if (cardData.description !== undefined) formData.append('description', cardData.description);
     if (cardData.isActive !== undefined) formData.append('isActive', cardData.isActive.toString());
-    if (cardData.images && cardData.images.length > 0) {
-      // Добавляем все изображения
-      cardData.images.forEach(image => {
-        formData.append('images', image);
-      });
-    }
     
     const response = await fetch(url, {
       method: 'PUT',
@@ -266,7 +257,7 @@ export const updateCard = async (id: string, cardData: Partial<{
       id: data.id,
       name: data.name,
       description: data.description || '',
-      imageUrls: data.imageUrl ? [data.imageUrl] : [],
+      imageUrls: data.attachments ? data.attachments.map((att: any) => att.source) : [],
       isActive: data.isActive,
       categoryId: cardData.categoryId || '',
       category: {

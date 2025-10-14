@@ -117,10 +117,11 @@ export function HierarchyAddModal({ onClose, onSuccess, parentItem }: AddModalPr
 
       <Box>
         <Text size="sm" fw={500} mb="xs">Описание</Text>
-        <TiptapEditor
-          content={description}
-          onChange={setDescription}
-        />
+          <TiptapEditor
+            content={description}
+            onChange={setDescription}
+            telegramMode={true}
+          />
       </Box>
 
       <Box>
@@ -261,10 +262,11 @@ export function HierarchyEditModal({ item, onClose, onSuccess }: ItemModalProps)
 
       <Box>
         <Text size="sm" fw={500} mb="xs">Описание</Text>
-        <TiptapEditor
-          content={description}
-          onChange={setDescription}
-        />
+          <TiptapEditor
+            content={description}
+            onChange={setDescription}
+            telegramMode={true}
+          />
       </Box>
 
       <Box>

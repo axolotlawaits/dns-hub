@@ -585,7 +585,6 @@ model Merch {
   children    Merch[]  @relation("CategoryHierarchy")
   name        String
   description String?
-  imageUrl   String   // ← новое имя поля
   isActive    Boolean  @default(true) // ← новое поле
   sortOrder   Int      @default(0)    // ← порядок сортировки
   createdAt   DateTime @default(now())
@@ -606,7 +605,7 @@ model MerchAttachment {
   userAdd   User     @relation(fields: [userAddId], references: [id])
 }
 
-model TelegramUser {
+model MerchTgUser {
   id        String   @id @default(uuid())
   userId    Int      @unique // Telegram user ID
   username  String?
@@ -614,16 +613,16 @@ model TelegramUser {
   lastName  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  stats     TelegramUserStats[]
+  stats     MerchTgUserStats[]
 }
 
-model TelegramUserStats {
+model MerchTgUserStats {
   id        String       @id @default(uuid())
   userId    String
   action    String
   details   String?
   timestamp DateTime     @default(now())
-  user      TelegramUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      MerchTgUser @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 enum Role {

@@ -157,6 +157,7 @@ export function AddCardModal({ categoryId, onSuccess, onClose }: AddCardModalPro
           <TiptapEditor
             content={description}
             onChange={setDescription}
+            telegramMode={true}
           />
         </Box>
 
@@ -349,6 +350,7 @@ export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) 
           <TiptapEditor
             content={description}
             onChange={setDescription}
+            telegramMode={true}
           />
         </Box>
 

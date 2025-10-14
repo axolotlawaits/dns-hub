@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
-import {Container,Title,Paper,Text,Button,Group,Stack,Modal,LoadingOverlay, Tabs, Box, Progress} from '@mantine/core';
+import {Container,Title,Paper,Text,Button,Group,Stack,Modal,LoadingOverlay, Tabs, Box, Progress, Badge} from '@mantine/core';
 import { TimeInput } from '@mantine/dates';
 import {  IconUpload,  IconMusic,  IconClock,  IconDeviceMobile,  IconBuilding, IconEdit, IconCheck, IconRefresh, IconPower, IconBattery, IconWifi, IconCalendar, IconPlayerPlay, IconPlayerPause, IconWifiOff, IconX, IconRadio, IconDownload, IconAlertCircle } from '@tabler/icons-react';
 import { notificationSystem } from '../../../utils/Push';
@@ -209,6 +209,13 @@ const RadioAdmin: React.FC = () => {
     return [];
   }, [branchesWithDevices, hasFullAccess, hasReadOnlyAccess, user]);
 
+  // Определяем вкладку по умолчанию в зависимости от уровня доступа
+  const defaultTab = useMemo(() => {
+    if (hasReadOnlyAccess) {
+      return "devices"; // Для пользователей с доступом только для чтения сразу показываем устройства
+    }
+    return "music"; // Для остальных показываем музыку
+  }, [hasReadOnlyAccess]);
 
   // Проверка состояния музыки
   const musicStatus = useMemo(() => {
@@ -1216,14 +1223,38 @@ const RadioAdmin: React.FC = () => {
               WebkitBackdropFilter: 'blur(8px)'
             }}
           >
-            <Tabs 
-              defaultValue="music"
-              variant="pills"
-              classNames={{
-                list: 'radio-tabs-list',
-                tab: 'radio-tab'
-              }}
-            >
+            {hasReadOnlyAccess ? (
+              // Для пользователей с доступом только для чтения показываем только заголовок
+              <Group justify="space-between" align="center">
+                <div>
+                  <Title order={3} size="h4" style={{ color: 'var(--theme-text-primary)' }}>
+                    Устройства
+                  </Title>
+                  <Text size="sm" c="dimmed">
+                    Управление устройствами вашего филиала
+                  </Text>
+                </div>
+                <div style={{
+                  padding: '6px 12px',
+                  backgroundColor: 'var(--color-primary-500)',
+                  borderRadius: '20px',
+                  color: 'white',
+                  fontSize: '12px',
+                  fontWeight: '500'
+                }}>
+                  {currentBranchDevices.length} устройств
+                </div>
+              </Group>
+            ) : (
+              // Для пользователей с полным доступом показываем вкладки
+              <Tabs 
+                defaultValue={defaultTab}
+                variant="pills"
+                classNames={{
+                  list: 'radio-tabs-list',
+                  tab: 'radio-tab'
+                }}
+              >
               <Tabs.List grow>
                 {hasFullAccess && (
                 <Tabs.Tab 
@@ -2030,7 +2061,122 @@ const RadioAdmin: React.FC = () => {
 
               </Box>
             </Tabs>
+            )}
           </Paper>
+
+          {/* Контент для пользователей с доступом только для чтения */}
+          {hasReadOnlyAccess && (
+            <Stack gap="md">
+              {/* Статистика устройств */}
+              {stats && (
+                <Paper p="md" withBorder className="radio-stats-card">
+                  <Group justify="space-between" align="center">
+                    <div>
+                      <Text size="lg" fw={600} style={{ color: 'var(--theme-text-primary)' }}>
+                        Статистика устройств
+                      </Text>
+                      <Text size="sm" c="dimmed">
+                        Общая информация по устройствам
+                      </Text>
+                    </div>
+                    <Group gap="lg">
+                      <div style={{ textAlign: 'center' }}>
+                        <Text size="xl" fw={700} style={{ color: 'var(--color-primary-500)' }}>
+                          {stats.totalDevices}
+                        </Text>
+                        <Text size="xs" c="dimmed">Всего устройств</Text>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <Text size="xl" fw={700} style={{ color: 'var(--color-success-500)' }}>
+                          {currentBranchDevices.filter(device => statusMap[device.id]).length}
+                        </Text>
+                        <Text size="xs" c="dimmed">Онлайн</Text>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <Text size="xl" fw={700} style={{ color: 'var(--color-error-500)' }}>
+                          {currentBranchDevices.filter(device => !statusMap[device.id]).length}
+                        </Text>
+                        <Text size="xs" c="dimmed">Офлайн</Text>
+                      </div>
+                    </Group>
+                  </Group>
+                </Paper>
+              )}
+
+              {/* Устройства */}
+              <Stack gap="md">
+                {hasReadOnlyAccess && user && (
+                  <Paper p="md" withBorder className="radio-device-card">
+                    <Group justify="space-between" mb="md">
+                      <div>
+                        <Title order={4} size="h5">{user.branch}</Title>
+                        <Text size="sm" c="dimmed">Ваш филиал</Text>
+                      </div>
+                      <div style={{
+                        padding: '6px 12px',
+                        backgroundColor: 'var(--color-primary-500)',
+                        borderRadius: '20px',
+                        color: 'white',
+                        fontSize: '12px',
+                        fontWeight: '500'
+                      }}>
+                        {currentBranchDevices.length} устройств
+                      </div>
+                    </Group>
+
+                    <Stack gap="sm">
+                      {currentBranchDevices.map((device) => {
+                        const online = !!statusMap[device.id];
+                        return (
+                          <div 
+                            key={device.id} 
+                            style={{ 
+                              padding: '16px',
+                              backgroundColor: 'var(--theme-bg-elevated)',
+                              borderRadius: '8px',
+                              border: '1px solid var(--theme-border)',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onClick={() => openDeviceModal(device)}
+                            onMouseEnter={(e) => e.currentTarget.style.boxShadow = 'var(--mantine-shadow-sm)'}
+                            onMouseLeave={(e) => e.currentTarget.style.boxShadow = 'none'}
+                          >
+                            <Group justify="space-between" align="center">
+                              <div>
+                                <Group gap="xs" align="center">
+                                  <Text fw={500} size="sm" style={{ color: 'var(--theme-text-primary)' }}>{device.name}</Text>
+                                  {deviceUpdates[device.id] && (
+                                    <Badge size="xs" color="blue" variant="light">
+                                      Обновление
+                                    </Badge>
+                                  )}
+                                </Group>
+                                <Text size="xs" c="dimmed" mt={4}>
+                                  {device.network} • {device.vendor}
+                                </Text>
+                              </div>
+                              <Group gap="xs" align="center">
+                                <div style={{
+                                  width: '8px',
+                                  height: '8px',
+                                  borderRadius: '50%',
+                                  backgroundColor: online ? 'var(--color-success-500)' : 'var(--color-error-500)'
+                                }} />
+                                <Text size="xs" c={online ? 'green' : 'red'}>
+                                  {online ? 'Онлайн' : 'Офлайн'}
+                                </Text>
+                              </Group>
+                            </Group>
+                          </div>
+                        );
+                      })}
+                    </Stack>
+                  </Paper>
+                )}
+              </Stack>
+            </Stack>
+          )}
         </Stack>
       </Box>
 

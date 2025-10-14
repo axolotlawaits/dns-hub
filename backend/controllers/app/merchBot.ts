@@ -857,20 +857,12 @@ class MerchBotService {
         return [];
       }
       
-      console.log(`📋 Найден элемент: ${item.name}, imageUrl: ${item.imageUrl}, attachments: ${item.attachments.length}`);
+      console.log(`📋 Найден элемент: ${item.name}, attachments: ${item.attachments.length}`);
       
       const urls: string[] = [];
       const addedFiles = new Set<string>(); // Для отслеживания уже добавленных файлов
       
-      // Основное изображение
-      if (item.imageUrl) {
-        const mainImageUrl = this.getImageUrl(item.imageUrl);
-        urls.push(mainImageUrl);
-        addedFiles.add(item.imageUrl); // Запоминаем, что этот файл уже добавлен
-        console.log(`🖼️ Добавлено основное изображение: ${mainImageUrl}`);
-      }
-      
-      // Дополнительные изображения (только если они не дублируют основное)
+      // Изображения из attachments
       for (const attachment of item.attachments) {
         if (!addedFiles.has(attachment.source)) { // Проверяем, не добавлен ли уже этот файл
           const attachmentUrl = this.getImageUrl(attachment.source);
@@ -913,7 +905,7 @@ class MerchBotService {
   // Сохранение пользователя Telegram в БД
   private async saveUserToDB(userId: number, username?: string, firstName?: string, lastName?: string): Promise<void> {
     try {
-      await prisma.telegramUser.upsert({
+      await prisma.merchTgUser.upsert({
         where: { userId: userId },
         update: {
           username: username,
@@ -937,13 +929,13 @@ class MerchBotService {
   private async updateStats(userId: number, actionType: string, details?: string): Promise<void> {
     try {
       // Сначала убеждаемся, что пользователь существует
-      const telegramUser = await prisma.telegramUser.findUnique({
+      const telegramUser = await prisma.merchTgUser.findUnique({
         where: { userId: userId }
       });
 
       if (telegramUser) {
         // Сохраняем статистику
-        await prisma.telegramUserStats.create({
+        await prisma.merchTgUserStats.create({
           data: {
             userId: telegramUser.id,
             action: actionType,

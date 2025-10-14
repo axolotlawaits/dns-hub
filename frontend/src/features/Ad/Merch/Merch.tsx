@@ -8,7 +8,7 @@ import {
   Text,
   Stack
 } from '@mantine/core';
-import { IconChevronLeft, IconChevronRight, IconRefresh } from '@tabler/icons-react';
+import { IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { AppProvider } from './context/SelectedCategoryContext';
 import Hierarchy from './components/Hierarchy/Hierarchy';
@@ -36,11 +36,6 @@ function Merch() {
       title: 'Управление мерчем',
       subtitle: 'Создание и управление категориями и карточками товаров',
       icon: <Text size="xl" fw={700} c="white">🛍️</Text>,
-      actionButton: {
-        text: 'Обновить данные',
-        onClick: () => window.location.reload(),
-        icon: <IconRefresh size={18} />
-      }
     });
 
     return () => clearHeader();
