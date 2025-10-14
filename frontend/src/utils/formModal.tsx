@@ -421,7 +421,7 @@ const FileUploadComponent = memo(({
     try {
       return (
         <>
-          <FileDropZone onFilesDrop={onFilesDrop} />
+          <FileDropZone onFilesDrop={onFilesDrop} acceptedTypes={accept} />
           {!hidePreview && (
           <Stack mt="md">
             {attachments.map(renderAttachment)}
@@ -1093,7 +1093,7 @@ export const DynamicFormModal = ({
   fileCardTitle = 'Файл'
 }: DynamicFormModalProps) => {
   const [previewId, setPreviewId] = useState<string | null>(null);
-  
+
   // Отладка изменений previewId
   useEffect(() => {
   }, [previewId]);

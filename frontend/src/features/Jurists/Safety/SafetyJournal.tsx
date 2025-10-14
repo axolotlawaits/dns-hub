@@ -213,7 +213,7 @@ const LocalJournalTable = function LocalJournalTable({
                 </td>
                 <td className='table-cell' onClick={() => onViewFile(journal)}>
                   <Group gap="xs" align="center">
-                    {journal.files && journal.files.length > 0 ? (
+                    {journal.files && journal.files.filter(f => !f.is_deleted).length > 0 ? (
                       <>
                         <ThemeIcon size="sm" color="blue" variant="light">
                           <IconFile size={14} />
@@ -1584,7 +1584,7 @@ export default function SafetyJournal() {
             type: 'file',
             required: true,
             withDnd: true,
-            accept: '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif'
+            accept: "image/png, image/jpeg, image/webp, application/pdf"
           }
         ]}
         initialValues={{ files: [] }}
