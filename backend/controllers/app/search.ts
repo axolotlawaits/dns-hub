@@ -95,6 +95,20 @@ export const searchBranches = async (req: Request, res: Response): Promise<any> 
   res.status(400).json({error: 'ошибка при поиске филиалов'})
 }
 
+export const getBranchEmployees = async (req: Request, res: Response): Promise<any>  => {
+  const branchId = req.params.id as string
+
+  const branchEmployees = await prisma.userData.findMany({ 
+    where: {branch_uuid: branchId}, 
+    select: {uuid: true, fio: true, position: {select: {name: true}}}
+  })
+  
+  if (branchEmployees) {
+    return res.status(200).json(branchEmployees)
+  }
+  res.status(400).json({error: 'ошибка при поиске филиала'})
+}
+
 /* employee */
 
 export const getEmployee = async (req: Request, res: Response): Promise<any> => {

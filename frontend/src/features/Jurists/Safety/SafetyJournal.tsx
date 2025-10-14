@@ -349,11 +349,29 @@ const LocalJournalTable = function LocalJournalTable({
     setExpandedBranches: (branches: Set<string>) => void;
   }) {
   const [isExpanded, setIsExpanded] = useState(expandedBranches.has(branch.branch_id));
+  const [responsibleOpened, { open: responsibleOpen, close: responsibleClose }] = useDisclosure(false)
+  const [branchEmployees, setBranchEmployees] = useState([])
+  const [responsibleOT, setResponsibleOT] = useState<string | null>('')
+  const [responsiblePB, setResponsiblePB] = useState<string | null>('')
 
   // Синхронизируем локальное состояние с глобальным
   useEffect(() => {
     setIsExpanded(expandedBranches.has(branch.branch_id));
   }, [expandedBranches, branch.branch_id]);
+
+  const getBranchEmployees = async () => {
+    const response = await fetch(`${API}/search/branch/${branch.branch_id}/employees`)
+    const json = await response.json()
+    
+    if (response.ok) {
+      setBranchEmployees(json)
+    }
+  }
+
+  const handleResponsibleOpen = () => {
+    responsibleOpen()
+    getBranchEmployees()
+  }
 
   return (
     <Paper withBorder radius="md" p="lg" style={{ background: 'var(--theme-bg-primary)' }}>
@@ -428,6 +446,7 @@ const LocalJournalTable = function LocalJournalTable({
               </Group>
             </Stack>
           </Group>
+          <Stack>
             <Button
               size="sm"
               leftSection={isExpanded ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
@@ -448,6 +467,37 @@ const LocalJournalTable = function LocalJournalTable({
             >
               {isExpanded ? 'Свернуть' : 'Развернуть'}
             </Button>
+            {/* {canManageStatuses &&
+            <>
+              <Button variant="outline" onClick={handleResponsibleOpen}>Ответственные</Button>
+              <Modal opened={responsibleOpened} onClose={responsibleClose} title="Назначение ответственных" centered>
+                <Stack gap='lg'>
+                  <Select
+                    label="Ответственный за ПБ"
+                    placeholder="Выберите сотрудника"
+                    data={branchEmployees.map(emp => ({label: emp.fio, value: emp.uuid}))}
+                    value={responsiblePB}
+                    onChange={setResponsiblePB}
+                    searchable
+                    clearable
+                    style={{ minWidth: 200 }}
+                  />
+                  <Select
+                    label="Ответственный за ПБ"
+                    placeholder="Выберите сотрудника"
+                    data={branchEmployees.map(emp => ({label: emp.fio, value: emp.uuid}))}
+                    value={responsibleOT}
+                    onChange={setResponsibleOT}
+                    searchable
+                    clearable
+                    style={{ minWidth: 200 }}
+                  />
+                  <Button variant='light'>Назначить</Button>
+                </Stack>
+              </Modal>
+            </>
+            } */}
+          </Stack>
         </Group>
 
         {/* Список журналов */}
