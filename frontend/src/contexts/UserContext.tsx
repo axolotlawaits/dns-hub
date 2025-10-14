@@ -62,12 +62,23 @@ export const UserContextProvider = ({ children }: Props) => {
 
   const refreshUserData = async () => {
     if (user) {
-      const response = await fetch(`${API}/user/${user.id}`)
-      const json = await response.json()
-      if (response.ok) {
-        setToken(json.token)
-        localStorage.setItem('user', JSON.stringify(json.user))
-        localStorage.setItem('token', json.token)
+      try {
+        const response = await fetch(`${API}/user/${user.id}`)
+        const json = await response.json()
+        if (response.ok) {
+          setToken(json.token)
+          localStorage.setItem('user', JSON.stringify(json.user))
+          localStorage.setItem('token', json.token)
+        } else if (response.status === 400) {
+          // Пользователь не найден в базе данных, очищаем localStorage
+          console.warn('Пользователь не найден в базе данных, очищаем localStorage')
+          localStorage.removeItem('user')
+          localStorage.removeItem('token')
+          setUser(null)
+          setToken(null)
+        }
+      } catch (error) {
+        console.error('Ошибка при обновлении данных пользователя:', error)
       }
     }
   }

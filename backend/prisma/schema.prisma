@@ -194,6 +194,7 @@ model User {
   SupplyDocsAttachments  SupplyDocsAttachment[]
   UserSettings           UserSettings[]
   userToolAccesses       UserToolAccess[]
+  MerchAttachments       MerchAttachment[]
 }
 
 model GroupToolAccess {
@@ -575,6 +576,54 @@ model AppVersion {
   @@index([version])
   @@index([isActive])
   @@index([createdAt])
+}
+
+model Merch {
+  id          String   @id @default(uuid())
+  parentId    String?
+  parent      Merch?   @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children    Merch[]  @relation("CategoryHierarchy")
+  name        String
+  description String?
+  imageUrl   String   // ← новое имя поля
+  isActive    Boolean  @default(true) // ← новое поле
+  sortOrder   Int      @default(0)    // ← порядок сортировки
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  layer       Int
+  attachments MerchAttachment[]   // Связи с attachments
+}
+
+model MerchAttachment {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  userAddId String
+  source    String
+  type      String
+  recordId  String
+  sortOrder Int      @default(0)    // ← порядок сортировки
+  merch     Merch    @relation(fields: [recordId], references: [id])
+  userAdd   User     @relation(fields: [userAddId], references: [id])
+}
+
+model TelegramUser {
+  id        String   @id @default(uuid())
+  userId    Int      @unique // Telegram user ID
+  username  String?
+  firstName String?
+  lastName  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  stats     TelegramUserStats[]
+}
+
+model TelegramUserStats {
+  id        String       @id @default(uuid())
+  userId    String
+  action    String
+  details   String?
+  timestamp DateTime     @default(now())
+  user      TelegramUser @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 enum Role {

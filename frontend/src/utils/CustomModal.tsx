@@ -1,6 +1,6 @@
 import { Modal, Group, ThemeIcon, Text } from '@mantine/core';
 import { IconCalendar } from '@tabler/icons-react';
-import './CustomModal.css';
+import './styles/CustomModal.css';
 
 interface CustomModalProps {
   opened: boolean;

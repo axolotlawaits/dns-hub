@@ -25,11 +25,13 @@ import filialRouter from './routes/supply/filial.js'
 import mediaRouter from './routes/add/media.js'
 import rkRouter from './routes/add/rk.js'
 import sliderRouter from './routes/add/slider.js'
+import merchRouter from './routes/add/merch.js'
 import printServiceRouter from './routes/retail/printService.js'
 import appStoreRouter from './routes/retail/appStore.js'
 import scannerRouter from './routes/scanner/scanner.js'
 import adminRouter from './routes/admin.js'
 import telegramRouter  from './routes/app/telegram.js'
+import merchBotRouter from './routes/app/merchBot.js'
 import safetyJournalRouter from './routes/jurists/safetyJournal.js'
 import fs from 'fs'
 import cookieParser from 'cookie-parser'
@@ -37,6 +39,7 @@ import { refreshToken } from './middleware/auth.js';
 import { createServer } from 'http';
 import { SocketIOService } from './socketio.js';
 import { telegramService } from './controllers/app/telegram.js';
+import { merchBotService } from './controllers/app/merchBot.js';
 import { initToolsCron } from './tasks/cron.js';
 
 const app = express()
@@ -56,7 +59,7 @@ export const accessPublicKey = fs.readFileSync(path.join(__dirname, 'keys/access
 export const refreshPrivateKey = fs.readFileSync(path.join(__dirname, 'keys/refresh_private.pem'), 'utf8');
 export const refreshPublicKey = fs.readFileSync(path.join(__dirname, 'keys/refresh_public.pem'), 'utf8');
 
-const allowedOrigins = process.env.NODE_ENV === 'production'  ? ['https://dns-zs.partner.ru', 'http://10.11.145.196']  : ['http://localhost:5173', 'http://10.11.145.196:5173'];
+const allowedOrigins = process.env.NODE_ENV === 'production'  ? ['https://dns-zs.partner.ru', 'http://10.11.145.196']  : ['http://localhost:5173', 'http://localhost:5174', 'http://10.11.145.196:5173', 'http://10.11.145.196:5174'];
 export const API = process.env.NODE_ENV === 'production' ? `https://dns-zs.partner.ru/hub-api` : 'http://localhost:2000/hub-api';
 export const APIWebSocket = process.env.NODE_ENV === 'production' ? `https://dns-zs.partner.ru/ws` : 'http://localhost:2000/ws';
 
@@ -97,6 +100,7 @@ app.use('/hub-api/device', deviceRouter)
 app.use('/hub-api/radio', radioRouter)
 app.use('/hub-api/profile', profileRouter)
 app.use('/hub-api/telegram', telegramRouter);
+app.use('/hub-api/merch-bot', merchBotRouter);
 app.use('/hub-api/birthday', birthdayRouter)
 app.use('/hub-api/bookmarks', bookmarksRouter)
 app.use('/hub-api/notifications', notificationRouter)
@@ -107,6 +111,7 @@ app.use('/hub-api/accounting/roc', rocRouter)
 app.use('/hub-api/add/media', mediaRouter)
 app.use('/hub-api/add/rk', rkRouter)
 app.use('/hub-api/add/sliders', sliderRouter)
+app.use('/hub-api/add/merch', merchRouter)
 app.use('/hub-api/radio', adminRouter)
 app.use('/hub-api/search', searchRouter)
 app.use('/hub-api/navigation', navigationRouter);
@@ -137,5 +142,17 @@ server.listen(2000, async function() {
     }
   } catch (error) {
     console.error('Failed to start Telegram bot:', error);
+  }
+
+  // Запуск Merch бота
+  try {
+    const merchBotStarted = await merchBotService.launch();
+    if (merchBotStarted) {
+      console.log('Merch bot started');
+    } else {
+      console.log('Merch bot failed to start - check .env file');
+    }
+  } catch (error) {
+    console.error('Failed to start Merch bot:', error);
   }
 });

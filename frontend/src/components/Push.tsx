@@ -1,5 +1,5 @@
 import { Paper, Text, Group, ActionIcon, Stack } from '@mantine/core';
-import { IconBell, IconCheck, IconX, IconAlertCircle, IconInfoCircle } from '@tabler/icons-react';
+import { IconCheck, IconX, IconAlertCircle, IconInfoCircle } from '@tabler/icons-react';
 import { INotification } from '../utils/Push';
 
 interface NotificationsProps {
@@ -119,7 +119,7 @@ export function Notifications({ notifications, onDismiss }: NotificationsProps) 
         ))}
       </Stack>
       
-      <style jsx>{`
+      <style>{`
         @keyframes slideInUp {
           from {
             transform: translateY(100%);

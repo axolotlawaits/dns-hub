@@ -93,10 +93,6 @@ const getContextualGradientBackground = (
   elevation?: number,
   isWeekend?: boolean
 ): string => {
-  console.log(`[Advanced Gradient Background] Input:`, {
-    season, timeOfDay, weatherCondition, temperature, humidity, windSpeed, 
-    pressure, visibility, uvIndex, latitude, longitude, elevation, isWeekend
-  });
   
   // Определяем цвета для всех линий
   const getLineColors = () => {
@@ -286,7 +282,6 @@ const getContextualGradientBackground = (
 
   const dataUrl = `data:image/svg+xml;base64,${btoa(svg)}`;
 
-  console.log(`[Advanced Gradient Background] Generated gradient with colors:`, colors);
   return dataUrl;
 };
 
@@ -350,23 +345,14 @@ const fetchBackgroundImage = async (
   elevation?: number,
   isWeekend?: boolean
 ) => {
-  console.log(`[Advanced Background Gradient] Starting contextual background loading...`);
-  console.log(`[Advanced Background Gradient] Context:`, {
-    season, timeOfDay, weatherCondition, temperature, humidity, windSpeed, 
-    pressure, visibility, uvIndex, latitude, longitude, elevation, isWeekend
-  });
-  
   // Используем реальную температуру или 0°C как fallback для зимы
   const actualTemperature = temperature !== undefined ? temperature : 0;
-  console.log(`[Advanced Background Gradient] Using temperature: ${actualTemperature}°C (original: ${temperature}°C)`);
   
   const background = getContextualBackground(
     season, timeOfDay, weatherCondition, actualTemperature, humidity, windSpeed, 
     pressure, visibility, uvIndex, latitude, longitude, elevation, isWeekend
   );
   
-  console.log(`[Advanced Background Gradient] ✅ Gradient background generated successfully`);
-  console.log(`[Advanced Background Gradient] Context:`, background);
   
   return background;
 };
@@ -396,7 +382,7 @@ const fetchUserInfo = async (login: string): Promise<UserInfo> => {
     const formattedName = formatName(data.name) || login;
     
     return {
-      photo: data.image ? `data:image/jpeg;base64,${data.image}` : null, // null если нет фото
+      photo: data.image && data.image !== null ? `data:image/jpeg;base64,${data.image}` : null, // null если нет фото или фото равно null
       name: formattedName,
       login: data.login
     };
@@ -444,13 +430,13 @@ const UserProfileCard = memo(({ userInfo }: { userInfo: UserInfo }) => (
         radius="xl"
         className="user-avatar"
         style={{
-          background: userInfo.photo ? undefined : 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
-          color: userInfo.photo ? undefined : 'white',
+          background: userInfo.photo && userInfo.photo !== null ? undefined : 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
+          color: userInfo.photo && userInfo.photo !== null ? undefined : 'white',
           fontWeight: 'bold',
           fontSize: '24px'
         }}
       >
-        {!userInfo.photo && generateInitials(userInfo.name)}
+        {(!userInfo.photo || userInfo.photo === null) && generateInitials(userInfo.name)}
       </Avatar>
       <Box>
         <Text size="lg" fw={600} c="var(--theme-text-primary)">
@@ -482,7 +468,6 @@ const BackgroundWrapper = memo(({
   backgroundImage: string;
   children: React.ReactNode;
 }) => {
-  console.log(`[Background Wrapper] Setting background image: ${backgroundImage.substring(0, 50)}...`);
 
   return (
     <div 
@@ -533,37 +518,27 @@ function Login() {
     return dayOfWeek === 0 || dayOfWeek === 6; // Воскресенье или суббота
   }, []);
   
-  // Логируем данные погоды для отладки
-  useEffect(() => {
-    console.log(`[Weather Debug] weatherCondition: "${weatherCondition}", temperature: ${temperature}°C`);
-    console.log(`[Weather Debug] season: ${currentSeason}, timeOfDay: ${currentTimeOfDay}`);
-    console.log(`[Weather Debug] Current date: ${new Date().toLocaleDateString()}, month: ${new Date().getMonth() + 1}`);
-    
-    // Проверяем правильность определения сезона
-    const currentMonth = new Date().getMonth() + 1;
-    const expectedSeason = currentMonth === 12 || currentMonth <= 2 ? 'winter' :
-                          currentMonth >= 3 && currentMonth <= 5 ? 'spring' :
-                          currentMonth >= 6 && currentMonth <= 8 ? 'summer' : 'autumn';
-    console.log(`[Weather Debug] Expected season for month ${currentMonth}: ${expectedSeason}, actual: ${currentSeason}`);
-  }, [weatherCondition, temperature, currentSeason, currentTimeOfDay]);
   
   // Debounce ref для поиска пользователей
   const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Загрузка сохраненных данных пользователя
   useEffect(() => {
-    const loadSavedData = () => {
+    const loadSavedData = async () => {
       const lastLogin = localStorage.getItem(LAST_LOGIN_KEY);
-      const lastUserInfo = localStorage.getItem(LAST_USER_INFO_KEY);
       
-      if (lastLogin && lastUserInfo) {
+      if (lastLogin) {
         try {
-          const parsedInfo = JSON.parse(lastUserInfo);
-          setUserInfo(parsedInfo);
+          // Всегда загружаем свежие данные пользователя из базы
+          const freshUserInfo = await fetchUserInfo(lastLogin);
+          setUserInfo(freshUserInfo);
           setUserData(prev => ({ ...prev, login: lastLogin }));
           setFormState('knownUser');
-        } catch (e) {
-          console.error('Ошибка парсинга сохраненных данных', e);
+        } catch (error) {
+          console.error('Ошибка загрузки данных пользователя:', error);
+          // Если не удалось загрузить, очищаем кэш
+          localStorage.removeItem(LAST_LOGIN_KEY);
+          localStorage.removeItem(LAST_USER_INFO_KEY);
           setFormState('newUser');
         }
       } else {
@@ -583,7 +558,6 @@ function Login() {
     
     const loadBackground = async () => {
       try {
-        console.log(`[Advanced Background Loader] Starting gradient background load...`);
         
         const background = await fetchBackgroundImage(
           currentSeason, 
@@ -603,7 +577,6 @@ function Login() {
         
         if (isMounted) {
           setCurrentBackground(background);
-          console.log(`[Advanced Background Loader] Gradient background loaded successfully`);
         }
       } catch (error) {
         console.error('[Advanced Background Loader] Error loading background:', error);
@@ -628,7 +601,6 @@ function Login() {
         };
         if (isMounted) {
           setCurrentBackground(fallbackBackground);
-          console.log('[Advanced Background Loader] Fallback gradient background loaded');
         }
       }
     };
@@ -667,7 +639,7 @@ function Login() {
     try {
       const info = await fetchUserInfo(userData.login);
       setUserInfo(info);
-      localStorage.setItem(LAST_USER_INFO_KEY, JSON.stringify(info));
+      // Не сохраняем userInfo в localStorage, чтобы всегда загружать свежие данные
     } catch (error) {
       console.error('Ошибка загрузки данных пользователя:', error);
     } finally {
@@ -710,6 +682,15 @@ function Login() {
         contextLogin(json.user, json.token);
         localStorage.setItem('user', JSON.stringify(json.user));
         localStorage.setItem('token', json.token);
+        
+        // Принудительно обновляем аватар пользователя из базы данных
+        try {
+          const freshUserInfo = await fetchUserInfo(userData.login);
+          setUserInfo(freshUserInfo);
+        } catch (error) {
+          console.error('Ошибка обновления аватара:', error);
+        }
+        
         navigate('/');
       } else {
         setValidationErrors(json.errors || {});

@@ -92,13 +92,15 @@ export default function BookmarksList() {
 
       try {
         const response = await fetch(`${API}/user/settings/${user.id}/bookmarks_cards_per_row`);
-        if (!response.ok) {
-          return;
-        }
-        const data = await response.json();
-        const savedSetting = data.value;
-        if (savedSetting && ['3', '6', '9'].includes(savedSetting)) {
-          setCardsPerRow(parseInt(savedSetting) as 3 | 6 | 9);
+        if (response.ok) {
+          const data = await response.json();
+          const savedSetting = data.value;
+          if (savedSetting && ['3', '6', '9'].includes(savedSetting)) {
+            setCardsPerRow(parseInt(savedSetting) as 3 | 6 | 9);
+          }
+        } else if (response.status === 404) {
+          // Если настройка не найдена, используем значение по умолчанию
+          console.log('Настройка bookmarks_cards_per_row не найдена, используем значение по умолчанию');
         }
       } catch (err) {
         console.error('Error loading bookmarks setting:', err);

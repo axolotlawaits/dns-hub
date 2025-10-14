@@ -1106,6 +1106,7 @@ const ProfileInfo = () => {
         onSubmit={updatePhoto}
         submitButtonText="Подтвердить"
       />
+
       </Stack>
     </DndProviderWrapper>
   );
