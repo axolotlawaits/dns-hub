@@ -8,7 +8,7 @@ import FloatingActionButton from '../../../components/FloatingActionButton';
 import { Button, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Paper, Badge, Tabs, Tooltip, Alert, Divider, Select, Pagination, Popover, Card, ThemeIcon, Accordion, Modal, Textarea } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
-import { IconClock, IconFileText, IconChevronDown, IconChevronUp, IconUpload, IconFilter, IconShield, IconFlame, IconCircleCheck, IconCircleX, IconAlertCircle, IconUsers, IconX, IconFile, IconCheck, IconRefresh, IconQrcode } from '@tabler/icons-react';
+import { IconClock, IconFileText, IconChevronDown, IconChevronUp, IconUpload, IconFilter, IconShield, IconFlame, IconCircleCheck, IconCircleX, IconAlertCircle, IconUsers, IconX, IconFile, IconCheck, IconRefresh, IconQrcode, IconMessageDots } from '@tabler/icons-react';
 import { FilePreviewModal } from '../../../utils/FilePreviewModal';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { DndProviderWrapper } from '../../../utils/dnd';
@@ -76,6 +76,7 @@ interface JournalInfo {
   branch_id: string;
   branch_name: string;
   status: 'approved' | 'pending' | 'rejected' | 'under_review';
+  comment?: string
   filled_at: string | null;
   approved_at: string | null;
   period_start: string;
@@ -297,19 +298,17 @@ const LocalJournalTable = function LocalJournalTable({
                                 
                               </Stack>
                             </Modal>
-                            {/* <Tooltip label="На проверке">
-                              <ActionIcon 
-                                size="sm" 
-                                color="blue" 
-                                variant={journal.status === 'under_review' ? 'filled' : 'light'} 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onUnderReviewJournal(journal);
-                                }}
-                              >
-                                <IconAlertCircle size={14} />
-                              </ActionIcon>
-                            </Tooltip> */}
+                            {journal.status !== 'approved' && journal.comment &&
+                              <Tooltip label={journal.comment} multiline w={250}>
+                                <ActionIcon 
+                                  size="sm" 
+                                  color="orange" 
+                                  variant={journal.status === 'rejected' ? 'filled' : 'light'} 
+                                >
+                                  <IconMessageDots size={14} />
+                                </ActionIcon>
+                              </Tooltip>
+                            }
                           </>
                         );
                       })()}
