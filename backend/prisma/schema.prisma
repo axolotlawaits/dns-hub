@@ -606,6 +606,26 @@ model MerchAttachment {
   userAdd   User     @relation(fields: [userAddId], references: [id])
 }
 
+model TelegramUser {
+  id        String   @id @default(uuid())
+  userId    Int      @unique // Telegram user ID
+  username  String?
+  firstName String?
+  lastName  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  stats     TelegramUserStats[]
+}
+
+model TelegramUserStats {
+  id        String       @id @default(uuid())
+  userId    String
+  action    String
+  details   String?
+  timestamp DateTime     @default(now())
+  user      TelegramUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
 enum Role {
   DEVELOPER
   ADMIN

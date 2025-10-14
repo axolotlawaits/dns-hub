@@ -55,14 +55,10 @@ import Bookmarks from './Bookmarks';
 import Notification from './Notification';
 import Radio from '../features/Retail/Radio/Radio';
 import AppStore from '../features/Retail/AppStore/AppStore';
-import VirtualPet from '../components/VirtualPet';
-import { usePetSettings } from '../hooks/usePetSettings';
-import { LogButton } from '../components/LogButton';
 
 function App() {
   const { user } = useUserContext();
   const [navOpened, { toggle: toggleNav }] = useDisclosure(true);
-  const { settings: petSettings, updateSettings: updatePetSettings } = usePetSettings();
 
   return (
     <BrowserRouter>
@@ -176,11 +172,6 @@ function App() {
             </AppShell.Main>
             <Footer />
             <FloatingActionButton />
-            <VirtualPet 
-              settings={petSettings} 
-              onSettingsChange={updatePetSettings} 
-            />
-            <LogButton />
           </AppShell>
         } />
         <Route path="/login" element={<Login />} />

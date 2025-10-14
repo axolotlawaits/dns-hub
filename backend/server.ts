@@ -31,6 +31,7 @@ import appStoreRouter from './routes/retail/appStore.js'
 import scannerRouter from './routes/scanner/scanner.js'
 import adminRouter from './routes/admin.js'
 import telegramRouter  from './routes/app/telegram.js'
+import merchBotRouter from './routes/app/merchBot.js'
 import safetyJournalRouter from './routes/jurists/safetyJournal.js'
 import fs from 'fs'
 import cookieParser from 'cookie-parser'
@@ -38,6 +39,7 @@ import { refreshToken } from './middleware/auth.js';
 import { createServer } from 'http';
 import { SocketIOService } from './socketio.js';
 import { telegramService } from './controllers/app/telegram.js';
+import { merchBotService } from './controllers/app/merchBot.js';
 import { initToolsCron } from './tasks/cron.js';
 
 const app = express()
@@ -98,6 +100,7 @@ app.use('/hub-api/device', deviceRouter)
 app.use('/hub-api/radio', radioRouter)
 app.use('/hub-api/profile', profileRouter)
 app.use('/hub-api/telegram', telegramRouter);
+app.use('/hub-api/merch-bot', merchBotRouter);
 app.use('/hub-api/birthday', birthdayRouter)
 app.use('/hub-api/bookmarks', bookmarksRouter)
 app.use('/hub-api/notifications', notificationRouter)
@@ -139,5 +142,17 @@ server.listen(2000, async function() {
     }
   } catch (error) {
     console.error('Failed to start Telegram bot:', error);
+  }
+
+  // Запуск Merch бота
+  try {
+    const merchBotStarted = await merchBotService.launch();
+    if (merchBotStarted) {
+      console.log('Merch bot started');
+    } else {
+      console.log('Merch bot failed to start - check .env file');
+    }
+  } catch (error) {
+    console.error('Failed to start Merch bot:', error);
   }
 });

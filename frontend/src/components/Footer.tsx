@@ -139,8 +139,14 @@ function Footer() {
   // Загрузка настройки автоскрытия футера
   useEffect(() => {
     const loadFooterSetting = async () => {
+      if (!user?.id) {
+        // Если пользователь не загружен, используем значение по умолчанию
+        setAutoHideEnabled(false);
+        return;
+      }
+      
       try {
-        const response = await fetch(`${API}/user/settings/${user?.id}/auto_hide_footer`, {
+        const response = await fetch(`${API}/user/settings/${user.id}/auto_hide_footer`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           }
@@ -154,6 +160,7 @@ function Footer() {
         }
       } catch (error) {
         console.error('Error loading footer setting:', error);
+        setAutoHideEnabled(false);
       }
     };
 

@@ -23,8 +23,6 @@ import {
   IconQrcode,
   IconBookmark
 } from '@tabler/icons-react';
-import PetSettings from '../../components/PetSettings';
-import { usePetSettings } from '../../hooks/usePetSettings';
 
 interface UserData {
   fio: string;
@@ -50,7 +48,6 @@ const ProfileInfo = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [newPhoto, setNewPhoto] = useState<string | null>(null);
-  const { settings: petSettings, updateSettings: updatePetSettings } = usePetSettings();
   const [autoHideFooter, setAutoHideFooter] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -1109,12 +1106,7 @@ const ProfileInfo = () => {
         onSubmit={updatePhoto}
         submitButtonText="Подтвердить"
       />
-      
-      {/* Настройки виртуального питомца */}
-      <PetSettings 
-        settings={petSettings} 
-        onSettingsChange={updatePetSettings} 
-      />
+
       </Stack>
     </DndProviderWrapper>
   );
