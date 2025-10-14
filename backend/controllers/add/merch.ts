@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { PrismaClient, Merch } from '@prisma/client';
-import { uploadMerch } from '../../middleware/uploaderMerch';
+import { uploadMerch } from '../../middleware/uploaderMerch.js';
 import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
