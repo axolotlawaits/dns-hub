@@ -11,6 +11,7 @@ import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { decodeRussianFileName } from '../../../utils/format';
 import { useUserContext } from '../../../hooks/useUserContext';
 import { useAccessContext } from '../../../hooks/useAccessContext';
+import WebRadioPlayer from './components/WebRadioPlayer';
 import './Radio.css';
 import '../../../app/styles/DesignSystem.css';
 
@@ -1659,6 +1660,16 @@ const RadioAdmin: React.FC = () => {
                     </Button>
                   </Group>
                 </Paper>
+
+                {/* Веб-радио плеер */}
+                <WebRadioPlayer 
+                  branchName={user?.branch || "Мой филиал"}
+                  branchType={user?.branch || "Магазин"}
+                  workingTime={{
+                    start: "08:00",
+                    end: "22:00"
+                  }}
+                />
               </Stack>
               </Tabs.Panel>
               )}
