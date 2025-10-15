@@ -114,7 +114,7 @@ model Devices {
   number       String
   app          String
   os           String
-  macAddress   String?  @unique
+  macAddress   String?
   branchId     String
   branch       Branch   @relation(fields: [branchId], references: [uuid])
   userEmail    String?  // Email пользователя для связи с UserData

@@ -6,8 +6,13 @@ const router = express.Router();
 // Маршрут для проверки статуса Merch бота
 router.get('/bot-status', async (req: any, res: any) => {
   try {
+    console.log('🔍 [Routes] Проверяем статус Merch бота...');
     const { merchBotService } = await import('../../controllers/app/merchBot.js');
-    const status = merchBotService.status;
+    console.log('✅ [Routes] Импорт успешен');
+    const service = merchBotService;
+    console.log('✅ [Routes] Получен экземпляр сервиса');
+    const status = service.status;
+    console.log('✅ [Routes] Получен статус:', status);
     
     res.json({
       bot_status: status,
@@ -172,7 +177,6 @@ router.get('/search', async (req: any, res: any) => {
       id: item.id,
       name: item.name,
       description: item.description || '',
-      imageUrl: item.imageUrl,
       attachments: item.attachments.map(att => att.source),
       hasChildren: false // Можно добавить проверку
     }));
@@ -214,7 +218,6 @@ router.get('/item/:id', async (req: any, res: any) => {
       id: item.id,
       name: item.name,
       description: item.description || '',
-      imageUrl: item.imageUrl,
       attachments: item.attachments.map(att => att.source),
       children: item.children.map(child => ({
         id: child.id,

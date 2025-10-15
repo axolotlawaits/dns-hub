@@ -18,7 +18,7 @@ router.get('/streams/active', h(getActiveStreamsByBranchType));
 router.get('/streams/:id/download', h(downloadStreamFile));
 router.post('/streams', uploadRadio.single('attachment'), h(createRadioStream));
 router.post('/streams/:id/upload', uploadRadio.single('roll'), h(uploadStreamRoll));
-router.put('/streams/:id', h(updateRadioStream));
+router.put('/streams/:id', uploadRadio.single('attachment'), h(updateRadioStream));
 router.delete('/streams/:id', h(deleteRadioStream));
 
 router.get('/devices', h(getDevicesByBranches));

@@ -926,30 +926,77 @@ export const uploadStreamRoll = async (req: Request, res: Response): Promise<any
 // Обновление радио потока
 export const updateRadioStream = async (req: Request, res: Response): Promise<any> => {
   try {
+    console.log('Updating radio stream with data:', req.body);
+    console.log('Request file:', req.file);
+    console.log('Request files:', req.files);
+    console.log('Content-Type:', req.headers['content-type']);
+    
     const { id } = req.params;
     const { name, branchTypeOfDist, frequencySongs, fadeInDuration, volumeLevel, startDate, endDate, isActive } = req.body;
 
+    console.log('Parsed data:', {
+      id,
+      name,
+      branchTypeOfDist,
+      frequencySongs,
+      fadeInDuration,
+      volumeLevel,
+      startDate,
+      endDate,
+      isActive
+    });
+
+    // Подготавливаем данные для обновления
+    const updateData: any = {
+      name,
+      branchTypeOfDist,
+      frequencySongs: frequencySongs ? parseInt(frequencySongs) : undefined,
+      fadeInDuration: fadeInDuration ? parseInt(fadeInDuration) : undefined,
+      volumeLevel: volumeLevel ? parseInt(volumeLevel) : undefined,
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate ? new Date(endDate) : undefined,
+      isActive
+    };
+
+    // Обработка загруженного файла
+    if (req.file) {
+      console.log('File uploaded:', req.file);
+      console.log('File path:', req.file.path);
+      console.log('File exists:', fs.existsSync(req.file.path));
+      
+      // Файл уже в правильном месте благодаря middleware
+      if (fs.existsSync(req.file.path)) {
+        // Исправляем кодировку русских символов в названии файла
+        const correctedFileName = decodeRussianFileName(req.file.originalname);
+        console.log('File name encoding correction:', {
+          original: req.file.originalname,
+          corrected: correctedFileName
+        });
+        updateData.attachment = correctedFileName;
+        console.log('Attachment path set to:', correctedFileName);
+      } else {
+        console.error('File does not exist at path:', req.file.path);
+      }
+    } else {
+      console.log('No file uploaded for update');
+    }
+
     const stream = await prisma.radioStream.update({
       where: { id },
-      data: {
-        name,
-        branchTypeOfDist,
-        frequencySongs: frequencySongs ? parseInt(frequencySongs) : undefined,
-        fadeInDuration: fadeInDuration ? parseInt(fadeInDuration) : undefined,
-        volumeLevel: volumeLevel ? parseInt(volumeLevel) : undefined,
-        startDate: startDate ? new Date(startDate) : undefined,
-        endDate: endDate ? new Date(endDate) : undefined,
-        isActive
-      }
+      data: updateData
     });
+
+    console.log('Updated stream:', stream);
 
     // Уведомляем устройства об обновлении потоков
     await notifyStreamsUpdate(stream.branchTypeOfDist);
     
     return res.status(200).json({ success: true, data: stream });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating radio stream:', error);
-    return res.status(500).json({ error: 'Ошибка при обновлении радио потока' });
+    console.error('Error details:', error.message);
+    console.error('Error stack:', error.stack);
+    return res.status(500).json({ error: 'Ошибка при обновлении радио потока', details: error.message });
   }
 };
 

@@ -50,6 +50,20 @@ class MerchBotService {
     return MerchBotService.instance;
   }
 
+  // Геттеры для публичного доступа к статусу
+  public get status() {
+    return {
+      isRunning: this.isRunning,
+      retryCount: this.retryCount,
+      botInitialized: !!this.bot,
+      hasToken: !!process.env.MERCH_BOT_TOKEN,
+      hasBotName: !!process.env.MERCH_BOT_NAME,
+      botName: process.env.MERCH_BOT_NAME || 'Not set',
+      cacheSize: Object.keys(this.cache.buttonsHierarchy).length,
+      lastCacheUpdate: this.cache.lastUpdate
+    };
+  }
+
   // Инициализация бота
   private initializeBot(): void {
     console.log('🔧 [MerchBot] Инициализация бота...');
@@ -1003,10 +1017,22 @@ class MerchBotService {
 
       this.isRunning = true;
       this.retryCount = 0;
-      console.log('MerchBot started successfully');
+      console.log('✅ [MerchBot] Бот успешно запущен');
+      
+      // Добавляем обработчик ошибок
+      this.bot.catch((error) => {
+        console.error('❌ [MerchBot] Ошибка бота:', error);
+        this.isRunning = false;
+        // Автоматический перезапуск через 5 секунд
+        setTimeout(() => {
+          console.log('🔄 [MerchBot] Попытка перезапуска...');
+          this.launch();
+        }, 5000);
+      });
+      
       return true;
     } catch (error) {
-      console.error('Failed to start MerchBot:', error);
+      console.error('❌ [MerchBot] Ошибка запуска бота:', error);
 
       if (this.retryCount < this.MAX_RETRIES) {
         this.retryCount++;
@@ -1032,19 +1058,6 @@ class MerchBotService {
     }
   }
 
-  // Статус бота
-  public get status() {
-    return {
-      isRunning: this.isRunning,
-      retryCount: this.retryCount,
-      botInitialized: !!this.bot,
-      hasToken: !!process.env.MERCH_BOT_TOKEN,
-      hasBotName: !!process.env.MERCH_BOT_NAME,
-      botName: process.env.MERCH_BOT_NAME || 'Not set',
-      cacheSize: Object.keys(this.cache.buttonsHierarchy).length,
-      lastCacheUpdate: this.cache.lastUpdate
-    };
-  }
 
   // Перезапуск бота
   public async restart(): Promise<boolean> {

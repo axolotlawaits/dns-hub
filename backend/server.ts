@@ -144,15 +144,18 @@ server.listen(2000, async function() {
     console.error('Failed to start Telegram bot:', error);
   }
 
-  // Запуск Merch бота
-  try {
-    const merchBotStarted = await merchBotService.launch();
-    if (merchBotStarted) {
-      console.log('Merch bot started');
-    } else {
-      console.log('Merch bot failed to start - check .env file');
+  // Запуск Merch бота с задержкой
+  setTimeout(async () => {
+    try {
+      console.log('🤖 [Server] Запускаем Merch бота...');
+      const merchBotStarted = await merchBotService.launch();
+      if (merchBotStarted) {
+        console.log('✅ [Server] Merch bot started successfully');
+      } else {
+        console.log('❌ [Server] Merch bot failed to start - check .env file');
+      }
+    } catch (error) {
+      console.error('❌ [Server] Failed to start Merch bot:', error);
     }
-  } catch (error) {
-    console.error('Failed to start Merch bot:', error);
-  }
+  }, 2000); // Задержка 2 секунды
 });

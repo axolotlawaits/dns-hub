@@ -228,8 +228,14 @@ const RadioAdmin: React.FC = () => {
     if (hasFullAccess) {
       // Полный доступ - видим все устройства всех филиалов (для статистики и других целей)
       const allDevices = branchesWithDevices.flatMap(branch => branch.devices);
-      console.log('🔍 [Radio] Полный доступ - все устройства:', allDevices.length);
-      return allDevices;
+      
+      // Дедупликация устройств по ID (убираем дубли)
+      const uniqueDevices = allDevices.filter((device, index, self) => 
+        index === self.findIndex(d => d.id === device.id)
+      );
+      
+      console.log('🔍 [Radio] Полный доступ - все устройства:', allDevices.length, 'уникальных:', uniqueDevices.length);
+      return uniqueDevices;
     } else if (hasReadOnlyAccess && user) {
       // Доступ только для чтения - видим только устройства своего филиала
       console.log('🔍 [Radio] Поиск филиала пользователя по названию:', user.branch);
@@ -1974,7 +1980,7 @@ const RadioAdmin: React.FC = () => {
                       </Group>
                     )}
                     
-                    {/* Полный доступ - видим все филиалы */}
+                    {/* Полный доступ - видим все филиалы с дедупликацией устройств */}
                     {branchesWithDevices
                       .sort((a, b) => {
                         // Собственный филиал пользователя всегда вверху
@@ -1983,7 +1989,13 @@ const RadioAdmin: React.FC = () => {
                         // Остальные филиалы сортируем по алфавиту
                         return a.branch.name.localeCompare(b.branch.name);
                       })
-                      .map((branchData) => (
+                      .map((branchData) => {
+                        // Дедупликация устройств в филиале
+                        const uniqueDevices = branchData.devices.filter((device, index, self) => 
+                          index === self.findIndex(d => d.id === device.id)
+                        );
+                        
+                        return (
                     <Paper 
                       key={branchData.branch.uuid} 
                       p="md" 
@@ -2039,14 +2051,14 @@ const RadioAdmin: React.FC = () => {
                         fontSize: '12px',
                         fontWeight: '500'
                       }}>
-                        {branchData.devices.length} устройств
+                        {uniqueDevices.length} устройств
                       </div>
                     </Group>
 
                     {/* Устройства показываются только если филиал развернут или филиал один */}
                     {(branchesWithDevices.length === 1 || expandedBranches.has(branchData.branch.uuid)) && (
                       <Stack gap="sm">
-                        {branchData.devices.map((device) => {
+                        {uniqueDevices.map((device) => {
                         const online = !!statusMap[device.id];
                         return (
                           <div 
@@ -2115,7 +2127,8 @@ const RadioAdmin: React.FC = () => {
                       </Stack>
                     )}
                     </Paper>
-                  ))}
+                        );
+                      })}
                   </>
                 ) : (
                   // Доступ только для чтения - видим только свой филиал
