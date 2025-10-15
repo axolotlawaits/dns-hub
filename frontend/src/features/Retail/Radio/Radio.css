@@ -549,3 +549,144 @@
     background-position: 200% 0;
   }
 }
+
+/* ========================================
+   ВЕБ-РАДИО ПЛЕЕР
+   ======================================== */
+
+.web-radio-player {
+  position: relative;
+  overflow: hidden;
+}
+
+.web-radio-player .mantine-Paper-root {
+  background: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: var(--transition-all);
+}
+
+.web-radio-player .mantine-Paper-root:hover {
+  box-shadow: var(--theme-shadow-md);
+  transform: translateY(-1px);
+}
+
+/* Элементы управления плеером */
+.web-radio-player .mantine-Button-root {
+  transition: var(--transition-all);
+  border-radius: var(--radius-lg);
+}
+
+.web-radio-player .mantine-Button-root:hover {
+  transform: scale(1.05);
+  box-shadow: var(--theme-shadow-sm);
+}
+
+.web-radio-player .mantine-ActionIcon-root {
+  transition: var(--transition-all);
+  border-radius: var(--radius-xl);
+}
+
+.web-radio-player .mantine-ActionIcon-root:hover {
+  transform: scale(1.1);
+  background: var(--color-primary-100);
+}
+
+/* Прогресс-бар */
+.web-radio-player .progress-bar {
+  position: relative;
+  cursor: pointer;
+  transition: var(--transition-all);
+}
+
+.web-radio-player .progress-bar:hover {
+  transform: scaleY(1.2);
+}
+
+.web-radio-player .progress-bar .progress-fill {
+  transition: width 0.1s ease;
+  background: linear-gradient(90deg, var(--color-primary-500), var(--color-primary-600));
+  border-radius: var(--radius-sm);
+}
+
+/* Слайдер громкости */
+.web-radio-player .mantine-Slider-track {
+  background: var(--theme-border);
+  border-radius: var(--radius-sm);
+}
+
+.web-radio-player .mantine-Slider-bar {
+  background: linear-gradient(90deg, var(--color-primary-500), var(--color-primary-600));
+  border-radius: var(--radius-sm);
+}
+
+.web-radio-player .mantine-Slider-thumb {
+  background: var(--color-primary-500);
+  border: 2px solid var(--theme-bg-elevated);
+  box-shadow: var(--theme-shadow-sm);
+  transition: var(--transition-all);
+}
+
+.web-radio-player .mantine-Slider-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: var(--theme-shadow-md);
+}
+
+/* Список потоков */
+.web-radio-player .stream-item {
+  transition: var(--transition-all);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+}
+
+.web-radio-player .stream-item:hover {
+  transform: translateX(4px);
+  box-shadow: var(--theme-shadow-sm);
+}
+
+.web-radio-player .stream-item.active {
+  background: var(--color-primary-100);
+  border-color: var(--color-primary-500);
+  box-shadow: var(--theme-shadow-sm);
+}
+
+/* Анимации */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.web-radio-player .playing-indicator {
+  animation: pulse 2s infinite;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .web-radio-player .mantine-Button-root {
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--font-size-sm);
+  }
+  
+  .web-radio-player .mantine-ActionIcon-root {
+    width: 36px;
+    height: 36px;
+  }
+  
+  .web-radio-player .stream-item {
+    padding: var(--space-2);
+  }
+}

@@ -13,24 +13,20 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 минут
 // Функция для уведомления об обновлении потоков
 const notifyStreamsUpdate = async (branchType: string) => {
   try {
-    console.log(`Notifying devices about stream update for branch type: ${branchType}`);
     const socketService = SocketIOService.getInstance();
     socketService.emit('device_streams_updated', {
       branchType: branchType
     });
   } catch (error) {
-    console.error('Error notifying streams update:', error);
   }
 };
 
 // Функция для очистки старых папок с музыкой
 export const cleanupOldMusicFolders = async () => {
   try {
-    console.log('🧹 Запуск очистки папок с музыкой...');
     const musicPath = './public/retail/radio/music';
     
     if (!fs.existsSync(musicPath)) {
-      console.log('📁 Папка retail/radio/music не существует, пропускаем очистку');
       return;
     }
 
@@ -45,14 +41,12 @@ export const cleanupOldMusicFolders = async () => {
     for (const folder of folders) {
       // Пропускаем текущую папку
       if (folder === currentFolder) {
-        console.log(`✅ Пропускаем текущую папку: ${folder}`);
         continue;
       }
       
       // Проверяем формат папки (MM-YYYY)
       const folderRegex = /^\d{2}-\d{4}$/;
       if (!folderRegex.test(folder)) {
-        console.log(`⚠️ Пропускаем папку с неверным форматом: ${folder}`);
         continue;
       }
       
@@ -61,16 +55,12 @@ export const cleanupOldMusicFolders = async () => {
       
       if (stats.isDirectory()) {
         // Удаляем ВСЕ папки, которые не соответствуют текущему месяцу
-        console.log(`🗑️ Удаляем папку: ${folder} (не соответствует текущему месяцу ${currentFolder})`);
         fs.rmSync(folderPath, { recursive: true, force: true });
         deletedCount++;
-        console.log(`✅ Папка ${folder} успешно удалена`);
       }
     }
     
-    console.log(`🧹 Очистка завершена. Удалено ${deletedCount} папок.`);
   } catch (error) {
-    console.error('❌ Ошибка при очистке папок с музыкой:', error);
   }
 };
 
@@ -113,7 +103,6 @@ export const createMusicFolder = async (req: Request, res: Response): Promise<an
       path: musicPath 
     });
   } catch (error) {
-    console.error('Error creating music folder:', error);
     return res.status(500).json({ error: 'Ошибка при создании папки для музыки' });
   }
 };
@@ -230,7 +219,7 @@ export const getMusicInFolder = async (req: Request, res: Response): Promise<any
         const stats = fs.statSync(filePath);
         return { name: file, size: stats.size, created: stats.birthtime, modified: stats.mtime, path: `/retail/radio/music/${folderName}/${file}` };
       })
-      .sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime());
+      .sort((a, b) => a.name.localeCompare(b.name)); // Сортируем по имени файла
     return res.status(200).json({ success: true, folderName, files });
   } catch (error) {
     console.error('Error getting music in folder:', error);
@@ -1173,5 +1162,92 @@ export const downloadStreamFile = async (req: Request, res: Response): Promise<a
   } catch (error) {
     console.error('Error downloading stream file:', error);
     return res.status(500).json({ error: 'Ошибка при скачивании файла потока' });
+  }
+};
+
+// Проигрывание радио потока для веб-плеера
+export const playRadioStream = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { id } = req.params;
+    
+    console.log('🎵 [playRadioStream] Запрос на проигрывание потока:', id);
+
+    // Получаем поток из базы данных
+    const stream = await prisma.radioStream.findUnique({
+      where: { id }
+    });
+
+    if (!stream) {
+      console.log('❌ [playRadioStream] Поток не найден:', id);
+      return res.status(404).json({ error: 'Поток не найден' });
+    }
+
+    if (!stream.isActive) {
+      console.log('⚠️ [playRadioStream] Поток неактивен:', id);
+      return res.status(400).json({ error: 'Поток неактивен' });
+    }
+
+    // Проверяем, есть ли файл для проигрывания
+    if (!stream.attachment) {
+      console.log('❌ [playRadioStream] У потока нет файла для проигрывания:', id);
+      return res.status(400).json({ error: 'У потока нет файла для проигрывания' });
+    }
+
+    const filePath = path.join(process.cwd(), 'public', 'retail', 'radio', 'stream', stream.attachment);
+    
+    // Проверяем существование файла
+    if (!fs.existsSync(filePath)) {
+      console.log('❌ [playRadioStream] Файл не найден:', filePath);
+      return res.status(404).json({ error: 'Файл потока не найден' });
+    }
+
+    console.log('✅ [playRadioStream] Отправляем файл для проигрывания:', filePath);
+
+    // Определяем MIME тип по расширению файла
+    const ext = path.extname(stream.attachment).toLowerCase();
+    let contentType = 'audio/mpeg'; // по умолчанию
+    
+    switch (ext) {
+      case '.mp3':
+        contentType = 'audio/mpeg';
+        break;
+      case '.wav':
+        contentType = 'audio/wav';
+        break;
+      case '.ogg':
+        contentType = 'audio/ogg';
+        break;
+      case '.aac':
+        contentType = 'audio/aac';
+        break;
+      case '.m4a':
+        contentType = 'audio/mp4';
+        break;
+      default:
+        contentType = 'audio/mpeg';
+    }
+
+    console.log(`🎵 [playRadioStream] MIME тип: ${contentType} для файла ${stream.attachment}`);
+
+    // Устанавливаем правильные заголовки для потокового воспроизведения
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'no-cache');
+    
+    // Отправляем файл для потокового воспроизведения
+    res.sendFile(filePath, (err) => {
+      if (err) {
+        console.error('❌ [playRadioStream] Ошибка отправки файла:', err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Ошибка при проигрывании потока' });
+        }
+      } else {
+        console.log('✅ [playRadioStream] Файл успешно отправлен для проигрывания');
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ [playRadioStream] Ошибка при проигрывании потока:', error);
+    return res.status(500).json({ error: 'Ошибка при проигрывании потока' });
   }
 };
