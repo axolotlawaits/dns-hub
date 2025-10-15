@@ -38,6 +38,11 @@ interface ResponsibleEmployeeType {
   employee_name: string
 }
 
+interface ResponsibleEmployeeAddType {
+  responsibilityType: 'ОТ' | 'ПБ',
+  employeeId: string
+}
+
 interface ResponsibilitiesType {
   ot: ResponsibleEmployeeType[]
   pb: ResponsibleEmployeeType[]
@@ -351,8 +356,11 @@ const LocalJournalTable = function LocalJournalTable({
   const [isExpanded, setIsExpanded] = useState(expandedBranches.has(branch.branch_id));
   const [responsibleOpened, { open: responsibleOpen, close: responsibleClose }] = useDisclosure(false)
   const [branchEmployees, setBranchEmployees] = useState([])
-  const [responsibleOT, setResponsibleOT] = useState<string | null>('')
-  const [responsiblePB, setResponsiblePB] = useState<string | null>('')
+  const [responsible, setResponsible] = useState<ResponsibleEmployeeAddType[]>([
+    {branchId: branch.branch_id, employeeId: '', responsibilityType: ''},
+    {branchId: branch.branch_id, employeeId: '', responsibilityType: ''},
+    {branchId: branch.branch_id, employeeId: '', responsibilityType: ''}
+  ])
 
   // Синхронизируем локальное состояние с глобальным
   useEffect(() => {
@@ -372,7 +380,7 @@ const LocalJournalTable = function LocalJournalTable({
     responsibleOpen()
     getBranchEmployees()
   }
-
+  console.log(responsible)
   return (
     <Paper withBorder radius="md" p="lg" style={{ background: 'var(--theme-bg-primary)' }}>
       <Stack gap="md">
@@ -472,26 +480,33 @@ const LocalJournalTable = function LocalJournalTable({
               <Button variant="outline" onClick={handleResponsibleOpen}>Ответственные</Button>
               <Modal opened={responsibleOpened} onClose={responsibleClose} title="Назначение ответственных" centered>
                 <Stack gap='lg'>
-                  <Select
-                    label="Ответственный за ПБ"
-                    placeholder="Выберите сотрудника"
-                    data={branchEmployees.map(emp => ({label: emp.fio, value: emp.uuid}))}
-                    value={responsiblePB}
-                    onChange={setResponsiblePB}
-                    searchable
-                    clearable
-                    style={{ minWidth: 200 }}
-                  />
-                  <Select
-                    label="Ответственный за ПБ"
-                    placeholder="Выберите сотрудника"
-                    data={branchEmployees.map(emp => ({label: emp.fio, value: emp.uuid}))}
-                    value={responsibleOT}
-                    onChange={setResponsibleOT}
-                    searchable
-                    clearable
-                    style={{ minWidth: 200 }}
-                  />
+                  {responsible.map((res, index) => {
+                    return (
+                      <Stack>
+                        <Text>Ответственный {index + 1}</Text>
+                        <Group>
+                          <Select
+                            placeholder="Выберите сотрудника"
+                            data={branchEmployees.map(emp => ({label: emp.fio, value: emp.uuid}))}
+                            value={res.employeeId}
+                            onChange={(value) => setResponsible(responsible.map((item, i) => i === index ? { ...item, employeeId: value } : item))}
+                            searchable
+                            clearable
+                            style={{ minWidth: 200 }}
+                          />
+                          <Select
+                            placeholder="ОТ или ПБ?"
+                            data={['ОТ', 'ПБ']}
+                            value={res.responsibilityType}
+                            onChange={(value) => setResponsible(responsible.map((item, i) => i === index ?  { ...item, responsibilityType: value } : item))}
+                            searchable
+                            clearable
+                            w={150}
+                          />
+                        </Group>
+                      </Stack>
+                    )
+                  })}
                   <Button variant='light'>Назначить</Button>
                 </Stack>
               </Modal>
