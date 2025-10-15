@@ -465,7 +465,7 @@ export const getDeviceByMAC = async (req: Request, res: Response): Promise<any> 
     
     console.log('Getting device by MAC address:', macAddress);
     
-    const device = await prisma.devices.findUnique({
+    const device = await prisma.devices.findFirst({
       where: { macAddress },
       include: {
         branch: {
@@ -488,7 +488,7 @@ export const getDeviceByMAC = async (req: Request, res: Response): Promise<any> 
       macAddress: device.macAddress,
       network: device.network,
       number: device.number,
-      branch: device.branch?.name
+      branch: device.branch.name
     });
 
     return res.json({
