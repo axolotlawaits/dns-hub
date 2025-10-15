@@ -360,11 +360,9 @@ const LocalJournalTable = function LocalJournalTable({
   const [isExpanded, setIsExpanded] = useState(expandedBranches.has(branch.branch_id));
   const [responsibleOpened, { open: responsibleOpen, close: responsibleClose }] = useDisclosure(false)
   const [branchEmployees, setBranchEmployees] = useState([])
-  const [responsible, setResponsible] = useState<ResponsibleEmployeeAddType[]>([
-    {branchId: branch.branch_id, employeeId: '', responsibilityType: ''},
-    {branchId: branch.branch_id, employeeId: '', responsibilityType: ''},
-    {branchId: branch.branch_id, employeeId: '', responsibilityType: ''}
-  ])
+  const [responsible, setResponsible] = useState<ResponsibleEmployeeAddType>()
+  const [responsibleData, setResponsibleData] = useState([])
+  // const [popoverOpened, setPopoverOpened] = useState(false)
   const authFetch  = useAuthFetch()
 
   // Синхронизируем локальное состояние с глобальным
@@ -385,6 +383,15 @@ const LocalJournalTable = function LocalJournalTable({
     responsibleOpen()
     getBranchEmployees()
   }
+
+  const getResponsive = async () => {
+    const response = await authFetch(`${JOURNAL_API}/v1/branch_responsibles/?branchId=${branch.branch_id}`)
+    if (response && response.ok) {
+      const json = await response?.json()
+      const [responsible] = json
+      setResponsibleData(responsible)
+    }
+  }
   
   const addResponsive = async () => {
     const response = await authFetch(`${JOURNAL_API}/v1/branch_responsibles`, {
@@ -392,10 +399,12 @@ const LocalJournalTable = function LocalJournalTable({
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(responsible),
+      body: JSON.stringify({
+        branchId: branch.branch_id,
+        employeeId: responsible?.employeeId,
+        responsibilityType: responsible?.responsibilityType
+      }),
     })
-    const json = await response?.json()
-    console.log(json)
   }
 
   return (
@@ -437,6 +446,39 @@ const LocalJournalTable = function LocalJournalTable({
                   <Popover.Dropdown>
                     <Stack gap="sm">
                       <Text size="sm" fw={600}>Ответственные</Text>
+                      {/* {canManageStatuses &&
+                      <>
+                        <Button variant="outline" onClick={handleResponsibleOpen}>Назначить</Button>
+                        <Modal opened={responsibleOpened} onClose={responsibleClose} title="Назначение ответственных" centered zIndex={1000}>
+                          <Stack gap='lg'>
+                            <Stack>
+                              <Text>Ответственный</Text>
+                              <Group>
+                                <Select
+                                  placeholder="Выберите сотрудника"
+                                  data={branchEmployees.map((emp: any) => ({label: emp.fio, value: emp.uuid}))}
+                                  value={responsible?.employeeId}
+                                  onChange={(value) => setResponsible({...responsible, employeeId: value})}
+                                  searchable
+                                  clearable
+                                  style={{ minWidth: 200 }}
+                                />
+                                <Select
+                                  placeholder="ОТ или ПБ?"
+                                  data={['ОТ', 'ПБ']}
+                                  value={responsible?.responsibilityType}
+                                  onChange={(value) => setResponsible({...responsible, responsibilityType: value})}
+                                  searchable
+                                  clearable
+                                  w={150}
+                                />
+                              </Group>
+                            </Stack>
+                            <Button variant='light' onClick={addResponsive}>Назначить</Button>
+                          </Stack>
+                        </Modal>
+                      </>
+                      } */}
                       <Divider />
                       <Stack gap="xs">
                         <Text size="xs" fw={500} c="blue">По пожарной безопасности:</Text>
@@ -492,47 +534,6 @@ const LocalJournalTable = function LocalJournalTable({
             >
               {isExpanded ? 'Свернуть' : 'Развернуть'}
             </Button>
-            {/*{canManageStatuses &&
-            <>
-              <Button variant="outline" onClick={handleResponsibleOpen}>Ответственные</Button>
-              <Modal opened={responsibleOpened} onClose={responsibleClose} title="Назначение ответственных" centered>
-                <Stack gap='lg'>
-                  {responsible.map((res, index) => {
-                    return (
-                      <Stack>
-                        <Text>Ответственный {index + 1}</Text>
-                        <Group>
-                          <Select
-                            placeholder="Выберите сотрудника"
-                            data={branchEmployees.map((emp: any) => ({label: emp.fio, value: emp.uuid}))}
-                            value={res.employeeId}
-                            onChange={(value) => 
-                              setResponsible(responsible.map((item, i) => i === index ? { ...item, employeeId: value } : item)
-                            )}
-                            searchable
-                            clearable
-                            style={{ minWidth: 200 }}
-                          />
-                          <Select
-                            placeholder="ОТ или ПБ?"
-                            data={['ОТ', 'ПБ']}
-                            value={res.responsibilityType}
-                            onChange={(value) => 
-                              setResponsible(responsible.map((item, i) => i === index ?  { ...item, responsibilityType: value } : item)
-                            )}
-                            searchable
-                            clearable
-                            w={150}
-                          />
-                        </Group>
-                      </Stack>
-                    )
-                  })}
-                  <Button variant='light' onClick={addResponsive}>Назначить</Button>
-                </Stack>
-              </Modal>
-            </>
-            }*/}
           </Stack>
         </Group>
 
