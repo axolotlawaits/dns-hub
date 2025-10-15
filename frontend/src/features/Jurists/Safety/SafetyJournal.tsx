@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { API } from '../../../config/constants';
+import { API, JOURNAL_API } from '../../../config/constants';
 import { useUserContext } from '../../../hooks/useUserContext';
 import { useAccessContext } from '../../../hooks/useAccessContext';
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
@@ -17,6 +17,7 @@ import { Image } from '@mantine/core'
 import tgBotQRImage from '../../../assets/images/tg_bot_journals.webp'
 import tgBotQRImageDark from '../../../assets/images/tg_bot_journals_black.webp'
 import { useThemeContext } from '../../../hooks/useThemeContext';
+import useAuthFetch from '../../../hooks/useAuthFetch';
 
 // Интерфейсы для работы с API
 interface UserInfo {
@@ -39,8 +40,9 @@ interface ResponsibleEmployeeType {
 }
 
 interface ResponsibleEmployeeAddType {
-  responsibilityType: 'ОТ' | 'ПБ',
+  responsibilityType: 'ОТ' | 'ПБ' | '',
   employeeId: string
+  branchId: string
 }
 
 interface ResponsibilitiesType {
@@ -361,6 +363,7 @@ const LocalJournalTable = function LocalJournalTable({
     {branchId: branch.branch_id, employeeId: '', responsibilityType: ''},
     {branchId: branch.branch_id, employeeId: '', responsibilityType: ''}
   ])
+  const authFetch  = useAuthFetch()
 
   // Синхронизируем локальное состояние с глобальным
   useEffect(() => {
@@ -380,7 +383,19 @@ const LocalJournalTable = function LocalJournalTable({
     responsibleOpen()
     getBranchEmployees()
   }
-  console.log(responsible)
+  
+  const addResponsive = async () => {
+    const response = await authFetch(`${JOURNAL_API}/v1/branch_responsibles`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(responsible),
+    })
+    const json = await response?.json()
+    console.log(json)
+  }
+
   return (
     <Paper withBorder radius="md" p="lg" style={{ background: 'var(--theme-bg-primary)' }}>
       <Stack gap="md">
@@ -487,9 +502,11 @@ const LocalJournalTable = function LocalJournalTable({
                         <Group>
                           <Select
                             placeholder="Выберите сотрудника"
-                            data={branchEmployees.map(emp => ({label: emp.fio, value: emp.uuid}))}
+                            data={branchEmployees.map((emp: any) => ({label: emp.fio, value: emp.uuid}))}
                             value={res.employeeId}
-                            onChange={(value) => setResponsible(responsible.map((item, i) => i === index ? { ...item, employeeId: value } : item))}
+                            onChange={(value) => 
+                              setResponsible(responsible.map((item, i) => i === index ? { ...item, employeeId: value } : item)
+                            )}
                             searchable
                             clearable
                             style={{ minWidth: 200 }}
@@ -498,7 +515,9 @@ const LocalJournalTable = function LocalJournalTable({
                             placeholder="ОТ или ПБ?"
                             data={['ОТ', 'ПБ']}
                             value={res.responsibilityType}
-                            onChange={(value) => setResponsible(responsible.map((item, i) => i === index ?  { ...item, responsibilityType: value } : item))}
+                            onChange={(value) => 
+                              setResponsible(responsible.map((item, i) => i === index ?  { ...item, responsibilityType: value } : item)
+                            )}
                             searchable
                             clearable
                             w={150}
@@ -507,7 +526,7 @@ const LocalJournalTable = function LocalJournalTable({
                       </Stack>
                     )
                   })}
-                  <Button variant='light'>Назначить</Button>
+                  <Button variant='light' onClick={addResponsive}>Назначить</Button>
                 </Stack>
               </Modal>
             </>
