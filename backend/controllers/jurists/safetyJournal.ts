@@ -4,10 +4,7 @@ import FormData from 'form-data';
 import { prisma } from '../../server.js';
 import { decodeRussianFileName } from '../../utils/format.js';
 
-// Базовый URL для внешнего API
-// ВАЖНО: Создайте файл .env в корне проекта и добавьте:
-// EXTERNAL_API_URL=http://10.0.128.95:8000/api/v1
-const EXTERNAL_API_URL = process.env.EXTERNAL_API_URL || 'http://10.0.128.95:8000/api/v1';
+const JOURNALS_API_URL = process.env.JOURNALS_API_URL
 
 // Функция для получения токена из заголовков
 const getAuthToken = (req: Request): string | null => {
@@ -199,7 +196,7 @@ export const getBranchesWithJournals = async (req: Request, res: Response) => {
     const hasFullAccess = await checkSafetyJournalAccess(userId, positionName, groupName);
     
     // Получаем филиалы из внешнего API
-    const branchesResponse = await axios.get(`${EXTERNAL_API_URL}/me/branches_with_journals`, {
+    const branchesResponse = await axios.get(`${JOURNALS_API_URL}/me/branches_with_journals`, {
       headers: createAuthHeaders(token)
     });
 
@@ -270,15 +267,12 @@ async function getJournalFilesCount(journalId: string, token: string): Promise<n
 // Функция для получения списка файлов журнала
 async function getJournalFiles(journalId: string, token: string): Promise<any[]> {
   try {
-    const EXTERNAL_API_URL = process.env.EXTERNAL_API_URL || 'http://10.0.128.95:8000/api/v1';
-    
-    // Попробуем разные эндпоинты для получения файлов
     const endpoints = [
-      `${EXTERNAL_API_URL}/files/?branch_journal_id=${journalId}`,
-      `${EXTERNAL_API_URL}/files/?journal_id=${journalId}`,
-      `${EXTERNAL_API_URL}/journals/${journalId}/files`,
-      `${EXTERNAL_API_URL}/branch_journals/${journalId}/files`,
-      `${EXTERNAL_API_URL}/files/`
+      `${JOURNALS_API_URL}/files/?branch_journal_id=${journalId}`,
+      `${JOURNALS_API_URL}/files/?journal_id=${journalId}`,
+      `${JOURNALS_API_URL}/journals/${journalId}/files`,
+      `${JOURNALS_API_URL}/branch_journals/${journalId}/files`,
+      `${JOURNALS_API_URL}/files/`
     ];
     
     for (const endpoint of endpoints) {
@@ -355,8 +349,8 @@ export const uploadFile = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'ID журнала филиала не предоставлен' });
     }
 
-    if (!EXTERNAL_API_URL) {
-      console.error('EXTERNAL_API_URL is not defined');
+    if (!JOURNALS_API_URL) {
+      console.error('JOURNALS_API_URL is not defined');
       return res.status(500).json({ message: 'Внешний API не настроен' });
     }
 
@@ -411,7 +405,7 @@ export const uploadFile = async (req: Request, res: Response) => {
     }
 
     console.log('Preparing to upload file to external API:', {
-      url: `${EXTERNAL_API_URL}/files/`,
+      url: `${JOURNALS_API_URL}/files/`,
       fileName: correctedFileName,
       originalFileName: file.originalname,
       fileSize: file.size,
@@ -438,7 +432,7 @@ export const uploadFile = async (req: Request, res: Response) => {
       });
     }
 
-    const url = `${EXTERNAL_API_URL}/files/`;
+    const url = `${JOURNALS_API_URL}/files/`;
 
     console.log('Sending request to external API:', {
       url,
@@ -503,7 +497,7 @@ export const getFileMetadata = async (req: Request, res: Response) => {
   try {
     const { fileId } = req.params;
 
-    const response = await axios.get(`${EXTERNAL_API_URL}/files/${fileId}`, {
+    const response = await axios.get(`${JOURNALS_API_URL}/files/${fileId}`, {
       headers: createAuthHeaders(getAuthToken(req))
     });
 
@@ -528,7 +522,7 @@ export const deleteFile = async (req: Request, res: Response) => {
     // Удаление файлов доступно всем пользователям (не требует проверки прав)
     console.log('File deletion allowed for all users:', { userId, positionName, groupName, fileId });
 
-    const response = await axios.delete(`${EXTERNAL_API_URL}/files/${fileId}`, {
+    const response = await axios.delete(`${JOURNALS_API_URL}/files/${fileId}`, {
       headers: createAuthHeaders(getAuthToken(req))
     });
 
@@ -553,7 +547,7 @@ export const testExternalApi = async (req: Request, res: Response) => {
     }
     
     // Получаем данные от внешнего API
-    const branchesResponse = await axios.get(`${EXTERNAL_API_URL}/me/branches_with_journals`, {
+    const branchesResponse = await axios.get(`${JOURNALS_API_URL}/me/branches_with_journals`, {
       headers: createAuthHeaders(token)
     });
     
@@ -625,9 +619,7 @@ export const viewFile = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'ID файла не предоставлен' });
     }
     
-    const EXTERNAL_API_URL = process.env.EXTERNAL_API_URL || 'http://10.0.128.95:8000/api/v1';
-    
-    const fileUrl = `${EXTERNAL_API_URL}/files/${fileId}/view`;
+    const fileUrl = `${JOURNALS_API_URL}/files/${fileId}/view`;
     
     // Сначала проверим, доступен ли файл (без stream)
     try {
@@ -699,10 +691,8 @@ export const downloadFile = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'ID файла не предоставлен' });
     }
     
-    const EXTERNAL_API_URL = process.env.EXTERNAL_API_URL || 'http://10.0.128.95:8000/api/v1';
-    
     // Перенаправляем запрос на внешний API
-    const response = await axios.get(`${EXTERNAL_API_URL}/files/${fileId}/download`, {
+    const response = await axios.get(`${JOURNALS_API_URL}/files/${fileId}/download`, {
       headers: {
         'Authorization': `Bearer ${token}`
       },
@@ -783,7 +773,7 @@ export const makeBranchJournalDecision = async (req: Request, res: Response) => 
 
 
       const externalResponse = await axios.patch(
-        `${EXTERNAL_API_URL}/branch_journals/${branchJournalId}/decision`,
+        `${JOURNALS_API_URL}/branch_journals/${branchJournalId}/decision`,
         formData,
         {
           headers: {
@@ -796,6 +786,7 @@ export const makeBranchJournalDecision = async (req: Request, res: Response) => 
       res.json({ 
         message: `Журнал ${status === 'approved' ? 'одобрен' : status === 'rejected' ? 'отклонен' : 'возвращен на рассмотрение'}`,
         branchJournalId,
+        comment,
         status,
         updatedAt: new Date().toISOString(),
         externalResponse: externalResponse.data

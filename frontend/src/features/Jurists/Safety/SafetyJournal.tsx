@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { API } from '../../../config/constants';
+import { API, JOURNAL_API } from '../../../config/constants';
 import { useUserContext } from '../../../hooks/useUserContext';
 import { useAccessContext } from '../../../hooks/useAccessContext';
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
@@ -8,7 +8,7 @@ import FloatingActionButton from '../../../components/FloatingActionButton';
 import { Button, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Paper, Badge, Tabs, Tooltip, Alert, Divider, Select, Pagination, Popover, Card, ThemeIcon, Accordion, Modal, Textarea } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
-import { IconClock, IconFileText, IconChevronDown, IconChevronUp, IconUpload, IconFilter, IconShield, IconFlame, IconCircleCheck, IconCircleX, IconAlertCircle, IconUsers, IconX, IconFile, IconCheck, IconRefresh, IconQrcode } from '@tabler/icons-react';
+import { IconClock, IconFileText, IconChevronDown, IconChevronUp, IconUpload, IconFilter, IconShield, IconFlame, IconCircleCheck, IconCircleX, IconAlertCircle, IconUsers, IconX, IconFile, IconCheck, IconRefresh, IconQrcode, IconMessageDots } from '@tabler/icons-react';
 import { FilePreviewModal } from '../../../utils/FilePreviewModal';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { DndProviderWrapper } from '../../../utils/dnd';
@@ -17,6 +17,7 @@ import { Image } from '@mantine/core'
 import tgBotQRImage from '../../../assets/images/tg_bot_journals.webp'
 import tgBotQRImageDark from '../../../assets/images/tg_bot_journals_black.webp'
 import { useThemeContext } from '../../../hooks/useThemeContext';
+import useAuthFetch from '../../../hooks/useAuthFetch';
 
 // Интерфейсы для работы с API
 interface UserInfo {
@@ -36,6 +37,12 @@ interface UserInfo {
 interface ResponsibleEmployeeType {
   employee_id: string
   employee_name: string
+}
+
+interface ResponsibleEmployeeAddType {
+  responsibilityType: 'ОТ' | 'ПБ' | '',
+  employeeId: string
+  branchId: string
 }
 
 interface ResponsibilitiesType {
@@ -76,6 +83,7 @@ interface JournalInfo {
   branch_id: string;
   branch_name: string;
   status: 'approved' | 'pending' | 'rejected' | 'under_review';
+  comment?: string
   filled_at: string | null;
   approved_at: string | null;
   period_start: string;
@@ -297,19 +305,17 @@ const LocalJournalTable = function LocalJournalTable({
                                 
                               </Stack>
                             </Modal>
-                            {/* <Tooltip label="На проверке">
-                              <ActionIcon 
-                                size="sm" 
-                                color="blue" 
-                                variant={journal.status === 'under_review' ? 'filled' : 'light'} 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onUnderReviewJournal(journal);
-                                }}
-                              >
-                                <IconAlertCircle size={14} />
-                              </ActionIcon>
-                            </Tooltip> */}
+                            {journal.status !== 'approved' && journal.comment &&
+                              <Tooltip label={journal.comment} multiline w={250}>
+                                <ActionIcon 
+                                  size="sm" 
+                                  color="orange" 
+                                  variant={journal.status === 'rejected' ? 'filled' : 'light'} 
+                                >
+                                  <IconMessageDots size={14} />
+                                </ActionIcon>
+                              </Tooltip>
+                            }
                           </>
                         );
                       })()}
@@ -350,11 +356,45 @@ const LocalJournalTable = function LocalJournalTable({
     setExpandedBranches: (branches: Set<string>) => void;
   }) {
   const [isExpanded, setIsExpanded] = useState(expandedBranches.has(branch.branch_id));
+  const [responsibleOpened, { open: responsibleOpen, close: responsibleClose }] = useDisclosure(false)
+  const [branchEmployees, setBranchEmployees] = useState([])
+  const [responsible, setResponsible] = useState<ResponsibleEmployeeAddType[]>([
+    {branchId: branch.branch_id, employeeId: '', responsibilityType: ''},
+    {branchId: branch.branch_id, employeeId: '', responsibilityType: ''},
+    {branchId: branch.branch_id, employeeId: '', responsibilityType: ''}
+  ])
+  const authFetch  = useAuthFetch()
 
   // Синхронизируем локальное состояние с глобальным
   useEffect(() => {
     setIsExpanded(expandedBranches.has(branch.branch_id));
   }, [expandedBranches, branch.branch_id]);
+
+  const getBranchEmployees = async () => {
+    const response = await fetch(`${API}/search/branch/${branch.branch_id}/employees`)
+    const json = await response.json()
+    
+    if (response.ok) {
+      setBranchEmployees(json)
+    }
+  }
+
+  const handleResponsibleOpen = () => {
+    responsibleOpen()
+    getBranchEmployees()
+  }
+  
+  const addResponsive = async () => {
+    const response = await authFetch(`${JOURNAL_API}/v1/branch_responsibles`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(responsible),
+    })
+    const json = await response?.json()
+    console.log(json)
+  }
 
   return (
     <Paper withBorder radius="md" p="lg" style={{ background: 'var(--theme-bg-primary)' }}>
@@ -429,6 +469,7 @@ const LocalJournalTable = function LocalJournalTable({
               </Group>
             </Stack>
           </Group>
+          <Stack>
             <Button
               size="sm"
               leftSection={isExpanded ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
@@ -449,6 +490,48 @@ const LocalJournalTable = function LocalJournalTable({
             >
               {isExpanded ? 'Свернуть' : 'Развернуть'}
             </Button>
+            {/* {canManageStatuses &&
+            <>
+              <Button variant="outline" onClick={handleResponsibleOpen}>Ответственные</Button>
+              <Modal opened={responsibleOpened} onClose={responsibleClose} title="Назначение ответственных" centered>
+                <Stack gap='lg'>
+                  {responsible.map((res, index) => {
+                    return (
+                      <Stack>
+                        <Text>Ответственный {index + 1}</Text>
+                        <Group>
+                          <Select
+                            placeholder="Выберите сотрудника"
+                            data={branchEmployees.map((emp: any) => ({label: emp.fio, value: emp.uuid}))}
+                            value={res.employeeId}
+                            onChange={(value) => 
+                              setResponsible(responsible.map((item, i) => i === index ? { ...item, employeeId: value } : item)
+                            )}
+                            searchable
+                            clearable
+                            style={{ minWidth: 200 }}
+                          />
+                          <Select
+                            placeholder="ОТ или ПБ?"
+                            data={['ОТ', 'ПБ']}
+                            value={res.responsibilityType}
+                            onChange={(value) => 
+                              setResponsible(responsible.map((item, i) => i === index ?  { ...item, responsibilityType: value } : item)
+                            )}
+                            searchable
+                            clearable
+                            w={150}
+                          />
+                        </Group>
+                      </Stack>
+                    )
+                  })}
+                  <Button variant='light' onClick={addResponsive}>Назначить</Button>
+                </Stack>
+              </Modal>
+            </>
+            } */}
+          </Stack>
         </Group>
 
         {/* Список журналов */}

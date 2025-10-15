@@ -10,8 +10,7 @@ import {
   addCardImages,
   addMerchAttachment,
   deleteMerchAttachment
-} from '../../controllers/add/merch';
-import { uploadMerch } from '../../middleware/uploaderMerch';
+} from '../../controllers/add/merch.js';
 
 const router = Router();
 
