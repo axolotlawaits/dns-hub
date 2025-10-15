@@ -325,7 +325,7 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
 // Heartbeat от приложения устройства
 export const heartbeat = async (req: Request, res: Response): Promise<any> => {
   try {
-    const { deviceId, appVersion, macAddress, currentIP } = req.body || {};
+    const { deviceId, appVersion, macAddress, currentIP, userEmail } = req.body || {};
     if (!deviceId) {
       return res.status(400).json({ success: false, error: 'deviceId обязателен' });
     }
@@ -345,15 +345,32 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
     
     // userUuid больше не используется, так как связь с пользователем через email
     
-    // Если есть MAC адрес и текущий IP, обновляем IP адрес
-    if (macAddress && currentIP) {
+    // Если есть userEmail, обновляем его
+    if (userEmail) {
+      updateData.userEmail = sanitizeString(userEmail);
+      console.log('Updating device userEmail from heartbeat:', {
+        deviceId,
+        userEmail: updateData.userEmail
+      });
+    }
+    
+    // Если есть MAC адрес, обновляем его
+    if (macAddress) {
+      updateData.macAddress = sanitizeString(macAddress);
+      console.log('Updating device MAC address from heartbeat:', {
+        deviceId,
+        macAddress: updateData.macAddress
+      });
+    }
+    
+    // Если есть текущий IP, обновляем IP адрес
+    if (currentIP) {
       const ipParts = currentIP.split('.');
       if (ipParts.length === 4) {
         updateData.network = ipParts.slice(0, 3).join('.') + '.';
         updateData.number = ipParts[3];
         console.log('Updating device IP from heartbeat:', {
           deviceId,
-          macAddress,
           currentIP,
           network: updateData.network,
           number: updateData.number

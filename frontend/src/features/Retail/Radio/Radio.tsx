@@ -124,7 +124,7 @@ const RadioAdmin: React.FC = () => {
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
 
   const [deviceStatus, setDeviceStatus] = useState<any>(null);
-  const [deviceTime, setDeviceTime] = useState<string>('');
+  const [, setDeviceTime] = useState<string>('');
   const [manualTime, setManualTime] = useState<string>('');
 
   const [loadingDeviceAction, setLoadingDeviceAction] = useState<string | null>(null);
@@ -247,6 +247,32 @@ const RadioAdmin: React.FC = () => {
     }
     return [];
   }, [branchesWithDevices, hasFullAccess, hasReadOnlyAccess, user]);
+
+  // Группировка потоков по типам филиалов
+  const streamsByType = useMemo(() => {
+    const grouped = radioStreams.reduce((acc, stream) => {
+      const type = stream.branchTypeOfDist || 'Неизвестный тип';
+      if (!acc[type]) {
+        acc[type] = [];
+      }
+      acc[type].push(stream);
+      return acc;
+    }, {} as Record<string, RadioStream[]>);
+
+    // Сортируем потоки внутри каждой группы по активности и названию
+    Object.keys(grouped).forEach(type => {
+      grouped[type].sort((a, b) => {
+        // Сначала активные потоки
+        if (a.isActive !== b.isActive) {
+          return a.isActive ? -1 : 1;
+        }
+        // Затем по названию
+        return a.name.localeCompare(b.name);
+      });
+    });
+
+    return grouped;
+  }, [radioStreams]);
 
   // Определяем вкладку по умолчанию в зависимости от уровня доступа
   const defaultTab = useMemo(() => {
@@ -457,7 +483,7 @@ const RadioAdmin: React.FC = () => {
         sm[item.deviceId] = !!item.online;
       }
       setStatusMap(sm);
-      console.log('📊 [Radio] Статусы устройств обновлены:', sm);
+      console.log('📊 [Radio] Статусы устройств обновлены:', Object.values(sm).filter(Boolean).length, 'онлайн из', Object.keys(sm).length);
     } catch (e) {
       console.error('❌ [Radio] Ошибка загрузки статусов устройств:', e);
     }
@@ -1385,7 +1411,7 @@ const RadioAdmin: React.FC = () => {
                   Устройства
                   {stats && (
                     <Text span size="xs" c="dimmed" ml="xs">
-                      ({stats.activeDevices}/{stats.totalDevices})
+                      ({currentBranchDevices.filter(device => statusMap[device.id]).length}/{currentBranchDevices.length})
                     </Text>
                   )}
                 </Tabs.Tab>
@@ -1687,12 +1713,39 @@ const RadioAdmin: React.FC = () => {
                 </Group>
                 
                 {radioStreams.length > 0 ? (
-                  <div style={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', 
-                    gap: 'var(--space-4)'
-                  }}>
-                    {radioStreams.map((stream) => (
+                  <Stack gap="xl">
+                    {Object.entries(streamsByType).map(([type, streams]) => (
+                      <div key={type}>
+                        {/* Заголовок типа филиала */}
+                        <Group justify="space-between" align="center" mb="md">
+                          <div>
+                            <Title order={3} size="h4" style={{ color: 'var(--theme-text-primary)' }}>
+                              {type}
+                            </Title>
+                            <Text size="sm" c="dimmed">
+                              {streams.length} поток{streams.length === 1 ? '' : streams.length < 5 ? 'а' : 'ов'}
+                            </Text>
+                          </div>
+                          <Badge 
+                            size="lg" 
+                            variant="light" 
+                            color={streams.some(s => s.isActive) ? 'green' : 'gray'}
+                            style={{
+                              fontSize: 'var(--font-size-sm)',
+                              fontWeight: 'var(--font-weight-medium)'
+                            }}
+                          >
+                            {streams.filter(s => s.isActive).length} активн{streams.filter(s => s.isActive).length === 1 ? 'ый' : streams.filter(s => s.isActive).length < 5 ? 'ых' : 'ых'}
+                          </Badge>
+                        </Group>
+
+                        {/* Потоки этого типа */}
+                        <div style={{ 
+                          display: 'grid', 
+                          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', 
+                          gap: 'var(--space-4)'
+                        }}>
+                          {streams.map((stream) => (
                       <Paper 
                         key={stream.id} 
                         p="md" 
@@ -1801,8 +1854,11 @@ const RadioAdmin: React.FC = () => {
                           </Group>
                         </div>
                       </Paper>
+                          ))}
+                        </div>
+                      </div>
                     ))}
-                  </div>
+                  </Stack>
                 ) : (
                   <Text size="sm" c="dimmed" ta="center" py="xl">
                     Радио потоки не найдены. Создайте первый поток для начала работы.
@@ -1874,7 +1930,7 @@ const RadioAdmin: React.FC = () => {
                             fw={700}
                             style={{ color: 'var(--theme-text-primary)' }}
                           >
-                            {stats.totalDevices}
+                            {currentBranchDevices.length}
                           </Text>
                     </div>
                   </Group>
@@ -1938,7 +1994,7 @@ const RadioAdmin: React.FC = () => {
                               fontSize: 'var(--font-size-xl)'
                             }}
                           >
-                            {stats.activeDevices}
+                            {currentBranchDevices.filter(device => statusMap[device.id]).length}
                           </Text>
                     </div>
                   </Group>
@@ -2544,7 +2600,7 @@ const RadioAdmin: React.FC = () => {
                 <Group grow>
                   <Button 
                     variant="light" 
-                    onClick={syncTime}
+                    onClick={() => void syncTime()}
                     loading={loadingDeviceAction === 'sync-time'}
                     leftSection={<IconClock size={16} />}
                     style={{
@@ -2590,7 +2646,7 @@ const RadioAdmin: React.FC = () => {
                   />
                   <Button 
                     variant="light" 
-                    onClick={setTime}
+                    onClick={() => void setTime()}
                     loading={loadingDeviceAction === 'set-time'}
                     style={{ 
                       alignSelf: 'end',

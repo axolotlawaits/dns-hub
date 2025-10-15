@@ -47,7 +47,6 @@ export const createApp = async (req: Request, res: Response): Promise<void> => {
       app: newApp 
     });
   } catch (error: any) {
-    console.error('Ошибка при создании приложения:', error);
     res.status(500).json({ 
       success: false, 
       message: error.message || 'Ошибка сервера при создании приложения' 
@@ -77,20 +76,8 @@ export const getApps = async (req: Request, res: Response): Promise<void> => {
       orderBy: { createdAt: 'desc' }
     });
     
-    console.log('Apps found:', apps.map(app => ({
-      id: app.id,
-      name: app.name,
-      versions: app.versions.map(v => ({
-        id: v.id,
-        version: v.version,
-        fileName: v.fileName,
-        filePath: v.filePath
-      }))
-    })));
-
     res.status(200).json({ success: true, apps });
   } catch (error: any) {
-    console.error('Ошибка при получении списка приложений:', error);
     res.status(500).json({ 
       success: false, 
       message: error.message || 'Ошибка сервера' 
@@ -122,7 +109,6 @@ export const getAppById = async (req: Request, res: Response): Promise<void> => 
 
     res.status(200).json({ success: true, app });
   } catch (error: any) {
-    console.error('Ошибка при получении приложения:', error);
     res.status(500).json({ 
       success: false, 
       message: error.message || 'Ошибка сервера' 
@@ -199,16 +185,12 @@ export const uploadAppVersion = async (req: Request, res: Response): Promise<voi
     try {
       // Сначала пытаемся переместить (быстрее)
       fs.renameSync(tempFilePath, finalFilePath);
-      console.log('File moved successfully from', tempFilePath, 'to', finalFilePath);
     } catch (renameError: any) {
-      console.log('Rename failed, trying copy:', renameError.message);
       // Если перемещение не удалось (cross-device link), копируем
       try {
         fs.copyFileSync(tempFilePath, finalFilePath);
         fs.unlinkSync(tempFilePath); // Удаляем временный файл после копирования
-        console.log('File copied successfully from', tempFilePath, 'to', finalFilePath);
       } catch (copyError: any) {
-        console.error('Error copying file:', copyError);
         throw new Error(`Ошибка при сохранении файла: ${copyError.message}`);
       }
     }
@@ -238,7 +220,6 @@ export const uploadAppVersion = async (req: Request, res: Response): Promise<voi
       version: newVersion 
     });
   } catch (error: any) {
-    console.error('Ошибка при загрузке версии:', error);
     res.status(500).json({ 
       success: false, 
       message: error.message || 'Ошибка сервера при загрузке версии' 
@@ -251,7 +232,6 @@ export const downloadLatestVersion = async (req: Request, res: Response): Promis
   try {
     const { id: appId } = req.params;
     
-    console.log('Download request for appId:', appId);
 
     const latestVersion = await prisma.appVersion.findFirst({
       where: { 
@@ -263,15 +243,6 @@ export const downloadLatestVersion = async (req: Request, res: Response): Promis
       },
       orderBy: { createdAt: 'desc' }
     });
-    
-    console.log('Found latest version:', latestVersion ? {
-      id: latestVersion.id,
-      appId: latestVersion.appId,
-      appName: latestVersion.app.name,
-      version: latestVersion.version,
-      fileName: latestVersion.fileName,
-      filePath: latestVersion.filePath
-    } : 'No version found');
 
     if (!latestVersion) {
       res.status(404).json({ 
@@ -302,23 +273,13 @@ export const downloadLatestVersion = async (req: Request, res: Response): Promis
     const downloadDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
     const downloadFileName = `${appName}_v${latestVersion.version}_${downloadDate}${fileExtension}`;
     
-    console.log('Download filename generated:', downloadFileName);
-    console.log('App name:', latestVersion.app.name);
-    console.log('Version:', latestVersion.version);
-    console.log('File extension:', fileExtension);
     
     // Устанавливаем правильные заголовки для скачивания
     res.setHeader('Content-Disposition', `attachment; filename="${downloadFileName}"`);
     res.setHeader('Content-Type', 'application/octet-stream');
     
-    console.log('Headers set:', {
-      'Content-Disposition': `attachment; filename="${downloadFileName}"`,
-      'Content-Type': 'application/octet-stream'
-    });
-    
     res.download(filePath, downloadFileName);
   } catch (error: any) {
-    console.error('Ошибка при скачивании версии:', error);
     res.status(500).json({ 
       success: false, 
       message: error.message || 'Ошибка сервера' 
@@ -338,7 +299,6 @@ export const getAppVersions = async (req: Request, res: Response): Promise<void>
 
     res.status(200).json({ success: true, versions });
   } catch (error: any) {
-    console.error('Ошибка при получении версий:', error);
     res.status(500).json({ 
       success: false, 
       message: error.message || 'Ошибка сервера' 
@@ -394,7 +354,6 @@ export const getAppFiles = async (req: Request, res: Response): Promise<void> =>
       appDir 
     });
   } catch (error: any) {
-    console.error('Ошибка при получении файлов:', error);
     res.status(500).json({ 
       success: false, 
       message: error.message || 'Ошибка сервера' 
@@ -424,7 +383,6 @@ export const updateApp = async (req: Request, res: Response): Promise<void> => {
       app: updatedApp 
     });
   } catch (error: any) {
-    console.error('Ошибка при обновлении приложения:', error);
     res.status(500).json({ 
       success: false, 
       message: error.message || 'Ошибка сервера' 
@@ -461,7 +419,6 @@ export const deleteApp = async (req: Request, res: Response): Promise<void> => {
       message: 'Приложение удалено успешно' 
     });
   } catch (error: any) {
-    console.error('Ошибка при удалении приложения:', error);
     res.status(500).json({ 
       success: false, 
       message: error.message || 'Ошибка сервера' 
