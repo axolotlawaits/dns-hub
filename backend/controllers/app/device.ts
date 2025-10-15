@@ -505,7 +505,7 @@ export const getDeviceByMAC = async (req: Request, res: Response): Promise<any> 
       macAddress: device.macAddress,
       network: device.network,
       number: device.number,
-      branch: device.branch?.name || 'Unknown'
+      branch: device.branch.name
     });
 
     return res.json({
