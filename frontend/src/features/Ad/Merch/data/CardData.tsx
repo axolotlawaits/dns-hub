@@ -407,7 +407,7 @@ export const toggleCardActive = async (id: string, isActive: boolean): Promise<C
 // Функция для удаления карточки
 export const deleteCard = async (id: string): Promise<void> => {
   try {
-    const url = `${API_BASE}/categories/${id}`;
+    const url = `${API_BASE}/cards/${id}`;
     console.log(`🗑️ Удаляем карточку ${id}...`);
     
     const response = await fetch(url, {

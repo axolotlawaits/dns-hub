@@ -52,18 +52,23 @@ class MerchBotService {
 
   // Инициализация бота
   private initializeBot(): void {
+    console.log('🔧 [MerchBot] Инициализация бота...');
+    
     const token = process.env.MERCH_BOT_TOKEN;
+    console.log('🔑 [MerchBot] Токен найден:', !!token);
     if (!token) {
-      console.error('MERCH_BOT_TOKEN not found');
+      console.error('❌ [MerchBot] MERCH_BOT_TOKEN not found');
       return;
     }
     
     const botName = process.env.MERCH_BOT_NAME;
+    console.log('📛 [MerchBot] Имя бота найдено:', !!botName, botName);
     if (!botName) {
-      console.error('MERCH_BOT_NAME not found');
+      console.error('❌ [MerchBot] MERCH_BOT_NAME not found');
       return;
     }
     
+    console.log('🤖 [MerchBot] Создаем экземпляр бота...');
     this.bot = new Bot<MerchContext>(token);
 
     // Настройка middleware
@@ -470,7 +475,8 @@ class MerchBotService {
       // Отправляем описание
       if (item.description) {
         const formattedText = this.formatDescription(item.description);
-        await ctx.reply(formattedText, { parse_mode: 'Markdown' });
+        console.log(`📝 [MerchBot] Отправляем описание:`, formattedText);
+        await ctx.reply(formattedText, { parse_mode: 'HTML' });
       }
 
       // Проверяем, есть ли дочерние элементы
@@ -957,12 +963,14 @@ class MerchBotService {
   }
 
   private formatDescription(description: string): string {
-    // Простое форматирование для Markdown
+    // Конвертируем HTML в простой текст с переносами
     return description
-      .replace(/\*\*(.*?)\*\*/g, '*$1*')
-      .replace(/<b>(.*?)<\/b>/g, '*$1*')
-      .replace(/<br\s*\/?>/g, '\n')
-      .replace(/<[^>]+>/g, '');
+      .replace(/<p>/g, '') // Убираем открывающие <p>
+      .replace(/<\/p>/g, '\n\n') // Заменяем закрывающие </p> на двойные переносы
+      .replace(/<br\s*\/?>/g, '\n') // Заменяем <br> на переносы строк
+      .replace(/<[^>]+>/g, '') // Убираем все остальные HTML-теги
+      .replace(/\n\s*\n/g, '\n\n') // Убираем лишние пустые строки
+      .trim(); // Убираем лишние пробелы
   }
 
   private getImageUrl(imagePath: string): string {
@@ -974,12 +982,16 @@ class MerchBotService {
 
   // Запуск бота
   public async launch(): Promise<boolean> {
+    console.log('🚀 [MerchBot] Попытка запуска бота...');
+    console.log('📊 [MerchBot] Статус:', { isRunning: this.isRunning, hasBot: !!this.bot });
+    
     if (this.isRunning) {
+      console.log('⚠️ [MerchBot] Бот уже запущен');
       return false;
     }
     
     if (!this.bot) {
-      console.error('MerchBot not initialized');
+      console.error('❌ [MerchBot] Бот не инициализирован');
       return false;
     }
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import {Container,Title,Paper,Text,Button,Group,Stack,Modal,LoadingOverlay, Tabs, Box, Progress, Badge} from '@mantine/core';
 import { TimeInput } from '@mantine/dates';
-import {  IconUpload,  IconMusic,  IconClock,  IconDeviceMobile,  IconBuilding, IconEdit, IconCheck, IconRefresh, IconPower, IconBattery, IconWifi, IconCalendar, IconPlayerPlay, IconPlayerPause, IconWifiOff, IconX, IconRadio, IconDownload, IconAlertCircle } from '@tabler/icons-react';
+import {  IconUpload,  IconMusic,  IconClock,  IconDeviceMobile,  IconBuilding, IconEdit, IconCheck, IconRefresh, IconPower, IconBattery, IconWifi, IconCalendar, IconPlayerPlay, IconPlayerPause, IconWifiOff, IconX, IconRadio, IconDownload, IconAlertCircle, IconChevronDown, IconChevronRight, IconChevronsDown, IconChevronsUp } from '@tabler/icons-react';
 import { notificationSystem } from '../../../utils/Push';
 import { API } from '../../../config/constants';
 import { DynamicFormModal, FormField } from '../../../utils/formModal';
@@ -29,6 +29,11 @@ interface Device {
   os: string;
   app: string;
   createdAt: string;
+  user?: {
+    id: string;
+    name: string;
+    login: string;
+  };
 }
 
 interface Branch {
@@ -132,7 +137,32 @@ const RadioAdmin: React.FC = () => {
   const [deviceAppVersion, setDeviceAppVersion] = useState<string>('');
   const [deviceUpdates, setDeviceUpdates] = useState<Record<string, App | null>>({});
 
+  // Состояние для управления раскрытием филиалов
+  const [expandedBranches, setExpandedBranches] = useState<Set<string>>(new Set());
+
   const API_BASE = useMemo(() => `${API}/radio`, []);
+
+  // Функции для управления раскрытием филиалов
+  const toggleBranchExpansion = useCallback((branchId: string) => {
+    setExpandedBranches(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(branchId)) {
+        newSet.delete(branchId);
+      } else {
+        newSet.add(branchId);
+      }
+      return newSet;
+    });
+  }, []);
+
+  const expandAllBranches = useCallback(() => {
+    const allBranchIds = branchesWithDevices.map(branch => branch.branch.uuid);
+    setExpandedBranches(new Set(allBranchIds));
+  }, [branchesWithDevices]);
+
+  const collapseAllBranches = useCallback(() => {
+    setExpandedBranches(new Set());
+  }, []);
 
   // Определяем права доступа на основе роли пользователя
   const isAdminOrDeveloper = useMemo(() => {
@@ -196,14 +226,17 @@ const RadioAdmin: React.FC = () => {
   // Мемоизация устройств в зависимости от роли пользователя и групп доступа
   const currentBranchDevices = useMemo(() => {
     if (hasFullAccess) {
-      // Полный доступ - видим все устройства всех филиалов
-      return branchesWithDevices.flatMap(branch => branch.devices);
+      // Полный доступ - видим все устройства всех филиалов (для статистики и других целей)
+      const allDevices = branchesWithDevices.flatMap(branch => branch.devices);
+      console.log('🔍 [Radio] Полный доступ - все устройства:', allDevices.length);
+      return allDevices;
     } else if (hasReadOnlyAccess && user) {
       // Доступ только для чтения - видим только устройства своего филиала
+      console.log('🔍 [Radio] Поиск филиала пользователя по названию:', user.branch);
       const userBranch = branchesWithDevices.find(branch => 
-        branch.branch.name === user.branch || 
-        branch.branch.uuid === user.branch
+        branch.branch.name === user.branch
       );
+      console.log('🔍 [Radio] Найденный филиал:', userBranch?.branch.name, 'устройств:', userBranch?.devices.length);
       return userBranch?.devices || [];
     }
     return [];
@@ -408,6 +441,22 @@ const RadioAdmin: React.FC = () => {
     }
   ];
 
+  // Функция для загрузки статусов устройств
+  const loadDeviceStatuses = useCallback(async () => {
+    try {
+      const statusResp = await axios.get(`${API_BASE}/devices-status-ping`);
+      const arr = (statusResp.data && statusResp.data.data) ? statusResp.data.data : [];
+      const sm: Record<string, boolean> = {};
+      for (const item of arr) {
+        sm[item.deviceId] = !!item.online;
+      }
+      setStatusMap(sm);
+      console.log('📊 [Radio] Статусы устройств обновлены:', sm);
+    } catch (e) {
+      console.error('❌ [Radio] Ошибка загрузки статусов устройств:', e);
+    }
+  }, []);
+
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
@@ -440,23 +489,27 @@ const RadioAdmin: React.FC = () => {
           os: d.os,
           app: d.app,
           createdAt: d.createdAt,
+          user: d.user ? {
+            id: d.user.id,
+            name: d.user.name,
+            login: d.user.login
+          } : undefined,
         }))
       }));
 
+      console.log('🔍 [Radio] Загруженные данные branchesWithDevices:', mapped);
+      console.log('🔍 [Radio] Общее количество устройств:', mapped.reduce((total, branch) => total + branch.devices.length, 0));
+      
+      // Проверим структуру первого устройства
+      if (mapped.length > 0 && mapped[0].devices.length > 0) {
+        console.log('🔍 [Radio] Пример устройства:', mapped[0].devices[0]);
+        console.log('🔍 [Radio] Пользователь устройства:', mapped[0].devices[0].user);
+      }
+
       setBranchesWithDevices(mapped);
 
-      // Загружаем статусы устройств через ping
-      try {
-        const statusResp = await axios.get(`${API_BASE}/devices-status-ping`);
-        const arr = (statusResp.data && statusResp.data.data) ? statusResp.data.data : [];
-        const sm: Record<string, boolean> = {};
-        for (const item of arr) {
-          sm[item.deviceId] = !!item.online;
-        }
-        setStatusMap(sm);
-      } catch (e) {
-        console.error('Error loading device statuses:', e);
-      }
+          // Загружаем статусы устройств через ping
+      await loadDeviceStatuses();
 
       const sd = (statsResponse.data && statsResponse.data.data) ? statsResponse.data.data : {};
       console.log('Stats response:', statsResponse.data);
@@ -824,6 +877,21 @@ const RadioAdmin: React.FC = () => {
 
     return () => clearHeader();
   }, [setHeader, clearHeader, hasFullAccess, hasReadOnlyAccess]);
+
+  // Периодическое обновление статусов устройств
+  useEffect(() => {
+    if (branchesWithDevices.length === 0) return;
+
+    // Обновляем статусы сразу
+    loadDeviceStatuses();
+
+    // Устанавливаем интервал для периодического обновления (каждые 30 секунд)
+    const interval = setInterval(() => {
+      loadDeviceStatuses();
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [branchesWithDevices.length, loadDeviceStatuses]);
 
   // Device Management Functions
   const loadDeviceStatus = useCallback(async (deviceId: string) => {
@@ -1875,13 +1943,93 @@ const RadioAdmin: React.FC = () => {
                 {/* Устройства по филиалам */}
               <Stack gap="md">
                 {hasFullAccess ? (
-                  // Полный доступ - видим все филиалы
-                  branchesWithDevices.map((branchData) => (
-                    <Paper key={branchData.branch.uuid} p="md" withBorder className="radio-device-card">
+                  <>
+                    {/* Кнопки управления раскрытием, если филиалов больше одного */}
+                    {branchesWithDevices.length > 1 && (
+                      <Group justify="flex-end" mb="sm">
+                        <Button
+                          variant="subtle"
+                          size="xs"
+                          leftSection={<IconChevronsDown size={14} />}
+                          onClick={expandAllBranches}
+                          style={{
+                            color: 'var(--theme-text-secondary)',
+                            fontSize: 'var(--font-size-xs)'
+                          }}
+                        >
+                          Развернуть все
+                        </Button>
+                        <Button
+                          variant="subtle"
+                          size="xs"
+                          leftSection={<IconChevronsUp size={14} />}
+                          onClick={collapseAllBranches}
+                          style={{
+                            color: 'var(--theme-text-secondary)',
+                            fontSize: 'var(--font-size-xs)'
+                          }}
+                        >
+                          Свернуть все
+                        </Button>
+                      </Group>
+                    )}
+                    
+                    {/* Полный доступ - видим все филиалы */}
+                    {branchesWithDevices
+                      .sort((a, b) => {
+                        // Собственный филиал пользователя всегда вверху
+                        if (user && a.branch.name === user.branch) return -1;
+                        if (user && b.branch.name === user.branch) return 1;
+                        // Остальные филиалы сортируем по алфавиту
+                        return a.branch.name.localeCompare(b.branch.name);
+                      })
+                      .map((branchData) => (
+                    <Paper 
+                      key={branchData.branch.uuid} 
+                      p="md" 
+                      withBorder 
+                      className="radio-device-card"
+                      style={{
+                        // Выделяем собственный филиал пользователя
+                        borderColor: user && branchData.branch.name === user.branch 
+                          ? 'var(--color-primary-500)' 
+                          : 'var(--theme-border)',
+                        borderWidth: user && branchData.branch.name === user.branch ? '2px' : '1px'
+                      }}
+                    >
                     <Group justify="space-between" mb="md">
-                      <div>
-                          <Title order={4} size="h5">{branchData.branch.name}</Title>
-                          <Text size="sm" c="dimmed">{branchData.branch.typeOfDist}</Text>
+                      <div style={{ flex: 1 }}>
+                        <Group gap="xs" align="center">
+                          {branchesWithDevices.length > 1 && (
+                            <Button
+                              variant="subtle"
+                              size="xs"
+                              p={4}
+                              onClick={() => toggleBranchExpansion(branchData.branch.uuid)}
+                              style={{
+                                color: 'var(--theme-text-secondary)',
+                                minWidth: 'auto',
+                                height: 'auto'
+                              }}
+                            >
+                              {expandedBranches.has(branchData.branch.uuid) ? 
+                                <IconChevronDown size={16} /> : 
+                                <IconChevronRight size={16} />
+                              }
+                            </Button>
+                          )}
+                          <div>
+                            <Group gap="xs" align="center">
+                              <Title order={4} size="h5">{branchData.branch.name}</Title>
+                              {user && branchData.branch.name === user.branch && (
+                                <Badge size="xs" color="blue" variant="light">
+                                  Ваш филиал
+                                </Badge>
+                              )}
+                            </Group>
+                            <Text size="sm" c="dimmed">{branchData.branch.typeOfDist}</Text>
+                          </div>
+                        </Group>
                       </div>
                       <div style={{
                         padding: '6px 12px',
@@ -1891,12 +2039,14 @@ const RadioAdmin: React.FC = () => {
                         fontSize: '12px',
                         fontWeight: '500'
                       }}>
-                        {currentBranchDevices.length} устройств
+                        {branchData.devices.length} устройств
                       </div>
                     </Group>
 
-                    <Stack gap="sm">
-                      {currentBranchDevices.map((device) => {
+                    {/* Устройства показываются только если филиал развернут или филиал один */}
+                    {(branchesWithDevices.length === 1 || expandedBranches.has(branchData.branch.uuid)) && (
+                      <Stack gap="sm">
+                        {branchData.devices.map((device) => {
                         const online = !!statusMap[device.id];
                         return (
                           <div 
@@ -1928,28 +2078,29 @@ const RadioAdmin: React.FC = () => {
                                   <Text size="xs" style={{ color: 'var(--theme-text-secondary)' }}>
                                   {device.network}{device.number} • {device.os} • {device.app}
                                 </Text>
-                                {user && (
+                                {device.user && (
                                   <Text size="xs" style={{ 
                                     color: 'var(--theme-text-tertiary)', 
                                     fontStyle: 'italic',
                                     marginTop: '2px'
                                   }}>
-                                    👤 {user.name || user.login}
+                                    👤 {device.user.name || device.user.login}
                                   </Text>
                                 )}
                               </div>
                               
                               <Group gap="xs">
-                                <div style={{
-                                  padding: '4px 8px',
-                                  backgroundColor: online ? 'var(--color-success)' : 'var(--color-gray-500)',
-                                  borderRadius: '12px',
-                                  color: 'white',
-                                  fontSize: '11px',
-                                  fontWeight: '500'
-                                }}>
+                                <Badge 
+                                  size="sm" 
+                                  color={online ? 'green' : 'gray'} 
+                                  variant="filled"
+                                  style={{
+                                    fontSize: '11px',
+                                    fontWeight: '500'
+                                  }}
+                                >
                                   {online ? 'Онлайн' : 'Оффлайн'}
-                                </div>
+                                </Badge>
                                 
                                   <Text size="xs" style={{ color: 'var(--theme-text-secondary)' }}>
                                   {formatTime(device.timeFrom)} - {formatTime(device.timeUntil)}
@@ -1960,10 +2111,12 @@ const RadioAdmin: React.FC = () => {
                             </Group>
                           </div>
                         )
-                      })}
-                    </Stack>
+                        })}
+                      </Stack>
+                    )}
                     </Paper>
-                ))
+                  ))}
+                  </>
                 ) : (
                   // Доступ только для чтения - видим только свой филиал
                   hasReadOnlyAccess && user && (
@@ -2018,28 +2171,29 @@ const RadioAdmin: React.FC = () => {
                                   <Text size="xs" style={{ color: 'var(--theme-text-secondary)' }}>
                                   {device.network}{device.number} • {device.os} • {device.app}
                                 </Text>
-                                {user && (
+                                {device.user && (
                                   <Text size="xs" style={{ 
                                     color: 'var(--theme-text-tertiary)', 
                                     fontStyle: 'italic',
                                     marginTop: '2px'
                                   }}>
-                                    👤 {user.name || user.login}
+                                    👤 {device.user.name || device.user.login}
                                   </Text>
                                 )}
                                 </div>
                                 
                                 <Group gap="xs">
-                                  <div style={{
-                                    padding: '4px 8px',
-                                    backgroundColor: online ? 'var(--color-success)' : 'var(--color-gray-500)',
-                                    borderRadius: '12px',
-                                    color: 'white',
-                                    fontSize: '11px',
-                                    fontWeight: '500'
-                                  }}>
+                                  <Badge 
+                                    size="sm" 
+                                    color={online ? 'green' : 'gray'} 
+                                    variant="filled"
+                                    style={{
+                                      fontSize: '11px',
+                                      fontWeight: '500'
+                                    }}
+                                  >
                                     {online ? 'Онлайн' : 'Оффлайн'}
-                                  </div>
+                                  </Badge>
                                   
                                     <Text size="xs" style={{ color: 'var(--theme-text-secondary)' }}>
                                     {formatTime(device.timeFrom)} - {formatTime(device.timeUntil)}
@@ -2087,13 +2241,13 @@ const RadioAdmin: React.FC = () => {
                         <Text size="xs" c="dimmed">Всего устройств</Text>
                       </div>
                       <div style={{ textAlign: 'center' }}>
-                        <Text size="xl" fw={700} style={{ color: 'var(--color-success-500)' }}>
+                        <Text size="xl" fw={700} c="green">
                           {currentBranchDevices.filter(device => statusMap[device.id]).length}
                         </Text>
                         <Text size="xs" c="dimmed">Онлайн</Text>
                       </div>
                       <div style={{ textAlign: 'center' }}>
-                        <Text size="xl" fw={700} style={{ color: 'var(--color-error-500)' }}>
+                        <Text size="xl" fw={700} c="red">
                           {currentBranchDevices.filter(device => !statusMap[device.id]).length}
                         </Text>
                         <Text size="xs" c="dimmed">Офлайн</Text>
@@ -2157,15 +2311,17 @@ const RadioAdmin: React.FC = () => {
                                 </Text>
                               </div>
                               <Group gap="xs" align="center">
-                                <div style={{
-                                  width: '8px',
-                                  height: '8px',
-                                  borderRadius: '50%',
-                                  backgroundColor: online ? 'var(--color-success-500)' : 'var(--color-error-500)'
-                                }} />
-                                <Text size="xs" c={online ? 'green' : 'red'}>
+                                <Badge 
+                                  size="sm" 
+                                  color={online ? 'green' : 'gray'} 
+                                  variant="filled"
+                                  style={{
+                                    fontSize: '11px',
+                                    fontWeight: '500'
+                                  }}
+                                >
                                   {online ? 'Онлайн' : 'Офлайн'}
-                                </Text>
+                                </Badge>
                               </Group>
                             </Group>
                           </div>
@@ -2268,14 +2424,14 @@ const RadioAdmin: React.FC = () => {
                 <Text fw={600} size="lg" style={{ color: 'var(--theme-text-primary)' }}>
                   📱 Информация об устройстве
                 </Text>
-                {user && (
+                {selectedDevice?.user && (
                   <Text size="sm" c="dimmed" style={{ 
                     background: 'var(--theme-bg-secondary)', 
                     padding: '4px 8px', 
                     borderRadius: '6px',
                     border: '1px solid var(--theme-border)'
                   }}>
-                    👤 {user.name || user.login}
+                    👤 {selectedDevice.user.name || selectedDevice.user.login}
                   </Text>
                 )}
               </Group>

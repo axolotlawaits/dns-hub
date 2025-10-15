@@ -255,10 +255,47 @@ export const deleteMusicFolder = async (req: Request, res: Response): Promise<an
 // ===== Admin-related (moved) =====
 export const getDevicesByBranches = async (req: Request, res: Response) => {
   try {
+    // Убираем фильтрацию на бэкенде - пусть фронтенд фильтрует по правам доступа
+    console.log('🔍 [getDevicesByBranches] Возвращаем все устройства, фильтрация на фронтенде');
+
     const devices = await prisma.devices.findMany({
-      include: { branch: { select: { uuid: true, name: true, typeOfDist: true, city: true, address: true } } },
+      select: {
+        id: true,
+        createdAt: true,
+        lastSeen: true,
+        vendor: true,
+        name: true,
+        timeFrom: true,
+        timeUntil: true,
+        network: true,
+        number: true,
+        app: true,
+        os: true,
+        macAddress: true,
+        branchId: true,
+        userEmail: true,
+        branch: { select: { uuid: true, name: true, typeOfDist: true, city: true, address: true } }
+      },
       orderBy: [ { branch: { name: 'asc' } }, { createdAt: 'desc' } ]
     });
+
+    // Получаем информацию о пользователях из UserData по email
+    const userEmails = devices
+      .map(d => d.userEmail)
+      .filter((email): email is string => email !== null && email !== undefined)
+      .filter((email, index, arr) => arr.indexOf(email) === index); // Убираем дубликаты
+
+    const userDataMap = new Map();
+    if (userEmails.length > 0) {
+      const userDataList = await prisma.userData.findMany({
+        where: { email: { in: userEmails } },
+        select: { email: true, fio: true }
+      });
+      
+      userDataList.forEach(user => {
+        userDataMap.set(user.email, user);
+      });
+    }
 
     // Используем Map для O(1) группировки вместо reduce
     const devicesByBranches = new Map();
@@ -267,7 +304,19 @@ export const getDevicesByBranches = async (req: Request, res: Response) => {
       if (!devicesByBranches.has(bid)) {
         devicesByBranches.set(bid, { branch: device.branch, devices: [] });
       }
-      devicesByBranches.get(bid).devices.push(device);
+      
+      // Добавляем информацию о пользователе из UserData
+      const userInfo = device.userEmail ? userDataMap.get(device.userEmail) : null;
+      const deviceWithUser = {
+        ...device,
+        user: userInfo ? {
+          id: userInfo.email, // Используем email как ID
+          name: userInfo.fio,
+          login: userInfo.email
+        } : null
+      };
+      
+      devicesByBranches.get(bid).devices.push(deviceWithUser);
     });
 
     const result = Array.from(devicesByBranches.values());
@@ -282,7 +331,14 @@ export const getDevicesStatus = async (req: Request, res: Response) => {
   try {
     const { branchId } = req.query as { branchId?: string };
     const where: any = {};
-    if (branchId) where.branchId = String(branchId);
+    
+    // Фильтруем только если явно указан branchId в query
+    if (branchId) {
+      where.branchId = String(branchId);
+      console.log('🔍 [getDevicesStatus] Фильтруем по branchId из query:', branchId);
+    } else {
+      console.log('🔍 [getDevicesStatus] Возвращаем статус всех устройств');
+    }
 
     const devices = await prisma.devices.findMany({ 
       where, 

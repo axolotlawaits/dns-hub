@@ -117,6 +117,7 @@ model Devices {
   macAddress   String?  @unique
   branchId     String
   branch       Branch   @relation(fields: [branchId], references: [uuid])
+  userEmail    String?  // Email пользователя для связи с UserData
 }
 
 model Type {
@@ -601,7 +602,7 @@ model MerchAttachment {
   type      String
   recordId  String
   sortOrder Int      @default(0)    // ← порядок сортировки
-  merch     Merch    @relation(fields: [recordId], references: [id])
+  merch     Merch    @relation(fields: [recordId], references: [id], onDelete: Cascade)
   userAdd   User     @relation(fields: [userAddId], references: [id])
 }
 

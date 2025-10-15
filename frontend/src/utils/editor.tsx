@@ -4,9 +4,6 @@ import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import Underline from '@tiptap/extension-underline';
-import Strike from '@tiptap/extension-strike';
-import Code from '@tiptap/extension-code';
-import CodeBlock from '@tiptap/extension-code-block';
 import '../utils/styles/editor.css';
 
 type TiptapEditorProps = {
@@ -25,22 +22,17 @@ const TiptapEditor: React.FC<TiptapEditorProps> = ({ content, onChange, telegram
         orderedList: false, // Отключаем нумерованные списки
         blockquote: false, // Отключаем цитаты
         horizontalRule: false, // Отключаем горизонтальные линии
+        // strike, code, codeBlock включены по умолчанию
       }),
       Underline,
-      Strike,
-      Code,
-      CodeBlock,
       Link.configure({
         openOnClick: false,
       }),
     ] : [
       // Полный набор расширений
-      StarterKit,
+      StarterKit, // Используем StarterKit без дополнительной конфигурации
       Image,
       Underline,
-      Strike,
-      Code,
-      CodeBlock,
       Link.configure({
         openOnClick: false,
       }),

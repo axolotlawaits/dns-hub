@@ -6,6 +6,7 @@ import {
   deleteMerchCategory,
   createMerchCard,
   updateMerchCard,
+  deleteMerchCard,
   addCardImages,
   addMerchAttachment,
   deleteMerchAttachment
@@ -23,6 +24,7 @@ router.delete('/categories/:id', deleteMerchCategory as any);
 // Роуты для карточек (layer = 0)
 router.post('/cards', ...(createMerchCard as any));
 router.put('/cards/:id', ...(updateMerchCard as any));
+router.delete('/cards/:id', deleteMerchCard as any);
 router.post('/cards/:id/images', ...(addCardImages as any));
 
 // Роуты для attachments

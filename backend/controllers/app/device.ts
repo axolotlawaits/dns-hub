@@ -47,44 +47,54 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
   }
 
   try {
-    // Получаем данные пользователя и его филиал
-    const user = await prisma.user.findFirst({ 
-      where: { email: userEmail.toLowerCase() }, 
-      select: { id: true } 
-    });
-    if (!user) {
-      return res.status(404).json({ error: 'Пользователь не найден' });
-    }
-
+    // Получаем данные пользователя из UserData
     const userData = await prisma.userData.findUnique({ 
       where: { email: userEmail.toLowerCase() }, 
-      select: { branch_uuid: true } 
+      select: { 
+        uuid: true,
+        fio: true,
+        branch_uuid: true,
+        email: true
+      } 
     });
     if (!userData) {
       return res.status(404).json({ error: 'Пользователь не найден в UserData' });
     }
 
+    // Логируем информацию о пользователе из UserData
+    console.log('Найден пользователь в UserData:', userData.fio, 'с email:', userData.email);
+
     const branchId = sanitizeUuid(userData.branch_uuid);
+    console.log('🔍 [createOrUpdateDevice] branch_uuid из UserData:', userData.branch_uuid);
+    console.log('🔍 [createOrUpdateDevice] sanitized branchId:', branchId);
+    
     if (!branchId) {
       return res.status(400).json({ error: 'Некорректный branchId' });
     }
 
     // Транзакция для атомарности операций
     const result = await prisma.$transaction(async (tx) => {
+      // Проверяем, существует ли филиал
+      const existingBranch = await tx.branch.findUnique({ 
+        where: { uuid: branchId }, 
+        select: { uuid: true, name: true, typeOfDist: true } 
+      });
+      
+      console.log('🔍 [createOrUpdateDevice] Поиск филиала с UUID:', branchId);
+      console.log('🔍 [createOrUpdateDevice] Найденный филиал:', existingBranch);
+      
+      if (!existingBranch) {
+        throw new Error('Филиал не найден');
+      }
+
       // Обновляем филиал
       const updatedBranch = await tx.branch.update({
         where: { uuid: branchId },
         data: { typeOfDist: sanitizeString(branchType) },
         select: { uuid: true, name: true, typeOfDist: true }
-      }).catch(async (e) => {
-        const exists = await tx.branch.findUnique({ where: { uuid: branchId }, select: { uuid: true } });
-        if (!exists) return null;
-        throw e;
       });
-
-      if (!updatedBranch) {
-        throw new Error('Филиал не найден');
-      }
+      
+      console.log('🔍 [createOrUpdateDevice] Обновленный филиал:', updatedBranch);
 
       // Подготавливаем данные устройства
       // Приоритет: полный IP от устройства > network+number > заголовки прокси > req.ip
@@ -168,6 +178,7 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
 
       const deviceData = {
         branchId,
+        userEmail: userData.email, // Сохраняем email пользователя
         name: sanitizeString(deviceName ?? 'DNS Radio Device', 'DNS Radio Device'),
         vendor: sanitizeString(vendor ?? 'DNS', 'DNS'),
         network: sanitizeString(networkIP, ''),
@@ -255,7 +266,9 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
             os: deviceData.os,
             macAddress: deviceData.macAddress,
             timeFrom: deviceData.timeFrom,
-            timeUntil: deviceData.timeUntil
+            timeUntil: deviceData.timeUntil,
+            userEmail: deviceData.userEmail, // Обновляем email пользователя
+            branchId: deviceData.branchId    // Обновляем филиал
           }
         });
         
@@ -288,12 +301,24 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
       success: true, 
       message: 'Устройство успешно создано/обновлено', 
       ...result, 
-      userId: user.id 
+      userEmail: userData.email 
     });
 
   } catch (error) {
     console.error('Error creating/updating device:', error);
-    return res.status(500).json({ error: 'Ошибка при создании/обновлении устройства' });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    const errorName = error instanceof Error ? error.name : 'Unknown';
+    
+    console.error('Error details:', {
+      message: errorMessage,
+      stack: errorStack,
+      name: errorName
+    });
+    return res.status(500).json({ 
+      error: 'Ошибка при создании/обновлении устройства',
+      details: errorMessage 
+    });
   }
 };
 
@@ -317,6 +342,8 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
     if (appVersion) {
       updateData.app = sanitizeString(appVersion);
     }
+    
+    // userUuid больше не используется, так как связь с пользователем через email
     
     // Если есть MAC адрес и текущий IP, обновляем IP адрес
     if (macAddress && currentIP) {
