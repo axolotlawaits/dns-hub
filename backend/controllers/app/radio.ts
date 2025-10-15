@@ -378,13 +378,21 @@ export const getDevicesStatusPing = async (req: Request, res: Response) => {
     const where: any = {};
     if (branchId) where.branchId = String(branchId);
 
+    console.log('🔍 [getDevicesStatusPing] Поиск устройств с фильтром:', where);
     const devices = await prisma.devices.findMany({ where, select: { id: true, branchId: true } });
+    console.log('📱 [getDevicesStatusPing] Найдено устройств:', devices.length);
+    console.log('📱 [getDevicesStatusPing] Список устройств:', devices.map(d => ({ id: d.id, branchId: d.branchId })));
+    
     const deviceIds = devices.map(d => d.id);
+    console.log('🆔 [getDevicesStatusPing] ID устройств для пинга:', deviceIds);
 
     const socketService = SocketIOService.getInstance();
     const pingResults = await socketService.pingDevices(deviceIds, 1500);
+    console.log('🏓 [getDevicesStatusPing] Результаты пинга:', pingResults);
 
     const data = devices.map((d) => ({ deviceId: d.id, branchId: d.branchId, online: !!pingResults[d.id]?.online, rttMs: pingResults[d.id]?.rttMs ?? null }));
+    console.log('📊 [getDevicesStatusPing] Финальные данные:', data);
+    console.log('📊 [getDevicesStatusPing] Онлайн устройств:', data.filter(d => d.online).length);
 
     res.json({ success: true, data });
   } catch (error) {
@@ -533,12 +541,26 @@ export const getDevicesStats = async (req: Request, res: Response) => {
     ]);
 
     const socketService = SocketIOService.getInstance();
-    const activeDevices = socketService.getConnectedDeviceIds().length;
+    
+    // Получаем все устройства для пинга
+    const allDevices = await prisma.devices.findMany({ 
+      select: { id: true } 
+    });
+    const deviceIds = allDevices.map(d => d.id);
+    
+    // Используем pingDevices для получения реального статуса
+    const pingResults = await socketService.pingDevices(deviceIds, 1500);
+    const activeDevices = Object.values(pingResults).filter(result => result.online).length;
+    
+    console.log('📊 [getDevicesStats] Всего устройств в БД:', deviceIds.length);
+    console.log('📊 [getDevicesStats] Результаты пинга:', pingResults);
+    console.log('📊 [getDevicesStats] Количество онлайн устройств (ping):', activeDevices);
     
     // Асинхронный подсчет файлов
     const totalMusicFiles = await countMusicFilesAsync();
     
     const data = { totalDevices, activeDevices, totalBranches, totalMusicFiles, topBranches };
+    console.log('📊 [getDevicesStats] Финальная статистика:', data);
     
     // Кэшируем результат
     statsCache.set(cacheKey, { data, timestamp: Date.now() });

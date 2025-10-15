@@ -92,7 +92,6 @@ const AppStore: React.FC = () => {
         notificationSystem.addNotification('Ошибка', data.message, 'error');
       }
     } catch (error) {
-      console.error('Ошибка загрузки приложений:', error);
       notificationSystem.addNotification('Ошибка', 'Ошибка при загрузке приложений', 'error');
     } finally {
       setLoading(false);
@@ -122,7 +121,6 @@ const AppStore: React.FC = () => {
         notificationSystem.addNotification('Ошибка', data.message, 'error');
       }
     } catch (error) {
-      console.error('Ошибка создания приложения:', error);
       notificationSystem.addNotification('Ошибка', 'Ошибка при создании приложения', 'error');
     }
   };
@@ -148,7 +146,6 @@ const AppStore: React.FC = () => {
         notificationSystem.addNotification('Ошибка', data.message, 'error');
       }
     } catch (error) {
-      console.error('Ошибка обновления приложения:', error);
       notificationSystem.addNotification('Ошибка', 'Ошибка при обновлении приложения', 'error');
     }
   };
@@ -179,7 +176,6 @@ const AppStore: React.FC = () => {
         notificationSystem.addNotification('Ошибка', data.message, 'error');
       }
     } catch (error) {
-      console.error('Ошибка загрузки версии:', error);
       notificationSystem.addNotification('Ошибка', 'Ошибка при загрузке версии', 'error');
     }
   };
@@ -192,7 +188,6 @@ const AppStore: React.FC = () => {
       if (response.ok) {
         // Получаем имя файла из заголовка Content-Disposition
         const contentDisposition = response.headers.get('Content-Disposition');
-        console.log('Content-Disposition header:', contentDisposition);
         
         let fileName = `app-${appId}`; // fallback
         
@@ -200,12 +195,9 @@ const AppStore: React.FC = () => {
           const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
           if (fileNameMatch) {
             fileName = fileNameMatch[1];
-            console.log('Extracted filename:', fileName);
           } else {
-            console.log('Could not extract filename from Content-Disposition');
           }
         } else {
-          console.log('No Content-Disposition header found');
         }
         
         const blob = await response.blob();
@@ -223,7 +215,6 @@ const AppStore: React.FC = () => {
         notificationSystem.addNotification('Ошибка', 'Ошибка при скачивании', 'error');
       }
     } catch (error) {
-      console.error('Ошибка скачивания:', error);
       notificationSystem.addNotification('Ошибка', 'Ошибка при скачивании', 'error');
     }
   };
@@ -247,7 +238,6 @@ const AppStore: React.FC = () => {
         notificationSystem.addNotification('Ошибка', data.message, 'error');
       }
     } catch (error) {
-      console.error('Ошибка удаления:', error);
       notificationSystem.addNotification('Ошибка', 'Ошибка при удалении', 'error');
     }
   };
