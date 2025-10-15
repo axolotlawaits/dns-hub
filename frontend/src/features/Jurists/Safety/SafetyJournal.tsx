@@ -334,6 +334,7 @@ const LocalJournalTable = function LocalJournalTable({
 // Компонент карточки филиала с журналами (мемоизированный)
   const BranchCard = function BranchCard({ 
     branch, 
+    updateState,
     onApproveJournal, 
     onRejectJournal, 
     onUnderReviewJournal,
@@ -345,6 +346,7 @@ const LocalJournalTable = function LocalJournalTable({
     setExpandedBranches
   }: { 
     branch: Branch;
+    updateState: (newState: any) => void
     onApproveJournal: (journal: SafetyJournal) => void;
     onRejectJournal: (journal: SafetyJournal, status: 'rejected', rejectMessage: string) => void;
     onUnderReviewJournal: (journal: SafetyJournal) => void;
@@ -386,7 +388,7 @@ const LocalJournalTable = function LocalJournalTable({
   
   const addResponsive = async () => {
     const response = await authFetch(`${JOURNAL_API}/v1/branch_responsibles`, {
-      method: 'PATCH',
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
@@ -490,7 +492,7 @@ const LocalJournalTable = function LocalJournalTable({
             >
               {isExpanded ? 'Свернуть' : 'Развернуть'}
             </Button>
-            {/* {canManageStatuses &&
+            {/*{canManageStatuses &&
             <>
               <Button variant="outline" onClick={handleResponsibleOpen}>Ответственные</Button>
               <Modal opened={responsibleOpened} onClose={responsibleClose} title="Назначение ответственных" centered>
@@ -530,7 +532,7 @@ const LocalJournalTable = function LocalJournalTable({
                 </Stack>
               </Modal>
             </>
-            } */}
+            }*/}
           </Stack>
         </Group>
 
@@ -604,8 +606,6 @@ export default function SafetyJournal() {
   const updateState = useCallback((updates: Partial<typeof state>) => {
     setState(prev => ({ ...prev, ...updates }));
   }, []);
-
-
 
   const setActiveTab = useCallback((tab: string) => {
     updateState({ activeTab: tab });
@@ -1569,6 +1569,7 @@ export default function SafetyJournal() {
             {paginatedBranches.map((branch) => (
               <BranchCard
                 key={branch.branch_id}
+                updateState={updateState}
                 branch={branch}
                 onApproveJournal={(journal) => handleChangeStatus(journal, 'approved')}
                 onRejectJournal={handleChangeStatus}
