@@ -292,6 +292,19 @@ export const getAppVersions = async (req: Request, res: Response): Promise<void>
   try {
     const { id: appId } = req.params;
 
+    // Проверяем, что приложение существует
+    const app = await prisma.app.findUnique({
+      where: { id: appId }
+    });
+
+    if (!app) {
+      res.status(404).json({ 
+        success: false, 
+        message: 'Приложение не найдено' 
+      });
+      return;
+    }
+
     const versions = await prisma.appVersion.findMany({
       where: { appId },
       orderBy: { createdAt: 'desc' }
@@ -299,6 +312,7 @@ export const getAppVersions = async (req: Request, res: Response): Promise<void>
 
     res.status(200).json({ success: true, versions });
   } catch (error: any) {
+    console.error('❌ [getAppVersions] Ошибка:', error);
     res.status(500).json({ 
       success: false, 
       message: error.message || 'Ошибка сервера' 
