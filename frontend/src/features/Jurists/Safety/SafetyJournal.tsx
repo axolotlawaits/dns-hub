@@ -8,7 +8,7 @@ import FloatingActionButton from '../../../components/FloatingActionButton';
 import { Button, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Paper, Badge, Tabs, Tooltip, Alert, Divider, Select, Pagination, Popover, Card, ThemeIcon, Accordion, Modal, Textarea } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
-import { IconClock, IconFileText, IconChevronDown, IconChevronUp, IconUpload, IconFilter, IconShield, IconFlame, IconCircleCheck, IconCircleX, IconAlertCircle, IconUsers, IconX, IconFile, IconCheck, IconRefresh, IconQrcode, IconMessageDots } from '@tabler/icons-react';
+import { IconClock, IconFileText, IconChevronDown, IconChevronUp, IconUpload, IconFilter, IconShield, IconFlame, IconCircleCheck, IconCircleX, IconAlertCircle, IconUsers, IconX, IconFile, IconCheck, IconRefresh, IconQrcode, IconMessageDots, IconEyePlus } from '@tabler/icons-react';
 import { FilePreviewModal } from '../../../utils/FilePreviewModal';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { DndProviderWrapper } from '../../../utils/dnd';
@@ -489,7 +489,7 @@ type ResponsibleObjDataType = {
                     <Stack gap="sm">
                       <Text size="sm" fw={600}>Ответственные</Text>
                       {canManageStatuses &&
-                        <Button variant="outline" onClick={handleResponsibleOpen}>Назначить</Button>
+                        <Button leftSection={<IconEyePlus size={18} />} variant="outline" onClick={handleResponsibleOpen} size='xs'>Назначить</Button>
                       }
                       <Divider />
                       <Stack gap="xs">
@@ -499,7 +499,7 @@ type ResponsibleObjDataType = {
                           <Group>
                             <Text size="xs" c="dimmed">{res.employee_name}</Text>
                             <Tooltip label="Удалить ответственного">
-                              <ActionIcon variant="filled" aria-label="Settings" size='sm' color='red' onClick={() => openDeleteModal(res.employee_id, 'ПБ')}>
+                              <ActionIcon variant="light" aria-label="Settings" size='sm' color='red' onClick={() => openDeleteModal(res.employee_id, 'ПБ')}>
                                 <IconX stroke={1.5} />
                               </ActionIcon>
                             </Tooltip>
@@ -513,7 +513,7 @@ type ResponsibleObjDataType = {
                           <Group>
                             <Text size="xs" c="dimmed">{res.employee_name}</Text>
                             <Tooltip label="Удалить ответственного">
-                              <ActionIcon variant="filled" aria-label="Settings" size='sm' color='red' onClick={() => openDeleteModal(res.employee_id, 'ОТ')}>
+                              <ActionIcon variant="light" aria-label="Settings" size='sm' color='red' onClick={() => openDeleteModal(res.employee_id, 'ОТ')}>
                                 <IconX stroke={1.5} />
                               </ActionIcon>
                             </Tooltip>
@@ -552,10 +552,9 @@ type ResponsibleObjDataType = {
               {isExpanded ? 'Свернуть' : 'Развернуть'}
             </Button>
           </Stack>
-          <Modal opened={responsibleOpened} onClose={responsibleClose} title="Назначение ответственных" centered>
+          <Modal opened={responsibleOpened} onClose={responsibleClose} title="Назначение ответственного" centered>
             <Stack gap='lg'>
               <Stack>
-                <Text>Ответственный</Text>
                 <Group>
                   <Select
                     placeholder="Выберите сотрудника"
@@ -570,7 +569,7 @@ type ResponsibleObjDataType = {
                     placeholder="ОТ или ПБ?"
                     data={['ОТ', 'ПБ']}
                     value={responsible?.responsibilityType}
-                    onChange={(value) => setResponsible({...responsible, responsibilityType: value})}
+                    onChange={(value) => setResponsible({...responsible, responsibilityType: value })}
                     searchable
                     clearable
                     w={150}
@@ -580,10 +579,9 @@ type ResponsibleObjDataType = {
               <Button variant='light' onClick={() => {addResponsive(), responsibleClose()}}>Назначить</Button>
             </Stack>
           </Modal>
-          <Modal opened={deleteResId !== null} onClose={closeDeleteModal} title="Удалить ответственного" centered>
-            <Group>
-              <p>{deleteResId} {deleteResType}</p>
-              <Button onClick={closeDeleteModal}>Отмена</Button>
+          <Modal opened={deleteResId !== null} onClose={closeDeleteModal} title="Удаление ответственного" centered>
+            <Group grow>
+              <Button variant='light' onClick={closeDeleteModal}>Отмена</Button>
               <Button onClick={() => {deleteResponsive(), closeDeleteModal()}}>Удалить</Button>
             </Group>
           </Modal>
