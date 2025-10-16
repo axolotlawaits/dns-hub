@@ -331,10 +331,18 @@ const LocalJournalTable = function LocalJournalTable({
   );
 };
 
+type ResponsibleDataType = {
+  employee_id: string
+  employee_name: string
+  responsibility_type: 'ОТ' | 'ПБ'
+}
+
+type ResponsibleObjDataType = {
+  responsibles: ResponsibleDataType[]
+}
 // Компонент карточки филиала с журналами (мемоизированный)
   const BranchCard = function BranchCard({ 
     branch, 
-    updateState,
     onApproveJournal, 
     onRejectJournal, 
     onUnderReviewJournal,
@@ -359,10 +367,11 @@ const LocalJournalTable = function LocalJournalTable({
   }) {
   const [isExpanded, setIsExpanded] = useState(expandedBranches.has(branch.branch_id));
   const [responsibleOpened, { open: responsibleOpen, close: responsibleClose }] = useDisclosure(false)
+  const [deleteResOpened, { open: deleteResOpen, close: deleteResClose }] = useDisclosure(false)
   const [branchEmployees, setBranchEmployees] = useState([])
   const [responsible, setResponsible] = useState<ResponsibleEmployeeAddType>()
-  const [responsibleData, setResponsibleData] = useState([])
-  // const [popoverOpened, setPopoverOpened] = useState(false)
+  const [responsibleData, setResponsibleData] = useState<ResponsibleObjDataType>()
+  const [resPopoverOpened, setResPopoverOpened] = useState(false)
   const authFetch  = useAuthFetch()
 
   // Синхронизируем локальное состояние с глобальным
@@ -405,6 +414,27 @@ const LocalJournalTable = function LocalJournalTable({
         responsibilityType: responsible?.responsibilityType
       }),
     })
+    if (response && response.ok) {
+      console.log(response.json)
+    }
+  }
+
+  const deleteResponsive = async (employeeId: string, responsibilityType: 'ОТ' | 'ПБ') => {
+    console.log(employeeId, responsibilityType)
+    const response = await authFetch(`${JOURNAL_API}/v1/branch_responsibles`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        branchId: branch.branch_id,
+        employeeId,
+        responsibilityType
+      }),
+    })
+    if (response && response.ok) {
+      console.log(response.json)
+    }
   }
 
   return (
@@ -430,7 +460,7 @@ const LocalJournalTable = function LocalJournalTable({
                 <Badge size="sm" variant="outline" color="gray">
                   {branch.journals.length} журналов
                 </Badge>
-                <Popover width={300} position="bottom" withArrow shadow="md">
+                <Popover width={300} position="bottom" withArrow shadow="md" opened={resPopoverOpened} onChange={setResPopoverOpened} zIndex={100}>
                   <Popover.Target>
                     <Tooltip label="Ответственные по ПБ и ОТ">
                       <ActionIcon
@@ -438,6 +468,7 @@ const LocalJournalTable = function LocalJournalTable({
                         variant="outline"
                         color="blue"
                         style={{ cursor: 'pointer' }}
+                        onClick={() => {setResPopoverOpened((o) => !o), getResponsive()}}
                       >
                         <IconUsers size={14} />
                       </ActionIcon>
@@ -446,67 +477,54 @@ const LocalJournalTable = function LocalJournalTable({
                   <Popover.Dropdown>
                     <Stack gap="sm">
                       <Text size="sm" fw={600}>Ответственные</Text>
-                      {/* {canManageStatuses &&
-                      <>
+                      {canManageStatuses &&
                         <Button variant="outline" onClick={handleResponsibleOpen}>Назначить</Button>
-                        <Modal opened={responsibleOpened} onClose={responsibleClose} title="Назначение ответственных" centered zIndex={1000}>
-                          <Stack gap='lg'>
-                            <Stack>
-                              <Text>Ответственный</Text>
-                              <Group>
-                                <Select
-                                  placeholder="Выберите сотрудника"
-                                  data={branchEmployees.map((emp: any) => ({label: emp.fio, value: emp.uuid}))}
-                                  value={responsible?.employeeId}
-                                  onChange={(value) => setResponsible({...responsible, employeeId: value})}
-                                  searchable
-                                  clearable
-                                  style={{ minWidth: 200 }}
-                                />
-                                <Select
-                                  placeholder="ОТ или ПБ?"
-                                  data={['ОТ', 'ПБ']}
-                                  value={responsible?.responsibilityType}
-                                  onChange={(value) => setResponsible({...responsible, responsibilityType: value})}
-                                  searchable
-                                  clearable
-                                  w={150}
-                                />
-                              </Group>
-                            </Stack>
-                            <Button variant='light' onClick={addResponsive}>Назначить</Button>
-                          </Stack>
-                        </Modal>
-                      </>
-                      } */}
+                      }
                       <Divider />
                       <Stack gap="xs">
                         <Text size="xs" fw={500} c="blue">По пожарной безопасности:</Text>
-                        <Stack>
-                          {branch.responsibilities.pb.length > 0 ? branch.responsibilities.pb.map(emp => {
-                            return (
-                              <Text size="xs" c="dimmed">{emp.employee_name}</Text>
-                            )
-                          })
-                          :
-                            <Text size="xs" c="dimmed">Информация будет добавлена</Text>
-                          }
-                        </Stack>
+                        {responsibleData && responsibleData.responsibles?.length > 0 && 
+                        responsibleData.responsibles.filter(res => res.responsibility_type === 'ПБ').map(res => (
+                          <Group>
+                            <Text size="xs" c="dimmed">{res.employee_name}</Text>
+                            <Tooltip label="Удалить ответственного">
+                              <ActionIcon variant="filled" aria-label="Settings" size='sm' color='red' onClick={deleteResOpen}>
+                                <IconX stroke={1.5} />
+                              </ActionIcon>
+                            </Tooltip>
+                            <Modal opened={deleteResOpened} onClose={deleteResClose} title="Удалить ответственного" centered>
+                              <Group>
+                                <Button onClick={deleteResClose}>Отмена</Button>
+                                <Button onClick={() => {deleteResponsive(res.employee_id, 'ПБ'), deleteResClose()}}>Удалить</Button>
+                              </Group>
+                            </Modal>
+                          </Group>                         
+                        ))}
                       </Stack>
                       <Stack gap="xs">
                         <Text size="xs" fw={500} c="green">По охране труда:</Text>
-                          {branch.responsibilities.ot.length > 0 ? branch.responsibilities.ot.map(emp => {
-                            return (
-                              <Text size="xs" c="dimmed">{emp.employee_name}</Text>
-                            )
-                          })
-                          :
-                            <Text size="xs" c="dimmed">Информация будет добавлена</Text>
-                          }
+                        {responsibleData && responsibleData.responsibles?.length > 0 && 
+                          responsibleData.responsibles.filter(res => res.responsibility_type === 'ОТ').map(res => (
+                          <Group>
+                            <Text size="xs" c="dimmed">{res.employee_name}</Text>
+                            <Tooltip label="Удалить ответственного">
+                              <ActionIcon variant="filled" aria-label="Settings" size='sm' color='red' onClick={deleteResOpen}>
+                                <IconX stroke={1.5} />
+                              </ActionIcon>
+                            </Tooltip>
+                            <Modal opened={deleteResOpened} onClose={deleteResClose} title="Удалить ответственного" centered>
+                              <Group>
+                                <Button onClick={deleteResClose}>Отмена</Button>
+                                <Button onClick={() => {deleteResponsive(res.employee_id, 'ОТ'), deleteResClose()}}>Удалить</Button>
+                              </Group>
+                            </Modal>
+                          </Group>
+                        ))}
                       </Stack>
                     </Stack>
                   </Popover.Dropdown>
                 </Popover>
+                
                 <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }} truncate="end">
                 {branch.branch_address}
               </Text>
@@ -535,6 +553,34 @@ const LocalJournalTable = function LocalJournalTable({
               {isExpanded ? 'Свернуть' : 'Развернуть'}
             </Button>
           </Stack>
+          <Modal opened={responsibleOpened} onClose={responsibleClose} title="Назначение ответственных" centered>
+            <Stack gap='lg'>
+              <Stack>
+                <Text>Ответственный</Text>
+                <Group>
+                  <Select
+                    placeholder="Выберите сотрудника"
+                    data={branchEmployees.map((emp: any) => ({label: emp.fio, value: emp.uuid}))}
+                    value={responsible?.employeeId}
+                    onChange={(value) => setResponsible({...responsible, employeeId: value})}
+                    searchable
+                    clearable
+                    style={{ minWidth: 200 }}
+                  />
+                  <Select
+                    placeholder="ОТ или ПБ?"
+                    data={['ОТ', 'ПБ']}
+                    value={responsible?.responsibilityType}
+                    onChange={(value) => setResponsible({...responsible, responsibilityType: value})}
+                    searchable
+                    clearable
+                    w={150}
+                  />
+                </Group>
+              </Stack>
+              <Button variant='light' onClick={() => {addResponsive(), responsibleClose()}}>Назначить</Button>
+            </Stack>
+          </Modal>
         </Group>
 
         {/* Список журналов */}
