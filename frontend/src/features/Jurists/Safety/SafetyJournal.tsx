@@ -189,9 +189,11 @@ const LocalJournalTable = function LocalJournalTable({
                       }}
                     />
                   }
-                  <Text size="sm" fw={500} truncate='end'>
-                    {journal.journal_title}
-                  </Text>
+                  <Tooltip label={journal.journal_title} multiline w={275}>
+                    <Text size="sm" fw={500} truncate='end'>
+                      {journal.journal_title}
+                    </Text>
+                  </Tooltip>
                 </td>
                 <td className='table-cell'>
                   <Group gap="xs" align="center">
