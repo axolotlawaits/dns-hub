@@ -419,6 +419,9 @@ type ResponsibleObjDataType = {
     })
     if (response && response.ok) {
       console.log(response.json)
+      notificationSystem.addNotification('Успех', 'Ответственный добавлен', 'success')
+    } else {
+      notificationSystem.addNotification('Ошибка', 'Ошибка при добавлении ответственного', 'error')
     }
   }
 
@@ -435,7 +438,9 @@ type ResponsibleObjDataType = {
       }),
     })
     if (response && response.ok) {
-      console.log(response.json)
+      notificationSystem.addNotification('Успех', 'Ответственный удален', 'success')
+    } else {
+      notificationSystem.addNotification('Ошибка', 'Ошибка при удалении ответственного', 'error')
     }
   }
   const openDeleteModal = (id: string, type: 'ОТ' | 'ПБ') => {
@@ -1382,7 +1387,7 @@ export default function SafetyJournal() {
       subtitle: 'Управление журналами по охране труда и пожарной безопасности',
       icon: <Text size="xl" fw={700} c="white">🛡️</Text>,
       actionButton: {
-        text: 'Обновить данные',
+        text: 'Обновить',
         onClick: handleRefreshData,
         icon: <IconRefresh size={18} />,
         loading: loading
