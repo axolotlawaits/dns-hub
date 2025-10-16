@@ -367,7 +367,8 @@ type ResponsibleObjDataType = {
   }) {
   const [isExpanded, setIsExpanded] = useState(expandedBranches.has(branch.branch_id));
   const [responsibleOpened, { open: responsibleOpen, close: responsibleClose }] = useDisclosure(false)
-  const [deleteResOpened, { open: deleteResOpen, close: deleteResClose }] = useDisclosure(false)
+  const [deleteResId, setDeleteResId] = useState<string | null>(null)
+  const [deleteResType, setDeleteResType] = useState<string | null>(null)
   const [branchEmployees, setBranchEmployees] = useState([])
   const [responsible, setResponsible] = useState<ResponsibleEmployeeAddType>()
   const [responsibleData, setResponsibleData] = useState<ResponsibleObjDataType>()
@@ -419,8 +420,7 @@ type ResponsibleObjDataType = {
     }
   }
 
-  const deleteResponsive = async (employeeId: string, responsibilityType: 'ОТ' | 'ПБ') => {
-    console.log(employeeId, responsibilityType)
+  const deleteResponsive = async () => {
     const response = await authFetch(`${JOURNAL_API}/v1/branch_responsibles`, {
       method: 'DELETE',
       headers: {
@@ -428,13 +428,22 @@ type ResponsibleObjDataType = {
       },
       body: JSON.stringify({
         branchId: branch.branch_id,
-        employeeId,
-        responsibilityType
+        employeeId: deleteResId,
+        responsibilityType: deleteResType
       }),
     })
     if (response && response.ok) {
       console.log(response.json)
     }
+  }
+  const openDeleteModal = (id: string, type: 'ОТ' | 'ПБ') => {
+    setDeleteResId(id)
+    setDeleteResType(type)
+  }
+
+  const closeDeleteModal = () => {
+    setDeleteResId(null)
+    setDeleteResType(null)
   }
 
   return (
@@ -488,16 +497,10 @@ type ResponsibleObjDataType = {
                           <Group>
                             <Text size="xs" c="dimmed">{res.employee_name}</Text>
                             <Tooltip label="Удалить ответственного">
-                              <ActionIcon variant="filled" aria-label="Settings" size='sm' color='red' onClick={deleteResOpen}>
+                              <ActionIcon variant="filled" aria-label="Settings" size='sm' color='red' onClick={() => openDeleteModal(res.employee_id, 'ПБ')}>
                                 <IconX stroke={1.5} />
                               </ActionIcon>
                             </Tooltip>
-                            <Modal opened={deleteResOpened} onClose={deleteResClose} title="Удалить ответственного" centered>
-                              <Group>
-                                <Button onClick={deleteResClose}>Отмена</Button>
-                                <Button onClick={() => {deleteResponsive(res.employee_id, 'ПБ'), deleteResClose()}}>Удалить</Button>
-                              </Group>
-                            </Modal>
                           </Group>                         
                         ))}
                       </Stack>
@@ -508,16 +511,10 @@ type ResponsibleObjDataType = {
                           <Group>
                             <Text size="xs" c="dimmed">{res.employee_name}</Text>
                             <Tooltip label="Удалить ответственного">
-                              <ActionIcon variant="filled" aria-label="Settings" size='sm' color='red' onClick={deleteResOpen}>
+                              <ActionIcon variant="filled" aria-label="Settings" size='sm' color='red' onClick={() => openDeleteModal(res.employee_id, 'ОТ')}>
                                 <IconX stroke={1.5} />
                               </ActionIcon>
                             </Tooltip>
-                            <Modal opened={deleteResOpened} onClose={deleteResClose} title="Удалить ответственного" centered>
-                              <Group>
-                                <Button onClick={deleteResClose}>Отмена</Button>
-                                <Button onClick={() => {deleteResponsive(res.employee_id, 'ОТ'), deleteResClose()}}>Удалить</Button>
-                              </Group>
-                            </Modal>
                           </Group>
                         ))}
                       </Stack>
@@ -580,6 +577,13 @@ type ResponsibleObjDataType = {
               </Stack>
               <Button variant='light' onClick={() => {addResponsive(), responsibleClose()}}>Назначить</Button>
             </Stack>
+          </Modal>
+          <Modal opened={deleteResId !== null} onClose={closeDeleteModal} title="Удалить ответственного" centered>
+            <Group>
+              <p>{deleteResId} {deleteResType}</p>
+              <Button onClick={closeDeleteModal}>Отмена</Button>
+              <Button onClick={() => {deleteResponsive(), closeDeleteModal()}}>Удалить</Button>
+            </Group>
           </Modal>
         </Group>
 
