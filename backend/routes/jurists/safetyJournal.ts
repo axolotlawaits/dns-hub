@@ -11,7 +11,10 @@ import {
   makeBranchJournalDecision,
   testExternalApi,
   getJournalFilesList,
-  proxyFile
+  proxyFile,
+  getResponsible,
+  addResponsible,
+  deleteResponsible
 } from '../../controllers/jurists/safetyJournal.js';
 import { authenticateToken } from '../../middleware/auth.js';
 
@@ -61,5 +64,13 @@ router.patch('/branch_journals/:branchJournalId/decision', upload.none(), makeBr
 
 // Прокси для открытия файлов в новом окне
 router.get('/proxy-file', proxyFile as any);
+
+//Временные для ответственных
+
+router.get('/branch/responsible', getResponsible)
+
+router.post('/branch/responsible', addResponsible)
+
+router.delete('/branch/responsible', deleteResponsible)
 
 export default router;

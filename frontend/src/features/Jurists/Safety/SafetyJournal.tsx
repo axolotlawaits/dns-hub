@@ -396,17 +396,47 @@ type ResponsibleObjDataType = {
     getBranchEmployees()
   }
 
+  // const getResponsive = async () => {
+  //   const response = await authFetch(`${JOURNAL_API}/v1/branch_responsibles/?branchId=${branch.branch_id}`)
+  //   if (response && response.ok) {
+  //     const json = await response?.json()
+  //     const [responsible] = json
+  //     setResponsibleData(responsible)
+  //   }
+  // }
+
   const getResponsive = async () => {
-    const response = await authFetch(`${JOURNAL_API}/v1/branch_responsibles/?branchId=${branch.branch_id}`)
+    const response = await authFetch(`${API}/jurists/safety/branch/responsible?branchId=${branch.branch_id}`)
     if (response && response.ok) {
       const json = await response?.json()
       const [responsible] = json
+      console.log(json)
       setResponsibleData(responsible)
     }
   }
   
+  // const addResponsive = async () => {
+  //   const response = await authFetch(`${JOURNAL_API}/v1/branch_responsibles`, {
+  //     method: 'POST',
+  //     headers: {
+  //       'Content-Type': 'application/json',
+  //     },
+  //     body: JSON.stringify({
+  //       branchId: branch.branch_id,
+  //       employeeId: responsible?.employeeId,
+  //       responsibilityType: responsible?.responsibilityType
+  //     }),
+  //   })
+  //   if (response && response.ok) {
+  //     console.log(response.json)
+  //     notificationSystem.addNotification('Успех', 'Ответственный добавлен', 'success')
+  //   } else {
+  //     notificationSystem.addNotification('Ошибка', 'Ошибка при добавлении ответственного', 'error')
+  //   }
+  // }
+
   const addResponsive = async () => {
-    const response = await authFetch(`${JOURNAL_API}/v1/branch_responsibles`, {
+    const response = await authFetch(`${API}/jurists/safety/branch/responsible`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -417,16 +447,35 @@ type ResponsibleObjDataType = {
         responsibilityType: responsible?.responsibilityType
       }),
     })
+
     if (response && response.ok) {
-      console.log(response.json)
       notificationSystem.addNotification('Успех', 'Ответственный добавлен', 'success')
     } else {
       notificationSystem.addNotification('Ошибка', 'Ошибка при добавлении ответственного', 'error')
     }
   }
 
+  // const deleteResponsive = async () => {
+  //   const response = await authFetch(`${JOURNAL_API}/v1/branch_responsibles`, {
+  //     method: 'DELETE',
+  //     headers: {
+  //       'Content-Type': 'application/json',
+  //     },
+  //     body: JSON.stringify({
+  //       branchId: branch.branch_id,
+  //       employeeId: deleteResId,
+  //       responsibilityType: deleteResType
+  //     }),
+  //   })
+  //   if (response && response.ok) {
+  //     notificationSystem.addNotification('Успех', 'Ответственный удален', 'success')
+  //   } else {
+  //     notificationSystem.addNotification('Ошибка', 'Ошибка при удалении ответственного', 'error')
+  //   }
+  // }
+
   const deleteResponsive = async () => {
-    const response = await authFetch(`${JOURNAL_API}/v1/branch_responsibles`, {
+    const response = await authFetch(`${API}/jurists/safety/branch/responsible`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -443,6 +492,7 @@ type ResponsibleObjDataType = {
       notificationSystem.addNotification('Ошибка', 'Ошибка при удалении ответственного', 'error')
     }
   }
+
   const openDeleteModal = (id: string, type: 'ОТ' | 'ПБ') => {
     setDeleteResId(id)
     setDeleteResType(type)
