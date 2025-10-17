@@ -85,7 +85,6 @@ function App() {
                 top: 0,
                 left: 0,
                 right: 0,
-                zIndex: 1000
               },
               navbar: {
                 border: 'none',
@@ -93,7 +92,6 @@ function App() {
                 top: '64px',
                 left: 0,
                 bottom: '65px',
-                zIndex: 999
               },
               main: {
                 padding: '20px 0 20px 20px',
@@ -105,7 +103,6 @@ function App() {
                 overflow: 'auto',
                 transition: 'margin-left 0.2s ease',
                 position: 'relative',
-                zIndex: 1,
                 backgroundColor: 'var(--theme-bg-primary)'
               },
               footer: {
@@ -114,7 +111,6 @@ function App() {
                 bottom: 0,
                 left: 0,
                 right: 0,
-                zIndex: 1000
               }
             }}
           >

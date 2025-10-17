@@ -167,7 +167,6 @@ a:active {
   right: 0;
   background: transparent;
   border: 0px;
-  z-index: 1000;
   box-sizing: border-box;
 }
 

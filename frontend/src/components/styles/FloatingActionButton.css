@@ -72,10 +72,8 @@
 /* Темная тема */
 [data-mantine-color-scheme="dark"] .fab-button {
   background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700)) !important;
-  box-shadow: 0 8px 32px rgba(14, 165, 233, 0.4) !important;
 }
 
 [data-mantine-color-scheme="dark"] .fab-button:hover {
   background: linear-gradient(135deg, var(--color-primary-700), var(--color-primary-800)) !important;
-  box-shadow: 0 12px 40px rgba(14, 165, 233, 0.5) !important;
 }

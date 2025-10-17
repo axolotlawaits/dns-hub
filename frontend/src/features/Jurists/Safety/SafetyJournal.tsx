@@ -501,7 +501,7 @@ type ResponsibleObjDataType = {
                         <Text size="xs" fw={500} c="blue">По пожарной безопасности:</Text>
                         {responsibleData && responsibleData.responsibles?.length > 0 && 
                         responsibleData.responsibles.filter(res => res.responsibility_type === 'ПБ').map(res => (
-                          <Group>
+                          <Group key={res.employee_id}>
                             <Text size="xs" c="dimmed">{res.employee_name}</Text>
                             <Tooltip label="Удалить ответственного">
                               <ActionIcon variant="light" aria-label="Settings" size='sm' color='red' onClick={() => openDeleteModal(res.employee_id, 'ПБ')}>
@@ -515,7 +515,7 @@ type ResponsibleObjDataType = {
                         <Text size="xs" fw={500} c="green">По охране труда:</Text>
                         {responsibleData && responsibleData.responsibles?.length > 0 && 
                           responsibleData.responsibles.filter(res => res.responsibility_type === 'ОТ').map(res => (
-                          <Group>
+                          <Group key={res.employee_id}>
                             <Text size="xs" c="dimmed">{res.employee_name}</Text>
                             <Tooltip label="Удалить ответственного">
                               <ActionIcon variant="light" aria-label="Settings" size='sm' color='red' onClick={() => openDeleteModal(res.employee_id, 'ОТ')}>
@@ -601,16 +601,16 @@ type ResponsibleObjDataType = {
                 Нет журналов в этом филиале
               </Text>
             ) : (
-                     <LocalJournalTable
-                       key={`${branch.branch_id}-${branch.journals.length}-${branch.journals.map(j => j.status).join(',')}-${forceUpdate}`}
-                       journals={branch.journals}
-                       onApproveJournal={onApproveJournal}
-                       onRejectJournal={onRejectJournal}
-                       onUnderReviewJournal={onUnderReviewJournal}
-                       onViewFile={onViewFile}
-                       onUploadFiles={onUploadFiles}
-                       canManageStatuses={canManageStatuses}
-                     />
+              <LocalJournalTable
+                key={`${branch.branch_id}-${branch.journals.length}-${branch.journals.map(j => j.status).join(',')}-${forceUpdate}`}
+                journals={branch.journals}
+                onApproveJournal={onApproveJournal}
+                onRejectJournal={onRejectJournal}
+                onUnderReviewJournal={onUnderReviewJournal}
+                onViewFile={onViewFile}
+                onUploadFiles={onUploadFiles}
+                canManageStatuses={canManageStatuses}
+              />
             )}
           </Box>
         )}
@@ -1478,7 +1478,7 @@ export default function SafetyJournal() {
           style={{
             position: 'sticky',
             top: '0',
-            zIndex: 1000,
+            zIndex: 1,
             background: 'var(--theme-bg-primary)',
             borderBottom: '1px solid var(--theme-border-primary)',
             boxShadow: 'var(--theme-shadow-md)',

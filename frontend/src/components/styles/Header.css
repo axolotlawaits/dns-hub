@@ -9,7 +9,6 @@
   backdrop-filter: blur(8px);
   position: sticky;
   top: 0;
-  z-index: var(--z-sticky);
   transition: var(--transition-all);
 }
 
