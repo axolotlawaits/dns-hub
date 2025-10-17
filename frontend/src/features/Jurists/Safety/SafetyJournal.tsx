@@ -1389,7 +1389,7 @@ export default function SafetyJournal() {
       actionButton: {
         text: 'Обновить',
         onClick: handleRefreshData,
-        icon: <IconRefresh size={18} />,
+        icon: <IconRefresh size={22} />,
         loading: loading
       }
     });
@@ -1748,7 +1748,7 @@ export default function SafetyJournal() {
       <ActionIcon variant="filled" size={50} aria-label="Settings" onClick={qrOpen}
         style={{  
           position: 'fixed',
-          bottom: '150px',
+          bottom: '225px',
           right: '40px',
           zIndex: '1000',
           pointerEvents: 'auto'
