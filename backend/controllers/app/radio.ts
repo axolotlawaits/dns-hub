@@ -121,7 +121,7 @@ export const uploadMusic = async (req: Request, res: Response): Promise<any> => 
     }
     
     const folderName = getCurrentMonthFolder();
-    const fileName = req.file.originalname;
+    const fileName = req.file.filename;
     const filePath = req.file.path; // Файл уже в правильном месте благодаря middleware
     
     console.log('File details:', {
@@ -607,76 +607,8 @@ export const actionRestartApp = async (req: Request, res: Response) => {
   }
 };
 
-export const actionGetTime = async (req: Request, res: Response) => {
-  try {
-    const { deviceId } = req.params as any;
-    const socketService = SocketIOService.getInstance();
-    const result = await socketService.sendToDeviceWithAck(deviceId, 'device_get_time');
-    if (!result.ok) {
-      return res.json({ success: false, error: result.error || 'DEVICE_OFFLINE' });
-    }
-    const data: any = result.data || {};
-    
-    // Handle case where data might be a string representation
-    let deviceTimeMs = data.deviceTimeMs;
-    if (!deviceTimeMs && typeof data === 'string') {
-      // Try to parse string format like '{deviceTimeMs=1756880475288, timezone=Europe/Moscow}'
-      const match = data.match(/deviceTimeMs=(\d+)/);
-      if (match) {
-        deviceTimeMs = parseInt(match[1]);
-      }
-    }
-    
-    if (!deviceTimeMs) {
-      return res.json({ success: false, error: 'NO_TIME_DATA' });
-    }
-    
-    // Ensure we have proper data structure
-    const responseData = {
-      deviceTimeMs: deviceTimeMs,
-      timezone: data.timezone || 'Europe/Moscow'
-    };
-    res.json({ success: true, data: responseData });
-  } catch (error) {
-    console.error('Error requesting device time:', error);
-    res.status(500).json({ success: false, error: 'Ошибка запроса времени устройства' });
-  }
-};
 
-// Синхронизация времени с сервером
-export const actionSyncTime = async (req: Request, res: Response) => {
-  try {
-    const { deviceId } = req.params as any;
-    const socketService = SocketIOService.getInstance();
-    const serverTime = new Date().toISOString();
-    const result = await socketService.sendToDeviceWithAck(deviceId, 'device_sync_time', { serverTime });
-    if (!result.ok) return res.json({ success: false, error: result.error || 'DEVICE_OFFLINE' });
-    res.json({ success: true, data: { serverTime, deviceTime: result.data } });
-  } catch (error) {
-    console.error('Error syncing time:', error);
-    res.status(500).json({ success: false, error: 'Ошибка синхронизации времени' });
-  }
-};
 
-// Установка времени вручную
-export const actionSetTime = async (req: Request, res: Response) => {
-  try {
-    const { deviceId } = req.params as any;
-    const { dateTime } = req.body;
-    
-    if (!dateTime) {
-      return res.status(400).json({ success: false, error: 'dateTime обязателен' });
-    }
-
-    const socketService = SocketIOService.getInstance();
-    const result = await socketService.sendToDeviceWithAck(deviceId, 'device_set_time', { dateTime });
-    if (!result.ok) return res.json({ success: false, error: result.error || 'DEVICE_OFFLINE' });
-    res.json({ success: true, data: result.data });
-  } catch (error) {
-    console.error('Error setting time:', error);
-    res.status(500).json({ success: false, error: 'Ошибка установки времени' });
-  }
-};
 
 // Получение статуса устройства
 export const actionGetDeviceStatus = async (req: Request, res: Response) => {
@@ -851,13 +783,8 @@ export const createRadioStream = async (req: Request, res: Response): Promise<an
       
       // Файл уже в правильном месте благодаря middleware
       if (fs.existsSync(req.file.path)) {
-        // Исправляем кодировку русских символов в названии файла
-        const correctedFileName = decodeRussianFileName(req.file.originalname);
-        console.log('File name encoding correction:', {
-          original: req.file.originalname,
-          corrected: correctedFileName
-        });
-        attachmentPath = correctedFileName;
+        // Используем название файла как оно сохранено на диске
+        attachmentPath = req.file.filename;
         console.log('Attachment path set to:', attachmentPath);
       } else {
         console.error('File does not exist at path:', req.file.path);
@@ -906,25 +833,20 @@ export const uploadStreamRoll = async (req: Request, res: Response): Promise<any
       return res.status(400).json({ error: 'ID потока обязателен' });
     }
 
-    // Исправляем кодировку русских символов в названии файла
-    const correctedFileName = decodeRussianFileName(req.file.originalname);
-    console.log('File name encoding correction:', {
-      original: req.file.originalname,
-      corrected: correctedFileName
-    });
-    
+    // Используем название файла как оно сохранено на диске
+    const fileName = req.file.filename;
     const filePath = req.file.path; // Файл уже в правильном месте благодаря middleware
 
-    // Обновляем запись в базе данных - записываем исправленное название файла
+    // Обновляем запись в базе данных - записываем название файла
     const stream = await prisma.radioStream.update({
       where: { id: streamId },
-      data: { attachment: correctedFileName }
+      data: { attachment: fileName }
     });
 
     return res.status(200).json({
       success: true,
       message: 'Ролик загружен успешно',
-      fileName: correctedFileName,
+      fileName: fileName,
       streamId,
       path: filePath
     });
@@ -977,14 +899,9 @@ export const updateRadioStream = async (req: Request, res: Response): Promise<an
       
       // Файл уже в правильном месте благодаря middleware
       if (fs.existsSync(req.file.path)) {
-        // Исправляем кодировку русских символов в названии файла
-        const correctedFileName = decodeRussianFileName(req.file.originalname);
-        console.log('File name encoding correction:', {
-          original: req.file.originalname,
-          corrected: correctedFileName
-        });
-        updateData.attachment = correctedFileName;
-        console.log('Attachment path set to:', correctedFileName);
+        // Используем название файла как оно сохранено на диске
+        updateData.attachment = req.file.filename;
+        console.log('Attachment path set to:', req.file.filename);
       } else {
         console.error('File does not exist at path:', req.file.path);
       }
@@ -1121,10 +1038,11 @@ export const downloadStreamFile = async (req: Request, res: Response): Promise<a
       
       // Ищем файл, который может соответствовать нашему потоку
       const matchingFile = files.find(file => {
-        // Декодируем название файла и сравниваем с attachment из базы данных
-        const decodedFileName = decodeRussianFileName(file);
-        console.log('Comparing:', decodedFileName, 'with', stream.attachment);
-        return decodedFileName === stream.attachment;
+        // Сравниваем название файла с attachment из базы данных
+        // Также проверяем, может ли файл быть с исправленным названием
+        const correctedFile = decodeRussianFileName(file);
+        console.log('Comparing:', file, 'corrected:', correctedFile, 'with', stream.attachment);
+        return file === stream.attachment || correctedFile === stream.attachment;
       });
       
       if (matchingFile) {

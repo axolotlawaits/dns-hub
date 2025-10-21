@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Notifications } from '@mantine/notifications';
 import { useDisclosure } from '@mantine/hooks';
 import { AppShell } from '@mantine/core';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import '@mantine/core/styles.css';
 import '@mantine/dates/styles.css';
 import '@mantine/notifications/styles.css';
@@ -55,16 +56,18 @@ import Bookmarks from './Bookmarks';
 import Notification from './Notification';
 import Radio from '../features/Retail/Radio/Radio';
 import AppStore from '../features/Retail/AppStore/AppStore';
+import BugReports from '../features/Retail/BugReports/BugReports';
 
 function App() {
   const { user } = useUserContext();
   const [navOpened, { toggle: toggleNav }] = useDisclosure(true);
 
   return (
-    <BrowserRouter>
-      <PageHeaderProvider>
-        <Notifications />
-        <Routes>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <PageHeaderProvider>
+          <Notifications />
+          <Routes>
         <Route path='/*' element={!user ?
           <Navigate to='/login' />
           :
@@ -164,6 +167,7 @@ function App() {
                   <Route path='/jurists/safety' element={<Safety />} />
                   <Route path="/add/rk" element={<RK />} />
                   <Route path='/retail/radio' element={<Radio />} />
+                  <Route path='/retail/bug-reports' element={<BugReports />} />
                 </Route>
                 <Route path='/supply/loaders' element={<LoadersHome />} />
                 <Route path='/supply/loaders/route/:id' element={<RouteComponent />} />
@@ -175,9 +179,10 @@ function App() {
           </AppShell>
         } />
         <Route path="/login" element={<Login />} />
-        </Routes>
-      </PageHeaderProvider>
-    </BrowserRouter>
+          </Routes>
+        </PageHeaderProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }
 

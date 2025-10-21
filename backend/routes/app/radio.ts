@@ -1,6 +1,6 @@
 import express, { RequestHandler } from 'express';
 import uploadRadio from '../../middleware/uploaderRadio.js';
-import {  createMusicFolder,  uploadMusic,  getMusicFolders,  getMusicInFolder,  deleteMusicFolder, getDevicesByBranches, getDevicesStatus, getDevicesStatusPing, updateDeviceTime, updateBranchDevicesTime, getDevicesStats, getDeviceInfo, actionRestartApp, actionGetTime, actionSyncTime, actionSetTime, actionGetDeviceStatus, actionGetAppVersion, actionConfigureWifi, actionReboot, actionUpdateApp, getRadioStreams, createRadioStream, uploadStreamRoll, updateRadioStream, deleteRadioStream, getActiveStreamsByBranchType, downloadStreamFile, playRadioStream} from '../../controllers/app/radio.js';
+import {  createMusicFolder,  uploadMusic,  getMusicFolders,  getMusicInFolder,  deleteMusicFolder, getDevicesByBranches, getDevicesStatus, getDevicesStatusPing, updateDeviceTime, updateBranchDevicesTime, getDevicesStats, getDeviceInfo, actionRestartApp, actionGetDeviceStatus, actionGetAppVersion, actionConfigureWifi, actionReboot, actionUpdateApp, getRadioStreams, createRadioStream, uploadStreamRoll, updateRadioStream, deleteRadioStream, getActiveStreamsByBranchType, downloadStreamFile, playRadioStream} from '../../controllers/app/radio.js';
 
 const router = express.Router();
 const h = (fn: any) => fn as unknown as RequestHandler;
@@ -31,9 +31,6 @@ router.put('/devices/:deviceId/time', h(updateDeviceTime));
 router.put('/branches/:branchId/devices/time', h(updateBranchDevicesTime));
 router.post('/devices/:deviceId/restart-app', h(actionRestartApp));
 router.post('/devices/:deviceId/reboot', h(actionReboot));
-router.post('/devices/:deviceId/get-time', h(actionGetTime));
-router.post('/devices/:deviceId/sync-time', h(actionSyncTime));
-router.post('/devices/:deviceId/set-time', h(actionSetTime));
 router.post('/devices/:deviceId/get-status', h(actionGetDeviceStatus));
 router.post('/devices/:deviceId/get-app-version', h(actionGetAppVersion));
 router.post('/devices/:deviceId/configure-wifi', h(actionConfigureWifi));

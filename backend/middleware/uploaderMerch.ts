@@ -1,6 +1,7 @@
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { decodeRussianFileName } from '../utils/format.js';
 
 // Создаем директорию для мерч-файлов, если её нет
 const merchUploadDir = path.join(process.cwd(), 'public', 'add', 'merch');
@@ -15,12 +16,10 @@ const storage = multer.diskStorage({
     cb(null, merchUploadDir);
   },
   filename: (req, file, cb) => {
-    // Генерируем уникальное имя файла с timestamp
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    const filename = `merch-${uniqueSuffix}${ext}`;
-    console.log(`📄 [uploaderMerch] Генерируем имя файла: ${file.originalname} -> ${filename}`);
-    cb(null, filename);
+    // Исправляем кодировку русских символов и сохраняем оригинальное название
+    const correctedFileName = decodeRussianFileName(file.originalname);
+    console.log(`📄 [uploaderMerch] Исправляем кодировку: ${file.originalname} -> ${correctedFileName}`);
+    cb(null, correctedFileName);
   }
 });
 

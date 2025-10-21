@@ -50,7 +50,7 @@ const AttachmentCard = React.memo(function AttachmentCard({
   const today = dayjs().startOf('day');
   const diff = agreed ? agreed.diff(today, 'day') : null;
   const normalizedPath = String(att.source || '').replace(/\\/g, '/');
-  const fileUrl = `${apiBase}/${normalizedPath}`;
+  const fileUrl = `${apiBase}/public/add/RK/${att.source}`;
   const isDocument = att.typeAttachment === 'DOCUMENT';
 
   // Функция для определения типа файла и получения иконки
@@ -1518,11 +1518,10 @@ return (
                                         {group.documents.slice(0, 4).map((doc: any, docIndex: number) => {
                                           const sourcePath = String(doc.source || '');
                                           const fileName = sourcePath.split('/').pop() || 'Документ';
-                                          const normalizedPath = sourcePath
-                                            .replace(/\\/g, '/')
+                                          const normalizedPath = `${apiBase}/public/add/RK/${sourcePath}`
                                             .replace(/\/+/g, '/')
                                             .replace(/^\/+/, '');
-                                          const fileUrl = `${API}/${normalizedPath}`;
+                                          const fileUrl = normalizedPath;
                                           return (
                                             <Box
                                               key={docIndex}
@@ -1724,11 +1723,10 @@ return (
                                     {unassignedDocuments.slice(0, 4).map((att: any, index: number) => {
                                       const sourcePath = String(att.source || '');
                                       const fileName = sourcePath.split('/').pop() || 'Документ';
-                                      const normalizedPath = sourcePath
-                                        .replace(/\\/g, '/')
+                                      const normalizedPath = `${apiBase}/public/add/RK/${sourcePath}`
                                         .replace(/\/+/g, '/')
                                         .replace(/^\/+/, '');
-                                      const fileUrl = `${API}/${normalizedPath}`;
+                                      const fileUrl = normalizedPath;
                                       return (
                                         <Box
                                           key={index}

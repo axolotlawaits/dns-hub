@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import {Container,Title,Paper,Text,Button,Group,Stack,Modal,LoadingOverlay, Tabs, Box, Progress, Badge} from '@mantine/core';
 import { TimeInput } from '@mantine/dates';
-import {  IconUpload,  IconMusic,  IconClock,  IconDeviceMobile,  IconBuilding, IconEdit, IconCheck, IconRefresh, IconPower, IconBattery, IconWifi, IconCalendar, IconPlayerPlay, IconPlayerPause, IconWifiOff, IconX, IconRadio, IconDownload, IconAlertCircle, IconChevronDown, IconChevronRight, IconChevronsDown, IconChevronsUp } from '@tabler/icons-react';
+import {  IconUpload,  IconMusic,  IconClock,  IconDeviceMobile,  IconBuilding, IconEdit, IconCheck, IconRefresh, IconPower, IconBattery, IconWifi, IconCalendar, IconPlayerPlay, IconPlayerPause, IconWifiOff, IconX, IconRadio, IconDownload, IconAlertCircle, IconChevronDown, IconChevronRight, IconChevronsDown, IconChevronsUp, IconSearch } from '@tabler/icons-react';
 import { notificationSystem } from '../../../utils/Push';
 import { API } from '../../../config/constants';
 import { DynamicFormModal, FormField } from '../../../utils/formModal';
@@ -11,6 +11,7 @@ import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { decodeRussianFileName } from '../../../utils/format';
 import { useUserContext } from '../../../hooks/useUserContext';
 import { useAccessContext } from '../../../hooks/useAccessContext';
+import { FilterGroup } from '../../../utils/filter';
 import WebRadioPlayer from './components/WebRadioPlayer';
 import './Radio.css';
 import '../../../app/styles/DesignSystem.css';
@@ -21,6 +22,7 @@ interface Device {
   name: string;
   branchId: string;
   branchName: string;
+  rrs?: string;
   timeFrom: string;
   timeUntil: string;
   activity: string;
@@ -32,7 +34,7 @@ interface Device {
   createdAt: string;
   user?: {
     id: string;
-    name: string;
+  name: string;
     login: string;
   };
 }
@@ -104,6 +106,19 @@ const RadioAdmin: React.FC = () => {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  
+  // Настройки времени воспроизведения
+  const [workingTimeSettings, setWorkingTimeSettings] = useState({
+    start: "08:00",
+    end: "22:00"
+  });
+  
+  
+  // Функция для изменения времени воспроизведения
+  const handleTimeChange = useCallback((newTime: { start: string; end: string }) => {
+    setWorkingTimeSettings(newTime);
+    notificationSystem.addNotification('Настройки обновлены', `Время воспроизведения: ${newTime.start}-${newTime.end}`, 'success');
+  }, []);
 
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -119,14 +134,15 @@ const RadioAdmin: React.FC = () => {
   const [streamModalMode, setStreamModalMode] = useState<'create' | 'edit' | 'view' | 'delete'>('create');
   const [selectedStream, setSelectedStream] = useState<RadioStream | null>(null);
 
+  // Состояние для фильтров устройств (для FilterGroup)
+  const [deviceColumnFilters, setDeviceColumnFilters] = useState<any[]>([]);
+
   
   // Device Management Modal
   const [deviceModalOpen, setDeviceModalOpen] = useState(false);
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
 
   const [deviceStatus, setDeviceStatus] = useState<any>(null);
-  const [, setDeviceTime] = useState<string>('');
-  const [manualTime, setManualTime] = useState<string>('');
 
   const [loadingDeviceAction, setLoadingDeviceAction] = useState<string | null>(null);
   const [editingPlaybackTime, setEditingPlaybackTime] = useState({ timeFrom: '', timeUntil: '' });
@@ -163,6 +179,11 @@ const RadioAdmin: React.FC = () => {
 
   const collapseAllBranches = useCallback(() => {
     setExpandedBranches(new Set());
+  }, []);
+
+  // Функции для управления фильтрами устройств
+  const clearDeviceFilters = useCallback(() => {
+    setDeviceColumnFilters([]);
   }, []);
 
   // Определяем права доступа на основе роли пользователя
@@ -203,6 +224,14 @@ const RadioAdmin: React.FC = () => {
     return false;
   }, [radioAccess, isSupervisorOrEmployee]);
 
+  // Состояние активной вкладки
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    if (hasReadOnlyAccess) {
+      return "devices"; // Для пользователей с доступом только для чтения сразу показываем устройства
+    }
+    return "music"; // Для остальных показываем музыку
+  });
+
   // Функция для форматирования месяца (09-2025 -> Сентябрь 2025)
   const formatMonth = useCallback((monthStr: string) => {
     if (!monthStr || monthStr === 'N/A') return 'N/A';
@@ -223,6 +252,60 @@ const RadioAdmin: React.FC = () => {
     
     return monthStr; // Возвращаем исходную строку, если формат не распознан
   }, []);
+
+  // Получение уникальных РРС из всех устройств
+  const rrsOptions = useMemo(() => {
+    const rrsSet = new Set<string>();
+    branchesWithDevices.forEach(branch => {
+      branch.devices.forEach(device => {
+        if (device.rrs) {
+          rrsSet.add(device.rrs);
+        }
+      });
+    });
+    return Array.from(rrsSet).map(rrs => ({ value: rrs, label: rrs }));
+  }, [branchesWithDevices]);
+
+  // Конфигурация фильтров для FilterGroup
+  const deviceFiltersConfig = useMemo(() => [
+    {
+      columnId: 'rrs',
+      type: 'select' as const,
+      label: 'РРС',
+      placeholder: 'Выберите РРС',
+      options: rrsOptions,
+      icon: <IconBuilding size={16} />
+    },
+    {
+      columnId: 'branchId',
+      type: 'select' as const,
+      label: 'Филиал',
+      placeholder: 'Выберите филиал',
+      options: branchesWithDevices.map(branch => ({
+        value: branch.branch.uuid,
+        label: branch.branch.name
+      })),
+      icon: <IconBuilding size={16} />
+    },
+    {
+      columnId: 'status',
+      type: 'select' as const,
+      label: 'Статус',
+      placeholder: 'Выберите статус',
+      options: [
+        { value: 'online', label: 'Онлайн' },
+        { value: 'offline', label: 'Оффлайн' }
+      ],
+      icon: <IconWifi size={16} />
+    },
+    {
+      columnId: 'search',
+      type: 'text' as const,
+      label: 'Поиск',
+      placeholder: 'Поиск по названию...',
+      icon: <IconSearch size={16} />
+    }
+  ], [rrsOptions, branchesWithDevices]);
 
   // Мемоизация устройств в зависимости от роли пользователя и групп доступа
   const currentBranchDevices = useMemo(() => {
@@ -249,6 +332,40 @@ const RadioAdmin: React.FC = () => {
     return [];
   }, [branchesWithDevices, hasFullAccess, hasReadOnlyAccess, user]);
 
+  // Фильтрация устройств для полного доступа
+  const filteredDevices = useMemo(() => {
+    if (!hasFullAccess) return currentBranchDevices;
+    
+    return currentBranchDevices.filter(device => {
+      // Фильтр по РРС
+      const rrsFilter = deviceColumnFilters.find(f => f.id === 'rrs')?.value as string[] | undefined;
+      if (rrsFilter && rrsFilter.length > 0 && device.rrs && !rrsFilter.includes(device.rrs)) return false;
+      
+      // Фильтр по филиалу
+      const branchFilter = deviceColumnFilters.find(f => f.id === 'branchId')?.value as string[] | undefined;
+      if (branchFilter && branchFilter.length > 0 && !branchFilter.includes(device.branchId)) return false;
+      
+      // Фильтр по статусу онлайн/оффлайн
+      const statusFilter = deviceColumnFilters.find(f => f.id === 'status')?.value as string[] | undefined;
+      if (statusFilter && statusFilter.length > 0) {
+        const isOnline = !!statusMap[device.id];
+        const status = isOnline ? 'online' : 'offline';
+        if (!statusFilter.includes(status)) return false;
+      }
+      
+      // Фильтр по поиску
+      const searchFilter = deviceColumnFilters.find(f => f.id === 'search')?.value as string | undefined;
+      if (searchFilter && searchFilter.trim()) {
+        const searchLower = searchFilter.toLowerCase();
+        return device.name.toLowerCase().includes(searchLower) ||
+               device.vendor.toLowerCase().includes(searchLower) ||
+               device.branchName.toLowerCase().includes(searchLower);
+      }
+      
+      return true;
+    });
+  }, [currentBranchDevices, deviceColumnFilters, statusMap, hasFullAccess]);
+
   // Группировка потоков по типам филиалов
   const streamsByType = useMemo(() => {
     const grouped = radioStreams.reduce((acc, stream) => {
@@ -274,14 +391,6 @@ const RadioAdmin: React.FC = () => {
 
     return grouped;
   }, [radioStreams]);
-
-  // Определяем вкладку по умолчанию в зависимости от уровня доступа
-  const defaultTab = useMemo(() => {
-    if (hasReadOnlyAccess) {
-      return "devices"; // Для пользователей с доступом только для чтения сразу показываем устройства
-    }
-    return "music"; // Для остальных показываем музыку
-  }, [hasReadOnlyAccess]);
 
   // Проверка состояния музыки
   const musicStatus = useMemo(() => {
@@ -477,7 +586,8 @@ const RadioAdmin: React.FC = () => {
   // Функция для загрузки статусов устройств
   const loadDeviceStatuses = useCallback(async () => {
     try {
-      const statusResp = await axios.get(`${API_BASE}/devices-status-ping`);
+      // Используем devices-status вместо devices-status-ping для розницы (включает веб-плеер)
+      const statusResp = await axios.get(`${API_BASE}/devices-status`);
       const arr = (statusResp.data && statusResp.data.data) ? statusResp.data.data : [];
       const sm: Record<string, boolean> = {};
       for (const item of arr) {
@@ -909,7 +1019,7 @@ const RadioAdmin: React.FC = () => {
     });
 
     return () => clearHeader();
-  }, [setHeader, clearHeader, hasFullAccess, hasReadOnlyAccess]);
+  }, [setHeader, clearHeader, hasFullAccess, hasReadOnlyAccess, workingTimeSettings]);
 
   // Периодическое обновление статусов устройств
   useEffect(() => {
@@ -949,26 +1059,14 @@ const RadioAdmin: React.FC = () => {
         try {
           const date = new Date(response.data.data.deviceTimeMs);
           if (!isNaN(date.getTime())) {
-            const deviceTime = date.toISOString();
-            setDeviceTime(deviceTime);
-            setManualTime(deviceTime);
-          } else {
-            setDeviceTime('');
-            setManualTime('');
+            // Время устройства получено, но не сохраняем в состояние
           }
         } catch (error) {
           console.error('Error parsing device time:', error);
-          setDeviceTime('');
-          setManualTime('');
         }
-      } else {
-        setDeviceTime('');
-        setManualTime('');
       }
     } catch (error: any) {
       console.error('Error loading device time:', error);
-      setDeviceTime('');
-      setManualTime('');
       // Не показываем ошибку, так как устройство может быть офлайн
     }
   }, [API_BASE]);
@@ -992,6 +1090,12 @@ const RadioAdmin: React.FC = () => {
     setSelectedDevice(device);
     setDeviceModalOpen(true);
     setEditingPlaybackTime({ timeFrom: device.timeFrom, timeUntil: device.timeUntil });
+    
+    // Для веб-плеера не загружаем дополнительную информацию
+    if (device.vendor === 'Web Browser') {
+      return;
+    }
+    
     await loadDeviceStatus(device.id);
     await loadDeviceTime(device.id);
     await loadDeviceAppVersion(device.id);
@@ -999,56 +1103,7 @@ const RadioAdmin: React.FC = () => {
     await checkDeviceUpdate(device);
   }, [API_BASE, checkDeviceUpdate, loadDeviceAppVersion, loadDeviceStatus, loadDeviceTime]);
 
-  const syncTime = useCallback(async () => {
-    if (!selectedDevice) return;
-    
-    setLoadingDeviceAction('sync-time');
-    try {
-      const response = await axios.post(`${API_BASE}/devices/${selectedDevice.id}/sync-time`);
-      if (response.data.success) {
-        try {
-          const deviceTime = response.data.data.deviceTime;
-          if (deviceTime) {
-            const date = new Date(deviceTime);
-            if (!isNaN(date.getTime())) {
-              setDeviceTime(deviceTime);
-              setManualTime(deviceTime);
-              notificationSystem.addNotification('Успешно', 'Время синхронизировано с сервером', 'success');
-            } else {
-              console.error('Invalid device time from sync:', deviceTime);
-              notificationSystem.addNotification('Ошибка', 'Получено некорректное время от устройства', 'error');
-            }
-          }
-        } catch (error) {
-          console.error('Error processing sync time:', error);
-          notificationSystem.addNotification('Ошибка', 'Ошибка обработки времени синхронизации', 'error');
-        }
-      }
-    } catch (error: any) {
-      notificationSystem.addNotification('Ошибка', 'Ошибка синхронизации времени', 'error');
-    } finally {
-      setLoadingDeviceAction(null);
-    }
-  }, [selectedDevice, API_BASE]);
 
-  const setTime = async () => {
-    if (!selectedDevice || !manualTime) return;
-    
-    setLoadingDeviceAction('set-time');
-    try {
-      const response = await axios.post(`${API_BASE}/devices/${selectedDevice.id}/set-time`, {
-        dateTime: manualTime
-      });
-      if (response.data.success) {
-        setDeviceTime(manualTime);
-        notificationSystem.addNotification('Успешно', 'Время установлено', 'success');
-      }
-    } catch (error: any) {
-      notificationSystem.addNotification('Ошибка', 'Ошибка установки времени', 'error');
-    } finally {
-      setLoadingDeviceAction(null);
-    }
-  };
 
   const restartApp = async () => {
     if (!selectedDevice) return;
@@ -1319,7 +1374,7 @@ const RadioAdmin: React.FC = () => {
             shadow="sm"
             style={{
               background: 'var(--theme-bg-elevated)',
-              border: '1px solid var(--theme-border)',
+              
               backdropFilter: 'blur(8px)',
               WebkitBackdropFilter: 'blur(8px)'
             }}
@@ -1327,14 +1382,14 @@ const RadioAdmin: React.FC = () => {
             {hasReadOnlyAccess ? (
               // Для пользователей с доступом только для чтения показываем только заголовок
               <Group justify="space-between" align="center">
-                <div>
+                    <div>
                   <Title order={3} size="h4" style={{ color: 'var(--theme-text-primary)' }}>
                     Устройства
                   </Title>
                   <Text size="sm" c="dimmed">
                     Управление устройствами вашего филиала
                   </Text>
-                </div>
+                    </div>
                 <div style={{
                   padding: '6px 12px',
                   backgroundColor: 'var(--color-primary-500)',
@@ -1345,11 +1400,12 @@ const RadioAdmin: React.FC = () => {
                 }}>
                   {currentBranchDevices.length} устройств
                 </div>
-              </Group>
+                  </Group>
             ) : (
               // Для пользователей с полным доступом показываем вкладки
               <Tabs 
-                defaultValue={defaultTab}
+                value={activeTab}
+                onChange={(value) => setActiveTab(value || "devices")}
                 variant="pills"
                 classNames={{
                   list: 'radio-tabs-list',
@@ -1415,6 +1471,20 @@ const RadioAdmin: React.FC = () => {
                       ({currentBranchDevices.filter(device => statusMap[device.id]).length}/{currentBranchDevices.length})
                     </Text>
                   )}
+                </Tabs.Tab>
+                <Tabs.Tab 
+                  value="webplayer" 
+                  leftSection={<IconPlayerPlay size={20} />}
+                  className="radio-tab-item"
+                  style={{
+                    borderRadius: 'var(--radius-lg)',
+                    fontWeight: 'var(--font-weight-medium)',
+                    transition: 'var(--transition-all)',
+                    padding: 'var(--space-3) var(--space-4)',
+                    fontSize: 'var(--font-size-sm)'
+                  }}
+                >
+                  Веб-плеер
                 </Tabs.Tab>
               </Tabs.List>
 
@@ -1613,7 +1683,7 @@ const RadioAdmin: React.FC = () => {
                     borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0'
                   }} />
                   
-                  <Group justify="space-between" mb="md">
+                <Group justify="space-between" mb="md">
                     <div>
                     <Title 
                       order={3} 
@@ -1642,7 +1712,7 @@ const RadioAdmin: React.FC = () => {
                         Файлы автоматически сохраняются в папку retail/music/{musicStatus?.currentMonthFolder || 'текущий месяц'}.
                       </Text>
                     </div>
-                    <Button 
+                  <Button 
                       onClick={() => setUploadModalOpen(true)}
                       leftSection={<IconUpload size={20} />}
                       className="radio-action-button"
@@ -1657,19 +1727,9 @@ const RadioAdmin: React.FC = () => {
                       }}
                     >
                       Загрузить файлы
-                    </Button>
-                  </Group>
+                  </Button>
+                </Group>
                 </Paper>
-
-                {/* Веб-радио плеер */}
-                <WebRadioPlayer 
-                  branchName={user?.branch || "Мой филиал"}
-                  branchType={user?.branch || "Магазин"}
-                  workingTime={{
-                    start: "08:00",
-                    end: "22:00"
-                  }}
-                />
               </Stack>
               </Tabs.Panel>
               )}
@@ -1694,7 +1754,7 @@ const RadioAdmin: React.FC = () => {
                     >
                       <IconRadio size={24} />
                     Радио потоки
-                  </Title>
+                    </Title>
                     <Text 
                       size="sm"
                       style={{ 
@@ -1737,7 +1797,7 @@ const RadioAdmin: React.FC = () => {
                               {streams.length} поток{streams.length === 1 ? '' : streams.length < 5 ? 'а' : 'ов'}
                             </Text>
                           </div>
-                          <Badge 
+                                <Badge 
                             size="lg" 
                             variant="light" 
                             color={streams.some(s => s.isActive) ? 'green' : 'gray'}
@@ -1747,9 +1807,9 @@ const RadioAdmin: React.FC = () => {
                             }}
                           >
                             {streams.filter(s => s.isActive).length} активн{streams.filter(s => s.isActive).length === 1 ? 'ый' : streams.filter(s => s.isActive).length < 5 ? 'ых' : 'ых'}
-                          </Badge>
-                        </Group>
-
+                                </Badge>
+                                  </Group>
+                              
                         {/* Потоки этого типа */}
                         <div style={{ 
                           display: 'grid', 
@@ -1788,7 +1848,7 @@ const RadioAdmin: React.FC = () => {
                         <Group justify="space-between" mb="sm">
                           <Text fw={600} size="lg">
                             {stream.name}
-                          </Text>
+                                </Text>
                           <Group gap="xs">
                             {stream.isActive ? (
                 <div style={{
@@ -1839,9 +1899,9 @@ const RadioAdmin: React.FC = () => {
                                 Файл: <Text span fw={500}>{decodeRussianFileName(stream.attachment)}</Text>
                               </Text>
                             )}
-                            <Text size="xs" c="dimmed">
+                              <Text size="xs" c="dimmed">
                               Создан: {new Date(stream.createdAt).toLocaleDateString('ru-RU')}
-                            </Text>
+                                </Text>
                           </Stack>
                           
                           <Group justify="flex-end" mt="md" style={{ marginTop: 'auto' }}>
@@ -2013,6 +2073,28 @@ const RadioAdmin: React.FC = () => {
               </div>
             )}
 
+                {/* Фильтры устройств для полного доступа */}
+                {hasFullAccess && (
+                <Group>
+                    <FilterGroup
+                      title=""
+                      filters={deviceFiltersConfig}
+                      columnFilters={deviceColumnFilters}
+                      onColumnFiltersChange={(columnId: string, value: any) => {
+                        setDeviceColumnFilters(prev => {
+                          const existing = prev.find(f => f.id === columnId);
+                          if (existing) {
+                            return prev.map(f => f.id === columnId ? { id: columnId, value } : f);
+                          } else {
+                            return [...prev, { id: columnId, value }];
+                          }
+                        });
+                      }}
+                      showClearAll={true}
+                    />
+                  </Group>
+                )}
+
                 {/* Устройства по филиалам */}
               <Stack gap="md">
                 {hasFullAccess ? (
@@ -2056,9 +2138,21 @@ const RadioAdmin: React.FC = () => {
                         // Остальные филиалы сортируем по алфавиту
                         return a.branch.name.localeCompare(b.branch.name);
                       })
+                      .filter((branchData) => {
+                        // Показываем только филиалы, у которых есть отфильтрованные устройства
+                        const branchFilteredDevices = filteredDevices.filter(device => 
+                          device.branchId === branchData.branch.uuid
+                        );
+                        return branchFilteredDevices.length > 0;
+                      })
                       .map((branchData) => {
+                        // Получаем отфильтрованные устройства для этого филиала
+                        const branchFilteredDevices = filteredDevices.filter(device => 
+                          device.branchId === branchData.branch.uuid
+                        );
+                        
                         // Дедупликация устройств в филиале
-                        const uniqueDevices = branchData.devices.filter((device, index, self) => 
+                        const uniqueDevices = branchFilteredDevices.filter((device, index, self) => 
                           index === self.findIndex(d => d.id === device.id)
                         );
                         
@@ -2157,7 +2251,7 @@ const RadioAdmin: React.FC = () => {
                                   <Text size="xs" style={{ color: 'var(--theme-text-secondary)' }}>
                                   {device.network}{device.number} • {device.os} • {device.app}
                                 </Text>
-                                {device.user && (
+                              {device.user && (
                                   <Text size="xs" style={{ 
                                     color: 'var(--theme-text-tertiary)', 
                                     fontStyle: 'italic',
@@ -2183,7 +2277,7 @@ const RadioAdmin: React.FC = () => {
                                 
                                   <Text size="xs" style={{ color: 'var(--theme-text-secondary)' }}>
                                   {formatTime(device.timeFrom)} - {formatTime(device.timeUntil)}
-                                </Text>
+                                  </Text>
                                 
                                   <IconEdit size={16} style={{ color: 'var(--theme-text-secondary)' }} />
                               </Group>
@@ -2191,11 +2285,32 @@ const RadioAdmin: React.FC = () => {
                           </div>
                         )
                         })}
-                      </Stack>
+                            </Stack>
                     )}
                     </Paper>
                         );
                       })}
+
+                    {/* Сообщение, если нет устройств после фильтрации */}
+                    {branchesWithDevices.length > 0 && filteredDevices.length === 0 && (
+                      <Paper p="xl" withBorder>
+                        <Stack align="center" gap="md">
+                          <IconDeviceMobile size={64} color="var(--mantine-color-gray-4)" />
+                          <Text size="lg" c="dimmed">
+                            Устройства не найдены
+                          </Text>
+                          <Text size="sm" c="dimmed" ta="center">
+                            Измените фильтры или попробуйте другой поиск
+                          </Text>
+                          <Button 
+                            variant="light" 
+                            onClick={clearDeviceFilters}
+                          >
+                            Очистить фильтры
+                          </Button>
+                      </Stack>
+                      </Paper>
+                    )}
                   </>
                 ) : (
                   // Доступ только для чтения - видим только свой филиал
@@ -2286,11 +2401,25 @@ const RadioAdmin: React.FC = () => {
                           )
                         })}
                       </Stack>
-                    </Paper>
+          </Paper>
                   )
                 )}
               </Stack>
-          </Stack>
+              </Stack>
+              </Tabs.Panel>
+
+              <Tabs.Panel value="webplayer">
+                <Stack gap="md">
+
+                    <WebRadioPlayer
+                      branchName={user?.branch || "Мой филиал"}
+                      branchType={user?.branch || "Магазин"}
+                      workingTime={workingTimeSettings}
+                      onTimeChange={handleTimeChange}
+                      isActive={activeTab === "webplayer"}
+                    />
+       
+                </Stack>
               </Tabs.Panel>
 
               </Box>
@@ -2300,7 +2429,7 @@ const RadioAdmin: React.FC = () => {
 
           {/* Контент для пользователей с доступом только для чтения */}
           {hasReadOnlyAccess && (
-            <Stack gap="md">
+          <Stack gap="md">
               {/* Статистика устройств */}
               {stats && (
                 <Paper p="md" withBorder className="radio-stats-card">
@@ -2589,95 +2718,49 @@ const RadioAdmin: React.FC = () => {
               )}
             </Paper>
 
-            {/* Time Management - Закомментировано */}
-            {/* 
-            <Paper p="lg" withBorder style={{
-              background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
-              border: '1px solid var(--theme-border)',
-              borderRadius: '12px',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
-            }}>
-              <Text fw={600} mb="md" size="lg" style={{ color: 'var(--theme-text-primary)' }}>
-                🕐 Управление временем
+            {/* Специальное сообщение для веб-плеера */}
+            {selectedDevice.vendor === 'Web Browser' && (
+              <Paper p="lg" withBorder style={{
+                background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
+                border: '1px solid var(--theme-border)',
+                borderRadius: '12px',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                textAlign: 'center'
+              }}>
+                <Text fw={600} mb="md" size="lg" style={{ color: 'var(--theme-text-primary)' }}>
+                  🌐 Веб-плеер
+                </Text>
+                <Text size="md" c="dimmed" mb="md">
+                  Это веб-плеер DNS Radio. Все настройки и управление доступны в самой вкладке "Веб-плеер".
+                </Text>
+                <Text size="sm" c="dimmed" mb="md">
+                  💡 Перейдите на вкладку "Веб-плеер" для управления воспроизведением и настройками
               </Text>
-              <Stack gap="sm">
-                <Group justify="space-between">
-                  <Text size="sm">Текущее время устройства:</Text>
-                  <Text size="sm" fw={500}>
-                    {deviceTime ? new Date(deviceTime).toLocaleString('ru-RU') : 'Время недоступно'}
-                  </Text>
-                </Group>
-                
-                <Group grow>
-                  <Button 
-                    variant="light" 
-                    onClick={() => void syncTime()}
-                    loading={loadingDeviceAction === 'sync-time'}
-                    leftSection={<IconClock size={16} />}
-                    style={{
-                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      fontWeight: '500',
-                      boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
-                      transition: 'all 0.2s ease'
-                    }}
-                  >
-                    Синхронизировать с сервером
-                  </Button>
-                </Group>
+                            
+                {/* Кнопка обновить статус для веб-плеера */}
+                <Button
+                  variant="light"
+                  size="sm"
+                  leftSection={<IconRefresh size={14} />}
+                  onClick={() => {
+                    // Обновляем статус устройства
+                    loadDeviceStatuses();
+                    notificationSystem.addNotification('Обновлено', 'Статус веб-плеера обновлен', 'success');
+                  }}
+                  style={{
+                    background: 'var(--theme-bg-elevated)',
+                    border: '1px solid var(--theme-border)',
+                    color: 'var(--theme-text-primary)'
+                  }}
+                >
+                  Обновить статус
+                </Button>
+              </Paper>
+            )}
 
-                <Group grow>
-                  <TextInput
-                    label="Установить время вручную"
-                    type="datetime-local"
-                    value={manualTime ? (() => {
-                      try {
-                        const date = new Date(manualTime);
-                        return isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 16);
-                      } catch {
-                        return '';
-                      }
-                    })() : ''}
-                    onChange={(e) => {
-                      if (e.currentTarget?.value) {
-                        try {
-                          const date = new Date(e.currentTarget.value);
-                          if (!isNaN(date.getTime())) {
-                            setManualTime(date.toISOString());
-                          }
-                        } catch {
-                          setManualTime('');
-                        }
-                      } else {
-                        setManualTime('');
-                      }
-                    }}
-                  />
-                  <Button 
-                    variant="light" 
-                    onClick={() => void setTime()}
-                    loading={loadingDeviceAction === 'set-time'}
-                    style={{ 
-                      alignSelf: 'end',
-                      background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      fontWeight: '500',
-                      boxShadow: '0 4px 12px rgba(139, 92, 246, 0.3)',
-                      transition: 'all 0.2s ease'
-                    }}
-                  >
-                    Установить
-                  </Button>
-                </Group>
-              </Stack>
-            </Paper>
-            */}
 
-            {/* Playback Time Settings */}
+            {/* Playback Time Settings - только для обычных устройств */}
+            {selectedDevice.vendor !== 'Web Browser' && (
             <Paper p="lg" withBorder style={{
               background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
               border: '1px solid var(--theme-border)',
@@ -2734,8 +2817,10 @@ const RadioAdmin: React.FC = () => {
                 </Button>
               </Stack>
             </Paper>
+            )}
 
-            {/* App Update Section */}
+            {/* App Update Section - только для обычных устройств */}
+            {selectedDevice.vendor !== 'Web Browser' && (
             <Paper p="lg" withBorder style={{
               background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
               border: '1px solid var(--theme-border)',
@@ -2847,8 +2932,10 @@ const RadioAdmin: React.FC = () => {
                 </Stack>
               )}
             </Paper>
+            )}
 
-            {/* Device Actions */}
+            {/* Device Actions - только для обычных устройств */}
+            {selectedDevice.vendor !== 'Web Browser' && (
             <Paper p="lg" withBorder style={{
               background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
               border: '1px solid var(--theme-border)',
@@ -2897,6 +2984,57 @@ const RadioAdmin: React.FC = () => {
                 </Button>
               </Group>
             </Paper>
+            )}
+
+            {/* Web Player Actions - только для веб-плеера */}
+            {selectedDevice.vendor === 'Web Browser' && (
+            <Paper p="lg" withBorder style={{
+              background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
+              border: '1px solid var(--theme-border)',
+              borderRadius: '12px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+            }}>
+              <Text fw={600} mb="md" size="lg" style={{ color: 'var(--theme-text-primary)' }}>
+                🌐 Действия веб-плеера
+              </Text>
+              <Group grow>
+                <Button 
+                  variant="light" 
+                  color="green"
+                  onClick={() => {
+                    // Обновляем статус устройства
+                    loadDeviceStatuses();
+                    notificationSystem.addNotification('Обновлено', 'Статус веб-плеера обновлен', 'success');
+                  }}
+                  leftSection={<IconRefresh size={16} />}
+                  style={{
+                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                    border: 'none',
+                    color: 'white'
+                  }}
+                >
+                  Обновить статус
+                </Button>
+                <Button 
+                  variant="light" 
+                  color="blue"
+                  onClick={() => {
+                    // Закрываем модальное окно и показываем подсказку
+                    setDeviceModalOpen(false);
+                    notificationSystem.addNotification('Подсказка', 'Перейдите на вкладку "Веб-плеер" для управления воспроизведением', 'info');
+                  }}
+                  leftSection={<IconPlayerPlay size={16} />}
+                  style={{
+                    background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+                    border: 'none',
+                    color: 'white'
+                  }}
+                >
+                  Закрыть и перейти к плееру
+                </Button>
+              </Group>
+            </Paper>
+            )}
           </Stack>
         )}
       </Modal>

@@ -75,25 +75,48 @@ const handlePrismaError = (error: any, res: Response) => {
 
 const processFileUpload = (files: Express.Multer.File[] | undefined) => {
   if (!files || files.length === 0) return undefined;
-  return files[0].path; // Return path of the first file
+  return files[0].filename; // Return filename as saved on disk
 };
 
 const processAttachments = async (
   files: Express.Multer.File[] | undefined,
   supplyDocId: string,
-  userAdd: string,
+  userAddId: string,
   type: string
 ) => {
   if (!files || files.length === 0) return;
 
-  const attachmentsData = files.map(file => ({
-    userAdd,
-    source: file.path,
-    type,
-    recordId: supplyDocId,
-  }));
+  // Сначала проверяем, существует ли supply document
+  const supplyDocExists = await prisma.supplyDocs.findUnique({
+    where: { id: supplyDocId }
+  });
 
-  await prisma.supplyDocsAttachment.createMany({ data: attachmentsData });
+  if (!supplyDocExists) {
+    throw new Error(`Supply document with id ${supplyDocId} not found`);
+  }
+
+  // Проверяем существование пользователя
+  const userExists = await prisma.user.findUnique({
+    where: { id: userAddId }
+  });
+
+  if (!userExists) {
+    throw new Error(`User with id ${userAddId} not found`);
+  }
+
+  // Создаем вложения в транзакции
+  await prisma.$transaction(async (tx) => {
+    for (const file of files) {
+      await tx.supplyDocsAttachment.create({
+        data: {
+          userAdd: userAddId,
+          source: file.filename, // Сохраняем название файла как оно сохранено на диске
+          type,
+          recordId: supplyDocId,
+        }
+      });
+    }
+  });
 };
 
 // Controller methods
@@ -108,7 +131,7 @@ export const getSupplyDocs = async (
         supplyDocs: true, 
         addedBy: true,
         costBranch: true,
-        settlementSpecialist: true 
+        settlementSpecialist: true
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -237,7 +260,9 @@ const deleteAttachments = async (attachmentIds: string[], supplyDocId: string) =
 
   await Promise.all(
     attachments.map(async (attachment) => {
-      await deleteFileSafely(path.join(attachment.source));
+      // Строим полный путь к файлу
+      const fullPath = path.join(process.cwd(), 'public', 'accounting', 'roc', attachment.source);
+      await deleteFileSafely(fullPath);
       await prisma.supplyDocsAttachment.delete({
         where: { id: attachment.id }
       });
@@ -281,25 +306,28 @@ export const updateSupplyDoc = async (
     let fileInvoicePaymentPath = currentDoc.fileInvoicePayment;
     if (filesData?.fileInvoicePayment) {
       if (currentDoc.fileInvoicePayment) {
-        await deleteFileSafely(currentDoc.fileInvoicePayment);
+        const oldFullPath = path.join(process.cwd(), 'public', 'accounting', 'roc', currentDoc.fileInvoicePayment);
+        await deleteFileSafely(oldFullPath);
       }
-      fileInvoicePaymentPath = filesData.fileInvoicePayment[0].path;
+      fileInvoicePaymentPath = filesData.fileInvoicePayment[0].filename;
     }
 
     let fileNotePath = currentDoc.fileNote;
     if (filesData?.fileNote) {
       if (currentDoc.fileNote) {
-        await deleteFileSafely(currentDoc.fileNote);
+        const oldFullPath = path.join(process.cwd(), 'public', 'accounting', 'roc', currentDoc.fileNote);
+        await deleteFileSafely(oldFullPath);
       }
-      fileNotePath = filesData.fileNote[0].path;
+      fileNotePath = filesData.fileNote[0].filename;
     }
 
     let filePTiUPath = currentDoc.filePTiU;
     if (filesData?.filePTiU) {
       if (currentDoc.filePTiU) {
-        await deleteFileSafely(currentDoc.filePTiU);
+        const oldFullPath = path.join(process.cwd(), 'public', 'accounting', 'roc', currentDoc.filePTiU);
+        await deleteFileSafely(oldFullPath);
       }
-      filePTiUPath = filesData.filePTiU[0].path;
+      filePTiUPath = filesData.filePTiU[0].filename;
     }
 
     // Process additional attachments
@@ -369,13 +397,16 @@ export const deleteSupplyDoc = async (
 
     // Delete all file fields
     if (supplyDoc.fileInvoicePayment) {
-      await deleteFileSafely(supplyDoc.fileInvoicePayment);
+      const fullPath = path.join(process.cwd(), 'public', 'accounting', 'roc', supplyDoc.fileInvoicePayment);
+      await deleteFileSafely(fullPath);
     }
     if (supplyDoc.fileNote) {
-      await deleteFileSafely(supplyDoc.fileNote);
+      const fullPath = path.join(process.cwd(), 'public', 'accounting', 'roc', supplyDoc.fileNote);
+      await deleteFileSafely(fullPath);
     }
     if (supplyDoc.filePTiU) {
-      await deleteFileSafely(supplyDoc.filePTiU);
+      const fullPath = path.join(process.cwd(), 'public', 'accounting', 'roc', supplyDoc.filePTiU);
+      await deleteFileSafely(fullPath);
     }
 
     // Delete all attachments
@@ -384,7 +415,10 @@ export const deleteSupplyDoc = async (
     });
 
     await Promise.all(
-      attachments.map(attachment => deleteFileSafely(attachment.source))
+      attachments.map(attachment => {
+        const fullPath = path.join(process.cwd(), 'public', 'accounting', 'roc', attachment.source);
+        return deleteFileSafely(fullPath);
+      })
     );
 
     // Delete attachments and supply document in a transaction

@@ -22,7 +22,7 @@ const storage = multer.diskStorage({
     }
   },
   filename: function (req, file, cb) {
-    // Используем оригинальное имя файла
+    // Используем оригинальное имя файла (для AppStore нужны сгенерированные имена)
     cb(null, file.originalname);
   }
 });

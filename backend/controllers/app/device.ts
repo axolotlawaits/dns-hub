@@ -24,23 +24,6 @@ function hasControlChars(str: string): boolean {
 export const createOrUpdateDevice = async (req: Request, res: Response): Promise<any> => {
   const { userEmail, branchType, deviceName, vendor, network, number, app, os, deviceIP: deviceIPFromBody, ip, deviceId, deviceUuid, macAddress } = req.body;
 
-  console.log('Device registration request:', {
-    userEmail,
-    branchType,
-    deviceName,
-    vendor,
-    network,
-    number,
-    app,
-    os,
-    deviceIP: deviceIPFromBody,
-    ip,
-    deviceId,
-    deviceUuid,
-    'req.ip': req.ip,
-    'x-forwarded-for': req.headers['x-forwarded-for'],
-    'x-real-ip': req.headers['x-real-ip']
-  });
 
   if (!userEmail || !branchType) {
     return res.status(400).json({ error: 'userEmail и branchType обязательны' });
@@ -61,12 +44,8 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
       return res.status(404).json({ error: 'Пользователь не найден в UserData' });
     }
 
-    // Логируем информацию о пользователе из UserData
-    console.log('Найден пользователь в UserData:', userData.fio, 'с email:', userData.email);
 
     const branchId = sanitizeUuid(userData.branch_uuid);
-    console.log('🔍 [createOrUpdateDevice] branch_uuid из UserData:', userData.branch_uuid);
-    console.log('🔍 [createOrUpdateDevice] sanitized branchId:', branchId);
     
     if (!branchId) {
       return res.status(400).json({ error: 'Некорректный branchId' });
@@ -80,8 +59,6 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
         select: { uuid: true, name: true, typeOfDist: true } 
       });
       
-      console.log('🔍 [createOrUpdateDevice] Поиск филиала с UUID:', branchId);
-      console.log('🔍 [createOrUpdateDevice] Найденный филиал:', existingBranch);
       
       if (!existingBranch) {
         throw new Error('Филиал не найден');
@@ -202,6 +179,20 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
           select: { id: true, network: true, number: true, name: true, vendor: true, os: true, macAddress: true }
         });
         console.log('Search by MAC address:', deviceData.macAddress, 'Found:', !!existingDevice);
+      }
+      
+      // Специальная проверка для веб-плеера по userEmail + vendor + macAddress
+      if (!existingDevice && deviceData.vendor === 'Web Browser' && deviceData.macAddress?.startsWith('web-') && deviceData.userEmail) {
+        existingDevice = await tx.devices.findFirst({
+          where: {
+            userEmail: deviceData.userEmail,
+            vendor: 'Web Browser',
+            macAddress: deviceData.macAddress,
+            branchId
+          },
+          select: { id: true, network: true, number: true, name: true, vendor: true, os: true, macAddress: true }
+        });
+        console.log('Search by web player email+vendor+mac: Found:', !!existingDevice);
       }
       
       // Приоритет 2: По deviceId/deviceUuid (если не найден по MAC)
@@ -378,13 +369,56 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
       }
     }
 
-    // Обновляем lastSeen и другие данные в базе данных
-    await prisma.devices.update({ 
-      where: { id: deviceId }, 
-      data: updateData
-    }).catch((error) => {
-      console.error('Error updating device in heartbeat:', error);
-    });
+    // Обновляем или создаем запись устройства в базе данных
+    try {
+      // Сначала пытаемся найти устройство
+      const existingDevice = await prisma.devices.findUnique({
+        where: { id: deviceId }
+      });
+
+      if (existingDevice) {
+        // Если устройство существует, обновляем его
+        await prisma.devices.update({ 
+          where: { id: deviceId }, 
+          data: updateData
+        });
+        console.log(`✅ [Heartbeat] Device ${deviceId} updated successfully`);
+      } else {
+        // Если устройство не существует, создаем новое
+        // Сначала находим первый доступный branchId
+        const firstBranch = await prisma.branch.findFirst({
+          select: { uuid: true, name: true }
+        });
+
+        if (!firstBranch) {
+          console.error(`❌ [Heartbeat] No branches found in database for device ${deviceId}`);
+          return res.status(500).json({ success: false, error: 'No branches available' });
+        }
+
+        const newDeviceData = {
+          id: deviceId,
+          name: `Web Player ${deviceId}`,
+          vendor: 'Web Player',
+          app: updateData.app || 'Web Player',
+          os: 'Web Browser',
+          network: updateData.network || '127.0.0.1',
+          number: updateData.number || '1',
+          timeFrom: '08:00',
+          timeUntil: '22:00',
+          branchId: firstBranch.uuid,
+          userEmail: updateData.userEmail,
+          macAddress: updateData.macAddress,
+          lastSeen: updateData.lastSeen
+        };
+
+        await prisma.devices.create({
+          data: newDeviceData
+        });
+        console.log(`✅ [Heartbeat] New device ${deviceId} created successfully in branch: ${firstBranch.name} (${firstBranch.uuid})`);
+      }
+    } catch (error) {
+      console.error('Error updating/creating device in heartbeat:', error);
+    }
 
     console.log('Heartbeat received from device:', deviceId, 'at', nowDate.toISOString());
 

@@ -7,624 +7,9 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model UserData {
-  uuid        String   @id @default(uuid())
-  birthday    DateTime
-  fio         String
-  code        String
-  branch_uuid String
-  positionId  String
-  email       String   @unique
-  status      String
-  start_date  DateTime
-  end_date    DateTime
-  last_update DateTime @updatedAt
-  branch      Branch   @relation(fields: [branch_uuid], references: [uuid])
-  position    Position @relation(fields: [positionId], references: [uuid])
-}
-
-model Notifications {
-  id         String                @id @default(uuid())
-  type       NotificationType
-  channel    NotificationChannel[]
-  action     Json?
-  title      String
-  message    String
-  senderId   String
-  receiverId String
-  read       Boolean               @default(false)
-  toolId     String?
-  priority   NotificationPriority  @default(MEDIUM)
-  expiresAt  DateTime?
-  createdAt  DateTime              @default(now())
-  updatedAt  DateTime              @updatedAt
-  receiver   User                  @relation("receiver", fields: [receiverId], references: [id])
-  sender     User                  @relation("sender", fields: [senderId], references: [id])
-  tool       Tool?                 @relation(fields: [toolId], references: [id])
-
-  @@index([receiverId])
-  @@index([read])
-  @@index([createdAt])
-  @@index([senderId])
-  @@index([toolId])
-}
-
-model UserSettings {
-  id        String @id @default(uuid())
-  userId    String
-  parameter String
-  value     String
-  type      String
-  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, parameter])
-}
-
-model Position {
-  groupUuid            String
-  name                 String               @unique
-  uuid                 String               @id @default(uuid())
-  group                Group                @relation(fields: [groupUuid], references: [uuid])
-  positionToolAccesses PositionToolAccess[]
-  userData             UserData[]
-}
-
-model Group {
-  uuidPosition      String
-  name              String            @unique
-  uuid              String            @id @default(uuid())
-  groupToolAccesses GroupToolAccess[]
-  positions         Position[]
-}
-
-model Branch {
-  uuid          String         @id @default(uuid())
-  division      String
-  code          String
-  rrs           String
-  name          String
-  status        Int
-  city          String
-  address       String
-  last_update   DateTime
-  latitude      Float
-  longitude     Float
-  totalArea     Int
-  tradingArea   Int
-  warehouseArea Int
-  type          String
-  typeOfDist    String?
-  images        BranchImage[]
-  devices       Devices[]
-  printService  PrintService[] @relation("BranchPrint")
-  rk            RK[]
-  supplyDocs    SupplyDocs[]   @relation("SupplyDocs_Branch")
-  userData      UserData[]
-}
-
-model Devices {
-  id           String   @id @default(uuid())
-  createdAt    DateTime @default(now())
-  lastSeen     DateTime @default(now())
-  vendor       String
-  name         String
-  timeFrom     String   @default("08:00")
-  timeUntil    String   @default("22:00")
-  network      String
-  number       String
-  app          String
-  os           String
-  macAddress   String?
-  branchId     String
-  branch       Branch   @relation(fields: [branchId], references: [uuid])
-  userEmail    String?  // Email пользователя для связи с UserData
-}
-
-model Type {
-  id                     String         @id @default(uuid())
-  model_uuid             String
-  chapter                String
-  name                   String
-  colorHex               String?
-  Media                  Media[]        @relation("TypeMedia")
-  rk_approvalStatus      RKAttachment[] @relation("RK_approvalStatus")
-  rk_typeStructure       RKAttachment[] @relation("RK_typeStructure")
-  roc_statusContract     Roc[]          @relation("Roc_statusContract")
-  roc_typeContract       Roc[]          @relation("Roc_typeContract")
-  SupplyDocsPTiU         SupplyDocs[]   @relation("SupplyDocs_PTiU")
-  SupplyDocsRequirements SupplyDocs[]   @relation("SupplyDocs_Requirements")
-  Tool                   Tool           @relation(fields: [model_uuid], references: [id])
-}
-
-model Tool {
-  id                   String               @id @default(uuid())
-  parent_id            String?
-  name                 String
-  icon                 String
-  link                 String
-  description          String?
-  order                Int                  @default(1)
-  included             Boolean?             @default(true)
-  groupToolAccesses    GroupToolAccess[]
-  Notifications        Notifications[]
-  positionToolAccesses PositionToolAccess[]
-  types                Type[]
-  userToolAccesses     UserToolAccess[]
-}
-
-model BranchImage {
-  id          String @id @default(uuid())
-  link        String
-  branch_uuid String
-  branch      Branch @relation(fields: [branch_uuid], references: [uuid])
-}
-
-/// App models
-model User {
-  id                     String                     @id @default(uuid())
-  name                   String
-  email                  String                     @unique
-  position               String
-  branch                 String
-  image                  String?
-  login                  String                     @unique
-  updatedAt              DateTime                   @updatedAt
-  role                   Role                       @default(EMPLOYEE)
-  telegramChatId         String?                    @unique
-  telegramLinkToken      String?                    @unique
-  bookmarks              Bookmarks[]
-  correspondences        Correspondence[]
-  attachments            CorrespondenceAttachment[]
-  MediaAdd               Media[]                    @relation("Media_UserAdd")
-  MediaUpdated           Media[]                    @relation("Media_UserUpdated")
-  MediaAttachment        MediaAttachment[]
-  meterReadings          MeterReading[]
-  news                   News[]
-  Notifications_Receiver Notifications[]            @relation("receiver")
-  Notifications_Sender   Notifications[]            @relation("sender")
-  RKAdded                RK[]                       @relation("RK_UserAdd")
-  RKUpdated              RK[]                       @relation("RK_UserUpdated")
-  RKAttachment           RKAttachment[]
-  RocAdded               Roc[]                      @relation("Roc_UserAdd")
-  RocUpdated             Roc[]                      @relation("Roc_UserUpdated")
-  RocAttachment          RocAttachment[]
-  Slider_Add             Slider[]                   @relation("added")
-  Slider_Updated         Slider[]                   @relation("updated")
-  AddedSupplyDocs        SupplyDocs[]               @relation("SupplyDocs_AddedBy")
-  SupplyDocs             SupplyDocs[]               @relation("SupplyDocs_SettlementSpecialist")
-  SupplyDocsAttachments  SupplyDocsAttachment[]
-  UserSettings           UserSettings[]
-  userToolAccesses       UserToolAccess[]
-  MerchAttachments       MerchAttachment[]
-}
-
-model GroupToolAccess {
-  id          String      @id @default(uuid())
-  toolId      String
-  accessLevel AccessLevel
-  groupId     String
-  group       Group       @relation(fields: [groupId], references: [uuid])
-  tool        Tool        @relation(fields: [toolId], references: [id])
-
-  @@unique([groupId, toolId], name: "groupId_toolId")
-}
-
-model PositionToolAccess {
-  id          String      @id @default(uuid())
-  toolId      String
-  accessLevel AccessLevel
-  positionId  String
-  position    Position    @relation(fields: [positionId], references: [uuid])
-  tool        Tool        @relation(fields: [toolId], references: [id])
-
-  @@unique([positionId, toolId], name: "positionId_toolId")
-}
-
-model UserToolAccess {
-  id          String      @id @default(uuid())
-  userId      String
-  toolId      String
-  accessLevel AccessLevel
-  tool        Tool        @relation(fields: [toolId], references: [id])
-  user        User        @relation(fields: [userId], references: [id])
-
-  @@unique([userId, toolId], name: "userId_toolId")
-}
-
-model News {
-  id          String   @id @default(uuid())
-  name        String
-  description String
-  userId      String
-  createdAt   DateTime @default(now())
-  user        User     @relation(fields: [userId], references: [id])
-}
-
-model Bookmarks {
-  id         String  @id @default(uuid())
-  name       String
-  url        String  @unique
-  userId     String
-  order      Int     @default(0)
-  user       User    @relation(fields: [userId], references: [id])
-}
-
-/// AXO
-model MeterReading {
-  id          String   @id @default(uuid())
-  createdAt   DateTime @default(now())
-  date        DateTime
-  userId      String
-  indications Json
-  user        User     @relation(fields: [userId], references: [id])
-}
-
-model Correspondence {
-  id          String                     @id @default(uuid())
-  createdAt   DateTime                   @default(now())
-  ReceiptDate DateTime
-  userAdd     String
-  from        String
-  to          String
-  content     String
-  typeMail    String
-  numberMail  String
-  user        User                       @relation(fields: [userAdd], references: [id])
-  attachments CorrespondenceAttachment[]
-}
-
-model CorrespondenceAttachment {
-  id             String         @id @default(uuid())
-  createdAt      DateTime       @default(now())
-  record_id      String
-  userAdd        String
-  source         String
-  correspondence Correspondence @relation(fields: [record_id], references: [id])
-  user           User           @relation(fields: [userAdd], references: [id])
-}
-
-model Route {
-  id         String     @id @default(uuid())
-  name       String     @unique
-  rrs        String
-  contractor String
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
-  filials    Filial[]
-  days       RouteDay[]
-}
-
-model RouteDay {
-  id        String   @id @default(uuid())
-  day       DateTime @unique
-  routeId   String
-  createdAt DateTime @default(now())
-  filials   Filial[]
-  route     Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
-}
-
-model Filial {
-  id         String    @id @default(uuid())
-  name       String
-  place      Int?
-  accepted   Boolean   @default(false)
-  feedback   String?
-  routeId    String
-  routeDayId String?
-  updatedAt  DateTime  @updatedAt
-  routeDay   RouteDay? @relation(fields: [routeDayId], references: [id], onDelete: Cascade)
-  route      Route     @relation(fields: [routeId], references: [id], onDelete: Cascade)
-  loaders    Loader[]
-}
-
-model Loader {
-  id        String   @id @default(uuid())
-  startTime DateTime
-  endTime   DateTime
-  filialId  String
-  filial    Filial   @relation(fields: [filialId], references: [id], onDelete: Cascade)
-}
-
-model SupplyDocs {
-  id                     String                 @id @default(uuid())
-  createdAt              DateTime               @default(now())
-  updatedAt              DateTime
-  addedById              String
-  inn                    Int
-  counterParty           String
-  demandsForPayment      String
-  statusRequirements     String
-  fileInvoicePayment     String
-  costBranchId           String
-  settlementSpecialistId String?
-  statusOfPTiU           String
-  filePTiU               String
-  note                   String
-  fileNote               String
-  requirementNumber      String
-  addedBy                User                   @relation("SupplyDocs_AddedBy", fields: [addedById], references: [id])
-  costBranch             Branch                 @relation("SupplyDocs_Branch", fields: [costBranchId], references: [uuid])
-  settlementSpecialist   User?                  @relation("SupplyDocs_SettlementSpecialist", fields: [settlementSpecialistId], references: [id])
-  statusOfPTiUId         Type                   @relation("SupplyDocs_PTiU", fields: [statusOfPTiU], references: [id])
-  statusRequirementsId   Type                   @relation("SupplyDocs_Requirements", fields: [statusRequirements], references: [id])
-  supplyDocs             SupplyDocsAttachment[]
-}
-
-model SupplyDocsAttachment {
-  id         String     @id @default(uuid())
-  createdAt  DateTime   @default(now())
-  userAdd    String
-  source     String
-  type       String
-  recordId   String
-  supplyDocs SupplyDocs @relation(fields: [recordId], references: [id])
-  user       User       @relation(fields: [userAdd], references: [id])
-}
-
-model Media {
-  id              String            @id @default(uuid())
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime?         @updatedAt
-  userAddId       String
-  userUpdatedId   String?
-  name            String?
-  information     String?
-  urlMedia2       String?
-  typeContentId   String?
-  typeContent     Type?             @relation("TypeMedia", fields: [typeContentId], references: [id])
-  userAdd         User              @relation("Media_UserAdd", fields: [userAddId], references: [id])
-  userUpdated     User?             @relation("Media_UserUpdated", fields: [userUpdatedId], references: [id])
-  MediaAttachment MediaAttachment[]
-}
-
-model MediaAttachment {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
-  userAddId String
-  source    String
-  type      String
-  recordId  String
-  media     Media    @relation(fields: [recordId], references: [id])
-  userAdd   User     @relation(fields: [userAddId], references: [id])
-}
-
-model RK {
-  id            String         @id @default(uuid())
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime?      @updatedAt
-  userAddId     String
-  userUpdatedId String
-  branchId      String
-  branch        Branch         @relation(fields: [branchId], references: [uuid])
-  userAdd       User           @relation("RK_UserAdd", fields: [userAddId], references: [id])
-  userUpdated   User           @relation("RK_UserUpdated", fields: [userUpdatedId], references: [id])
-  rkAttachment  RKAttachment[]
-}
-
-model RKAttachment {
-  id                 String         @id @default(uuid())
-  createdAt          DateTime       @default(now())
-  userAddId          String
-  source             String
-  type               String
-  recordId           String
-  sizeXY             String
-  clarification      String
-  agreedTo           DateTime?
-  approvalStatusId   String?
-  typeStructureId    String?
-  typeAttachment     String
-  parentAttachmentId String?
-  approvalStatus     Type?          @relation("RK_approvalStatus", fields: [approvalStatusId], references: [id])
-  parentAttachment   RKAttachment?  @relation("RKAttachment_Parent", fields: [parentAttachmentId], references: [id])
-  childAttachments   RKAttachment[] @relation("RKAttachment_Parent")
-  rk                 RK             @relation(fields: [recordId], references: [id])
-  typeStructure      Type?          @relation("RK_typeStructure", fields: [typeStructureId], references: [id])
-  userAdd            User           @relation(fields: [userAddId], references: [id])
-}
-
-model Doc {
-  id              String    @id @default(uuid())
-  fullName        String
-  name            String
-  address         String
-  inn             String
-  ogrn            String
-  kpp             String
-  taxationSystem  String
-  phone           String
-  email           String
-  siEgrul         String
-  statusCode      Int
-  deStatusCode    String
-  liquidationDate DateTime
-  successorName   String
-  successorINN    String
-  updatedAt       DateTime? @updatedAt
-  roc             Roc[]
-}
-
-model Roc {
-  id                     String          @id @default(uuid())
-  createdAt              DateTime        @default(now())
-  updatedAt              DateTime?       @updatedAt
-  userAddId              String
-  userUpdatedId          String
-  terminationLetter      Boolean         @default(false)
-  dateSendCorrespondence DateTime
-  docId                  String
-  shelfLife              Int
-  name                   String
-  typeTerm               RocTypeByTerm
-  contractNumber         String
-  dateContract           DateTime
-  agreedTo               DateTime
-  typeContractId         String
-  statusContractId       String
-  terminationСonditions String
-  peculiarities          String
-  folderNo               String
-  doc                    Doc             @relation(fields: [docId], references: [id])
-  statusContract         Type            @relation("Roc_statusContract", fields: [statusContractId], references: [id])
-  typeContract           Type            @relation("Roc_typeContract", fields: [typeContractId], references: [id])
-  userAdd                User            @relation("Roc_UserAdd", fields: [userAddId], references: [id])
-  userUpdated            User            @relation("Roc_UserUpdated", fields: [userUpdatedId], references: [id])
-  rocAttachment          RocAttachment[]
-}
-
-model RocAttachment {
-  id         String   @id @default(uuid())
-  createdAt  DateTime @default(now())
-  source     String
-  type       String
-  recordId   String
-  userAddId  String
-  additional Boolean  @default(false)
-  roc        Roc      @relation(fields: [recordId], references: [id])
-  userAdd    User     @relation(fields: [userAddId], references: [id])
-}
-
-model PrintService {
-  id        String   @id @default(uuid())
-  branchId  String
-  tovarName String
-  tovarCode Int
-  price     Float
-  createdAt DateTime
-  updatedAt DateTime
-  brand     String
-  tovarId   String
-  format    Int
-  branch    Branch   @relation("BranchPrint", fields: [branchId], references: [uuid])
-}
-
-model Slider {
-  id          String    @id @default(uuid())
-  addedById   String
-  updatedById String?
-  name        String
-  category    String
-  visible     Boolean   @default(false)
-  timeVisible Float     @default(0)
-  attachment  String
-  startDate   DateTime?
-  endDate     DateTime?
-  url         String    @default("https://dns-shop.ru/")
-  add         Boolean   @default(false)
-  sale        Boolean   @default(false)
-  order       Int       @default(1)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  addedBy     User      @relation("added", fields: [addedById], references: [id])
-  updatedBy   User?     @relation("updated", fields: [updatedById], references: [id])
-}
-
-model RadioStream {
-  id               String    @id @default(cuid())
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  name             String
-  branchTypeOfDist String
-  frequencySongs   Int
-  fadeInDuration   Int
-  volumeLevel      Int
-  startDate        DateTime
-  endDate          DateTime?
-  attachment       String?
-  isActive         Boolean   @default(true)
-
-  @@map("RadioStream")
-}
-// Модель приложения в магазине
-model App {
-  id            String        @id @default(uuid())
-  name          String        // Название приложения
-  category      AppCategory   // Категория приложения
-  appType       AppType       // Тип приложения
-  description   String?       // Описание приложения
-  icon          String?       // Путь к иконке
-  isActive      Boolean       @default(true)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  
-  // Связи
-  versions      AppVersion[]  // Версии приложения
-  
-  @@index([category])
-  @@index([appType])
-  @@index([isActive])
-  @@index([createdAt])
-}
-
-// Модель версии приложения
-model AppVersion {
-  id          String   @id @default(uuid())
-  appId       String   // ID приложения
-  version     String   // Версия (например, "1.0.0")
-  fileName    String   // Имя файла
-  filePath    String   // Путь к файлу
-  fileSize    Int      // Размер файла в байтах
-  description String?  // Описание изменений в версии
-  isActive    Boolean  @default(true) // Активная версия
-  downloadCount Int    @default(0) // Количество скачиваний
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  // Связи
-  app         App      @relation(fields: [appId], references: [id], onDelete: Cascade)
-  
-  @@index([appId])
-  @@index([version])
-  @@index([isActive])
-  @@index([createdAt])
-}
-
-model Merch {
-  id          String   @id @default(uuid())
-  parentId    String?
-  parent      Merch?   @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
-  children    Merch[]  @relation("CategoryHierarchy")
-  name        String
-  description String?
-  isActive    Boolean  @default(true) // ← новое поле
-  sortOrder   Int      @default(0)    // ← порядок сортировки
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  layer       Int
-  attachments MerchAttachment[]   // Связи с attachments
-}
-
-model MerchAttachment {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
-  userAddId String
-  source    String
-  type      String
-  recordId  String
-  sortOrder Int      @default(0)    // ← порядок сортировки
-  merch     Merch    @relation(fields: [recordId], references: [id], onDelete: Cascade)
-  userAdd   User     @relation(fields: [userAddId], references: [id])
-}
-
-model MerchTgUser {
-  id        String   @id @default(uuid())
-  userId    Int      @unique // Telegram user ID
-  username  String?
-  firstName String?
-  lastName  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  stats     MerchTgUserStats[]
-}
-
-model MerchTgUserStats {
-  id        String       @id @default(uuid())
-  userId    String
-  action    String
-  details   String?
-  timestamp DateTime     @default(now())
-  user      MerchTgUser @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
+// ========================================
+// ENUMS - Перечисления
+// ========================================
 
 enum Role {
   DEVELOPER
@@ -692,3 +77,767 @@ enum AppType {
   ARCHIVE     // Архив (ZIP, RAR)
 }
 
+enum BugReportErrorType {
+  CRASH                 // Критическая ошибка (краш приложения)
+  NETWORK_ERROR         // Ошибка сети
+  AUTHENTICATION_ERROR  // Ошибка аутентификации
+  MEDIA_ERROR           // Ошибка воспроизведения
+  DOWNLOAD_ERROR        // Ошибка загрузки
+  PERMISSION_ERROR      // Ошибка разрешений
+  STORAGE_ERROR         // Ошибка хранилища
+  SOCKET_ERROR          // Ошибка Socket.IO
+  PERFORMANCE_ISSUE     // Проблема производительности
+  UNKNOWN_ERROR         // Неизвестная ошибка
+}
+
+enum BugReportSeverity {
+  LOW       // Низкая - не влияет на работу
+  MEDIUM    // Средняя - частично влияет на работу
+  HIGH      // Высокая - серьезно влияет на работу
+  CRITICAL  // Критическая - приложение не работает
+}
+
+enum NetworkType {
+  WiFi      // WiFi
+  Mobile    // Мобильная сеть
+  Ethernet  // Ethernet
+}
+
+// ========================================
+// СПРАВОЧНИКИ - Reference Data
+// ========================================
+
+// Организационная структура
+model Branch {
+  uuid          String         @id @default(uuid())
+  division      String
+  code          String
+  rrs           String
+  name          String
+  status        Int
+  city          String
+  address       String
+  last_update   DateTime
+  latitude      Float
+  longitude     Float
+  totalArea     Int
+  tradingArea   Int
+  warehouseArea Int
+  type          String
+  typeOfDist    String?
+  images        BranchImage[]
+  devices       Devices[]
+  printService  PrintService[] @relation("BranchPrint")
+  rk            RK[]
+  supplyDocs    SupplyDocs[]   @relation("SupplyDocs_Branch")
+  userData      UserData[]
+}
+
+model Group {
+  uuidPosition      String
+  name              String            @unique
+  uuid              String            @id @default(uuid())
+  groupToolAccesses GroupToolAccess[]
+  positions         Position[]
+}
+
+model Position {
+  groupUuid            String
+  name                 String               @unique
+  uuid                 String               @id @default(uuid())
+  group                Group                @relation(fields: [groupUuid], references: [uuid])
+  positionToolAccesses PositionToolAccess[]
+  userData             UserData[]
+}
+
+// Типы и категории
+model Type {
+  id                     String         @id @default(uuid())
+  model_uuid             String
+  chapter                String
+  name                   String
+  colorHex               String?
+  Media                  Media[]        @relation("TypeMedia")
+  rk_approvalStatus      RKAttachment[] @relation("RK_approvalStatus")
+  rk_typeStructure       RKAttachment[] @relation("RK_typeStructure")
+  roc_statusContract     Roc[]          @relation("Roc_statusContract")
+  roc_typeContract       Roc[]          @relation("Roc_typeContract")
+  SupplyDocsPTiU         SupplyDocs[]   @relation("SupplyDocs_PTiU")
+  SupplyDocsRequirements SupplyDocs[]   @relation("SupplyDocs_Requirements")
+  Tool                   Tool           @relation(fields: [model_uuid], references: [id])
+}
+
+// Инструменты и доступы
+model Tool {
+  id                   String               @id @default(uuid())
+  parent_id            String?
+  name                 String
+  icon                 String
+  link                 String
+  description          String?
+  order                Int                  @default(1)
+  included             Boolean?             @default(true)
+  groupToolAccesses    GroupToolAccess[]
+  Notifications        Notifications[]
+  positionToolAccesses PositionToolAccess[]
+  types                Type[]
+  userToolAccesses     UserToolAccess[]
+}
+
+// ========================================
+// ПОЛЬЗОВАТЕЛИ И АУТЕНТИФИКАЦИЯ
+// ========================================
+
+model User {
+  id                     String                     @id @default(uuid())
+  name                   String
+  email                  String                     @unique
+  position               String
+  branch                 String
+  image                  String?
+  login                  String                     @unique
+  updatedAt              DateTime                   @updatedAt
+  role                   Role                       @default(EMPLOYEE)
+  telegramChatId         String?                    @unique
+  telegramLinkToken      String?                    @unique
+  bookmarks              Bookmarks[]
+  correspondences        Correspondence[]
+  attachments            CorrespondenceAttachment[]
+  MediaAdd               Media[]                    @relation("Media_UserAdd")
+  MediaUpdated           Media[]                    @relation("Media_UserUpdated")
+  MediaAttachment        MediaAttachment[]
+  meterReadings          MeterReading[]
+  news                   News[]
+  Notifications_Receiver Notifications[]            @relation("receiver")
+  Notifications_Sender   Notifications[]            @relation("sender")
+  RKAdded                RK[]                       @relation("RK_UserAdd")
+  RKUpdated              RK[]                       @relation("RK_UserUpdated")
+  RKAttachment           RKAttachment[]
+  RocAdded               Roc[]                      @relation("Roc_UserAdd")
+  RocUpdated             Roc[]                      @relation("Roc_UserUpdated")
+  RocAttachment          RocAttachment[]
+  Slider_Add             Slider[]                   @relation("added")
+  Slider_Updated         Slider[]                   @relation("updated")
+  AddedSupplyDocs        SupplyDocs[]               @relation("SupplyDocs_AddedBy")
+  SupplyDocs             SupplyDocs[]               @relation("SupplyDocs_SettlementSpecialist")
+  SupplyDocsAttachments  SupplyDocsAttachment[]
+  UserSettings           UserSettings[]
+  userToolAccesses       UserToolAccess[]
+  MerchAttachments       MerchAttachment[]
+}
+
+model UserData {
+  uuid        String   @id @default(uuid())
+  birthday    DateTime
+  fio         String
+  code        String
+  branch_uuid String
+  positionId  String
+  email       String   @unique
+  status      String
+  start_date  DateTime
+  end_date    DateTime
+  last_update DateTime @updatedAt
+  branch      Branch   @relation(fields: [branch_uuid], references: [uuid])
+  position    Position @relation(fields: [positionId], references: [uuid])
+}
+
+model UserSettings {
+  id        String @id @default(uuid())
+  userId    String
+  parameter String
+  value     String
+  type      String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, parameter])
+}
+
+// ========================================
+// РЕГИСТРЫ - Operational Data
+// ========================================
+
+// Устройства и оборудование
+model Devices {
+  id           String   @id @default(uuid())
+  createdAt    DateTime @default(now())
+  lastSeen     DateTime @default(now())
+  vendor       String
+  name         String
+  timeFrom     String   @default("08:00")
+  timeUntil    String   @default("22:00")
+  network      String
+  number       String
+  app          String
+  os           String
+  macAddress   String?
+  branchId     String
+  branch       Branch   @relation(fields: [branchId], references: [uuid])
+  userEmail    String?  // Email пользователя для связи с UserData
+}
+
+// Уведомления
+model Notifications {
+  id         String                @id @default(uuid())
+  type       NotificationType
+  channel    NotificationChannel[]
+  action     Json?
+  title      String
+  message    String
+  senderId   String
+  receiverId String
+  read       Boolean               @default(false)
+  toolId     String?
+  priority   NotificationPriority  @default(MEDIUM)
+  expiresAt  DateTime?
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+  receiver   User                  @relation("receiver", fields: [receiverId], references: [id])
+  sender     User                  @relation("sender", fields: [senderId], references: [id])
+  tool       Tool?                 @relation(fields: [toolId], references: [id])
+
+  @@index([receiverId])
+  @@index([read])
+  @@index([createdAt])
+  @@index([senderId])
+  @@index([toolId])
+}
+
+// Новости
+model News {
+  id          String   @id @default(uuid())
+  name        String
+  description String
+  userId      String
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+// Закладки
+model Bookmarks {
+  id         String  @id @default(uuid())
+  name       String
+  url        String  @unique
+  userId     String
+  order      Int     @default(0)
+  user       User    @relation(fields: [userId], references: [id])
+}
+
+// ========================================
+// МОДУЛЬ AXO (Административно-хозяйственный отдел)
+// ========================================
+
+// Показания счетчиков
+model MeterReading {
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  date        DateTime
+  userId      String
+  indications Json
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+// Корреспонденция
+model Correspondence {
+  id          String                     @id @default(uuid())
+  createdAt   DateTime                   @default(now())
+  ReceiptDate DateTime
+  userAdd     String
+  from        String
+  to          String
+  content     String
+  typeMail    String
+  numberMail  String
+  user        User                       @relation(fields: [userAdd], references: [id])
+  attachments CorrespondenceAttachment[]
+}
+
+model CorrespondenceAttachment {
+  id             String         @id @default(uuid())
+  createdAt      DateTime       @default(now())
+  record_id      String
+  userAdd        String
+  source         String
+  correspondence Correspondence @relation(fields: [record_id], references: [id])
+  user           User           @relation(fields: [userAdd], references: [id])
+}
+
+// ========================================
+// МОДУЛЬ СНАБЖЕНИЯ
+// ========================================
+
+// Маршруты
+model Route {
+  id         String     @id @default(uuid())
+  name       String     @unique
+  rrs        String
+  contractor String
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  filials    Filial[]
+  days       RouteDay[]
+}
+
+model RouteDay {
+  id        String   @id @default(uuid())
+  day       DateTime @unique
+  routeId   String
+  createdAt DateTime @default(now())
+  filials   Filial[]
+  route     Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+}
+
+model Filial {
+  id         String    @id @default(uuid())
+  name       String
+  place      Int?
+  accepted   Boolean   @default(false)
+  feedback   String?
+  routeId    String
+  routeDayId String?
+  updatedAt  DateTime  @updatedAt
+  routeDay   RouteDay? @relation(fields: [routeDayId], references: [id], onDelete: Cascade)
+  route      Route     @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  loaders    Loader[]
+}
+
+model Loader {
+  id        String   @id @default(uuid())
+  startTime DateTime
+  endTime   DateTime
+  filialId  String
+  filial    Filial   @relation(fields: [filialId], references: [id], onDelete: Cascade)
+}
+
+// Документы снабжения
+model SupplyDocs {
+  id                     String                 @id @default(uuid())
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime
+  addedById              String
+  inn                    Int
+  counterParty           String
+  demandsForPayment      String
+  statusRequirements     String
+  fileInvoicePayment     String
+  costBranchId           String
+  settlementSpecialistId String?
+  statusOfPTiU           String
+  filePTiU               String
+  note                   String
+  fileNote               String
+  requirementNumber      String
+  addedBy                User                   @relation("SupplyDocs_AddedBy", fields: [addedById], references: [id])
+  costBranch             Branch                 @relation("SupplyDocs_Branch", fields: [costBranchId], references: [uuid])
+  settlementSpecialist   User?                  @relation("SupplyDocs_SettlementSpecialist", fields: [settlementSpecialistId], references: [id])
+  statusOfPTiUId         Type                   @relation("SupplyDocs_PTiU", fields: [statusOfPTiU], references: [id])
+  statusRequirementsId   Type                   @relation("SupplyDocs_Requirements", fields: [statusRequirements], references: [id])
+  supplyDocs             SupplyDocsAttachment[]
+}
+
+model SupplyDocsAttachment {
+  id         String     @id @default(uuid())
+  createdAt  DateTime   @default(now())
+  userAdd    String
+  source     String
+  type       String
+  recordId   String
+  supplyDocs SupplyDocs @relation(fields: [recordId], references: [id])
+  user       User       @relation(fields: [userAdd], references: [id])
+}
+
+// ========================================
+// МОДУЛЬ ДОБАВЛЕНИЯ КОНТЕНТА
+// ========================================
+
+// Медиа
+model Media {
+  id              String            @id @default(uuid())
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime?         @updatedAt
+  userAddId       String
+  userUpdatedId   String?
+  name            String?
+  information     String?
+  urlMedia2       String?
+  typeContentId   String?
+  typeContent     Type?             @relation("TypeMedia", fields: [typeContentId], references: [id])
+  userAdd         User              @relation("Media_UserAdd", fields: [userAddId], references: [id])
+  userUpdated     User?             @relation("Media_UserUpdated", fields: [userUpdatedId], references: [id])
+  MediaAttachment MediaAttachment[]
+}
+
+model MediaAttachment {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  userAddId String
+  source    String
+  type      String
+  recordId  String
+  media     Media    @relation(fields: [recordId], references: [id])
+  userAdd   User     @relation(fields: [userAddId], references: [id])
+}
+
+// Рекламные конструкции
+model RK {
+  id            String         @id @default(uuid())
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime?      @updatedAt
+  userAddId     String
+  userUpdatedId String
+  branchId      String
+  branch        Branch         @relation(fields: [branchId], references: [uuid])
+  userAdd       User           @relation("RK_UserAdd", fields: [userAddId], references: [id])
+  userUpdated   User           @relation("RK_UserUpdated", fields: [userUpdatedId], references: [id])
+  rkAttachment  RKAttachment[]
+}
+
+model RKAttachment {
+  id                 String         @id @default(uuid())
+  createdAt          DateTime       @default(now())
+  userAddId          String
+  source             String
+  type               String
+  recordId           String
+  sizeXY             String
+  clarification      String
+  agreedTo           DateTime?
+  approvalStatusId   String?
+  typeStructureId    String?
+  typeAttachment     String
+  parentAttachmentId String?
+  approvalStatus     Type?          @relation("RK_approvalStatus", fields: [approvalStatusId], references: [id])
+  parentAttachment   RKAttachment?  @relation("RKAttachment_Parent", fields: [parentAttachmentId], references: [id])
+  childAttachments   RKAttachment[] @relation("RKAttachment_Parent")
+  rk                 RK             @relation(fields: [recordId], references: [id])
+  typeStructure      Type?          @relation("RK_typeStructure", fields: [typeStructureId], references: [id])
+  userAdd            User           @relation(fields: [userAddId], references: [id])
+}
+
+// Слайдер
+model Slider {
+  id          String    @id @default(uuid())
+  addedById   String
+  updatedById String?
+  name        String
+  category    String
+  visible     Boolean   @default(false)
+  timeVisible Float     @default(0)
+  attachment  String
+  startDate   DateTime?
+  endDate     DateTime?
+  url         String    @default("https://dns-shop.ru/")
+  add         Boolean   @default(false)
+  sale        Boolean   @default(false)
+  order       Int       @default(1)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  addedBy     User      @relation("added", fields: [addedById], references: [id])
+  updatedBy   User?     @relation("updated", fields: [updatedById], references: [id])
+}
+
+// ========================================
+// МОДУЛЬ ЮРИДИЧЕСКОЙ СЛУЖБЫ
+// ========================================
+
+// Документы
+model Doc {
+  id              String    @id @default(uuid())
+  fullName        String
+  name            String
+  address         String
+  inn             String
+  ogrn            String
+  kpp             String
+  taxationSystem  String
+  phone           String
+  email           String
+  siEgrul         String
+  statusCode      Int
+  deStatusCode    String
+  liquidationDate DateTime
+  successorName   String
+  successorINN    String
+  updatedAt       DateTime? @updatedAt
+  roc             Roc[]
+}
+
+// Реестр контрактов
+model Roc {
+  id                     String          @id @default(uuid())
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime?       @updatedAt
+  userAddId              String
+  userUpdatedId          String
+  terminationLetter      Boolean         @default(false)
+  dateSendCorrespondence DateTime
+  docId                  String
+  shelfLife              Int
+  name                   String
+  typeTerm               RocTypeByTerm
+  contractNumber         String
+  dateContract           DateTime
+  agreedTo               DateTime
+  typeContractId         String
+  statusContractId       String
+  terminationСonditions  String
+  peculiarities          String
+  folderNo               String
+  doc                    Doc             @relation(fields: [docId], references: [id])
+  statusContract         Type            @relation("Roc_statusContract", fields: [statusContractId], references: [id])
+  typeContract           Type            @relation("Roc_typeContract", fields: [typeContractId], references: [id])
+  userAdd                User            @relation("Roc_UserAdd", fields: [userAddId], references: [id])
+  userUpdated            User            @relation("Roc_UserUpdated", fields: [userUpdatedId], references: [id])
+  rocAttachment          RocAttachment[]
+}
+
+model RocAttachment {
+  id         String   @id @default(uuid())
+  createdAt  DateTime @default(now())
+  source     String
+  type       String
+  recordId   String
+  userAddId  String
+  additional Boolean  @default(false)
+  roc        Roc      @relation(fields: [recordId], references: [id])
+  userAdd    User     @relation(fields: [userAddId], references: [id])
+}
+
+// ========================================
+// МОДУЛЬ РОЗНИЧНОЙ ТОРГОВЛИ
+// ========================================
+
+// Печатные услуги
+model PrintService {
+  id        String   @id @default(uuid())
+  branchId  String
+  tovarName String
+  tovarCode Int
+  price     Float
+  createdAt DateTime
+  updatedAt DateTime
+  brand     String
+  tovarId   String
+  format    Int
+  branch    Branch   @relation("BranchPrint", fields: [branchId], references: [uuid])
+}
+
+// Магазин приложений
+model App {
+  id            String        @id @default(uuid())
+  name          String        // Название приложения
+  category      AppCategory   // Категория приложения
+  appType       AppType       // Тип приложения
+  description   String?       // Описание приложения
+  icon          String?       // Путь к иконке
+  isActive      Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  
+  // Связи
+  versions      AppVersion[]  // Версии приложения
+  
+  @@index([category])
+  @@index([appType])
+  @@index([isActive])
+  @@index([createdAt])
+}
+
+// Модель версии приложения
+model AppVersion {
+  id          String   @id @default(uuid())
+  appId       String   // ID приложения
+  version     String   // Версия (например, "1.0.0")
+  fileName    String   // Имя файла
+  filePath    String   // Путь к файлу
+  fileSize    Int      // Размер файла в байтах
+  description String?  // Описание изменений в версии
+  isActive    Boolean  @default(true) // Активная версия
+  downloadCount Int    @default(0) // Количество скачиваний
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Связи
+  app         App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+  
+  @@index([appId])
+  @@index([version])
+  @@index([isActive])
+  @@index([createdAt])
+}
+
+// ========================================
+// МОДУЛЬ РАДИО
+// ========================================
+
+model RadioStream {
+  id               String    @id @default(cuid())
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  name             String
+  branchTypeOfDist String
+  frequencySongs   Int
+  fadeInDuration   Int
+  volumeLevel      Int
+  startDate        DateTime
+  endDate          DateTime?
+  attachment       String?
+  isActive         Boolean   @default(true)
+
+  @@map("RadioStream")
+}
+
+// Отчеты об ошибках DNS Radio
+model BugReport {
+  id                String              @id @default(uuid())
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  
+  // Основная информация
+  deviceId          String              // Уникальный ID устройства
+  userId            String?             // ID пользователя
+  userEmail         String?             // Email пользователя
+  branchType        String?             // Тип филиала
+  branchName        String?             // Название филиала
+  
+  // Информация об ошибке
+  errorType         BugReportErrorType  // Тип ошибки
+  errorMessage      String              // Описание ошибки
+  stackTrace        String?             // Стек вызовов
+  severity          BugReportSeverity   // Серьезность ошибки
+  
+  // Информация об устройстве
+  appVersion        String              // Версия приложения
+  androidVersion    String?             // Версия Android
+  deviceModel       String?             // Модель устройства
+  deviceManufacturer String?            // Производитель
+  
+  // Системная информация
+  memoryUsage       Int?                // Использование памяти в MB
+  storageFree       Int?                // Свободное место в MB
+  networkType       NetworkType?        // Тип сети
+  isOnline          Boolean?            // Статус подключения
+  
+  // Контекст
+  userAction        String?             // Действие пользователя
+  sessionId         String?             // ID сессии
+  timestamp         DateTime            // Время ошибки
+  
+  // Дополнительные данные (JSON)
+  additionalData    Json?               // Дополнительная информация
+  
+  // Статус
+  isAutoReport      Boolean             @default(true)  // Автоматический отчет
+  isResolved        Boolean             @default(false) // Решена ли ошибка
+  resolvedAt        DateTime?           // Время решения
+  resolvedBy        String?             // Кто решил
+  resolutionNotes   String?             // Заметки о решении
+  
+  // Индексы для быстрого поиска
+  @@index([deviceId])
+  @@index([errorType])
+  @@index([severity])
+  @@index([isResolved])
+  @@index([createdAt])
+  @@index([timestamp])
+  @@index([userEmail])
+  @@index([branchType])
+}
+
+// ========================================
+// МОДУЛЬ МЕРЧАНДАЙЗИНГА
+// ========================================
+
+model Merch {
+  id          String   @id @default(uuid())
+  parentId    String?
+  parent      Merch?   @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children    Merch[]  @relation("CategoryHierarchy")
+  name        String
+  description String?
+  isActive    Boolean  @default(true) // ← новое поле
+  sortOrder   Int      @default(0)    // ← порядок сортировки
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  layer       Int
+  attachments MerchAttachment[]   // Связи с attachments
+}
+
+model MerchAttachment {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  userAddId String
+  source    String
+  type      String
+  recordId  String
+  sortOrder Int      @default(0)    // ← порядок сортировки
+  merch     Merch    @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  userAdd   User     @relation(fields: [userAddId], references: [id])
+}
+
+// Telegram бот для мерча
+model MerchTgUser {
+  id        String   @id @default(uuid())
+  userId    Int      @unique // Telegram user ID
+  username  String?
+  firstName String?
+  lastName  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  stats     MerchTgUserStats[]
+}
+
+model MerchTgUserStats {
+  id        String       @id @default(uuid())
+  userId    String
+  action    String
+  details   String?
+  timestamp DateTime     @default(now())
+  user      MerchTgUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ========================================
+// СВЯЗУЮЩИЕ ТАБЛИЦЫ - Junction Tables
+// ========================================
+
+// Доступы к инструментам
+model GroupToolAccess {
+  id          String      @id @default(uuid())
+  toolId      String
+  accessLevel AccessLevel
+  groupId     String
+  group       Group       @relation(fields: [groupId], references: [uuid])
+  tool        Tool        @relation(fields: [toolId], references: [id])
+
+  @@unique([groupId, toolId], name: "groupId_toolId")
+}
+
+model PositionToolAccess {
+  id          String      @id @default(uuid())
+  toolId      String
+  accessLevel AccessLevel
+  positionId  String
+  position    Position    @relation(fields: [positionId], references: [uuid])
+  tool        Tool        @relation(fields: [toolId], references: [id])
+
+  @@unique([positionId, toolId], name: "positionId_toolId")
+}
+
+model UserToolAccess {
+  id          String      @id @default(uuid())
+  userId      String
+  toolId      String
+  accessLevel AccessLevel
+  tool        Tool        @relation(fields: [toolId], references: [id])
+  user        User        @relation(fields: [userId], references: [id])
+
+  @@unique([userId, toolId], name: "userId_toolId")
+}
+
+// Изображения филиалов
+model BranchImage {
+  id          String @id @default(uuid())
+  link        String
+  branch_uuid String
+  branch      Branch @relation(fields: [branch_uuid], references: [uuid])
+}

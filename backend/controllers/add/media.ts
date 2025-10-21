@@ -75,7 +75,7 @@ const processMediaAttachments = async (
       await tx.mediaAttachment.create({
         data: {
           userAddId,
-          source: file.path,
+          source: file.filename, // Сохраняем название файла как оно сохранено на диске
           type: file.mimetype,
           recordId: mediaId,
         }

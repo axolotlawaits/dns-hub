@@ -5,18 +5,20 @@ import {
   Button, 
   Text, 
   Stack, 
-  Badge,
   Progress,
-  Box
+  Box,
+  TextInput
 } from '@mantine/core';
 import { 
   IconPlayerPlay, 
   IconPlayerPause, 
   IconClock,
-  IconWifi,
+  IconWifi, 
   IconWifiOff
 } from '@tabler/icons-react';
+import { CustomModal } from '../../../../utils/CustomModal';
 import { API } from '../../../../config/constants';
+import { useUserContext } from '../../../../hooks/useUserContext';
 
 interface WebRadioPlayerProps {
   className?: string;
@@ -26,6 +28,8 @@ interface WebRadioPlayerProps {
     start: string;
     end: string;
   };
+  onTimeChange?: (newTime: { start: string; end: string }) => void;
+  isActive?: boolean; // Новый пропс для контроля активности вкладки
 }
 
 interface RadioStream {
@@ -59,8 +63,78 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
   className, 
   branchName = "Мой филиал", 
   branchType = "Магазин",
-  workingTime = { start: "08:00", end: "22:00" }
+  workingTime = { start: "08:00", end: "22:00" },
+  onTimeChange,
+  isActive = true
 }) => {
+  const { user } = useUserContext();
+  
+  // Состояние для IP пользователя
+  const [userIP, setUserIP] = useState<string>('localhost');
+  
+  // Состояние для модального окна смены времени
+  const [timeModalOpen, setTimeModalOpen] = useState(false);
+  const [tempTimeStart, setTempTimeStart] = useState(workingTime.start);
+  const [tempTimeEnd, setTempTimeEnd] = useState(workingTime.end);
+  
+  // Функция для получения IP устройства в локальной сети
+  const getUserIP = useCallback(async () => {
+    try {
+      // Используем WebRTC для получения локального IP
+      const pc = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+      });
+      
+      pc.createDataChannel('');
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          const candidate = event.candidate.candidate;
+          const ipMatch = candidate.match(/([0-9]{1,3}(\.[0-9]{1,3}){3})/);
+          if (ipMatch && !ipMatch[1].startsWith('127.') && !ipMatch[1].startsWith('169.254.')) {
+            setUserIP(ipMatch[1]);
+            console.log('🌐 [WebRadioPlayer] Получен локальный IP устройства:', ipMatch[1]);
+            pc.close();
+          }
+        }
+      };
+      
+      // Fallback через 3 секунды
+      setTimeout(() => {
+        if (userIP === 'localhost') {
+          setUserIP(window.location.hostname);
+          console.log('⚠️ [WebRadioPlayer] Используем hostname как fallback:', window.location.hostname);
+        }
+        pc.close();
+      }, 3000);
+      
+    } catch (error) {
+      console.warn('⚠️ [WebRadioPlayer] Не удалось получить локальный IP:', error);
+      // Fallback на hostname
+      setUserIP(window.location.hostname);
+    }
+  }, [userIP]);
+
+  // Функции для работы с модальным окном времени
+  const openTimeModal = useCallback(() => {
+    setTempTimeStart(workingTime.start);
+    setTempTimeEnd(workingTime.end);
+    setTimeModalOpen(true);
+  }, [workingTime.start, workingTime.end]);
+
+  const closeTimeModal = useCallback(() => {
+    setTimeModalOpen(false);
+  }, []);
+
+  const saveTimeChanges = useCallback(() => {
+    if (onTimeChange && tempTimeStart && tempTimeEnd) {
+      onTimeChange({ start: tempTimeStart, end: tempTimeEnd });
+      setTimeModalOpen(false);
+    }
+  }, [onTimeChange, tempTimeStart, tempTimeEnd]);
+  
   // Состояние воспроизведения
   const [playbackState, setPlaybackState] = useState<PlaybackState>('stopped');
   const [downloadState] = useState<DownloadState>('idle');
@@ -84,20 +158,73 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
   
   const audioRef = useRef<HTMLAudioElement>(null);
 
+  // Создание стабильного идентификатора браузера
+  const getBrowserFingerprint = useCallback(() => {
+    const storageKey = 'dns-radio-web-player-id';
+    let browserId: string | null = null;
+    
+    try {
+      browserId = localStorage.getItem(storageKey);
+    } catch (error) {
+      console.warn('localStorage недоступен:', error);
+    }
+    
+    if (!browserId) {
+      // Создаем уникальный идентификатор на основе характеристик браузера
+      const fingerprint = [
+        navigator.userAgent,
+        navigator.language,
+        screen.width + 'x' + screen.height,
+        new Date().getTimezoneOffset(),
+        window.location.hostname
+      ].join('|');
+      
+      // Хешируем для получения короткого ID
+      try {
+        browserId = 'web-' + btoa(fingerprint).substring(0, 16).replace(/[^a-zA-Z0-9]/g, '');
+      } catch (error) {
+        // Fallback если btoa недоступен - используем простой хеш
+        let hash = 0;
+        for (let i = 0; i < fingerprint.length; i++) {
+          const char = fingerprint.charCodeAt(i);
+          hash = ((hash << 5) - hash) + char;
+          hash = hash & hash; // Convert to 32bit integer
+        }
+        browserId = 'web-' + Math.abs(hash).toString(36).substring(0, 16);
+      }
+      
+      try {
+        localStorage.setItem(storageKey, browserId);
+      } catch (error) {
+        console.warn('Не удалось сохранить в localStorage:', error);
+      }
+    }
+    
+    return browserId;
+  }, []);
+
   // Регистрация веб-плеера как устройства
   const registerWebPlayer = useCallback(async () => {
     try {
+      const browserId = getBrowserFingerprint();
+      
+      // Проверяем что у нас есть пользователь
+      if (!user?.email) {
+        console.warn('Пользователь не найден, пропускаем регистрацию устройства');
+        return;
+      }
+      
       const deviceData = {
-        userEmail: 'web-player@dns-hub.local',
+        userEmail: user.email,
         branchType: branchType,
-        deviceName: 'DNS Radio Web',
+        deviceName: `DNS Radio Web (${browserId})`,
         vendor: 'Web Browser',
-        network: window.location.hostname,
-        number: '1',
+        network: userIP.includes('.') ? userIP.split('.').slice(0, 3).join('.') + '.' : userIP,
+        number: userIP.includes('.') ? userIP.split('.')[3] || '1' : '1',
         app: 'DNS Radio Web',
         os: navigator.userAgent,
-        deviceIP: window.location.hostname,
-        macAddress: 'web-player-' + Date.now()
+        deviceIP: userIP,
+        macAddress: browserId
       };
 
       const response = await fetch(`${API}/device/create`, {
@@ -116,7 +243,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     } catch (err) {
       console.log('⚠️ [WebRadioPlayer] Ошибка регистрации устройства:', err);
     }
-  }, [branchType]);
+  }, [branchType, user?.email, getBrowserFingerprint]);
 
   // Загрузка папок с музыкой
   const loadMusicFolders = useCallback(async () => {
@@ -162,7 +289,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
           }));
         setMusicTracks(musicTracks);
         console.log('🎵 [WebRadioPlayer] Загружено треков:', musicTracks.length);
-        console.log('🎵 [WebRadioPlayer] Порядок треков:', musicTracks.map(t => `${t.index}: ${t.fileName}`));
+        console.log('🎵 [WebRadioPlayer] Порядок треков:', musicTracks.map((t: any) => `${t.index}: ${t.fileName}`));
         return musicTracks;
       }
       return [];
@@ -199,6 +326,9 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
   // Инициализация при загрузке компонента
   useEffect(() => {
     const initializePlayer = async () => {
+      // Получаем IP пользователя
+      await getUserIP();
+      
       await loadStreams();
       const folderName = await loadMusicFolders();
       if (folderName) {
@@ -206,12 +336,18 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       }
     };
     initializePlayer();
-  }, [loadStreams, loadMusicFolders, loadMusicFromFolder]);
+  }, [getUserIP, loadStreams, loadMusicFolders, loadMusicFromFolder]);
 
-  // Регистрация веб-плеера как устройства (отдельный useEffect)
+  // Регистрация веб-плеера как устройства (только один раз)
+  const [isRegistered, setIsRegistered] = useState(false);
+  
   useEffect(() => {
-    registerWebPlayer();
-  }, [registerWebPlayer]);
+    if (!isRegistered) {
+      registerWebPlayer().then(() => {
+        setIsRegistered(true);
+      });
+    }
+  }, [registerWebPlayer, isRegistered]);
 
 
   // Обновление громкости
@@ -281,12 +417,20 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
   // Heartbeat для веб-плеера
   const sendHeartbeat = useCallback(async () => {
     try {
+      const browserId = getBrowserFingerprint();
+      
+      // Проверяем что у нас есть пользователь
+      if (!user?.email) {
+        console.warn('Пользователь не найден, пропускаем heartbeat');
+        return;
+      }
+      
       const heartbeatData = {
-        deviceId: 'web-player-' + Date.now(),
+        deviceId: browserId,
         appVersion: '1.0.0',
-        macAddress: 'web-player-' + Date.now(),
-        currentIP: window.location.hostname,
-        userEmail: 'web-player@dns-hub.local'
+        macAddress: browserId,
+        currentIP: userIP,
+        userEmail: user.email
       };
 
       const response = await fetch(`${API}/device/heartbeat`, {
@@ -303,7 +447,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     } catch (err) {
       console.log('⚠️ [WebRadioPlayer] Ошибка heartbeat:', err);
     }
-  }, []);
+  }, [getBrowserFingerprint, user?.email]);
 
   // Логика выбора следующего трека/потока
   const findNextTrack = useCallback(() => {
@@ -444,6 +588,17 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     return () => clearInterval(interval);
   }, [sendHeartbeat]);
 
+  // Контроль активности вкладки - останавливаем плеер при переключении
+  useEffect(() => {
+    if (!isActive && playbackState === 'playing') {
+      console.log('🔄 [WebRadioPlayer] Вкладка неактивна, останавливаем плеер');
+      setPlaybackState('paused');
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+    }
+  }, [isActive, playbackState]);
+
   // Обработчики управления
   const handlePlayPause = async () => {
     if (!audioRef.current) return;
@@ -482,22 +637,6 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     }
   };
 
-  const handleStop = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      setPlaybackState('stopped');
-    }
-  };
-
-
-  const handleStreamSelect = (stream: RadioStream) => {
-    setCurrentStream(stream);
-    setCurrentTrack(null); // Сбрасываем текущий трек
-    if (playbackState === 'playing') {
-      handleStop();
-    }
-  };
 
   return (
     <Box className={`web-radio-player ${className || ''}`}>
@@ -509,7 +648,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
           radius="md"
           style={{
             background: 'var(--color-error-100)',
-            border: '1px solid var(--color-error-500)',
+
             display: 'flex',
             alignItems: 'center',
             gap: 'var(--space-2)'
@@ -531,7 +670,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
         shadow="sm"
         style={{
           background: 'var(--theme-bg-elevated)',
-          border: '1px solid var(--theme-border)',
+
           backdropFilter: 'blur(8px)',
           WebkitBackdropFilter: 'blur(8px)',
           minHeight: '500px',
@@ -541,22 +680,6 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
         {/* Заголовок с логотипом */}
         <Group justify="space-between" align="center" mb="xl">
           <Group gap="md" align="center">
-            <Box
-              style={{
-                width: '120px',
-                height: '70px',
-                background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
-                borderRadius: 'var(--radius-md)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'white',
-                fontWeight: 'bold',
-                fontSize: '18px'
-              }}
-            >
-              DNS Hub
-            </Box>
             <Box>
               <Text size="xs" c="dimmed" style={{ fontFamily: 'var(--font-family-primary)' }}>
                 {new Date().toLocaleDateString('ru-RU', { 
@@ -601,7 +724,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
                 <div style={{ 
                   width: '32px', 
                   height: '32px', 
-                  border: '3px solid white', 
+                  
                   borderTop: '3px solid transparent', 
                   borderRadius: '50%', 
                   animation: 'spin 1s linear infinite' 
@@ -702,9 +825,22 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
             <Text size="xl" fw={500} style={{ color: 'var(--theme-text-primary)' }}>
               {branchName}
             </Text>
-            <Text size="sm" c="dimmed" mt="xs">
-              {branchType} ({workingTime.start} — {workingTime.end})
-            </Text>
+            <Group gap="xs" align="center" mt="xs">
+              <Text size="sm" c="dimmed">
+                {branchType} ({workingTime.start} — {workingTime.end})
+              </Text>
+              {onTimeChange && (
+                <Button
+                  variant="subtle"
+                  size="xs"
+                  color="blue"
+                  onClick={openTimeModal}
+                  leftSection={<IconClock size={12} />}
+                >
+                  Изменить
+                </Button>
+              )}
+            </Group>
           </Box>
           
           <Box style={{ textAlign: 'right' }}>
@@ -723,49 +859,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
         </Box>
       </Paper>
 
-      {/* Список потоков */}
-      {streams.length > 0 && (
-        <Paper p="md" radius="lg" shadow="sm" mt="md" style={{ background: 'var(--theme-bg-elevated)' }}>
-          <Text size="md" fw={500} mb="md" style={{ color: 'var(--theme-text-primary)' }}>
-            Доступные радио потоки:
-          </Text>
-          <Stack gap="xs">
-            {streams.map((stream) => (
-              <Paper
-                key={stream.id}
-                p="sm"
-                radius="md"
-                className={`stream-item ${currentStream?.id === stream.id ? 'active' : ''}`}
-                style={{
-                  background: currentStream?.id === stream.id ? 'var(--color-primary-100)' : 'var(--theme-bg-subtle)',
-                  border: currentStream?.id === stream.id ? '1px solid var(--color-primary-500)' : '1px solid var(--theme-border)',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease'
-                }}
-                onClick={() => handleStreamSelect(stream)}
-              >
-                <Group justify="space-between" align="center">
-                  <div>
-                    <Text size="sm" fw={500}>
-                      📻 {stream.name}
-                    </Text>
-                    <Text size="xs" c="dimmed">
-                      {stream.branchTypeOfDist} • Каждые {stream.frequencySongs} песен
-                    </Text>
-                  </div>
-                  <Badge 
-                    size="xs" 
-                    color={stream.isActive ? 'green' : 'gray'} 
-                    variant="light"
-                  >
-                    {stream.isActive ? 'Активен' : 'Неактивен'}
-                  </Badge>
-                </Group>
-              </Paper>
-            ))}
-          </Stack>
-        </Paper>
-      )}
+      
 
       {/* Ошибки */}
       {error && (
@@ -775,7 +869,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
           mt="md"
           style={{ 
             background: 'var(--color-error-100)', 
-            border: '1px solid var(--color-error-500)' 
+            
           }}
         >
           <Text size="sm" c="red">
@@ -786,6 +880,58 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
 
       {/* Скрытый аудио элемент */}
       <audio ref={audioRef} preload="metadata" />
+
+      {/* Модальное окно для смены времени */}
+      <CustomModal
+        opened={timeModalOpen}
+        onClose={closeTimeModal}
+        title="Настройка времени воспроизведения"
+        icon={<IconClock size={20} />}
+        size="sm"
+      >
+        <Stack gap="md">
+          <Text size="sm" c="dimmed">
+            Укажите время начала и окончания воспроизведения музыки
+          </Text>
+          
+          <Group grow>
+            <Stack gap="xs">
+              <Text size="sm" fw={500}>Время начала</Text>
+              <TextInput
+                type="time"
+                value={tempTimeStart}
+                onChange={(e) => setTempTimeStart(e.target.value)}
+                placeholder="HH:MM"
+              />
+            </Stack>
+            
+            <Stack gap="xs">
+              <Text size="sm" fw={500}>Время окончания</Text>
+              <TextInput
+                type="time"
+                value={tempTimeEnd}
+                onChange={(e) => setTempTimeEnd(e.target.value)}
+                placeholder="HH:MM"
+              />
+            </Stack>
+          </Group>
+          
+          <Group justify="flex-end" gap="sm" mt="md">
+            <Button
+              variant="subtle"
+              onClick={closeTimeModal}
+            >
+              Отмена
+            </Button>
+            <Button
+              onClick={saveTimeChanges}
+              disabled={!tempTimeStart || !tempTimeEnd}
+            >
+              Сохранить
+            </Button>
+          </Group>
+        </Stack>
+      </CustomModal>
     </Box>
   );
 };

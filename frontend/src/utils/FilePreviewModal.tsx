@@ -210,11 +210,11 @@ export const FilePreviewModal = ({
           ? decodeURIComponent(source.split('\\').pop() || source.split('/').pop() || 'Файл')
           : source.name),
       fileUrl: typeof source === 'string'
-        ? source.startsWith('http') || source.startsWith('blob:') ? source : `${API}/${source}`
+        ? source.startsWith('http') || source.startsWith('blob:') ? source : `${API}/public/add/media/${source}`
         : URL.createObjectURL(source),
       fileExt: ext,
       downloadUrl: typeof source === 'string'
-        ? computeDownloadUrl(source.startsWith('http') || source.startsWith('blob:') ? source : `${API}/${source}`)
+        ? (source.startsWith('http') || source.startsWith('blob:') ? source : `${API}/public/add/media/${source}`)
         : ''
     };
   }, [currentAttachment, API, fileMimeType]);
@@ -1198,7 +1198,7 @@ export const FilePreviewModal = ({
                   onClick={async () => {
                     try {
                       const url = downloadUrl || fileUrl;
-                      // Всегда предпочитаем /download вариант
+                      // Создаем URL для скачивания, заменяя /view на /download
                       const finalUrl = url.replace(/\/view(?=(\?|#|$))/i, '/download');
                       if (url.startsWith('http')) {
                         const headers: HeadersInit = {};
@@ -1217,7 +1217,7 @@ export const FilePreviewModal = ({
                         URL.revokeObjectURL(objectUrl);
                       } else {
                         const link = document.createElement('a');
-                        link.href = url;
+                        link.href = finalUrl;
                         link.download = fileName;
                         link.click();
                       }
