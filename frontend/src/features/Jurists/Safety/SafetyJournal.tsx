@@ -4,7 +4,6 @@ import { useUserContext } from '../../../hooks/useUserContext';
 import { useAccessContext } from '../../../hooks/useAccessContext';
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { notificationSystem } from '../../../utils/Push';
-import FloatingActionButton from '../../../components/FloatingActionButton';
 import { Button, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Paper, Badge, Tabs, Tooltip, Alert, Divider, Select, Pagination, Popover, Card, ThemeIcon, Accordion, Modal, Textarea } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
@@ -515,7 +514,7 @@ type ResponsibleObjDataType = {
     setEmployeesData([])
     setResponsible({employeeId: '', responsibilityType: ''})
   }
-  console.log(responsible)
+
   return (
     <Paper withBorder radius="md" p="lg" style={{ background: 'var(--theme-bg-primary)' }}>
       <Stack gap="md">
@@ -1450,12 +1449,6 @@ export default function SafetyJournal() {
       title: 'Журналы охраны труда и пожарной безопасности',
       subtitle: 'Управление журналами по охране труда и пожарной безопасности',
       icon: <Text size="xl" fw={700} c="white">🛡️</Text>,
-      actionButton: {
-        text: 'Обновить',
-        onClick: handleRefreshData,
-        icon: <IconRefresh size={22} />,
-        loading: loading
-      }
     });
 
     return () => clearHeader();
@@ -1554,7 +1547,8 @@ export default function SafetyJournal() {
           <Paper withBorder radius="md" p="md" style={{ background: 'var(--theme-bg-elevated)' }}>
           <Stack gap="md">
         {/* Вкладки */}
-              <Tabs value={activeTab} onChange={(value) => {setActiveTab(value || 'all'), setBranchPagination( prev => ({ ...prev, page: 1 }))}}>
+        <Tabs value={activeTab} onChange={(value) => {setActiveTab(value || 'all'), setBranchPagination( prev => ({ ...prev, page: 1 }))}}>
+          <Group justify='space-between'>
           <Tabs.List>
             <Tabs.Tab value="all" leftSection={<IconFileText size={16} />}>
               Все журналы ({stats.total})
@@ -1578,6 +1572,15 @@ export default function SafetyJournal() {
               На проверке ({stats.under_review || 0})
             </Tabs.Tab>
           </Tabs.List>
+          <Group gap='sm'>
+            <ActionIcon variant="outline" size={35} aria-label="Settings" onClick={handleRefreshData}>
+              <IconRefresh  stroke={1.5} />
+            </ActionIcon>
+            <ActionIcon variant="outline" size={35} aria-label="Settings" onClick={qrOpen}>
+              <IconQrcode style={{ width: '80%', height: '80%' }} stroke={1.5} />
+            </ActionIcon>
+          </Group>
+          </Group>
         </Tabs>
 
               {/* Фильтры в аккордеоне */}
@@ -1806,20 +1809,6 @@ export default function SafetyJournal() {
         onConfirm={handleDeleteJournal}
         initialValues={{}}
       />
-
-      {/* Floating Action Button */}
-      <FloatingActionButton />
-      <ActionIcon variant="filled" size={50} aria-label="Settings" onClick={qrOpen}
-        style={{  
-          position: 'fixed',
-          bottom: '225px',
-          right: '40px',
-          zIndex: '1000',
-          pointerEvents: 'auto'
-        }}
-      >
-        <IconQrcode style={{ width: '85%', height: '85%' }} stroke={1.5} />
-      </ActionIcon>
       <Modal opened={qrOpened} onClose={qrClose} title="QR-код телеграм бота" centered zIndex={99999} size="auto">
         <Image
           radius="md"
