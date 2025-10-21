@@ -265,10 +265,7 @@ const FileUploadComponent = memo(({
     const originalName = typeof attachment.source === 'string'
       ? attachment.source.split('\\').pop() || 'Файл'
       : (attachment.source as File).name;
-    const normalizedPath = typeof attachment.source === 'string'
-      ? String(attachment.source).replace(/\\/g, '/')
-      : '';
-    const previewUrl = typeof attachment.source === 'string' ? `${API}/${normalizedPath}` : '';
+    const previewUrl = typeof attachment.source === 'string' ? `${API}/public/add/media/${attachment.source}` : '';
 
 
     return (
@@ -736,7 +733,7 @@ const FileFieldsCard = memo(({
                 {typeof file.source === 'string' ? (
                   isImageFile(String(file.source).split('\\').pop() || '') ? (
                     <img 
-                      src={`${API}/${String(file.source).replace(/\\/g, '/')}`} 
+                      src={`${API}/public/add/media/${String(file.source).split('\\').pop() || String(file.source).split('/').pop()}`} 
                       alt={String(file.source).split('\\').pop() || 'Файл'} 
                       style={{ 
                         height: 60, 
@@ -1459,8 +1456,7 @@ export const DynamicFormModal = ({
     const fileName = typeof attachment.source === 'string'
       ? attachment.source.split('\\').pop() || 'Файл'
       : attachment.source.name;
-    const normalized = typeof attachment.source === 'string' ? String(attachment.source).replace(/\\/g, '/') : '';
-    const fileUrl = `${API}/${normalized}`;
+    const fileUrl = `${API}/public/add/media/${attachment.source}`;
     const isImage = isImageFile(fileName);
     const fileId = attachment.id || `temp-${fileName}-${Math.random().toString(36).slice(2, 11)}`;
     return (
@@ -1469,17 +1465,6 @@ export const DynamicFormModal = ({
           <Group gap="md" onClick={() => {
             setPreviewId(fileId);
           }} style={{ cursor: 'pointer', flex: 1 }}>
-            {/* Тестовая кнопка для отладки */}
-            <Button 
-              size="xs" 
-              variant="outline" 
-              onClick={(e) => {
-                e.stopPropagation();
-                setPreviewId(fileId);
-              }}
-            >
-              Test
-            </Button>
             {isImage ? (
               <img 
                 src={fileUrl} 
@@ -1512,7 +1497,7 @@ export const DynamicFormModal = ({
                 wordBreak: 'break-all',
                 lineHeight: 1.4
               }}>
-                {fileName}
+                {fileName.split('/').pop() || fileName}
               </Text>
             </div>
           </Group>
@@ -1816,7 +1801,9 @@ export const DynamicFormModal = ({
           const mapped = all.map((a: any) => ({
             id: String(a.id || `temp-${Math.random().toString(36).slice(2, 11)}`),
             name: typeof a.source === 'string' ? (a.source.split('\\').pop() || 'Файл') : (a.source?.name || 'Файл'),
-            source: typeof a.source === 'string' ? `${API}/${a.source}` : (a.source ? a.source : ''),
+            source: typeof a.source === 'string' ? 
+              (a.source.startsWith('http') ? a.source : `${API}/public/add/media/${a.source}`) : 
+              (a.source ? a.source : ''),
           }));
           return mapped;
         })()}

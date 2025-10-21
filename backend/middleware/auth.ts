@@ -19,36 +19,104 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
     if (err instanceof jwt.TokenExpiredError) {
       return res.status(401).json({ message: 'Token has expired' });
     }
-    console.log('JWT verification error:', err);
+    console.log('JWT verification error:', err instanceof Error ? err.message : 'Unknown error');
     return res.sendStatus(401);
   }
 }
 
-export const checkAccess = async (req: Request, res: Response, next: NextFunction) => {
-  const { userId, positionId, groupId } = (req as any).token
-  /* need to get toolId here */
-  const temp = 'dd6ec264-4e8c-477a-b2d6-c62a956422c0'
+// Middleware для проверки доступа к конкретному инструменту
+export const checkAccess = (toolId: string) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { userId, positionId, groupId } = (req as any).token;
 
-  const userAccess = await prisma.userToolAccess.findUnique({
-    where: { userId_toolId: { userId, toolId: temp }}
-  })
+      if (!userId) {
+        return res.status(401).json({ message: 'User ID not found in token' });
+      }
 
-  if (userAccess) return next()
+      // Проверяем доступ пользователя
+      const userAccess = await prisma.userToolAccess.findUnique({
+        where: { userId_toolId: { userId, toolId } }
+      });
 
-  const positionAccess = await prisma.positionToolAccess.findUnique({
-    where: {positionId_toolId: { positionId, toolId: temp }}
-  })
+      if (userAccess) return next();
 
-  if (positionAccess) return next()
+      // Проверяем доступ по должности
+      if (positionId) {
+        const positionAccess = await prisma.positionToolAccess.findUnique({
+          where: { positionId_toolId: { positionId, toolId } }
+        });
 
-  const groupAccess = await prisma.groupToolAccess.findUnique({
-    where: {groupId_toolId: { groupId, toolId: temp }}
-  })
+        if (positionAccess) return next();
+      }
 
-  if (groupAccess) return next()
+      // Проверяем доступ по группе
+      if (groupId) {
+        const groupAccess = await prisma.groupToolAccess.findUnique({
+          where: { groupId_toolId: { groupId, toolId } }
+        });
 
-  return res.status(403).json({ message: 'Access denied' });
-}
+        if (groupAccess) return next();
+      }
+
+      return res.status(403).json({ message: 'Access denied' });
+    } catch (error) {
+      console.error('Error checking access:', error);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  };
+};
+
+// Middleware для проверки доступа по ссылке (legacy)
+export const checkAccessByLink = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { userId, positionId, groupId } = (req as any).token;
+    const toolLink = req.path.split('/')[2]; // Извлекаем tool link из пути
+
+    if (!userId) {
+      return res.status(401).json({ message: 'User ID not found in token' });
+    }
+
+    // Находим tool по ссылке
+    const tool = await prisma.tool.findFirst({
+      where: { link: toolLink }
+    });
+
+    if (!tool) {
+      return res.status(404).json({ message: 'Tool not found' });
+    }
+
+    // Проверяем доступ пользователя
+    const userAccess = await prisma.userToolAccess.findUnique({
+      where: { userId_toolId: { userId, toolId: tool.id } }
+    });
+
+    if (userAccess) return next();
+
+    // Проверяем доступ по должности
+    if (positionId) {
+      const positionAccess = await prisma.positionToolAccess.findUnique({
+        where: { positionId_toolId: { positionId, toolId: tool.id } }
+      });
+
+      if (positionAccess) return next();
+    }
+
+    // Проверяем доступ по группе
+    if (groupId) {
+      const groupAccess = await prisma.groupToolAccess.findUnique({
+        where: { groupId_toolId: { groupId, toolId: tool.id } }
+      });
+
+      if (groupAccess) return next();
+    }
+
+    return res.status(403).json({ message: 'Access denied' });
+  } catch (error) {
+    console.error('Error checking access by link:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};
 
 export const refreshToken = async (req: Request, res: Response): Promise<any> => {
   const token = req.cookies.refreshToken
@@ -72,7 +140,7 @@ export const refreshToken = async (req: Request, res: Response): Promise<any> =>
       maxAge: 90 * 24 * 60 * 60 * 1000
     })
 
-    console.log(`sending new access token with payload`)
+    console.log('New access token generated successfully')
     res.json(newAccessToken)
   });
 }

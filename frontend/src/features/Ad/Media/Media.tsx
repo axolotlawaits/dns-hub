@@ -110,6 +110,7 @@ export default function MediaList() {
     columnFilters: [] as ColumnFiltersState,
     sorting: [{ id: 'formattedCreatedAt', desc: true }] as SortingState,
     typeContentOptions: [] as TypeContentOption[],
+    formLoading: false,
   });
 
   const modals = {
@@ -184,7 +185,7 @@ export default function MediaList() {
       subtitle: 'Управление медиа контентом и файлами',
       icon: <Text size="xl" fw={700} c="white">🎬</Text>,
       actionButton: {
-        text: 'Добавить медиа',
+        text: 'Добавить',
         onClick: () => modals.create[1].open(),
         icon: <IconPlus size={20} />
       }
@@ -234,12 +235,42 @@ export default function MediaList() {
   }), [state.typeContentOptions]);
 
   const viewFieldsConfig = useMemo(() => [
-    { label: 'Название', value: (item: MediaWithFormattedData) => item.name || null },
-    { label: 'Тип контента', value: (item: MediaWithFormattedData) => item.typeContentName || null },
-    { label: 'Создал', value: (item: MediaWithFormattedData) => item.userName || null },
-    { label: 'Обновил', value: (item: MediaWithFormattedData) => item.updatedUserName || null },
-    { label: 'Дата создания', value: (item: MediaWithFormattedData) => item.formattedCreatedAt },
-    { label: 'Последнее обновление', value: (item: MediaWithFormattedData) => item.formattedUpdatedAt },
+    { 
+      label: 'Название и тип контента', 
+      value: (item: MediaWithFormattedData) => (
+        <Group gap="md" align="center" wrap="wrap">
+          <div style={{ flex: 1, minWidth: '200px' }}>
+            <Text fw={500} size="sm" c="var(--theme-text-primary)" mb="xs">Название:</Text>
+            <Text c="var(--theme-text-secondary)" size="sm" style={{ 
+              background: 'var(--theme-bg-secondary)', 
+              padding: 'var(--space-2) var(--space-3)', 
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--theme-border)'
+            }}>
+              {item.name || 'Без названия'}
+            </Text>
+          </div>
+          <div style={{ flex: 1, minWidth: '200px' }}>
+            <Text fw={500} size="sm" c="var(--theme-text-primary)" mb="xs">Тип контента:</Text>
+            <Badge
+              variant="light"
+              style={{
+                background: getMediaColor(item.typeContentName) + '20',
+                color: getMediaColor(item.typeContentName),
+                fontWeight: '500',
+                fontSize: '13px',
+                padding: '6px 12px',
+                borderRadius: '8px',
+                width: '100%',
+                textAlign: 'center'
+              }}
+            >
+              {item.typeContentName || 'Без типа'}
+            </Badge>
+          </div>
+        </Group>
+      )
+    },
   ], []);
 
   const tableData = useMemo(() => formatTableData(state.media), [state.media]);
@@ -274,7 +305,8 @@ export default function MediaList() {
     },
   ], [filterOptions]);
 
-  const getMediaIcon = (typeContentName: string) => {
+  const getMediaIcon = (typeContentName?: string) => {
+    if (!typeContentName) return IconFile;
     const type = typeContentName.toLowerCase();
     if (type.includes('видео') || type.includes('video')) return IconVideo;
     if (type.includes('аудио') || type.includes('audio') || type.includes('музыка')) return IconMusic;
@@ -282,7 +314,8 @@ export default function MediaList() {
     return IconFile;
   };
 
-  const getMediaColor = (typeContentName: string) => {
+  const getMediaColor = (typeContentName?: string) => {
+    if (!typeContentName) return 'var(--color-blue-500)';
     const type = typeContentName.toLowerCase();
     if (type.includes('видео') || type.includes('video')) return 'var(--color-orange-500)';
     if (type.includes('аудио') || type.includes('audio') || type.includes('музыка')) return 'var(--color-purple-500)';
@@ -529,6 +562,9 @@ export default function MediaList() {
   }, []);
 
   const handleFormSubmit = useCallback(async (values: Record<string, any>, mode: 'create' | 'edit') => {
+    // Устанавливаем состояние загрузки
+    setState(prev => ({ ...prev, formLoading: true, uploadError: null }));
+
     const formData = new FormData();
     const { attachments, ...cleanedValues } = values;
 
@@ -587,7 +623,8 @@ export default function MediaList() {
         media: mode === 'create'
           ? [updatedResult, ...prev.media]
           : prev.media.map(m => m.id === state.selectedMedia!.id ? updatedResult : m),
-        uploadError: null
+        uploadError: null,
+        formLoading: false
       }));
 
       modals[mode][1].close();
@@ -598,7 +635,7 @@ export default function MediaList() {
     } catch (error) {
       console.error(`Media ${mode} error:`, error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      setState(prev => ({ ...prev, uploadError: errorMsg }));
+      setState(prev => ({ ...prev, uploadError: errorMsg, formLoading: false }));
       showNotification('error', errorMsg);
     }
   }, [user, state.selectedMedia, modals, showNotification]);
@@ -669,23 +706,31 @@ export default function MediaList() {
         />
         <DynamicFormModal
           opened={modals.edit[0]}
-          onClose={modals.edit[1].close}
+          onClose={() => {
+            setState(prev => ({ ...prev, formLoading: false, uploadError: null }));
+            modals.edit[1].close();
+          }}
           title="Редактирование медиа"
           mode="edit"
           fields={formConfig.fields}
           initialValues={state.mediaForm}
           onSubmit={(values: Record<string, any>) => handleFormSubmit(values, 'edit')}
           error={state.uploadError}
+          loading={state.formLoading}
         />
         <DynamicFormModal
           opened={modals.create[0]}
-          onClose={modals.create[1].close}
+          onClose={() => {
+            setState(prev => ({ ...prev, formLoading: false, uploadError: null }));
+            modals.create[1].close();
+          }}
           title="Новое медиа"
           mode="create"
           fields={formConfig.fields}
           initialValues={DEFAULT_MEDIA_FORM}
           onSubmit={(values: Record<string, any>) => handleFormSubmit(values, 'create')}
           error={state.uploadError}
+          loading={state.formLoading}
         />
         <DynamicFormModal
           opened={modals.delete[0]}

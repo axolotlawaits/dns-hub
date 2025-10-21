@@ -4,8 +4,7 @@ import { uploadMerch } from '../../middleware/uploaderMerch.js';
 import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
-
-const prisma = new PrismaClient();
+import { prisma } from '../../server.js';
 
 // Схемы валидации
 const MerchCategorySchema = z.object({
@@ -139,7 +138,7 @@ export const createMerchCategory = [
           const file = files[i];
           await prisma.merchAttachment.create({
             data: {
-              source: file.originalname, // Сохраняем оригинальное название файла
+              source: file.filename, // Сохраняем название файла как оно сохранено на диске
               type: 'image',
               recordId: newCategory.id,
               userAddId: (req as any).token?.userId || 'system',
@@ -360,7 +359,7 @@ export const createMerchCard = [
           const file = files[i];
           await prisma.merchAttachment.create({
             data: {
-              source: file.originalname, // Сохраняем оригинальное название файла
+              source: file.filename, // Сохраняем название файла как оно сохранено на диске
               type: 'image',
               recordId: newCard.id,
               userAddId: (req as any).token?.userId || 'system',
@@ -506,7 +505,7 @@ export const addCardImages = [
           try {
             await prisma.merchAttachment.create({
               data: {
-                source: file.filename, // Используем сгенерированное имя файла
+                source: file.filename, // Сохраняем название файла как оно сохранено на диске
                 type: 'image',
                 recordId: cardId,
                 userAddId: userId,
@@ -569,7 +568,7 @@ export const addMerchAttachment = [
       const attachment = await prisma.merchAttachment.create({
         data: {
           recordId,
-          source: req.file.path.replace(/\\/g, '/').replace(process.cwd() + '/public', ''),
+          source: req.file.originalname, // Сохраняем только название файла
           type: type || 'image',
           userAddId: (req as any).token?.userId || 'system',
           sortOrder: sortOrder || 0

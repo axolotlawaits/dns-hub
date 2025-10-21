@@ -98,7 +98,7 @@ const processAttachments = async (
 
   const attachmentsData = files.map(file => ({
     userAdd,
-    source: file.path,
+    source: file.filename, // Сохраняем название файла как оно сохранено на диске
     record_id: correspondenceId,
   }));
 

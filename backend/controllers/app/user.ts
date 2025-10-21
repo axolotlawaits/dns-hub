@@ -107,7 +107,7 @@ export const login = async (req: Request, res: Response): Promise<any> => {
 
       console.log(`[Login] User data to create:`, {
         login: userData.login,
-        email: userData.email,
+        email: userData.email ? `${userData.email.substring(0, 3)}***` : null,
         position: userData.position,
         name: userData.name,
         branch: userData.branch,

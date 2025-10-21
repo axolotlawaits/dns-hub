@@ -90,7 +90,7 @@ const processRKAttachments = async (
     
     const attachment = {
       userAddId,
-      source: file.path,
+      source: file.filename, // Сохраняем название файла как оно сохранено на диске
       type: file.mimetype,
       typeAttachment,
       sizeXY: typeAttachment === 'CONSTRUCTION' ? (attachmentsMeta[index]?.sizeXY || '') : '',
@@ -371,7 +371,7 @@ export const createRK = async (req: Request, res: Response, next: NextFunction) 
           await prisma.rKAttachment.create({
             data: {
               userAddId: req.body.userAddId,
-              source: file.path,
+              source: file.filename, // Сохраняем название файла как оно сохранено на диске
               type: file.mimetype,
               typeAttachment: 'DOCUMENT',
               sizeXY: '',
@@ -533,7 +533,7 @@ export const updateRK = async (req: Request, res: Response, next: NextFunction) 
           await prisma.rKAttachment.create({
             data: {
               userAddId,
-              source: file.path,
+              source: file.filename, // Сохраняем название файла как оно сохранено на диске
               type: file.mimetype,
               typeAttachment: 'DOCUMENT',
               sizeXY: '',

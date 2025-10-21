@@ -2,8 +2,7 @@ import { Client, SearchEntry, Change, Attribute } from 'ldapts';
 import { NextFunction, Request, Response } from "express";
 import sharp from 'sharp';
 import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../server.js';
 
 interface LdapUser {
     department?: string;
@@ -67,8 +66,10 @@ async function processLdapPhoto(photoBase64: string): Promise<Buffer> {
 }
 
 async function createLdapClient() {
+    const ldapUrl = process.env.LDAP_URL || 'ldap://ural-dc01.partner.ru';
+    
     return new Client({
-        url: 'ldap://ural-dc01.partner.ru',
+        url: ldapUrl,
         timeout: 10000, // 10 секунд таймаут
         connectTimeout: 5000, // 5 секунд на подключение
         strictDN: false, // Отключаем строгую проверку DN
@@ -115,12 +116,12 @@ async function authenticateWithServiceAccount(client: Client, login: string, pas
     
     try {
         // Сначала подключаемся с служебным аккаунтом
-		console.log(`[LDAP Service Auth] Binding with service account: ${process.env.LDAP_SERVICE_USER}`);
 		const serviceUser = process.env.LDAP_SERVICE_USER;
 		const servicePassword = process.env.LDAP_SERVICE_PASSWORD;
 		if (!serviceUser || !servicePassword) {
 			throw new Error('LDAP service account credentials are not configured');
 		}
+		
 		await client.bind(serviceUser, servicePassword);
         console.log(`[LDAP Service Auth] ✅ Successfully bound with service account`);
         
@@ -131,7 +132,6 @@ async function authenticateWithServiceAccount(client: Client, login: string, pas
         // Теперь проверяем пароль пользователя, создав новый клиент
         const userClient = await createLdapClient();
         try {
-            console.log(`[LDAP Service Auth] Verifying user password for: ${userEntry.dn}`);
             await userClient.bind(userEntry.dn, password);
             console.log(`[LDAP Service Auth] ✅ User password verified successfully`);
             return userEntry;

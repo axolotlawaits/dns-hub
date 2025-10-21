@@ -113,7 +113,7 @@ export const createSlider = async (
         category: validatedData.category,
         visible: validatedData.visible,
         timeVisible: validatedData.timeVisible,
-        attachment: req.file?.filename || '',
+        attachment: req.file?.filename || '', // Сохраняем название файла как оно сохранено на диске
         startDate: validatedData.startDate ? new Date(validatedData.startDate) : null,
         endDate: validatedData.endDate ? new Date(validatedData.endDate) : null,
         url: validatedData.url,
@@ -198,7 +198,7 @@ export const updateSlider = async (
     };
 
     if (file) {
-      updateData.attachment = file.filename;
+      updateData.attachment = file.filename; // Сохраняем название файла как оно сохранено на диске
     }
 
     if (validatedData.updatedById) {

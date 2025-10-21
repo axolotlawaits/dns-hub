@@ -7,6 +7,9 @@
     "start": "node ./build/server.js",
     "build": "npx tsc",
     "dev": "tsx watch server.ts",
+    "dev:fast": "cross-env ENABLE_BOTS=false ENABLE_CRON=false tsx watch server.ts",
+    "dev:minimal": "cross-env ENABLE_BOTS=false ENABLE_CRON=false tsx server.ts",
+    "dev:compiled": "npm run build && node build/server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -50,6 +53,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/nodemailer": "^6.4.17",
     "@types/react": "^19.1.8",
+    "cross-env": "^10.1.0",
     "prisma": "^6.11.0",
     "typescript": "^5.8.2"
   }

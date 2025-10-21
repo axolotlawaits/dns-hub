@@ -9,7 +9,8 @@ import {
   getAppVersions, 
   getAppFiles,
   updateApp, 
-  deleteApp 
+  deleteApp,
+  downloadDiagnostics
 } from '../../controllers/retail/appStore.js';
 
 const router = express.Router();
@@ -28,6 +29,9 @@ router.post('/:id/versions', uploadApp.single('file'), uploadAppVersion);
 
 // Скачивание последней версии
 router.get('/:id/download', downloadLatestVersion);
+
+// Диагностика скачивания
+router.get('/:id/download-diagnostics', downloadDiagnostics);
 
 // Получение истории версий
 router.get('/:id/versions', getAppVersions);

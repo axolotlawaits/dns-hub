@@ -1,6 +1,7 @@
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { decodeRussianFileName } from '../utils/format.js';
 
 // Создаем базовые папки для радио файлов
 const musicBase = './public/retail/radio/music';
@@ -41,8 +42,9 @@ const storage = multer.diskStorage({
     cb(null, targetDir);
   },
   filename: function (req, file, cb) {
-    // Используем оригинальное имя файла
-    cb(null, file.originalname);
+    // Исправляем кодировку русских символов в названии файла
+    const correctedFileName = decodeRussianFileName(file.originalname);
+    cb(null, correctedFileName);
   },
 });
 
