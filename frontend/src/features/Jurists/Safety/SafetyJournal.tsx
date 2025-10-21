@@ -4,7 +4,6 @@ import { useUserContext } from '../../../hooks/useUserContext';
 import { useAccessContext } from '../../../hooks/useAccessContext';
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { notificationSystem } from '../../../utils/Push';
-import FloatingActionButton from '../../../components/FloatingActionButton';
 import { Button, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Paper, Badge, Tabs, Tooltip, Alert, Divider, Select, Pagination, Popover, Card, ThemeIcon, Accordion, Modal, Textarea } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
@@ -42,7 +41,6 @@ interface ResponsibleEmployeeType {
 interface ResponsibleEmployeeAddType {
   responsibilityType: 'ОТ' | 'ПБ' | '',
   employeeId: string
-  branchId: string
 }
 
 interface ResponsibilitiesType {
@@ -204,6 +202,17 @@ const LocalJournalTable = function LocalJournalTable({
                         <>
                           {IconComponent && <IconComponent size={16} color={`var(--mantine-color-${statusInfo?.color}-6)`} />}
                           <Text size="sm">{statusInfo?.label}</Text>
+                          {journal.status !== 'approved' && journal.comment &&
+                            <Tooltip label={journal.comment} multiline w={250}>
+                              <ActionIcon 
+                                size="sm" 
+                                color="orange" 
+                                variant='light'
+                              >
+                                <IconMessageDots size={14} />
+                              </ActionIcon>
+                            </Tooltip>
+                          }
                         </>
                       );
                     })()}
@@ -307,17 +316,6 @@ const LocalJournalTable = function LocalJournalTable({
                                 
                               </Stack>
                             </Modal>
-                            {journal.status !== 'approved' && journal.comment &&
-                              <Tooltip label={journal.comment} multiline w={250}>
-                                <ActionIcon 
-                                  size="sm" 
-                                  color="orange" 
-                                  variant={journal.status === 'rejected' ? 'filled' : 'light'} 
-                                >
-                                  <IconMessageDots size={14} />
-                                </ActionIcon>
-                              </Tooltip>
-                            }
                           </>
                         );
                       })()}
@@ -371,8 +369,8 @@ type ResponsibleObjDataType = {
   const [responsibleOpened, { open: responsibleOpen, close: responsibleClose }] = useDisclosure(false)
   const [deleteResId, setDeleteResId] = useState<string | null>(null)
   const [deleteResType, setDeleteResType] = useState<string | null>(null)
-  const [branchEmployees, setBranchEmployees] = useState([])
-  const [responsible, setResponsible] = useState<ResponsibleEmployeeAddType>()
+  const [employeesData, setEmployeesData] = useState([])
+  const [responsible, setResponsible] = useState<ResponsibleEmployeeAddType>({employeeId: '', responsibilityType: ''})
   const [responsibleData, setResponsibleData] = useState<ResponsibleObjDataType>()
   const [resPopoverOpened, setResPopoverOpened] = useState(false)
   const authFetch  = useAuthFetch()
@@ -382,18 +380,17 @@ type ResponsibleObjDataType = {
     setIsExpanded(expandedBranches.has(branch.branch_id));
   }, [expandedBranches, branch.branch_id]);
 
-  const getBranchEmployees = async () => {
-    const response = await fetch(`${API}/search/branch/${branch.branch_id}/employees`)
+  const getEmployees = async (text: string) => {
+    const response = await fetch(`${API}/search/employee/summary?text=${text}`)
     const json = await response.json()
-    
+    console.log(json)
     if (response.ok) {
-      setBranchEmployees(json)
+      setEmployeesData(json)
     }
   }
 
   const handleResponsibleOpen = () => {
     responsibleOpen()
-    getBranchEmployees()
   }
 
   // const getResponsive = async () => {
@@ -493,6 +490,15 @@ type ResponsibleObjDataType = {
     }
   }
 
+  const handleEmployeeSearch = (value: string) => {
+    console.log(value)
+    if (value) {
+      getEmployees(value)
+    } else {
+      employeesData.length > 0 && setEmployeesData([])
+    }
+  }
+
   const openDeleteModal = (id: string, type: 'ОТ' | 'ПБ') => {
     setDeleteResId(id)
     setDeleteResType(type)
@@ -501,6 +507,12 @@ type ResponsibleObjDataType = {
   const closeDeleteModal = () => {
     setDeleteResId(null)
     setDeleteResType(null)
+  }
+
+  const closeAddResonsibleModal = () => {
+    responsibleClose()
+    setEmployeesData([])
+    setResponsible({employeeId: '', responsibilityType: ''})
   }
 
   return (
@@ -607,16 +619,17 @@ type ResponsibleObjDataType = {
               {isExpanded ? 'Свернуть' : 'Развернуть'}
             </Button>
           </Stack>
-          <Modal opened={responsibleOpened} onClose={responsibleClose} title="Назначение ответственного" centered>
+          <Modal opened={responsibleOpened} onClose={closeAddResonsibleModal} title="Назначение ответственного" centered>
             <Stack gap='lg'>
               <Stack>
                 <Group>
                   <Select
                     placeholder="Выберите сотрудника"
-                    data={branchEmployees.map((emp: any) => ({label: emp.fio, value: emp.uuid}))}
-                    value={responsible?.employeeId}
-                    onChange={(value) => setResponsible({...responsible, employeeId: value})}
+                    data={employeesData.map((emp: any) => ({label: emp.fio, value: emp.uuid}))}
+                    value={responsible?.employeeId || ''}
+                    onChange={(value) => value && setResponsible({...responsible, employeeId: value})}
                     searchable
+                    onSearchChange={(value) => {console.log(value), handleEmployeeSearch(value)}}
                     clearable
                     style={{ minWidth: 200 }}
                   />
@@ -624,14 +637,14 @@ type ResponsibleObjDataType = {
                     placeholder="ОТ или ПБ?"
                     data={['ОТ', 'ПБ']}
                     value={responsible?.responsibilityType}
-                    onChange={(value) => setResponsible({...responsible, responsibilityType: value })}
+                    onChange={(value) => (value === 'ОТ' || value === 'ПБ') && setResponsible({...responsible, responsibilityType: value})}
                     searchable
                     clearable
                     w={150}
                   />
                 </Group>
               </Stack>
-              <Button variant='light' onClick={() => {addResponsive(), responsibleClose()}}>Назначить</Button>
+              <Button variant='light' onClick={() => {addResponsive(), closeAddResonsibleModal()}}>Назначить</Button>
             </Stack>
           </Modal>
           <Modal opened={deleteResId !== null} onClose={closeDeleteModal} title="Удаление ответственного" centered>
@@ -1436,12 +1449,6 @@ export default function SafetyJournal() {
       title: 'Журналы охраны труда и пожарной безопасности',
       subtitle: 'Управление журналами по охране труда и пожарной безопасности',
       icon: <Text size="xl" fw={700} c="white">🛡️</Text>,
-      actionButton: {
-        text: 'Обновить',
-        onClick: handleRefreshData,
-        icon: <IconRefresh size={22} />,
-        loading: loading
-      }
     });
 
     return () => clearHeader();
@@ -1540,7 +1547,8 @@ export default function SafetyJournal() {
           <Paper withBorder radius="md" p="md" style={{ background: 'var(--theme-bg-elevated)' }}>
           <Stack gap="md">
         {/* Вкладки */}
-              <Tabs value={activeTab} onChange={(value) => {setActiveTab(value || 'all'), setBranchPagination( prev => ({ ...prev, page: 1 }))}}>
+        <Tabs value={activeTab} onChange={(value) => {setActiveTab(value || 'all'), setBranchPagination( prev => ({ ...prev, page: 1 }))}}>
+          <Group justify='space-between'>
           <Tabs.List>
             <Tabs.Tab value="all" leftSection={<IconFileText size={16} />}>
               Все журналы ({stats.total})
@@ -1564,6 +1572,15 @@ export default function SafetyJournal() {
               На проверке ({stats.under_review || 0})
             </Tabs.Tab>
           </Tabs.List>
+          <Group gap='sm'>
+            <ActionIcon variant="outline" size={35} aria-label="Settings" onClick={handleRefreshData}>
+              <IconRefresh  stroke={1.5} />
+            </ActionIcon>
+            <ActionIcon variant="outline" size={35} aria-label="Settings" onClick={qrOpen}>
+              <IconQrcode style={{ width: '80%', height: '80%' }} stroke={1.5} />
+            </ActionIcon>
+          </Group>
+          </Group>
         </Tabs>
 
               {/* Фильтры в аккордеоне */}
@@ -1792,20 +1809,6 @@ export default function SafetyJournal() {
         onConfirm={handleDeleteJournal}
         initialValues={{}}
       />
-
-      {/* Floating Action Button */}
-      <FloatingActionButton />
-      <ActionIcon variant="filled" size={50} aria-label="Settings" onClick={qrOpen}
-        style={{  
-          position: 'fixed',
-          bottom: '225px',
-          right: '40px',
-          zIndex: '1000',
-          pointerEvents: 'auto'
-        }}
-      >
-        <IconQrcode style={{ width: '85%', height: '85%' }} stroke={1.5} />
-      </ActionIcon>
       <Modal opened={qrOpened} onClose={qrClose} title="QR-код телеграм бота" centered zIndex={99999} size="auto">
         <Image
           radius="md"

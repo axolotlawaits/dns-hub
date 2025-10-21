@@ -139,6 +139,21 @@ export const searchEmployees = async (req: Request, res: Response): Promise<any>
   }
 }
 
+export const searchEmployeesSummary = async (req: Request, res: Response): Promise<any> => {
+  const text = req.query.text as string
+
+  const employees = await prisma.userData.findMany({
+    where: {fio: {contains: text, mode: 'insensitive'}},
+    take: 10,
+    select: {uuid: true, fio: true, position: {select: {name: true}}}
+  })
+  if (employees) {
+    res.status(200).json(employees)
+  } else {
+    res.status(400).json({error: 'ошибка при поиске сотрудников'})
+  }
+}
+
 /* filters data */
 
 export const searchCities = async (req: Request, res: Response): Promise<any> => {
