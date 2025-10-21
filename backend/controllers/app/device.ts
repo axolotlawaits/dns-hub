@@ -326,6 +326,7 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
     
     // Обновляем heartbeat store (для быстрого доступа)
     heartbeatStore.set(deviceId, now);
+    console.log(`💓 [Heartbeat] Updated heartbeatStore for device ${deviceId} at ${nowDate.toISOString()}`);
 
     // Подготавливаем данные для обновления
     const updateData: any = { lastSeen: nowDate };
@@ -371,20 +372,61 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
 
     // Обновляем или создаем запись устройства в базе данных
     try {
-      // Сначала пытаемся найти устройство
-      const existingDevice = await prisma.devices.findUnique({
+      // Ищем существующее устройство по приоритету (как в createOrUpdateDevice)
+      let existingDevice = null;
+      
+      // Приоритет 1: По deviceId
+      existingDevice = await prisma.devices.findUnique({
         where: { id: deviceId }
       });
+      console.log(`🔍 [Heartbeat] Search by deviceId ${deviceId}: Found:`, !!existingDevice);
+      
+      // Приоритет 2: По MAC адресу (если не найден по deviceId)
+      if (!existingDevice && updateData.macAddress) {
+        existingDevice = await prisma.devices.findFirst({
+          where: { macAddress: updateData.macAddress }
+        });
+        console.log(`🔍 [Heartbeat] Search by MAC ${updateData.macAddress}: Found:`, !!existingDevice);
+      }
+      
+      // Приоритет 3: Специальная проверка для веб-плеера по userEmail + vendor + macAddress
+      if (!existingDevice && updateData.userEmail && updateData.macAddress?.startsWith('web-')) {
+        existingDevice = await prisma.devices.findFirst({
+          where: {
+            userEmail: updateData.userEmail,
+            vendor: 'Web Browser',
+            macAddress: updateData.macAddress
+          }
+        });
+        console.log(`🔍 [Heartbeat] Search by web player email+vendor+mac: Found:`, !!existingDevice);
+      }
+      
+      // Приоритет 4: По userEmail + vendor (если не найден по MAC)
+      if (!existingDevice && updateData.userEmail) {
+        existingDevice = await prisma.devices.findFirst({
+          where: {
+            userEmail: updateData.userEmail,
+            vendor: 'Web Browser'
+          }
+        });
+        console.log(`🔍 [Heartbeat] Search by userEmail+vendor: Found:`, !!existingDevice);
+      }
 
       if (existingDevice) {
         // Если устройство существует, обновляем его
         await prisma.devices.update({ 
-          where: { id: deviceId }, 
+          where: { id: existingDevice.id }, 
           data: updateData
         });
-        console.log(`✅ [Heartbeat] Device ${deviceId} updated successfully`);
+        console.log(`✅ [Heartbeat] Device ${existingDevice.id} updated successfully`);
+        console.log(`💓 [Heartbeat] Device ${existingDevice.id} is now online (heartbeat updated)`);
       } else {
-        // Если устройство не существует, создаем новое
+        // Если устройство не существует, создаем новое только если есть userEmail
+        if (!updateData.userEmail) {
+          console.warn(`⚠️ [Heartbeat] Cannot create device ${deviceId} without userEmail`);
+          return res.status(400).json({ success: false, error: 'userEmail required for new device' });
+        }
+        
         // Сначала находим первый доступный branchId
         const firstBranch = await prisma.branch.findFirst({
           select: { uuid: true, name: true }
@@ -398,7 +440,7 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
         const newDeviceData = {
           id: deviceId,
           name: `Web Player ${deviceId}`,
-          vendor: 'Web Player',
+          vendor: 'Web Browser',
           app: updateData.app || 'Web Player',
           os: 'Web Browser',
           network: updateData.network || '127.0.0.1',

@@ -206,6 +206,12 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
   // Регистрация веб-плеера как устройства
   const registerWebPlayer = useCallback(async () => {
     try {
+      // Проверяем, что вкладка активна
+      if (!isActive) {
+        console.log('✅ [WebRadioPlayer] Вкладка неактивна, пропускаем регистрацию устройства');
+        return;
+      }
+
       const browserId = getBrowserFingerprint();
       
       // Проверяем что у нас есть пользователь
@@ -243,7 +249,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     } catch (err) {
       console.log('⚠️ [WebRadioPlayer] Ошибка регистрации устройства:', err);
     }
-  }, [branchType, user?.email, getBrowserFingerprint]);
+  }, [branchType, user?.email, getBrowserFingerprint, userIP, isActive]);
 
   // Загрузка папок с музыкой
   const loadMusicFolders = useCallback(async () => {
@@ -417,6 +423,12 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
   // Heartbeat для веб-плеера
   const sendHeartbeat = useCallback(async () => {
     try {
+      // Проверяем, что вкладка активна
+      if (!isActive) {
+        console.log('💓 [WebRadioPlayer] Вкладка неактивна, пропускаем heartbeat');
+        return;
+      }
+
       const browserId = getBrowserFingerprint();
       
       // Проверяем что у нас есть пользователь
@@ -447,7 +459,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     } catch (err) {
       console.log('⚠️ [WebRadioPlayer] Ошибка heartbeat:', err);
     }
-  }, [getBrowserFingerprint, user?.email]);
+  }, [getBrowserFingerprint, user?.email, userIP, isActive]);
 
   // Логика выбора следующего трека/потока
   const findNextTrack = useCallback(() => {
