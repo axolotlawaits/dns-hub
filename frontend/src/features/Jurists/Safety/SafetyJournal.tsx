@@ -202,6 +202,17 @@ const LocalJournalTable = function LocalJournalTable({
                         <>
                           {IconComponent && <IconComponent size={16} color={`var(--mantine-color-${statusInfo?.color}-6)`} />}
                           <Text size="sm">{statusInfo?.label}</Text>
+                          {journal.status !== 'approved' && journal.comment &&
+                            <Tooltip label={journal.comment} multiline w={250}>
+                              <ActionIcon 
+                                size="sm" 
+                                color="orange" 
+                                variant='light'
+                              >
+                                <IconMessageDots size={14} />
+                              </ActionIcon>
+                            </Tooltip>
+                          }
                         </>
                       );
                     })()}
@@ -305,17 +316,6 @@ const LocalJournalTable = function LocalJournalTable({
                                 
                               </Stack>
                             </Modal>
-                            {journal.status !== 'approved' && journal.comment &&
-                              <Tooltip label={journal.comment} multiline w={250}>
-                                <ActionIcon 
-                                  size="sm" 
-                                  color="orange" 
-                                  variant={journal.status === 'rejected' ? 'filled' : 'light'} 
-                                >
-                                  <IconMessageDots size={14} />
-                                </ActionIcon>
-                              </Tooltip>
-                            }
                           </>
                         );
                       })()}
