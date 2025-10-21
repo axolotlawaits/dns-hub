@@ -1,6 +1,6 @@
 .floating-action-button {
   position: fixed;
-  bottom: 80px; /* Выше футера (footer height: 65px + margin) */
+  bottom: 160px; /* Выше футера (footer height: 65px + margin) */
   right: 40px;
   z-index: 1000;
   pointer-events: auto;
@@ -11,13 +11,12 @@
   color: white !important;
   border: none !important;
   font-weight: 600 !important;
-  box-shadow: 0 8px 32px rgba(14, 165, 233, 0.3) !important;
   transition: all 0.3s ease !important;
-  min-width: 160px !important;
-  height: 56px !important;
-  border-radius: 28px !important;
+  width: auto;
+  height: 50px !important;
+  border-radius: 5px !important;
   font-size: 16px !important;
-  padding: 0 24px !important;
+  padding: 0 10px !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -25,8 +24,6 @@
 }
 
 .fab-button:hover {
-  transform: translateY(-2px) !important;
-  box-shadow: 0 12px 40px rgba(14, 165, 233, 0.4) !important;
   background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700)) !important;
 }
 
@@ -75,10 +72,8 @@
 /* Темная тема */
 [data-mantine-color-scheme="dark"] .fab-button {
   background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700)) !important;
-  box-shadow: 0 8px 32px rgba(14, 165, 233, 0.4) !important;
 }
 
 [data-mantine-color-scheme="dark"] .fab-button:hover {
   background: linear-gradient(135deg, var(--color-primary-700), var(--color-primary-800)) !important;
-  box-shadow: 0 12px 40px rgba(14, 165, 233, 0.5) !important;
 }

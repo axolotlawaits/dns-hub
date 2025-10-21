@@ -888,3 +888,70 @@ export const proxyFile = async (req: Request, res: Response) => {
     }
   }
 };
+
+/* temporary functions before https on JOURNAL_API */
+
+export const getResponsible = async (req: Request, res: Response) => {
+  try {
+    const { branchId } = req.query
+
+    const response = await axios.get(`${JOURNALS_API_URL}/branch_responsibles/?branchId=${branchId}`, {
+      headers: createAuthHeaders(getAuthToken(req))
+    });
+
+    res.json(response.data);
+  } catch (error: any) {
+    console.error('Error getting responsible:', error);
+    if (error.response) {
+      res.status(error.response.status).json(error.response.data);
+    } 
+  }
+};
+
+export const addResponsible = async (req: Request, res: Response) => {
+  try {
+    const { branchId, employeeId, responsibilityType } = req.body
+
+    const response = await fetch(`${JOURNALS_API_URL}/branch_responsibles`, {
+      method: 'POST',
+      headers: createAuthHeaders(getAuthToken(req)),
+      body: JSON.stringify({
+        branchId,
+        employeeId,
+        responsibilityType 
+      }),
+    });
+    const json = await response.json()
+    res.status(response.status).json(json)
+
+  } catch (error: any) {
+    console.error('Error adding responsible:', error);
+    if (error.response) {
+      res.status(error.response.status).json(error.response.data);
+    } 
+  }
+};
+
+export const deleteResponsible = async (req: Request, res: Response) => {
+  try {
+    const { branchId, employeeId, responsibilityType } = req.body
+
+    const response = await fetch(`${JOURNALS_API_URL}/branch_responsibles`, {
+      method: 'DELETE',
+      headers: createAuthHeaders(getAuthToken(req)),
+      body: JSON.stringify({
+        branchId,
+        employeeId,
+        responsibilityType 
+      }),
+    });
+    const json = await response.json()
+    res.status(response.status).json(json)
+  } catch (error: any) {
+    console.error('Error adding responsible:', error);
+    if (error.response) {
+      res.status(error.response.status).json(error.response.data);
+    } 
+  }
+};
+

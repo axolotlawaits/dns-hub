@@ -8,7 +8,7 @@ import FloatingActionButton from '../../../components/FloatingActionButton';
 import { Button, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Paper, Badge, Tabs, Tooltip, Alert, Divider, Select, Pagination, Popover, Card, ThemeIcon, Accordion, Modal, Textarea } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
-import { IconClock, IconFileText, IconChevronDown, IconChevronUp, IconUpload, IconFilter, IconShield, IconFlame, IconCircleCheck, IconCircleX, IconAlertCircle, IconUsers, IconX, IconFile, IconCheck, IconRefresh, IconQrcode, IconMessageDots } from '@tabler/icons-react';
+import { IconClock, IconFileText, IconChevronDown, IconChevronUp, IconUpload, IconFilter, IconShield, IconFlame, IconCircleCheck, IconCircleX, IconAlertCircle, IconUsers, IconX, IconFile, IconCheck, IconRefresh, IconQrcode, IconMessageDots, IconEyePlus } from '@tabler/icons-react';
 import { FilePreviewModal } from '../../../utils/FilePreviewModal';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { DndProviderWrapper } from '../../../utils/dnd';
@@ -189,9 +189,11 @@ const LocalJournalTable = function LocalJournalTable({
                       }}
                     />
                   }
-                  <Text size="sm" fw={500} truncate='end'>
-                    {journal.journal_title}
-                  </Text>
+                  <Tooltip label={journal.journal_title} multiline w={275}>
+                    <Text size="sm" fw={500} truncate='end'>
+                      {journal.journal_title}
+                    </Text>
+                  </Tooltip>
                 </td>
                 <td className='table-cell'>
                   <Group gap="xs" align="center">
@@ -331,10 +333,18 @@ const LocalJournalTable = function LocalJournalTable({
   );
 };
 
+type ResponsibleDataType = {
+  employee_id: string
+  employee_name: string
+  responsibility_type: 'ОТ' | 'ПБ'
+}
+
+type ResponsibleObjDataType = {
+  responsibles: ResponsibleDataType[]
+}
 // Компонент карточки филиала с журналами (мемоизированный)
   const BranchCard = function BranchCard({ 
     branch, 
-    updateState,
     onApproveJournal, 
     onRejectJournal, 
     onUnderReviewJournal,
@@ -359,12 +369,12 @@ const LocalJournalTable = function LocalJournalTable({
   }) {
   const [isExpanded, setIsExpanded] = useState(expandedBranches.has(branch.branch_id));
   const [responsibleOpened, { open: responsibleOpen, close: responsibleClose }] = useDisclosure(false)
+  const [deleteResId, setDeleteResId] = useState<string | null>(null)
+  const [deleteResType, setDeleteResType] = useState<string | null>(null)
   const [branchEmployees, setBranchEmployees] = useState([])
-  const [responsible, setResponsible] = useState<ResponsibleEmployeeAddType[]>([
-    {branchId: branch.branch_id, employeeId: '', responsibilityType: ''},
-    {branchId: branch.branch_id, employeeId: '', responsibilityType: ''},
-    {branchId: branch.branch_id, employeeId: '', responsibilityType: ''}
-  ])
+  const [responsible, setResponsible] = useState<ResponsibleEmployeeAddType>()
+  const [responsibleData, setResponsibleData] = useState<ResponsibleObjDataType>()
+  const [resPopoverOpened, setResPopoverOpened] = useState(false)
   const authFetch  = useAuthFetch()
 
   // Синхронизируем локальное состояние с глобальным
@@ -385,17 +395,112 @@ const LocalJournalTable = function LocalJournalTable({
     responsibleOpen()
     getBranchEmployees()
   }
+
+  // const getResponsive = async () => {
+  //   const response = await authFetch(`${JOURNAL_API}/v1/branch_responsibles/?branchId=${branch.branch_id}`)
+  //   if (response && response.ok) {
+  //     const json = await response?.json()
+  //     const [responsible] = json
+  //     setResponsibleData(responsible)
+  //   }
+  // }
+
+  const getResponsive = async () => {
+    const response = await authFetch(`${API}/jurists/safety/branch/responsible?branchId=${branch.branch_id}`)
+    if (response && response.ok) {
+      const json = await response?.json()
+      const [responsible] = json
+      console.log(json)
+      setResponsibleData(responsible)
+    }
+  }
   
+  // const addResponsive = async () => {
+  //   const response = await authFetch(`${JOURNAL_API}/v1/branch_responsibles`, {
+  //     method: 'POST',
+  //     headers: {
+  //       'Content-Type': 'application/json',
+  //     },
+  //     body: JSON.stringify({
+  //       branchId: branch.branch_id,
+  //       employeeId: responsible?.employeeId,
+  //       responsibilityType: responsible?.responsibilityType
+  //     }),
+  //   })
+  //   if (response && response.ok) {
+  //     console.log(response.json)
+  //     notificationSystem.addNotification('Успех', 'Ответственный добавлен', 'success')
+  //   } else {
+  //     notificationSystem.addNotification('Ошибка', 'Ошибка при добавлении ответственного', 'error')
+  //   }
+  // }
+
   const addResponsive = async () => {
-    const response = await authFetch(`${JOURNAL_API}/v1/branch_responsibles`, {
+    const response = await authFetch(`${API}/jurists/safety/branch/responsible`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(responsible),
+      body: JSON.stringify({
+        branchId: branch.branch_id,
+        employeeId: responsible?.employeeId,
+        responsibilityType: responsible?.responsibilityType
+      }),
     })
-    const json = await response?.json()
-    console.log(json)
+
+    if (response && response.ok) {
+      notificationSystem.addNotification('Успех', 'Ответственный добавлен', 'success')
+    } else {
+      notificationSystem.addNotification('Ошибка', 'Ошибка при добавлении ответственного', 'error')
+    }
+  }
+
+  // const deleteResponsive = async () => {
+  //   const response = await authFetch(`${JOURNAL_API}/v1/branch_responsibles`, {
+  //     method: 'DELETE',
+  //     headers: {
+  //       'Content-Type': 'application/json',
+  //     },
+  //     body: JSON.stringify({
+  //       branchId: branch.branch_id,
+  //       employeeId: deleteResId,
+  //       responsibilityType: deleteResType
+  //     }),
+  //   })
+  //   if (response && response.ok) {
+  //     notificationSystem.addNotification('Успех', 'Ответственный удален', 'success')
+  //   } else {
+  //     notificationSystem.addNotification('Ошибка', 'Ошибка при удалении ответственного', 'error')
+  //   }
+  // }
+
+  const deleteResponsive = async () => {
+    const response = await authFetch(`${API}/jurists/safety/branch/responsible`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        branchId: branch.branch_id,
+        employeeId: deleteResId,
+        responsibilityType: deleteResType
+      }),
+    })
+    if (response && response.ok) {
+      notificationSystem.addNotification('Успех', 'Ответственный удален', 'success')
+    } else {
+      notificationSystem.addNotification('Ошибка', 'Ошибка при удалении ответственного', 'error')
+    }
+  }
+
+  const openDeleteModal = (id: string, type: 'ОТ' | 'ПБ') => {
+    setDeleteResId(id)
+    setDeleteResType(type)
+  }
+
+  const closeDeleteModal = () => {
+    setDeleteResId(null)
+    setDeleteResType(null)
   }
 
   return (
@@ -421,7 +526,7 @@ const LocalJournalTable = function LocalJournalTable({
                 <Badge size="sm" variant="outline" color="gray">
                   {branch.journals.length} журналов
                 </Badge>
-                <Popover width={300} position="bottom" withArrow shadow="md">
+                <Popover width={300} position="bottom" withArrow shadow="md" opened={resPopoverOpened} onChange={setResPopoverOpened} zIndex={100}>
                   <Popover.Target>
                     <Tooltip label="Ответственные по ПБ и ОТ">
                       <ActionIcon
@@ -429,6 +534,7 @@ const LocalJournalTable = function LocalJournalTable({
                         variant="outline"
                         color="blue"
                         style={{ cursor: 'pointer' }}
+                        onClick={() => {setResPopoverOpened((o) => !o), getResponsive()}}
                       >
                         <IconUsers size={14} />
                       </ActionIcon>
@@ -437,34 +543,42 @@ const LocalJournalTable = function LocalJournalTable({
                   <Popover.Dropdown>
                     <Stack gap="sm">
                       <Text size="sm" fw={600}>Ответственные</Text>
+                      {canManageStatuses &&
+                        <Button leftSection={<IconEyePlus size={18} />} variant="outline" onClick={handleResponsibleOpen} size='xs'>Назначить</Button>
+                      }
                       <Divider />
                       <Stack gap="xs">
                         <Text size="xs" fw={500} c="blue">По пожарной безопасности:</Text>
-                        <Stack>
-                          {branch.responsibilities.pb.length > 0 ? branch.responsibilities.pb.map(emp => {
-                            return (
-                              <Text size="xs" c="dimmed">{emp.employee_name}</Text>
-                            )
-                          })
-                          :
-                            <Text size="xs" c="dimmed">Информация будет добавлена</Text>
-                          }
-                        </Stack>
+                        {responsibleData && responsibleData.responsibles?.length > 0 && 
+                        responsibleData.responsibles.filter(res => res.responsibility_type === 'ПБ').map(res => (
+                          <Group key={res.employee_id}>
+                            <Text size="xs" c="dimmed">{res.employee_name}</Text>
+                            <Tooltip label="Удалить ответственного">
+                              <ActionIcon variant="light" aria-label="Settings" size='sm' color='red' onClick={() => openDeleteModal(res.employee_id, 'ПБ')}>
+                                <IconX stroke={1.5} />
+                              </ActionIcon>
+                            </Tooltip>
+                          </Group>                         
+                        ))}
                       </Stack>
                       <Stack gap="xs">
                         <Text size="xs" fw={500} c="green">По охране труда:</Text>
-                          {branch.responsibilities.ot.length > 0 ? branch.responsibilities.ot.map(emp => {
-                            return (
-                              <Text size="xs" c="dimmed">{emp.employee_name}</Text>
-                            )
-                          })
-                          :
-                            <Text size="xs" c="dimmed">Информация будет добавлена</Text>
-                          }
+                        {responsibleData && responsibleData.responsibles?.length > 0 && 
+                          responsibleData.responsibles.filter(res => res.responsibility_type === 'ОТ').map(res => (
+                          <Group key={res.employee_id}>
+                            <Text size="xs" c="dimmed">{res.employee_name}</Text>
+                            <Tooltip label="Удалить ответственного">
+                              <ActionIcon variant="light" aria-label="Settings" size='sm' color='red' onClick={() => openDeleteModal(res.employee_id, 'ОТ')}>
+                                <IconX stroke={1.5} />
+                              </ActionIcon>
+                            </Tooltip>
+                          </Group>
+                        ))}
                       </Stack>
                     </Stack>
                   </Popover.Dropdown>
                 </Popover>
+                
                 <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }} truncate="end">
                 {branch.branch_address}
               </Text>
@@ -492,48 +606,40 @@ const LocalJournalTable = function LocalJournalTable({
             >
               {isExpanded ? 'Свернуть' : 'Развернуть'}
             </Button>
-            {/*{canManageStatuses &&
-            <>
-              <Button variant="outline" onClick={handleResponsibleOpen}>Ответственные</Button>
-              <Modal opened={responsibleOpened} onClose={responsibleClose} title="Назначение ответственных" centered>
-                <Stack gap='lg'>
-                  {responsible.map((res, index) => {
-                    return (
-                      <Stack>
-                        <Text>Ответственный {index + 1}</Text>
-                        <Group>
-                          <Select
-                            placeholder="Выберите сотрудника"
-                            data={branchEmployees.map((emp: any) => ({label: emp.fio, value: emp.uuid}))}
-                            value={res.employeeId}
-                            onChange={(value) => 
-                              setResponsible(responsible.map((item, i) => i === index ? { ...item, employeeId: value } : item)
-                            )}
-                            searchable
-                            clearable
-                            style={{ minWidth: 200 }}
-                          />
-                          <Select
-                            placeholder="ОТ или ПБ?"
-                            data={['ОТ', 'ПБ']}
-                            value={res.responsibilityType}
-                            onChange={(value) => 
-                              setResponsible(responsible.map((item, i) => i === index ?  { ...item, responsibilityType: value } : item)
-                            )}
-                            searchable
-                            clearable
-                            w={150}
-                          />
-                        </Group>
-                      </Stack>
-                    )
-                  })}
-                  <Button variant='light' onClick={addResponsive}>Назначить</Button>
-                </Stack>
-              </Modal>
-            </>
-            }*/}
           </Stack>
+          <Modal opened={responsibleOpened} onClose={responsibleClose} title="Назначение ответственного" centered>
+            <Stack gap='lg'>
+              <Stack>
+                <Group>
+                  <Select
+                    placeholder="Выберите сотрудника"
+                    data={branchEmployees.map((emp: any) => ({label: emp.fio, value: emp.uuid}))}
+                    value={responsible?.employeeId}
+                    onChange={(value) => setResponsible({...responsible, employeeId: value})}
+                    searchable
+                    clearable
+                    style={{ minWidth: 200 }}
+                  />
+                  <Select
+                    placeholder="ОТ или ПБ?"
+                    data={['ОТ', 'ПБ']}
+                    value={responsible?.responsibilityType}
+                    onChange={(value) => setResponsible({...responsible, responsibilityType: value })}
+                    searchable
+                    clearable
+                    w={150}
+                  />
+                </Group>
+              </Stack>
+              <Button variant='light' onClick={() => {addResponsive(), responsibleClose()}}>Назначить</Button>
+            </Stack>
+          </Modal>
+          <Modal opened={deleteResId !== null} onClose={closeDeleteModal} title="Удаление ответственного" centered>
+            <Group grow>
+              <Button variant='light' onClick={closeDeleteModal}>Отмена</Button>
+              <Button onClick={() => {deleteResponsive(), closeDeleteModal()}}>Удалить</Button>
+            </Group>
+          </Modal>
         </Group>
 
         {/* Список журналов */}
@@ -545,16 +651,16 @@ const LocalJournalTable = function LocalJournalTable({
                 Нет журналов в этом филиале
               </Text>
             ) : (
-                     <LocalJournalTable
-                       key={`${branch.branch_id}-${branch.journals.length}-${branch.journals.map(j => j.status).join(',')}-${forceUpdate}`}
-                       journals={branch.journals}
-                       onApproveJournal={onApproveJournal}
-                       onRejectJournal={onRejectJournal}
-                       onUnderReviewJournal={onUnderReviewJournal}
-                       onViewFile={onViewFile}
-                       onUploadFiles={onUploadFiles}
-                       canManageStatuses={canManageStatuses}
-                     />
+              <LocalJournalTable
+                key={`${branch.branch_id}-${branch.journals.length}-${branch.journals.map(j => j.status).join(',')}-${forceUpdate}`}
+                journals={branch.journals}
+                onApproveJournal={onApproveJournal}
+                onRejectJournal={onRejectJournal}
+                onUnderReviewJournal={onUnderReviewJournal}
+                onViewFile={onViewFile}
+                onUploadFiles={onUploadFiles}
+                canManageStatuses={canManageStatuses}
+              />
             )}
           </Box>
         )}
@@ -1331,9 +1437,9 @@ export default function SafetyJournal() {
       subtitle: 'Управление журналами по охране труда и пожарной безопасности',
       icon: <Text size="xl" fw={700} c="white">🛡️</Text>,
       actionButton: {
-        text: 'Обновить данные',
+        text: 'Обновить',
         onClick: handleRefreshData,
-        icon: <IconRefresh size={18} />,
+        icon: <IconRefresh size={22} />,
         loading: loading
       }
     });
@@ -1422,7 +1528,7 @@ export default function SafetyJournal() {
           style={{
             position: 'sticky',
             top: '0',
-            zIndex: 1000,
+            zIndex: 1,
             background: 'var(--theme-bg-primary)',
             borderBottom: '1px solid var(--theme-border-primary)',
             boxShadow: 'var(--theme-shadow-md)',
@@ -1692,7 +1798,7 @@ export default function SafetyJournal() {
       <ActionIcon variant="filled" size={50} aria-label="Settings" onClick={qrOpen}
         style={{  
           position: 'fixed',
-          bottom: '150px',
+          bottom: '225px',
           right: '40px',
           zIndex: '1000',
           pointerEvents: 'auto'
