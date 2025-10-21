@@ -42,7 +42,6 @@ interface ResponsibleEmployeeType {
 interface ResponsibleEmployeeAddType {
   responsibilityType: 'ОТ' | 'ПБ' | '',
   employeeId: string
-  branchId: string
 }
 
 interface ResponsibilitiesType {
@@ -371,8 +370,8 @@ type ResponsibleObjDataType = {
   const [responsibleOpened, { open: responsibleOpen, close: responsibleClose }] = useDisclosure(false)
   const [deleteResId, setDeleteResId] = useState<string | null>(null)
   const [deleteResType, setDeleteResType] = useState<string | null>(null)
-  const [branchEmployees, setBranchEmployees] = useState([])
-  const [responsible, setResponsible] = useState<ResponsibleEmployeeAddType>()
+  const [employeesData, setEmployeesData] = useState([])
+  const [responsible, setResponsible] = useState<ResponsibleEmployeeAddType>({employeeId: '', responsibilityType: ''})
   const [responsibleData, setResponsibleData] = useState<ResponsibleObjDataType>()
   const [resPopoverOpened, setResPopoverOpened] = useState(false)
   const authFetch  = useAuthFetch()
@@ -382,18 +381,17 @@ type ResponsibleObjDataType = {
     setIsExpanded(expandedBranches.has(branch.branch_id));
   }, [expandedBranches, branch.branch_id]);
 
-  const getBranchEmployees = async () => {
-    const response = await fetch(`${API}/search/branch/${branch.branch_id}/employees`)
+  const getEmployees = async (text: string) => {
+    const response = await fetch(`${API}/search/employee/summary?text=${text}`)
     const json = await response.json()
-    
+    console.log(json)
     if (response.ok) {
-      setBranchEmployees(json)
+      setEmployeesData(json)
     }
   }
 
   const handleResponsibleOpen = () => {
     responsibleOpen()
-    getBranchEmployees()
   }
 
   // const getResponsive = async () => {
@@ -493,6 +491,15 @@ type ResponsibleObjDataType = {
     }
   }
 
+  const handleEmployeeSearch = (value: string) => {
+    console.log(value)
+    if (value) {
+      getEmployees(value)
+    } else {
+      employeesData.length > 0 && setEmployeesData([])
+    }
+  }
+
   const openDeleteModal = (id: string, type: 'ОТ' | 'ПБ') => {
     setDeleteResId(id)
     setDeleteResType(type)
@@ -503,6 +510,12 @@ type ResponsibleObjDataType = {
     setDeleteResType(null)
   }
 
+  const closeAddResonsibleModal = () => {
+    responsibleClose()
+    setEmployeesData([])
+    setResponsible({employeeId: '', responsibilityType: ''})
+  }
+  console.log(responsible)
   return (
     <Paper withBorder radius="md" p="lg" style={{ background: 'var(--theme-bg-primary)' }}>
       <Stack gap="md">
@@ -607,16 +620,17 @@ type ResponsibleObjDataType = {
               {isExpanded ? 'Свернуть' : 'Развернуть'}
             </Button>
           </Stack>
-          <Modal opened={responsibleOpened} onClose={responsibleClose} title="Назначение ответственного" centered>
+          <Modal opened={responsibleOpened} onClose={closeAddResonsibleModal} title="Назначение ответственного" centered>
             <Stack gap='lg'>
               <Stack>
                 <Group>
                   <Select
                     placeholder="Выберите сотрудника"
-                    data={branchEmployees.map((emp: any) => ({label: emp.fio, value: emp.uuid}))}
-                    value={responsible?.employeeId}
-                    onChange={(value) => setResponsible({...responsible, employeeId: value})}
+                    data={employeesData.map((emp: any) => ({label: emp.fio, value: emp.uuid}))}
+                    value={responsible?.employeeId || ''}
+                    onChange={(value) => value && setResponsible({...responsible, employeeId: value})}
                     searchable
+                    onSearchChange={(value) => {console.log(value), handleEmployeeSearch(value)}}
                     clearable
                     style={{ minWidth: 200 }}
                   />
@@ -624,14 +638,14 @@ type ResponsibleObjDataType = {
                     placeholder="ОТ или ПБ?"
                     data={['ОТ', 'ПБ']}
                     value={responsible?.responsibilityType}
-                    onChange={(value) => setResponsible({...responsible, responsibilityType: value })}
+                    onChange={(value) => (value === 'ОТ' || value === 'ПБ') && setResponsible({...responsible, responsibilityType: value})}
                     searchable
                     clearable
                     w={150}
                   />
                 </Group>
               </Stack>
-              <Button variant='light' onClick={() => {addResponsive(), responsibleClose()}}>Назначить</Button>
+              <Button variant='light' onClick={() => {addResponsive(), closeAddResonsibleModal()}}>Назначить</Button>
             </Stack>
           </Modal>
           <Modal opened={deleteResId !== null} onClose={closeDeleteModal} title="Удаление ответственного" centered>
