@@ -576,12 +576,25 @@ export const getDeviceInfo = async (req: Request, res: Response) => {
 export const actionRestartApp = async (req: Request, res: Response) => {
   try {
     const { deviceId } = req.params as any;
-    console.log('Restart app request for device:', deviceId);
+    console.log(`🔄 [actionRestartApp] Отправка команды перезапуска приложения для устройства: ${deviceId}`);
     
+    // Проверяем, что устройство подключено
     const socketService = SocketIOService.getInstance();
+    const connectedDevices = socketService.getConnectedDeviceIds();
+    console.log(`🔄 [actionRestartApp] Подключенные устройства:`, connectedDevices);
+    
+    if (!connectedDevices.includes(deviceId)) {
+      console.log(`❌ [actionRestartApp] Устройство ${deviceId} не подключено к Socket.IO`);
+      return res.status(400).json({ 
+        success: false, 
+        error: 'DEVICE_OFFLINE',
+        message: 'Устройство не подключено к серверу'
+      });
+    }
+    
     const result = await socketService.sendToDeviceWithAck(deviceId, 'device_restart_app');
     
-    console.log('Restart app result:', {
+    console.log(`🔄 [actionRestartApp] Результат отправки команды:`, {
       deviceId,
       ok: result.ok,
       error: result.error,
@@ -589,21 +602,52 @@ export const actionRestartApp = async (req: Request, res: Response) => {
     });
     
     if (!result.ok) {
-      console.log('Device restart failed:', result.error);
-      return res.status(400).json({ success: false, error: result.error || 'DEVICE_OFFLINE' });
+      console.log(`❌ [actionRestartApp] Устройство недоступно: ${result.error}`);
+      return res.status(400).json({ 
+        success: false, 
+        error: result.error || 'DEVICE_OFFLINE',
+        message: 'Устройство недоступно для команды перезапуска'
+      });
     }
     
-    const ok = (result.data as any)?.ok !== false; // по умолчанию ок, если нет явного отказа
-    if (!ok) {
-      console.log('Device restart rejected by device');
-      return res.status(400).json({ success: false, error: 'RESTART_FAILED' });
+    // Проверяем ответ от устройства
+    const deviceResponse = result.data as any;
+    console.log(`🔄 [actionRestartApp] Ответ от устройства:`, deviceResponse);
+    
+    // Если устройство вернуло ошибку
+    if (deviceResponse?.error) {
+      console.log(`❌ [actionRestartApp] Устройство вернуло ошибку:`, deviceResponse.error);
+      return res.status(400).json({ 
+        success: false, 
+        error: deviceResponse.error,
+        message: `Устройство не может выполнить перезапуск: ${deviceResponse.error}`
+      });
     }
     
-    console.log('Device restart successful');
-    res.json({ success: true, data: result.data ?? null, message: 'Команда перезапуска отправлена' });
+    // Если устройство явно отказалось выполнить команду
+    if (deviceResponse?.ok === false) {
+      console.log(`❌ [actionRestartApp] Устройство отказалось выполнить команду:`, deviceResponse);
+      return res.status(400).json({ 
+        success: false, 
+        error: 'COMMAND_REJECTED',
+        message: 'Устройство отказалось выполнить команду перезапуска'
+      });
+    }
+    
+    // Команда успешно отправлена
+    console.log(`✅ [actionRestartApp] Команда перезапуска успешно отправлена`);
+    res.json({ 
+      success: true, 
+      data: result.data ?? null, 
+      message: 'Команда перезапуска приложения отправлена устройству' 
+    });
   } catch (error) {
-    console.error('Error sending restart app:', error);
-    res.status(500).json({ success: false, error: 'Ошибка отправки команды' });
+    console.error('❌ [actionRestartApp] Ошибка отправки команды:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'INTERNAL_ERROR',
+      message: 'Внутренняя ошибка сервера при отправке команды'
+    });
   }
 };
 
@@ -695,15 +739,78 @@ export const actionConfigureWifi = async (req: Request, res: Response) => {
 export const actionReboot = async (req: Request, res: Response) => {
   try {
     const { deviceId } = req.params as any;
+    console.log(`🔄 [actionReboot] Отправка команды перезагрузки для устройства: ${deviceId}`);
+    
+    // Проверяем, что устройство подключено
     const socketService = SocketIOService.getInstance();
+    const connectedDevices = socketService.getConnectedDeviceIds();
+    console.log(`🔄 [actionReboot] Подключенные устройства:`, connectedDevices);
+    
+    if (!connectedDevices.includes(deviceId)) {
+      console.log(`❌ [actionReboot] Устройство ${deviceId} не подключено к Socket.IO`);
+      return res.status(400).json({ 
+        success: false, 
+        error: 'DEVICE_OFFLINE',
+        message: 'Устройство не подключено к серверу'
+      });
+    }
+    
     const result = await socketService.sendToDeviceWithAck(deviceId, 'device_reboot');
-    if (!result.ok) return res.status(400).json({ success: false, error: result.error || 'DEVICE_OFFLINE' });
-    const ok = (result.data as any)?.ok === true;
-    if (!ok) return res.status(400).json({ success: false, error: (result.data as any)?.error || 'NOT_SUPPORTED' });
-    res.json({ success: true, data: result.data ?? null, message: 'Команда перезагрузки отправлена' });
+    
+    console.log(`🔄 [actionReboot] Результат отправки команды:`, {
+      deviceId,
+      ok: result.ok,
+      error: result.error,
+      data: result.data
+    });
+    
+    if (!result.ok) {
+      console.log(`❌ [actionReboot] Устройство недоступно: ${result.error}`);
+      return res.status(400).json({ 
+        success: false, 
+        error: result.error || 'DEVICE_OFFLINE',
+        message: 'Устройство недоступно для команды перезагрузки'
+      });
+    }
+    
+    // Проверяем ответ от устройства
+    const deviceResponse = result.data as any;
+    console.log(`🔄 [actionReboot] Ответ от устройства:`, deviceResponse);
+    
+    // Если устройство вернуло ошибку
+    if (deviceResponse?.error) {
+      console.log(`❌ [actionReboot] Устройство вернуло ошибку:`, deviceResponse.error);
+      return res.status(400).json({ 
+        success: false, 
+        error: deviceResponse.error,
+        message: `Устройство не может выполнить перезагрузку: ${deviceResponse.error}`
+      });
+    }
+    
+    // Если устройство явно отказалось выполнить команду
+    if (deviceResponse?.ok === false) {
+      console.log(`❌ [actionReboot] Устройство отказалось выполнить команду:`, deviceResponse);
+      return res.status(400).json({ 
+        success: false, 
+        error: 'COMMAND_REJECTED',
+        message: 'Устройство отказалось выполнить команду перезагрузки'
+      });
+    }
+    
+    // Команда успешно отправлена
+    console.log(`✅ [actionReboot] Команда перезагрузки успешно отправлена`);
+    res.json({ 
+      success: true, 
+      data: result.data ?? null, 
+      message: 'Команда перезагрузки отправлена устройству' 
+    });
   } catch (error) {
-    console.error('Error sending reboot:', error);
-    res.status(500).json({ success: false, error: 'Ошибка отправки команды' });
+    console.error('❌ [actionReboot] Ошибка отправки команды:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'INTERNAL_ERROR',
+      message: 'Внутренняя ошибка сервера при отправке команды'
+    });
   }
 };
 
