@@ -255,6 +255,13 @@ export const downloadLatestVersion = async (req: Request, res: Response): Promis
       }
     });
     
+    // Логируем ВСЕ заголовки для диагностики
+    console.log(`[Download] ==== ALL HEADERS ====`);
+    Object.keys(req.headers).forEach(key => {
+      console.log(`[Download] ${key}: ${req.headers[key]}`);
+    });
+    console.log(`[Download] ==== END HEADERS ====`);
+    
     const dbStartTime = Date.now();
     const latestVersion = await prisma.appVersion.findFirst({
       where: { 
