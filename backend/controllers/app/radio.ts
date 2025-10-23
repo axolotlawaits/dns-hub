@@ -343,7 +343,20 @@ export const getDevicesStatus = async (req: Request, res: Response) => {
       
       // Используем данные из памяти, если они есть, иначе из базы данных
       const lastSeenTime = lastSeenMem || lastSeenDb;
-      const online = lastSeenTime ? (now - lastSeenTime <= ONLINE_THRESHOLD_MS) : false;
+      const timeDiff = lastSeenTime ? (now - lastSeenTime) : null;
+      const online = lastSeenTime ? (timeDiff! <= ONLINE_THRESHOLD_MS) : false;
+      
+      // Детальное логирование для первых 5 устройств
+      if (devices.indexOf(d) < 5) {
+        console.log(`📊 [getDevicesStatus] Device ${d.id}:`, {
+          lastSeenMem: lastSeenMem ? new Date(lastSeenMem).toISOString() : 'none',
+          lastSeenDb: lastSeenDb ? new Date(lastSeenDb).toISOString() : 'none',
+          lastSeenTime: lastSeenTime ? new Date(lastSeenTime).toISOString() : 'none',
+          timeDiff: timeDiff,
+          threshold: ONLINE_THRESHOLD_MS,
+          online
+        });
+      }
       
       return { 
         deviceId: d.id, 

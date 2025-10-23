@@ -327,6 +327,7 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
     // Обновляем heartbeat store (для быстрого доступа)
     heartbeatStore.set(deviceId, now);
     console.log(`💓 [Heartbeat] Updated heartbeatStore for device ${deviceId} at ${nowDate.toISOString()}`);
+    console.log(`💓 [Heartbeat] HeartbeatStore size: ${heartbeatStore.size}, keys:`, Array.from(heartbeatStore.keys()).slice(0, 5));
 
     // Подготавливаем данные для обновления
     const updateData: any = { lastSeen: nowDate };
@@ -414,12 +415,20 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
 
       if (existingDevice) {
         // Если устройство существует, обновляем его
+        // Используем ID найденного устройства
+        const updateDeviceId = existingDevice.id;
         await prisma.devices.update({ 
-          where: { id: existingDevice.id }, 
+          where: { id: updateDeviceId }, 
           data: updateData
         });
-        console.log(`✅ [Heartbeat] Device ${existingDevice.id} updated successfully`);
-        console.log(`💓 [Heartbeat] Device ${existingDevice.id} is now online (heartbeat updated)`);
+        console.log(`✅ [Heartbeat] Device ${updateDeviceId} updated successfully`);
+        console.log(`💓 [Heartbeat] Device ${updateDeviceId} is now online (heartbeat updated)`);
+        
+        // Если найденное устройство имеет другой ID, обновляем heartbeatStore
+        if (updateDeviceId !== deviceId) {
+          console.log(`🔄 [Heartbeat] Device ID mismatch: request ${deviceId} -> database ${updateDeviceId}`);
+          heartbeatStore.set(updateDeviceId, now);
+        }
       } else {
         // Если устройство не существует, создаем новое только если есть userEmail
         if (!updateData.userEmail) {
@@ -460,6 +469,8 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
       }
     } catch (error) {
       console.error('Error updating/creating device in heartbeat:', error);
+      // Не прерываем выполнение, но логируем ошибку
+      // HeartbeatStore уже обновлен, что достаточно для отслеживания онлайн статуса
     }
 
     console.log('Heartbeat received from device:', deviceId, 'at', nowDate.toISOString());
