@@ -244,7 +244,16 @@ export const downloadLatestVersion = async (req: Request, res: Response): Promis
     console.log(`[Download] Connection: ${req.headers['connection'] || 'unknown'}`);
     console.log(`[Download] Range: ${req.headers['range'] || 'none'}`);
     console.log(`[Download] Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`[Download] Full headers:`, JSON.stringify(req.headers, null, 2));
+    console.log(`[Download] Request URL: ${req.url}`);
+    console.log(`[Download] Request method: ${req.method}`);
+    
+    // Логируем важные заголовки
+    const importantHeaders = ['content-type', 'accept-encoding', 'cache-control', 'referer', 'origin'];
+    importantHeaders.forEach(header => {
+      if (req.headers[header]) {
+        console.log(`[Download] ${header}: ${req.headers[header]}`);
+      }
+    });
     
     const dbStartTime = Date.now();
     const latestVersion = await prisma.appVersion.findFirst({
@@ -347,6 +356,7 @@ export const downloadLatestVersion = async (req: Request, res: Response): Promis
         console.log(`[Download] Disabled caching for problematic browser: ${userAgent}`);
       } else {
         res.setHeader('Cache-Control', 'public, max-age=3600'); // Кеширование на 1 час для обычных браузеров
+      res.setHeader('Connection', 'keep-alive'); // Поддержка keep-alive
       }
 
       // Создаем поток для чтения части файла с оптимизированными настройками
@@ -357,6 +367,13 @@ export const downloadLatestVersion = async (req: Request, res: Response): Promis
         autoClose: true
       });
       
+      let bytesSent = 0;
+      
+      // Счетчик отправленных байт для Range запросов
+      fileStream.on('data', (chunk) => {
+        bytesSent += chunk.length;
+      });
+      
       fileStream.on('error', (err) => {
         console.error('[Download] Stream error:', err);
         if (!res.headersSent) {
@@ -364,6 +381,20 @@ export const downloadLatestVersion = async (req: Request, res: Response): Promis
             success: false, 
             message: 'Ошибка чтения файла' 
           });
+        }
+      });
+      
+      fileStream.on('end', () => {
+        const endTime = Date.now();
+        const duration = endTime - startTime;
+        console.log(`[Download] Range stream ended, ${bytesSent}/${chunksize} bytes sent`);
+        console.log(`[Download] Range download completed in ${duration}ms`);
+      });
+      
+      res.on('close', () => {
+        console.log(`[Download] Range client disconnected: ${bytesSent}/${chunksize} bytes sent`);
+        if (!fileStream.destroyed) {
+          fileStream.destroy();
         }
       });
 
@@ -410,10 +441,18 @@ export const downloadLatestVersion = async (req: Request, res: Response): Promis
       }
     });
 
+    let bytesSent = 0;
+    
+    // Счетчик отправленных байт
+    fileStream.on('data', (chunk) => {
+      bytesSent += chunk.length;
+    });
+
     fileStream.on('end', () => {
       const endTime = Date.now();
       const duration = endTime - startTime;
       const speed = fileSize / (duration / 1000) / 1024; // KB/s
+      console.log(`[Download] Stream ended, ${bytesSent}/${fileSize} bytes sent`);
       console.log(`[Download] Download completed for ${safeFileName} in ${duration}ms (${speed.toFixed(2)} KB/s)`);
       
       // Логируем медленные скачивания для анализа
@@ -426,11 +465,22 @@ export const downloadLatestVersion = async (req: Request, res: Response): Promis
       clearTimeout(downloadTimeout);
     });
 
-    // Обработка закрытия соединения клиентом
-    req.on('close', () => {
-      console.log(`[Download] Client disconnected during download of ${safeFileName}`);
+    // Обработка закрытия соединения клиентом (событие на Response, а не Request!)
+    res.on('close', () => {
+      const closeTime = Date.now();
+      const totalDuration = closeTime - startTime;
+      console.log(`[Download] Client disconnected: ${bytesSent}/${fileSize} bytes sent in ${totalDuration}ms`);
+      console.log(`[Download] Disconnect during download of ${safeFileName}`);
       clearTimeout(downloadTimeout);
-      fileStream.destroy();
+      if (!fileStream.destroyed) {
+        fileStream.destroy();
+      }
+    });
+
+    res.on('finish', () => {
+      const finishTime = Date.now();
+      const totalDuration = finishTime - startTime;
+      console.log(`[Download] Response finished: ${bytesSent}/${fileSize} bytes sent in ${totalDuration}ms`);
     });
 
     fileStream.pipe(res);
