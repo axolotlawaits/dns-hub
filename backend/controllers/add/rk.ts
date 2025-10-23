@@ -51,9 +51,9 @@ const validateBranchExists = async (branchId: string) => {
 const deleteFileSafely = async (filePath: string) => {
   try {
     await fs.unlink(filePath);
-    console.log(`File deleted successfully: ${filePath}`);
+    console.log(`[RK] File deleted successfully: ${filePath}`);
   } catch (error) {
-    console.error(`Error deleting file at ${filePath}:`, error);
+    console.error(`[RK] Error deleting file at ${filePath}:`, error);
   }
 };
 

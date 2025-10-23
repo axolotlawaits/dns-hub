@@ -93,7 +93,6 @@ export class SocketIOService {
         const conn = this.connections.get(socket.id);
         if (conn) {
           conn.lastActivity = new Date();
-          console.log(`[Socket.IO] pong received from deviceId=${conn.deviceId || 'unknown'}`);
         }
       });
 
@@ -101,25 +100,17 @@ export class SocketIOService {
         const conn = this.connections.get(socket.id);
         if (conn) {
           conn.lastActivity = new Date();
-          // Используем deviceId из соединения, если он не передан в payload
-          const deviceId = payload?.deviceId || conn.deviceId || 'unknown';
-          console.log(`[Socket.IO] heartbeat received from deviceId=${deviceId}, payload:`, payload);
         }
       });
 
       socket.onAny((eventName, ...args) => {
         const conn = this.connections.get(socket.id);
         if (conn) conn.lastActivity = new Date();
-        
-        // Логируем только определенные события для отладки
-        if (eventName === 'heartbeat' || eventName === 'pong' || eventName === 'ping') {
-          console.log(`[Socket.IO] Event '${eventName}' received from socketId=${socket.id}, deviceId=${conn?.deviceId || 'unknown'}`);
-        }
       });
 
       socket.on('disconnect', (reason) => {
         this.unregisterSocket(socket.id);
-        console.log(`[Socket.IO] socket disconnected (${reason})`);
+        console.log(`[Socket.IO] Disconnected: ${reason}`);
       });
 
       socket.on('error', (err) => {
@@ -159,7 +150,7 @@ export class SocketIOService {
     };
     this.connections.set(socketId, info);
 
-    console.log(`[Socket.IO] registered socketId=${socketId} userId=${userId || '-'} deviceId=${deviceId || '-'}`);
+    console.log(`[Socket.IO] Registered: userId=${userId || '-'} deviceId=${deviceId || '-'}`);
   }
 
   private registerDeviceSocket(deviceId: string, socketId: string) {
@@ -199,7 +190,7 @@ export class SocketIOService {
         if (inactiveDuration > 5 * 60 * 1000) {
           this.io?.sockets.sockets.get(socketId)?.disconnect(true);
           this.unregisterSocket(socketId);
-          console.log(`[Socket.IO] Cleaned up inactive connection ${socketId}`);
+          console.log(`[Socket.IO] Cleaned up inactive connection`);
         }
       });
     }, 60000);

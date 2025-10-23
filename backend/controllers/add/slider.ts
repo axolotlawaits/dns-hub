@@ -34,9 +34,9 @@ const validateUserExists = async (userId: string) => {
 const deleteFileSafely = async (filePath: string) => {
   try {
     await fs.unlink(filePath);
-    console.log(`File deleted successfully: ${filePath}`);
+    console.log(`[Slider] File deleted successfully: ${filePath}`);
   } catch (error) {
-    console.error(`Error deleting file at ${filePath}:`, error);
+    console.error(`[Slider] Error deleting file at ${filePath}:`, error);
   }
 };
 

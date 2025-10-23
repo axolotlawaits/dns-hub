@@ -244,7 +244,8 @@ export const downloadLatestVersion = async (req: Request, res: Response): Promis
     console.log(`[Download] Connection: ${req.headers['connection'] || 'unknown'}`);
     console.log(`[Download] Range: ${req.headers['range'] || 'none'}`);
     console.log(`[Download] Environment: ${process.env.NODE_ENV || 'development'}`);
-
+    console.log(`[Download] Full headers:`, JSON.stringify(req.headers, null, 2));
+    
     const dbStartTime = Date.now();
     const latestVersion = await prisma.appVersion.findFirst({
       where: { 
@@ -271,7 +272,7 @@ export const downloadLatestVersion = async (req: Request, res: Response): Promis
     const fileCheckStartTime = Date.now();
     const filePath = path.join(process.cwd(), latestVersion.filePath);
     if (!fs.existsSync(filePath)) {
-      console.log(`[Download] File not found at path: ${filePath}`);
+      console.error(`[Download] File not found at path: ${filePath}`);
       res.status(404).json({ 
         success: false, 
         message: 'Файл не найден на сервере' 
@@ -297,7 +298,7 @@ export const downloadLatestVersion = async (req: Request, res: Response): Promis
     
     // Создаем безопасное имя файла для заголовка (только ASCII)
     const safeFileName = downloadFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-
+    
     console.log(`[Download] File info - Size: ${fileSize} bytes, Original: ${downloadFileName}, Safe: ${safeFileName}`);
     console.log(`[Download] Content-Disposition header: attachment; filename="${safeFileName}"; filename*=UTF-8''${encodeURIComponent(downloadFileName)}`);
 

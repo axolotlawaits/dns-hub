@@ -256,7 +256,7 @@ export const reorderBookmarks = async (
 
     res.status(200).json({ success: true, message: 'Bookmarks reordered successfully' });
   } catch (error) {
-    console.error('Reorder error:', error);
+    console.error('[Bookmarks] Reorder error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };

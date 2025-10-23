@@ -60,15 +60,15 @@ export const scanNetworkForPrinters = async (req: Request, res: Response): Promi
       try {
         const nmapResults = await scanWithNmap(ipList, ports);
         results.push(...nmapResults);
-        console.log(`Nmap нашел ${nmapResults.length} принтеров со сканерами`);
+        console.log(`[Scanner] Nmap нашел ${nmapResults.length} принтеров со сканерами`);
       } catch (error) {
-        console.warn('Nmap сканирование не удалось, используем ручное сканирование:', error);
+        console.warn('[Scanner] Nmap сканирование не удалось, используем ручное сканирование:', error);
       }
     }
     
     // Если nmap не сработал или это Windows, используем ручное сканирование
     if (results.length === 0) {
-      console.log('Используем ручное сканирование...');
+      console.log('[Scanner] Используем ручное сканирование...');
       const batchSize = 50;
       for (let i = 0; i < ipList.length; i += batchSize) {
         const batch = ipList.slice(i, i + batchSize);
@@ -91,10 +91,10 @@ export const scanNetworkForPrinters = async (req: Request, res: Response): Promi
                   // Добавляем только если это устройство со сканером
                   if (details.hasScanner || details.scannerType) {
                     results.push(printerInfo);
-                    console.log(`Найден принтер со сканером: ${ip}:${port} (${details.scannerType || 'MFP'})`);
+                    console.log(`[Scanner] Найден принтер со сканером: ${ip}:${port} (${details.scannerType || 'MFP'})`);
                   }
                 } catch (error) {
-                  console.warn(`Не удалось получить детали принтера ${ip}:${port}`);
+                  console.warn(`[Scanner] Не удалось получить детали принтера ${ip}:${port}`);
                 }
                 break; // Найден принтер на одном из портов, переходим к следующему IP
               }
@@ -300,7 +300,7 @@ async function getPrinterDetails(ip: string, port: number): Promise<Partial<Prin
     }
 
   } catch (error) {
-    console.warn(`Ошибка получения деталей принтера ${ip}:${port}:`, error);
+    console.warn(`[Scanner] Ошибка получения деталей принтера ${ip}:${port}:`, error);
   }
 
   return details;
@@ -625,7 +625,7 @@ async function getLocalNetworkIps(): Promise<string[]> {
       return await getLinuxNetworkIps();
     }
   } catch (error) {
-    console.error('Критическая ошибка определения локальной сети:', error);
+    console.error('[Scanner] Критическая ошибка определения локальной сети:', error);
     throw new Error('Не удалось определить локальную сеть сервера. Проверьте сетевое подключение.');
   }
 }

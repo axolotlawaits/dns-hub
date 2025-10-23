@@ -99,7 +99,7 @@ export const updateGroupAccessInfo = async (req: Request, res: Response): Promis
   })
   if (access) {
     res.status(200).json(access)
-    console.log(access)
+    console.log('[Access]', access)
   } else {
     res.status(400).json({error: 'ошибка обновления доступа'})
   }

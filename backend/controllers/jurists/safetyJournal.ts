@@ -10,7 +10,7 @@ const JOURNALS_API_URL = process.env.JOURNALS_API_URL
 const getAuthToken = (req: Request): string | null => {
   const authHeader = req.headers?.authorization;
   if (!authHeader) {
-    console.error('No authorization header found in request');
+    console.error('[SafetyJournal] No authorization header found in request');
     return null;
   }
   return authHeader.split(' ')[1] || null;
@@ -27,18 +27,15 @@ const createAuthHeaders = (token: string | null) => {
 // Функция для проверки доступа к изменению статуса при загрузке файлов
 const checkFileUploadStatusChangeAccess = async (userId: string, positionName: string, groupName: string, newStatus: string): Promise<boolean> => {
   try {
-    console.log('Checking file upload status change access for:', { userId, positionName, groupName, newStatus });
-    
     // Разрешаем изменение статуса на "under_review" для всех пользователей при загрузке файлов
     if (newStatus === 'under_review') {
-      console.log('Status change to under_review allowed for all users during file upload');
       return true;
     }
     
     // Для других статусов используем обычную проверку прав
     return await checkSafetyJournalAccess(userId, positionName, groupName);
   } catch (error) {
-    console.error('Error checking file upload status change access:', error);
+    console.error('[SafetyJournal] Error checking file upload status change access:', error);
     return false;
   }
 };
@@ -46,8 +43,6 @@ const checkFileUploadStatusChangeAccess = async (userId: string, positionName: s
 // Функция для проверки доступа к jurists/safety (только для управления статусами)
 const checkSafetyJournalAccess = async (userId: string, positionName: string, groupName: string): Promise<boolean> => {
   try {
-    console.log('Checking safety journal access for:', { userId, positionName, groupName });
-    
     // Сначала проверяем роль пользователя - SUPERVISOR имеет полный доступ
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -55,7 +50,6 @@ const checkSafetyJournalAccess = async (userId: string, positionName: string, gr
     });
 
     if (user?.role === 'SUPERVISOR') {
-      console.log('User is SUPERVISOR - full access granted');
       return true;
     }
     
@@ -65,11 +59,8 @@ const checkSafetyJournalAccess = async (userId: string, positionName: string, gr
     });
 
     if (!safetyTool) {
-      console.log('Safety tool not found');
       return false;
     }
-
-    console.log('Safety tool found:', { id: safetyTool.id, name: safetyTool.name });
 
     // Проверяем доступ на уровне пользователя - только FULL доступ
     const userAccess = await prisma.userToolAccess.findFirst({
@@ -81,7 +72,6 @@ const checkSafetyJournalAccess = async (userId: string, positionName: string, gr
     });
 
     if (userAccess) {
-      console.log('User access found:', { accessLevel: userAccess.accessLevel });
       return true;
     }
 
@@ -91,7 +81,6 @@ const checkSafetyJournalAccess = async (userId: string, positionName: string, gr
     });
 
     if (position) {
-      console.log('Position found:', { uuid: position.uuid, name: position.name });
       const positionAccess = await prisma.positionToolAccess.findFirst({
         where: {
           positionId: position.uuid,
@@ -101,7 +90,6 @@ const checkSafetyJournalAccess = async (userId: string, positionName: string, gr
       });
 
       if (positionAccess) {
-        console.log('Position access found:', { accessLevel: positionAccess.accessLevel });
         return true;
       }
     }
@@ -113,7 +101,6 @@ const checkSafetyJournalAccess = async (userId: string, positionName: string, gr
       });
 
       if (group) {
-        console.log('Group found:', { uuid: group.uuid, name: group.name });
         const groupAccess = await prisma.groupToolAccess.findFirst({
           where: {
             groupId: group.uuid,
@@ -123,16 +110,14 @@ const checkSafetyJournalAccess = async (userId: string, positionName: string, gr
         });
 
         if (groupAccess) {
-          console.log('Group access found:', { accessLevel: groupAccess.accessLevel });
           return true;
         }
       }
     }
 
-    console.log('No access found for safety journal management');
     return false;
   } catch (error) {
-    console.error('Error checking safety journal access:', error);
+    console.error('[SafetyJournal] Error checking safety journal access:', error);
     return false;
   }
 };
@@ -177,7 +162,7 @@ export const getCurrentUser = async (req: Request, res: Response) => {
 
     res.json(userInfo);
   } catch (error) {
-    console.error('Error getting current user:', error);
+    console.error('[SafetyJournal] Error getting current user:', error);
     res.status(500).json({ message: 'Ошибка получения информации о пользователе' });
   }
 };
@@ -238,7 +223,7 @@ export const getBranchesWithJournals = async (req: Request, res: Response) => {
       hasFullAccess: hasFullAccess // Добавляем информацию о доступе
     });
   } catch (error) {
-    console.error('Error getting branches with journals:', error);
+    console.error('[SafetyJournal] Error getting branches with journals:', error);
     
     // Если внешний API недоступен, возвращаем пустой список с информацией об ошибке
     if ((error as any).code === 'ECONNREFUSED' || (error as any).message?.includes('ECONNREFUSED')) {
@@ -259,7 +244,7 @@ async function getJournalFilesCount(journalId: string, token: string): Promise<n
   try {
     return 0;
   } catch (error) {
-    console.error(`Error getting files count for journal ${journalId}:`, error);
+    console.error(`[SafetyJournal] Error getting files count for journal ${journalId}:`, error);
     return 0;
   }
 }
@@ -293,7 +278,7 @@ async function getJournalFiles(journalId: string, token: string): Promise<any[]>
     // Если все эндпоинты не сработали, возвращаем пустой массив
     return [];
   } catch (error: any) {
-    console.error(`Error getting files for journal ${journalId}:`, error.response?.data || error.message);
+    console.error(`[SafetyJournal] Error getting files for journal ${journalId}:`, error.response?.data || error.message);
     return [];
   }
 }
@@ -316,12 +301,12 @@ export const uploadFile = async (req: Request, res: Response) => {
 
     // Исправляем кодировку имени файла
     const correctedFileName = decodeRussianFileName(file?.originalname || '');
-    console.log('File name encoding correction:', {
+    console.log('[SafetyJournal] File name encoding correction:', {
       original: file?.originalname,
       corrected: correctedFileName
     });
 
-    console.log('Upload file request:', {
+    console.log('[SafetyJournal] Upload file request:', {
       branchJournalId,
       file: file ? {
         originalname: file.originalname,
@@ -340,30 +325,30 @@ export const uploadFile = async (req: Request, res: Response) => {
     });
 
     if (!file) {
-      console.log('No file provided');
+      console.log('[SafetyJournal] No file provided');
       return res.status(400).json({ message: 'Файл не предоставлен' });
     }
 
     if (!branchJournalId) {
-      console.log('No branchJournalId provided');
+      console.log('[SafetyJournal] No branchJournalId provided');
       return res.status(400).json({ message: 'ID журнала филиала не предоставлен' });
     }
 
     if (!JOURNALS_API_URL) {
-      console.error('JOURNALS_API_URL is not defined');
+      console.error('[SafetyJournal] JOURNALS_API_URL is not defined');
       return res.status(500).json({ message: 'Внешний API не настроен' });
     }
 
     const token = getAuthToken(req);
     
     if (!token) {
-      console.log('No auth token found');
+      console.log('[SafetyJournal] No auth token found');
       return res.status(401).json({ message: 'Токен авторизации не найден' });
     }
 
     // Проверяем валидность файла
     if (!file.buffer || file.buffer.length === 0) {
-      console.error('File buffer is empty or invalid:', {
+      console.error('[SafetyJournal] File buffer is empty or invalid:', {
         bufferExists: !!file.buffer,
         bufferLength: file.buffer?.length,
         fileName: file.originalname
@@ -372,7 +357,7 @@ export const uploadFile = async (req: Request, res: Response) => {
     }
 
     if (file.size !== file.buffer.length) {
-      console.warn('File size mismatch:', {
+      console.warn('[SafetyJournal] File size mismatch:', {
         declaredSize: file.size,
         bufferLength: file.buffer.length,
         fileName: file.originalname
@@ -381,7 +366,7 @@ export const uploadFile = async (req: Request, res: Response) => {
 
     // Специальная проверка для PDF файлов
     if (file.mimetype === 'application/pdf' || (correctedFileName && correctedFileName.toLowerCase().endsWith('.pdf'))) {
-      console.log('PDF file detected, performing additional checks:', {
+      console.log('[SafetyJournal] PDF file detected, performing additional checks:', {
         fileName: correctedFileName,
         originalFileName: file.originalname,
         mimetype: file.mimetype,
@@ -392,7 +377,7 @@ export const uploadFile = async (req: Request, res: Response) => {
       // Проверяем PDF заголовок
       const pdfHeader = file.buffer.slice(0, 4).toString();
       if (pdfHeader !== '%PDF') {
-        console.error('Invalid PDF file - missing PDF header:', {
+        console.error('[SafetyJournal] Invalid PDF file - missing PDF header:', {
           fileName: correctedFileName,
           originalFileName: file.originalname,
           header: pdfHeader,
@@ -401,10 +386,10 @@ export const uploadFile = async (req: Request, res: Response) => {
         return res.status(400).json({ message: 'Некорректный PDF файл' });
       }
 
-      console.log('PDF file validation passed');
+      console.log('[SafetyJournal] PDF file validation passed');
     }
 
-    console.log('Preparing to upload file to external API:', {
+    console.log('[SafetyJournal] Preparing to upload file to external API:', {
       url: `${JOURNALS_API_URL}/files/`,
       fileName: correctedFileName,
       originalFileName: file.originalname,
@@ -423,9 +408,9 @@ export const uploadFile = async (req: Request, res: Response) => {
         filename: correctedFileName, // Используем исправленное имя файла
         contentType: file.mimetype
       });
-      console.log('FormData created successfully with corrected filename:', correctedFileName);
+      console.log('[SafetyJournal] FormData created successfully with corrected filename:', correctedFileName);
     } catch (formDataError: any) {
-      console.error('Error creating FormData:', formDataError);
+      console.error('[SafetyJournal] Error creating FormData:', formDataError);
       return res.status(500).json({ 
         message: 'Ошибка при подготовке файла для загрузки',
         details: formDataError.message
@@ -434,7 +419,7 @@ export const uploadFile = async (req: Request, res: Response) => {
 
     const url = `${JOURNALS_API_URL}/files/`;
 
-    console.log('Sending request to external API:', {
+    console.log('[SafetyJournal] Sending request to external API:', {
       url,
       headers: {
         ...formData.getHeaders(),
@@ -455,14 +440,14 @@ export const uploadFile = async (req: Request, res: Response) => {
       maxBodyLength: 50 * 1024 * 1024 // 50MB
     });
 
-    console.log('File uploaded successfully:', {
+    console.log('[SafetyJournal] File uploaded successfully:', {
       status: response.status,
       data: response.data
     });
 
     res.json(response.data);
   } catch (error: any) {
-    console.error('Error uploading file:', {
+    console.error('[SafetyJournal] Error uploading file:', {
       message: error.message,
       code: error.code,
       response: error.response ? {
@@ -473,17 +458,17 @@ export const uploadFile = async (req: Request, res: Response) => {
     });
 
     if (error.response) {
-      console.error('External API error:', error.response.status, error.response.data);
+      console.error('[SafetyJournal] External API error:', error.response.status, error.response.data);
       res.status(error.response.status).json({
         message: 'Ошибка внешнего API',
         details: error.response.data,
         status: error.response.status
       });
     } else if (error.code === 'ECONNABORTED') {
-      console.error('Request timeout');
+      console.error('[SafetyJournal] Request timeout');
       res.status(408).json({ message: 'Превышено время ожидания загрузки файла' });
     } else {
-      console.error('Network or other error:', error.message);
+      console.error('[SafetyJournal] Network or other error:', error.message);
       res.status(500).json({ 
         message: 'Ошибка загрузки файла',
         details: error.message
@@ -503,7 +488,7 @@ export const getFileMetadata = async (req: Request, res: Response) => {
 
     res.json(response.data);
   } catch (error: any) {
-    console.error('Error getting file metadata:', error);
+    console.error('[SafetyJournal] Error getting file metadata:', error);
     if (error.response) {
       res.status(error.response.status).json(error.response.data);
     } else {
@@ -520,7 +505,7 @@ export const deleteFile = async (req: Request, res: Response) => {
     const { userId, positionName, groupName } = (req as any).token;
 
     // Удаление файлов доступно всем пользователям (не требует проверки прав)
-    console.log('File deletion allowed for all users:', { userId, positionName, groupName, fileId });
+    console.log('[SafetyJournal] File deletion allowed for all users:', { userId, positionName, groupName, fileId });
 
     const response = await axios.delete(`${JOURNALS_API_URL}/files/${fileId}`, {
       headers: createAuthHeaders(getAuthToken(req))
@@ -528,7 +513,7 @@ export const deleteFile = async (req: Request, res: Response) => {
 
     res.json(response.data);
   } catch (error: any) {
-    console.error('Error deleting file:', error);
+    console.error('[SafetyJournal] Error deleting file:', error);
     if (error.response) {
       res.status(error.response.status).json(error.response.data);
     } else {
@@ -570,7 +555,7 @@ export const testExternalApi = async (req: Request, res: Response) => {
       totalJournals: branchesResponse.data.branches.reduce((sum: number, branch: any) => sum + branch.journals.length, 0)
     });
   } catch (error: any) {
-    console.error('Error testing external API:', error);
+    console.error('[SafetyJournal] Error testing external API:', error);
     if (error.response) {
       res.status(error.response.status).json(error.response.data);
     } else {
@@ -596,7 +581,7 @@ export const getJournalFilesList = async (req: Request, res: Response) => {
     const files = await getJournalFiles(journalId, token);
     res.json({ files });
   } catch (error: any) {
-    console.error('Error getting journal files:', error);
+    console.error('[SafetyJournal] Error getting journal files:', error);
     if (error.response) {
       res.status(error.response.status).json(error.response.data);
     } else {
@@ -649,9 +634,9 @@ export const viewFile = async (req: Request, res: Response) => {
     
     response.data.pipe(res);
   } catch (error: any) {
-    console.error('Error viewing file:', error.message);
+    console.error('[SafetyJournal] Error viewing file:', error.message);
     if (error.response) {
-      console.error('External API error response:', {
+      console.error('[SafetyJournal] External API error response:', {
         status: error.response.status,
         statusText: error.response.statusText,
         data: error.response.data
@@ -708,7 +693,7 @@ export const downloadFile = async (req: Request, res: Response) => {
     
     response.data.pipe(res);
   } catch (error: any) {
-    console.error('Error downloading file:', error);
+    console.error('[SafetyJournal] Error downloading file:', error);
     if (error.response) {
       // Безопасно извлекаем данные ошибки без циклических ссылок
       const errorData = {
@@ -793,7 +778,7 @@ export const makeBranchJournalDecision = async (req: Request, res: Response) => 
       });
 
     } catch (externalError: any) {
-      console.error('Error calling external API:', {
+      console.error('[SafetyJournal] Error calling external API:', {
         status: externalError.response?.status,
         statusText: externalError.response?.statusText,
         responseData: externalError.response?.data,
@@ -817,7 +802,7 @@ export const makeBranchJournalDecision = async (req: Request, res: Response) => 
     }
 
   } catch (error) {
-    console.error('Error making branch journal decision:', error);
+    console.error('[SafetyJournal] Error making branch journal decision:', error);
     res.status(500).json({ message: 'Ошибка принятия решения по журналу' });
   }
 };
@@ -873,7 +858,7 @@ export const proxyFile = async (req: Request, res: Response) => {
     
     response.data.pipe(res);
   } catch (error: any) {
-    console.error('Error proxying file:', error);
+    console.error('[SafetyJournal] Error proxying file:', error);
     if (error.response) {
       res.status(error.response.status).json({
         error: 'Ошибка получения файла',
@@ -901,7 +886,7 @@ export const getResponsible = async (req: Request, res: Response) => {
 
     res.json(response.data);
   } catch (error: any) {
-    console.error('Error getting responsible:', error);
+    console.error('[SafetyJournal] Error getting responsible:', error);
     if (error.response) {
       res.status(error.response.status).json(error.response.data);
     } 
@@ -925,7 +910,7 @@ export const addResponsible = async (req: Request, res: Response) => {
     res.status(response.status).json(json)
 
   } catch (error: any) {
-    console.error('Error adding responsible:', error);
+    console.error('[SafetyJournal] Error adding responsible:', error);
     if (error.response) {
       res.status(error.response.status).json(error.response.data);
     } 
@@ -948,7 +933,7 @@ export const deleteResponsible = async (req: Request, res: Response) => {
     const json = await response.json()
     res.status(response.status).json(json)
   } catch (error: any) {
-    console.error('Error adding responsible:', error);
+    console.error('[SafetyJournal] Error adding responsible:', error);
     if (error.response) {
       res.status(error.response.status).json(error.response.data);
     } 
