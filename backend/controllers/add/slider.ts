@@ -23,8 +23,8 @@ const SliderSchema = z.object({
 
 // Helper functions
 const logRequest = (req: Request) => {
-  console.log('Request Body:', req.body);
-  console.log('Request File:', req.file);
+  console.log('[Slider] Request Body:', req.body);
+  console.log('[Slider] Request File:', req.file);
 };
 
 const validateUserExists = async (userId: string) => {

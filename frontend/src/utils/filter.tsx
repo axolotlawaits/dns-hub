@@ -3,7 +3,7 @@ import dayjs from 'dayjs';
 import 'dayjs/locale/ru';
 import isBetween from 'dayjs/plugin/isBetween';
 import { TextInput, MultiSelect, Group, Text, ActionIcon, Box } from '@mantine/core';
-import { IconX, IconFilter, IconCalendar, IconList } from '@tabler/icons-react';
+import { IconX, IconFilter, IconCalendar, IconList, IconClock } from '@tabler/icons-react';
 import './styles/filter.css';
 
 dayjs.locale('ru');
@@ -12,6 +12,11 @@ dayjs.extend(isBetween);
 interface DateFilter {
   start?: string;
   end?: string;
+}
+
+interface TimeFilter {
+  from?: string;
+  to?: string;
 }
 
 export const dateRange: FilterFn<any> = (
@@ -41,8 +46,8 @@ export const dateRange: FilterFn<any> = (
 };
 
 interface FilterProps {
-  filterType: 'date' | 'text' | 'select';
-  currentFilter?: DateFilter | string[];
+  filterType: 'date' | 'text' | 'select' | 'time';
+  currentFilter?: DateFilter | TimeFilter | string[];
   filterOptions?: Array<{ value: string; label: string }>;
   onFilterChange: (value: any) => void;
   label?: string;
@@ -73,24 +78,40 @@ export const Filter = ({
     onFilterChange(newFilter);
   };
 
+  const handleTimeChange = (time: string | null, isFrom: boolean) => {
+    const current = (currentFilter || {}) as TimeFilter;
+    const newFilter = {
+      from: isFrom ? time : current.from,
+      to: !isFrom ? time : current.to,
+    };
+    onFilterChange(newFilter);
+  };
+
   const handleMultiSelectChange = (values: string[]) => {
     onFilterChange(values);
   };
 
   const handleClear = () => {
-    onFilterChange(filterType === 'date' ? {} : []);
+    if (filterType === 'date' || filterType === 'time') {
+      onFilterChange({});
+    } else {
+      onFilterChange([]);
+    }
   };
 
   const selectedValues = Array.isArray(currentFilter) ? (currentFilter as string[]) : [];
   
   const hasActiveFilter = filterType === 'date' 
     ? (currentFilter as DateFilter)?.start || (currentFilter as DateFilter)?.end
+    : filterType === 'time'
+    ? (currentFilter as TimeFilter)?.from || (currentFilter as TimeFilter)?.to
     : selectedValues.length > 0;
 
   const getFilterIcon = () => {
     if (icon) return icon;
     switch (filterType) {
       case 'date': return <IconCalendar size={16} />;
+      case 'time': return <IconClock size={16} />;
       case 'select': return <IconList size={16} />;
       default: return <IconFilter size={16} />;
     }
@@ -139,6 +160,57 @@ export const Filter = ({
                     variant="subtle"
                     color="gray"
                     onClick={() => handleDateChange(null, false)}
+                  >
+                    <IconX size={12} />
+                  </ActionIcon>
+                ) : null}
+              />
+            </Box>
+          </div>
+        </Box>
+      );
+    case 'time':
+      return (
+        <Box className={`filter-item ${hasActiveFilter ? 'filter-active' : ''}`}>
+          <Text className="filter-label">
+            {getFilterIcon()}
+            {label}
+          </Text>
+          <div className="filter-date-group">
+            <Box className="filter-date-item">
+              <TextInput
+                type="time"
+                placeholder="С"
+                value={(currentFilter as TimeFilter)?.from || ''}
+                onChange={(e) => handleTimeChange(e.target.value, true)}
+                className="filter-input"
+                leftSection={<IconClock size={16} />}
+                rightSection={showClearButton && (currentFilter as TimeFilter)?.from ? (
+                  <ActionIcon
+                    size="sm"
+                    variant="subtle"
+                    color="gray"
+                    onClick={() => handleTimeChange(null, true)}
+                  >
+                    <IconX size={12} />
+                  </ActionIcon>
+                ) : null}
+              />
+            </Box>
+            <Box className="filter-date-item">
+              <TextInput
+                type="time"
+                placeholder="До"
+                value={(currentFilter as TimeFilter)?.to || ''}
+                onChange={(e) => handleTimeChange(e.target.value, false)}
+                className="filter-input"
+                leftSection={<IconClock size={16} />}
+                rightSection={showClearButton && (currentFilter as TimeFilter)?.to ? (
+                  <ActionIcon
+                    size="sm"
+                    variant="subtle"
+                    color="gray"
+                    onClick={() => handleTimeChange(null, false)}
                   >
                     <IconX size={12} />
                   </ActionIcon>
@@ -204,7 +276,7 @@ export const Filter = ({
 
 interface FilterGroupProps {
   filters: Array<{
-    type: 'date' | 'text' | 'select';
+    type: 'date' | 'text' | 'select' | 'time';
     columnId: string;
     label: string;
     placeholder?: string;
@@ -232,6 +304,10 @@ export const FilterGroup = ({
       const dateFilter = filter.value as DateFilter;
       return dateFilter?.start || dateFilter?.end;
     }
+    if (filter.id.includes('time') || filter.id.includes('Time')) {
+      const timeFilter = filter.value as TimeFilter;
+      return timeFilter?.from || timeFilter?.to;
+    }
     return Array.isArray(filter.value) ? filter.value.length > 0 : !!filter.value;
   });
 
@@ -241,7 +317,7 @@ export const FilterGroup = ({
     } else {
       // Очистить все фильтры
       filters.forEach(filter => {
-        onColumnFiltersChange(filter.columnId, filter.type === 'date' ? {} : []);
+        onColumnFiltersChange(filter.columnId, filter.type === 'date' || filter.type === 'time' ? {} : []);
       });
     }
   };

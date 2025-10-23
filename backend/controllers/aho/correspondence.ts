@@ -26,8 +26,8 @@ const CorrespondenceSchema = z.object({
 
 // Helper functions
 const logRequest = (req: Request) => {
-  console.log('Request Body:', req.body);
-  console.log('Request Files:', req.files);
+  console.log('[Correspondence] Request Body:', req.body);
+  console.log('[Correspondence] Request Files:', req.files);
 };
 
 const validateUserExists = async (userId: string) => {
@@ -191,7 +191,7 @@ export const updateCorrespondence = async (
         ? JSON.parse(body.removedAttachments)
         : [];
     } catch (e) {
-      console.error('Error parsing removedAttachments:', e);
+      console.error('[Correspondence] Error parsing removedAttachments:', e);
     }
 
     // Delete specified attachments

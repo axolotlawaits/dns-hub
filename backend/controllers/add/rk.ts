@@ -253,7 +253,7 @@ export const getRKById = async (req: Request, res: Response, next: NextFunction)
 
 export const createRK = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    console.log('Create RK request received:', {
+    console.log('[RK] Create RK request received:', {
       body: req.body,
       files: req.files ? (req.files as Express.Multer.File[]).map(f => ({
         originalname: f.originalname,
@@ -284,8 +284,8 @@ export const createRK = async (req: Request, res: Response, next: NextFunction) 
         ? JSON.parse(req.body.documentsMeta)
         : [];
       
-      console.log('Parsed attachments meta:', attachmentsMeta);
-      console.log('Parsed documents meta:', documentsMeta);
+      console.log('[RK] Parsed attachments meta:', attachmentsMeta);
+      console.log('[RK] Parsed documents meta:', documentsMeta);
       
       // Проверяем, что количество файлов с метаданными совпадает с количеством метаданных
       // Файлы без метаданных (документы) будут обработаны отдельно
@@ -299,7 +299,7 @@ export const createRK = async (req: Request, res: Response, next: NextFunction) 
         });
       }
     } catch (e: unknown) {
-      console.error('Error parsing attachmentsMeta:', e);
+      console.error('[RK] Error parsing attachmentsMeta:', e);
       return res.status(400).json({
         error: 'Invalid attachmentsMeta format',
         details: e instanceof Error ? e.message : String(e)
@@ -327,7 +327,7 @@ export const createRK = async (req: Request, res: Response, next: NextFunction) 
 
     // Обработка вложений
     if (Array.isArray(req.files) && req.files.length > 0) {
-      console.log('Creating attachments with meta:', attachmentsMeta);
+      console.log('[RK] Creating attachments with meta:', attachmentsMeta);
       
       // Разделяем файлы на те, что имеют метаданные (конструкции) и те, что не имеют (документы)
       const filesWithMeta = req.files.slice(0, attachmentsMeta.length);
@@ -416,11 +416,11 @@ export const createRK = async (req: Request, res: Response, next: NextFunction) 
       }
     });
 
-    console.log('RK created successfully:', result);
+    console.log('[RK] RK created successfully:', result);
     return res.status(201).json(result);
 
   } catch (error) {
-    console.error('Error in createRK:', error);
+    console.error('[RK] Error in createRK:', error);
     
     // Удаление созданной записи если возникла ошибка после создания
     if (req.body.userAddId && req.body.branchId) {
@@ -429,7 +429,7 @@ export const createRK = async (req: Request, res: Response, next: NextFunction) 
           userAddId: req.body.userAddId,
           branchId: req.body.branchId,
         }
-      }).catch(e => console.error('Error cleaning up:', e));
+      }).catch(e => console.error('[RK] Error cleaning up:', e));
     }
 
     return res.status(500).json({ 
@@ -450,7 +450,7 @@ export const updateRK = async (req: Request, res: Response, next: NextFunction) 
         ? JSON.parse(body.removedAttachments)
         : [];
     } catch (e) {
-      console.error('Error parsing removedAttachments:', e);
+      console.error('[RK] Error parsing removedAttachments:', e);
     }
 
     // Обработка удаленных документов
@@ -460,7 +460,7 @@ export const updateRK = async (req: Request, res: Response, next: NextFunction) 
         ? JSON.parse(body.removedDocuments)
         : [];
     } catch (e) {
-      console.error('Error parsing removedDocuments:', e);
+      console.error('[RK] Error parsing removedDocuments:', e);
     }
 
     let newAttachmentsMeta: Array<{ typeAttachment?: 'CONSTRUCTION' | 'DOCUMENT'; sizeXY?: string; clarification?: string; typeStructureId?: string; approvalStatusId?: string; agreedTo?: string }> = [];
@@ -471,7 +471,7 @@ export const updateRK = async (req: Request, res: Response, next: NextFunction) 
         ? JSON.parse(body.newAttachmentsMeta)
         : [];
     } catch (e) {
-      console.error('Error parsing newAttachmentsMeta:', e);
+      console.error('[RK] Error parsing newAttachmentsMeta:', e);
     }
     
     try {
@@ -479,7 +479,7 @@ export const updateRK = async (req: Request, res: Response, next: NextFunction) 
         ? JSON.parse(body.newDocumentsMeta)
         : [];
     } catch (e) {
-      console.error('Error parsing newDocumentsMeta:', e);
+      console.error('[RK] Error parsing newDocumentsMeta:', e);
     }
 
     await deleteRKAttachments(attachmentsToDelete, rkId);
@@ -568,7 +568,7 @@ export const updateRK = async (req: Request, res: Response, next: NextFunction) 
           });
         }
       } catch (e) {
-        console.error('Error parsing existingAttachmentsMeta', e);
+        console.error('[RK] Error parsing existingAttachmentsMeta', e);
       }
     }
 
@@ -766,7 +766,7 @@ export const dailyRKJob = async () => {
             .map((m) => emailService.sendRaw(m.email as string, title, `${message}\n\n${m.fio}`))
         );
       } catch (e) {
-        console.error('Failed to send emails to managers:', e);
+        console.error('[RK] Failed to send emails to managers:', e);
       }
     }
   }

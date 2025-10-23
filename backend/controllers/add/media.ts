@@ -27,8 +27,8 @@ const MediaSchema = z.object({
 
 // Helper functions remain similar but adjusted for media
 const logRequest = (req: Request) => {
-  console.log('Request Body:', req.body);
-  console.log('Request Files:', req.files);
+  console.log('[Media] Request Body:', req.body);
+  console.log('[Media] Request Files:', req.files);
 };
 
 const validateUserExists = async (userId: string) => {
@@ -233,7 +233,7 @@ export const updateMedia = async (
         ? JSON.parse(body.removedAttachments)
         : [];
     } catch (e) {
-      console.error('Error parsing removedAttachments:', e);
+      console.error('[Media] Error parsing removedAttachments:', e);
     }
 
     // Delete specified attachments

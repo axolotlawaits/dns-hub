@@ -31,7 +31,7 @@ export const updateUserSettings = async (req: Request, res: Response):Promise<an
 
     return res.status(200).json(setting);
   } catch (error) {
-    console.error('Error updating user settings:', error);
+    console.error('[User] Error updating user settings:', error);
     return res.status(500).json({ error: 'Failed to update user settings' });
   }
 };
@@ -59,7 +59,7 @@ export const getUserSettings = async (req: Request, res: Response):Promise<any> 
 
     return res.status(200).json(setting);
   } catch (error) {
-    console.error('Error fetching user settings:', error);
+    console.error('[User] Error fetching user settings:', error);
     return res.status(500).json({ error: 'Failed to fetch user settings' });
   }
 };
@@ -236,7 +236,7 @@ export const getLastUser = async (req: Request, res: Response): Promise<any> => 
       hasTelegram: !!user.telegramChatId
     });
   } catch (error) {
-    console.error('Error fetching user data:', error);
+    console.error('[User] Error fetching user data:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 };

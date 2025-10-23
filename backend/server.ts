@@ -12,6 +12,7 @@ import accessRouter from './routes/app/access.js'
 import newsRouter from './routes/app/news.js'
 import deviceRouter from './routes/app/device.js'
 import radioRouter from './routes/app/radio.js'
+import logsRouter from './routes/app/logs.js'
 import meterReadingRouter from './routes/aho/meterReading.js'
 import searchRouter from './routes/app/search.js'
 import profileRouter from './routes/app/profile.js'
@@ -217,6 +218,7 @@ app.use('/hub-api/retail/app-store', appStoreRouter);
 
 // Остальные роуты
 app.use('/hub-api/radio', adminRouter)
+app.use('/hub-api/logs', logsRouter)
 app.use('/hub-api/search', searchRouter)
 app.use('/hub-api/navigation', navigationRouter);
 app.use('/hub-api/type', typeRouter);

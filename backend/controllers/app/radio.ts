@@ -109,14 +109,14 @@ export const createMusicFolder = async (req: Request, res: Response): Promise<an
 
 export const uploadMusic = async (req: Request, res: Response): Promise<any> => {
   try {
-    console.log('Upload request received:', {
+    console.log('[Radio] Upload request received:', {
       body: req.body,
       file: req.file,
       files: req.files
     });
     
     if (!req.file) {
-      console.log('No file in request');
+      console.log('[Radio] No file in request');
       return res.status(400).json({ error: 'Файл не загружен' });
     }
     
@@ -124,7 +124,7 @@ export const uploadMusic = async (req: Request, res: Response): Promise<any> => 
     const fileName = req.file.filename;
     const filePath = req.file.path; // Файл уже в правильном месте благодаря middleware
     
-    console.log('File details:', {
+    console.log('[Radio] File details:', {
       originalName: req.file.originalname,
       filePath: filePath,
       fileExists: fs.existsSync(filePath),
@@ -133,7 +133,7 @@ export const uploadMusic = async (req: Request, res: Response): Promise<any> => 
     
     // Проверяем, что файл существует
     if (!fs.existsSync(filePath)) {
-      console.error('File does not exist:', filePath);
+      console.error('[Radio] File does not exist:', filePath);
       return res.status(500).json({ error: 'Файл не найден' });
     }
     
@@ -145,7 +145,7 @@ export const uploadMusic = async (req: Request, res: Response): Promise<any> => 
       path: filePath 
     });
   } catch (error) {
-    console.error('Error uploading music:', error);
+    console.error('[Radio] Error uploading music:', error);
     return res.status(500).json({ error: 'Ошибка при загрузке музыки' });
   }
 };
@@ -156,18 +156,14 @@ const getMusicFoldersAsync = (): Promise<any[]> => {
     setImmediate(() => {
       try {
         const musicPath = './public/retail/radio/music';
-        console.log('Getting music folders from:', musicPath);
-        console.log('Music path exists:', fs.existsSync(musicPath));
         
         if (!fs.existsSync(musicPath)) {
-          console.log('Music path does not exist, creating...');
           fs.mkdirSync(musicPath, { recursive: true });
           resolve([]);
           return;
         }
         
         const items = fs.readdirSync(musicPath, { withFileTypes: true });
-        console.log('All items in music path:', items.map(i => ({ name: i.name, isDirectory: i.isDirectory() })));
         
         const folders = items
           .filter(i => i.isDirectory())
@@ -181,11 +177,9 @@ const getMusicFoldersAsync = (): Promise<any[]> => {
             };
           })
           .sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime());
-        
-        console.log('Found music folders:', folders);
         resolve(folders);
       } catch (error) {
-        console.error('Error getting music folders:', error);
+        console.error('[Radio] Error getting music folders:', error);
         resolve([]);
       }
     });
@@ -195,9 +189,12 @@ const getMusicFoldersAsync = (): Promise<any[]> => {
 export const getMusicFolders = async (req: Request, res: Response): Promise<any> => {
   try {
     const folders = await getMusicFoldersAsync();
+    if (folders.length === 0) {
+      console.log('[Radio] No music folders found');
+    }
     return res.status(200).json({ success: true, folders });
   } catch (error) {
-    console.error('Error getting music folders:', error);
+    console.error('[Radio] Error getting music folders:', error);
     return res.status(500).json({ error: 'Ошибка при получении списка папок музыки' });
   }
 };
@@ -222,7 +219,7 @@ export const getMusicInFolder = async (req: Request, res: Response): Promise<any
       .sort((a, b) => a.name.localeCompare(b.name)); // Сортируем по имени файла
     return res.status(200).json({ success: true, folderName, files });
   } catch (error) {
-    console.error('Error getting music in folder:', error);
+    console.error('[Radio] Error getting music in folder:', error);
     return res.status(500).json({ error: 'Ошибка при получении списка музыки' });
   }
 };
@@ -236,7 +233,7 @@ export const deleteMusicFolder = async (req: Request, res: Response): Promise<an
     fs.rmSync(folderPath, { recursive: true, force: true });
     return res.status(200).json({ success: true, message: 'Папка музыки удалена успешно', folderName });
   } catch (error) {
-    console.error('Error deleting music folder:', error);
+    console.error('[Radio] Error deleting music folder:', error);
     return res.status(500).json({ error: 'Ошибка при удалении папки музыки' });
   }
 };
@@ -311,7 +308,7 @@ export const getDevicesByBranches = async (req: Request, res: Response) => {
     const result = Array.from(devicesByBranches.values());
     res.json({ success: true, data: result });
   } catch (error) {
-    console.error('Error getting devices by branches:', error);
+    console.error('[Radio] Error getting devices by branches:', error);
     res.status(500).json({ success: false, error: 'Ошибка при получении устройств' });
   }
 };
@@ -324,9 +321,6 @@ export const getDevicesStatus = async (req: Request, res: Response) => {
     // Фильтруем только если явно указан branchId в query
     if (branchId) {
       where.branchId = String(branchId);
-      console.log('🔍 [getDevicesStatus] Фильтруем по branchId из query:', branchId);
-    } else {
-      console.log('🔍 [getDevicesStatus] Возвращаем статус всех устройств');
     }
 
     const devices = await prisma.devices.findMany({ 
@@ -346,17 +340,17 @@ export const getDevicesStatus = async (req: Request, res: Response) => {
       const timeDiff = lastSeenTime ? (now - lastSeenTime) : null;
       const online = lastSeenTime ? (timeDiff! <= ONLINE_THRESHOLD_MS) : false;
       
-      // Детальное логирование для первых 5 устройств
-      if (devices.indexOf(d) < 5) {
-        console.log(`📊 [getDevicesStatus] Device ${d.id}:`, {
-          lastSeenMem: lastSeenMem ? new Date(lastSeenMem).toISOString() : 'none',
-          lastSeenDb: lastSeenDb ? new Date(lastSeenDb).toISOString() : 'none',
-          lastSeenTime: lastSeenTime ? new Date(lastSeenTime).toISOString() : 'none',
-          timeDiff: timeDiff,
-          threshold: ONLINE_THRESHOLD_MS,
-          online
-        });
-      }
+      // Детальное логирование отключено для уменьшения количества логов
+      // if (devices.indexOf(d) < 5) {
+      //   console.log(`📊 [getDevicesStatus] Device ${d.id}:`, {
+      //     lastSeenMem: lastSeenMem ? new Date(lastSeenMem).toISOString() : 'none',
+      //     lastSeenDb: lastSeenDb ? new Date(lastSeenDb).toISOString() : 'none',
+      //     lastSeenTime: lastSeenTime ? new Date(lastSeenTime).toISOString() : 'none',
+      //     timeDiff: timeDiff,
+      //     threshold: ONLINE_THRESHOLD_MS,
+      //     online
+      //   });
+      // }
       
       return { 
         deviceId: d.id, 
@@ -369,7 +363,7 @@ export const getDevicesStatus = async (req: Request, res: Response) => {
 
     res.json({ success: true, data });
   } catch (error) {
-    console.error('Error getting devices status:', error);
+    console.error('[Radio] Error getting devices status:', error);
     res.status(500).json({ success: false, error: 'Ошибка при получении статусов' });
   }
 };
@@ -398,7 +392,7 @@ export const getDevicesStatusPing = async (req: Request, res: Response) => {
 
     res.json({ success: true, data });
   } catch (error) {
-    console.error('Error getting devices status ping:', error);
+    console.error('[Radio] Error getting devices status ping:', error);
     res.status(500).json({ success: false, error: 'Ошибка при пинге устройств' });
   }
 };
@@ -428,12 +422,12 @@ export const updateDeviceTime = async (req: Request, res: Response) => {
       const socketService = SocketIOService.getInstance();
       (socketService as any)?.io?.emit('device_time_updated', { deviceId, timeFrom, timeUntil });
     } catch (e) {
-      console.warn('Socket emit device_time_updated failed', e);
+      console.warn('[Radio] Socket emit device_time_updated failed', e);
     }
     
     res.json({ success: true, data: device, message: 'Время воспроизведения обновлено' });
   } catch (error) {
-    console.error('Error updating device time:', error);
+    console.error('[Radio] Error updating device time:', error);
     res.status(500).json({ success: false, error: 'Ошибка при обновлении времени устройства' });
   }
 };
@@ -456,7 +450,7 @@ export const updateBranchDevicesTime = async (req: Request, res: Response) => {
       const socketService = SocketIOService.getInstance();
       (socketService as any)?.io?.emit('device_time_updated', { branchId, timeFrom, timeUntil });
     } catch (e) {
-      console.warn('Socket emit device_time_updated (branch) failed', e);
+      console.warn('[Radio] Socket emit device_time_updated (branch) failed', e);
     }
     
     res.json({ 
@@ -465,7 +459,7 @@ export const updateBranchDevicesTime = async (req: Request, res: Response) => {
       message: `Время воспроизведения обновлено для ${result.count} устройств` 
     });
   } catch (error) {
-    console.error('Error updating branch devices time:', error);
+    console.error('[Radio] Error updating branch devices time:', error);
     res.status(500).json({ success: false, error: 'Ошибка при обновлении времени устройств филиала' });
   }
 };
@@ -476,11 +470,8 @@ const countMusicFilesAsync = (): Promise<number> => {
     setImmediate(() => {
       try {
         const musicPath = './public/retail/radio/music';
-        console.log('Checking music path:', musicPath);
-        console.log('Music path exists:', fs.existsSync(musicPath));
         
         if (!fs.existsSync(musicPath)) {
-          console.log('Music path does not exist, creating...');
           fs.mkdirSync(musicPath, { recursive: true });
           resolve(0);
           return;
@@ -490,22 +481,16 @@ const countMusicFilesAsync = (): Promise<number> => {
           .filter(dirent => dirent.isDirectory())
           .map(dirent => dirent.name);
         
-        console.log('Found music folders:', folders);
-        
         let totalFiles = 0;
         for (const folder of folders) {
           const folderPath = path.join(musicPath, folder);
-          console.log('Checking folder:', folderPath);
           const files = fs.readdirSync(folderPath)
             .filter(file => ['.mp3', '.wav', '.ogg', '.m4a', '.flac'].includes(path.extname(file).toLowerCase()));
-          console.log(`Files in ${folder}:`, files);
           totalFiles += files.length;
         }
-        
-        console.log('Total music files found:', totalFiles);
         resolve(totalFiles);
       } catch (error) {
-        console.error('Error counting music files:', error);
+        console.error('[Radio] Error counting music files:', error);
         resolve(0);
       }
     });
@@ -569,7 +554,7 @@ export const getDevicesStats = async (req: Request, res: Response) => {
     
     res.json({ success: true, data });
   } catch (error) {
-    console.error('Error getting devices stats:', error);
+    console.error('[Radio] Error getting devices stats:', error);
     res.status(500).json({ success: false, error: 'Ошибка при получении статистики' });
   }
 };
@@ -581,7 +566,7 @@ export const getDeviceInfo = async (req: Request, res: Response) => {
     if (!device) return res.status(404).json({ success: false, error: 'Устройство не найдено' });
     res.json({ success: true, data: device });
   } catch (error) {
-    console.error('Error getting device info:', error);
+    console.error('[Radio] Error getting device info:', error);
     res.status(500).json({ success: false, error: 'Ошибка при получении информации об устройстве' });
   }
 };
@@ -698,14 +683,14 @@ export const actionGetDeviceStatus = async (req: Request, res: Response) => {
         
         parsedData = parsed;
       } catch (parseError) {
-        console.error('Error parsing device status data:', parseError);
+        console.error('[Radio] Error parsing device status data:', parseError);
         // Keep original data if parsing fails
       }
     }
     
     res.json({ success: true, data: parsedData });
   } catch (error) {
-    console.error('Error getting device status:', error);
+    console.error('[Radio] Error getting device status:', error);
     res.status(500).json({ success: false, error: 'Ошибка получения статуса устройства' });
   }
 };
@@ -720,7 +705,7 @@ export const actionGetAppVersion = async (req: Request, res: Response) => {
     
     res.json({ success: true, data: { appVersion: result.data } });
   } catch (error) {
-    console.error('Error getting app version:', error);
+    console.error('[Radio] Error getting app version:', error);
     res.status(500).json({ success: false, error: 'Ошибка получения версии приложения' });
   }
 };
@@ -744,7 +729,7 @@ export const actionConfigureWifi = async (req: Request, res: Response) => {
     if (!result.ok) return res.json({ success: false, error: result.error || 'DEVICE_OFFLINE' });
     res.json({ success: true, data: result.data });
   } catch (error) {
-    console.error('Error configuring WiFi:', error);
+    console.error('[Radio] Error configuring WiFi:', error);
     res.status(500).json({ success: false, error: 'Ошибка настройки WiFi' });
   }
 };
@@ -839,7 +824,7 @@ export const actionUpdateApp = async (req: Request, res: Response) => {
     if (!ok) return res.status(400).json({ success: false, error: 'UPDATE_REJECTED' });
     res.json({ success: true, data: result.data ?? null, message: 'Команда обновления отправлена' });
   } catch (error) {
-    console.error('Error sending update app:', error);
+    console.error('[Radio] Error sending update app:', error);
     res.status(500).json({ success: false, error: 'Ошибка отправки команды' });
   }
 };
@@ -869,7 +854,7 @@ export const getRadioStreams = async (req: Request, res: Response): Promise<any>
 
     return res.status(200).json({ success: true, data: streams });
   } catch (error) {
-    console.error('Error getting radio streams:', error);
+    console.error('[Radio] Error getting radio streams:', error);
     return res.status(500).json({ error: 'Ошибка при получении радио потоков' });
   }
 };
@@ -877,13 +862,13 @@ export const getRadioStreams = async (req: Request, res: Response): Promise<any>
 // Создание нового радио потока
 export const createRadioStream = async (req: Request, res: Response): Promise<any> => {
   try {
-    console.log('Creating radio stream with data:', req.body);
-    console.log('Request file:', req.file);
-    console.log('Request files:', req.files);
-    console.log('Content-Type:', req.headers['content-type']);
+    console.log('[Radio] Creating radio stream with data:', req.body);
+    console.log('[Radio] Request file:', req.file);
+    console.log('[Radio] Request files:', req.files);
+    console.log('[Radio] Content-Type:', req.headers['content-type']);
     const { name, branchTypeOfDist, frequencySongs, fadeInDuration, volumeLevel, startDate, endDate } = req.body;
 
-    console.log('Parsed data:', {
+    console.log('[Radio] Parsed data:', {
       name,
       branchTypeOfDist,
       frequencySongs,
@@ -897,21 +882,21 @@ export const createRadioStream = async (req: Request, res: Response): Promise<an
     
     // Обработка загруженного файла
     if (req.file) {
-      console.log('File uploaded:', req.file);
-      console.log('File path:', req.file.path);
-      console.log('File exists:', fs.existsSync(req.file.path));
+      console.log('[Radio] File uploaded:', req.file);
+      console.log('[Radio] File path:', req.file.path);
+      console.log('[Radio] File exists:', fs.existsSync(req.file.path));
       
       // Файл уже в правильном месте благодаря middleware
       if (fs.existsSync(req.file.path)) {
         // Используем название файла как оно сохранено на диске
         attachmentPath = req.file.filename;
-        console.log('Attachment path set to:', attachmentPath);
+        console.log('[Radio] Attachment path set to:', attachmentPath);
       } else {
-        console.error('File does not exist at path:', req.file.path);
+        console.error('[Radio] File does not exist at path:', req.file.path);
         attachmentPath = null;
       }
     } else {
-      console.log('No file uploaded');
+      console.log('[Radio] No file uploaded');
     }
 
     const stream = await prisma.radioStream.create({
@@ -927,16 +912,16 @@ export const createRadioStream = async (req: Request, res: Response): Promise<an
       }
     });
 
-    console.log('Created stream:', stream);
+    console.log('[Radio] Created stream:', stream);
     
     // Уведомляем устройства об обновлении потоков
     await notifyStreamsUpdate(stream.branchTypeOfDist);
     
     return res.status(201).json({ success: true, data: stream });
   } catch (error: any) {
-    console.error('Error creating radio stream:', error);
-    console.error('Error details:', error.message);
-    console.error('Error stack:', error.stack);
+    console.error('[Radio] Error creating radio stream:', error);
+    console.error('[Radio] Error details:', error.message);
+    console.error('[Radio] Error stack:', error.stack);
     return res.status(500).json({ error: 'Ошибка при создании радио потока', details: error.message });
   }
 };
@@ -971,7 +956,7 @@ export const uploadStreamRoll = async (req: Request, res: Response): Promise<any
       path: filePath
     });
   } catch (error) {
-    console.error('Error uploading stream roll:', error);
+    console.error('[Radio] Error uploading stream roll:', error);
     return res.status(500).json({ error: 'Ошибка при загрузке ролика' });
   }
 };
@@ -979,15 +964,15 @@ export const uploadStreamRoll = async (req: Request, res: Response): Promise<any
 // Обновление радио потока
 export const updateRadioStream = async (req: Request, res: Response): Promise<any> => {
   try {
-    console.log('Updating radio stream with data:', req.body);
-    console.log('Request file:', req.file);
-    console.log('Request files:', req.files);
-    console.log('Content-Type:', req.headers['content-type']);
+    console.log('[Radio] Updating radio stream with data:', req.body);
+    console.log('[Radio] Request file:', req.file);
+    console.log('[Radio] Request files:', req.files);
+    console.log('[Radio] Content-Type:', req.headers['content-type']);
     
     const { id } = req.params;
     const { name, branchTypeOfDist, frequencySongs, fadeInDuration, volumeLevel, startDate, endDate, isActive } = req.body;
 
-    console.log('Parsed data:', {
+    console.log('[Radio] Parsed data:', {
       id,
       name,
       branchTypeOfDist,
@@ -1013,20 +998,20 @@ export const updateRadioStream = async (req: Request, res: Response): Promise<an
 
     // Обработка загруженного файла
     if (req.file) {
-      console.log('File uploaded:', req.file);
-      console.log('File path:', req.file.path);
-      console.log('File exists:', fs.existsSync(req.file.path));
+      console.log('[Radio] File uploaded:', req.file);
+      console.log('[Radio] File path:', req.file.path);
+      console.log('[Radio] File exists:', fs.existsSync(req.file.path));
       
       // Файл уже в правильном месте благодаря middleware
       if (fs.existsSync(req.file.path)) {
         // Используем название файла как оно сохранено на диске
         updateData.attachment = req.file.filename;
-        console.log('Attachment path set to:', req.file.filename);
+        console.log('[Radio] Attachment path set to:', req.file.filename);
       } else {
-        console.error('File does not exist at path:', req.file.path);
+        console.error('[Radio] File does not exist at path:', req.file.path);
       }
     } else {
-      console.log('No file uploaded for update');
+      console.log('[Radio] No file uploaded for update');
     }
 
     const stream = await prisma.radioStream.update({
@@ -1034,16 +1019,16 @@ export const updateRadioStream = async (req: Request, res: Response): Promise<an
       data: updateData
     });
 
-    console.log('Updated stream:', stream);
+    console.log('[Radio] Updated stream:', stream);
 
     // Уведомляем устройства об обновлении потоков
     await notifyStreamsUpdate(stream.branchTypeOfDist);
     
     return res.status(200).json({ success: true, data: stream });
   } catch (error: any) {
-    console.error('Error updating radio stream:', error);
-    console.error('Error details:', error.message);
-    console.error('Error stack:', error.stack);
+    console.error('[Radio] Error updating radio stream:', error);
+    console.error('[Radio] Error details:', error.message);
+    console.error('[Radio] Error stack:', error.stack);
     return res.status(500).json({ error: 'Ошибка при обновлении радио потока', details: error.message });
   }
 };
@@ -1082,7 +1067,7 @@ export const getActiveStreamsByBranchType = async (req: Request, res: Response):
       data: streams
     });
   } catch (error) {
-    console.error('Error getting active streams by branch type:', error);
+    console.error('[Radio] Error getting active streams by branch type:', error);
     return res.status(500).json({ error: 'Ошибка при получении активных потоков' });
   }
 };
@@ -1115,7 +1100,7 @@ export const deleteRadioStream = async (req: Request, res: Response): Promise<an
 
     return res.status(200).json({ success: true, message: 'Радио поток удален' });
   } catch (error) {
-    console.error('Error deleting radio stream:', error);
+    console.error('[Radio] Error deleting radio stream:', error);
     return res.status(500).json({ error: 'Ошибка при удалении радио потока' });
   }
 };
@@ -1125,7 +1110,7 @@ export const downloadStreamFile = async (req: Request, res: Response): Promise<a
   try {
     const { id } = req.params;
     
-    console.log('Downloading stream file for ID:', id);
+    console.log('[Radio] Downloading stream file for ID:', id);
     
     // Находим поток в базе данных
     const stream = await prisma.radioStream.findUnique({
@@ -1133,47 +1118,47 @@ export const downloadStreamFile = async (req: Request, res: Response): Promise<a
     });
     
     if (!stream) {
-      console.log('Stream not found:', id);
+      console.log('[Radio] Stream not found:', id);
       return res.status(404).json({ error: 'Поток не найден' });
     }
     
     if (!stream.attachment) {
-      console.log('Stream has no attachment:', id);
+      console.log('[Radio] Stream has no attachment:', id);
       return res.status(404).json({ error: 'Файл потока не найден' });
     }
     
     // Путь к файлу
     const filePath = path.join('./public/retail/radio/stream', stream.attachment);
     
-    console.log('Looking for file at path:', filePath);
+    console.log('[Radio] Looking for file at path:', filePath);
     
     // Проверяем существование файла
     if (!fs.existsSync(filePath)) {
-      console.log('File does not exist at path:', filePath);
+      console.log('[Radio] File does not exist at path:', filePath);
       
       // Пытаемся найти файл с исправленным названием (для совместимости с искаженными названиями)
       const streamDir = './public/retail/radio/stream';
       const files = fs.readdirSync(streamDir);
-      console.log('Available files in stream directory:', files);
+      console.log('[Radio] Available files in stream directory:', files);
       
       // Ищем файл, который может соответствовать нашему потоку
       const matchingFile = files.find(file => {
         // Сравниваем название файла с attachment из базы данных
         // Также проверяем, может ли файл быть с исправленным названием
         const correctedFile = decodeRussianFileName(file);
-        console.log('Comparing:', file, 'corrected:', correctedFile, 'with', stream.attachment);
+        console.log('[Radio] Comparing:', file, 'corrected:', correctedFile, 'with', stream.attachment);
         return file === stream.attachment || correctedFile === stream.attachment;
       });
       
       if (matchingFile) {
-        console.log('Found matching file:', matchingFile);
+        console.log('[Radio] Found matching file:', matchingFile);
         const correctedFilePath = path.join(streamDir, matchingFile);
-        console.log('Using corrected file path:', correctedFilePath);
+        console.log('[Radio] Using corrected file path:', correctedFilePath);
         
         // Отправляем файл с исправленным путем
         res.download(correctedFilePath, stream.attachment, (err) => {
           if (err) {
-            console.error('Error sending file:', err);
+            console.error('[Radio] Error sending file:', err);
             if (!res.headersSent) {
               res.status(500).json({ error: 'Ошибка при скачивании файла' });
             }
@@ -1185,12 +1170,12 @@ export const downloadStreamFile = async (req: Request, res: Response): Promise<a
       return res.status(404).json({ error: 'Файл не найден на сервере' });
     }
     
-    console.log('File found, sending download response');
+    console.log('[Radio] File found, sending download response');
     
     // Отправляем файл
     res.download(filePath, stream.attachment, (err) => {
       if (err) {
-        console.error('Error sending file:', err);
+        console.error('[Radio] Error sending file:', err);
         if (!res.headersSent) {
           res.status(500).json({ error: 'Ошибка при скачивании файла' });
         }
@@ -1198,7 +1183,7 @@ export const downloadStreamFile = async (req: Request, res: Response): Promise<a
     });
     
   } catch (error) {
-    console.error('Error downloading stream file:', error);
+    console.error('[Radio] Error downloading stream file:', error);
     return res.status(500).json({ error: 'Ошибка при скачивании файла потока' });
   }
 };

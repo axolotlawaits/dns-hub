@@ -144,3 +144,24 @@ export const refreshToken = async (req: Request, res: Response): Promise<any> =>
     res.json(newAccessToken)
   });
 }
+
+// Middleware для аутентификации через query параметр (для SSE)
+export const authenticateTokenQuery = async (req: Request, res: Response, next: NextFunction): Promise<any> => {
+  const token = req.query.token as string;
+
+  if (!token) {
+    return res.status(401).json({ message: 'Token required' });
+  }
+
+  try {
+    const decodedToken = jwt.verify(token, accessPublicKey, { algorithms: ['RS256'] });
+    (req as any).token = decodedToken;
+    next();
+  } catch (err) {
+    if (err instanceof jwt.TokenExpiredError) {
+      return res.status(401).json({ message: 'Token has expired' });
+    }
+    console.log('JWT verification error:', err instanceof Error ? err.message : 'Unknown error');
+    return res.status(401).json({ message: 'Invalid token' });
+  }
+};

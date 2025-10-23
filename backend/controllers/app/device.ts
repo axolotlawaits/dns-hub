@@ -88,14 +88,14 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
           deviceIP = fullDeviceIP;
           networkIP = ipParts.slice(0, 3).join('.') + '.';
           deviceNumber = ipParts[3];
-          console.log('Using full device IP:', deviceIP, '-> network:', networkIP, 'number:', deviceNumber);
+          console.log('[Device] Using full device IP:', deviceIP, '-> network:', networkIP, 'number:', deviceNumber);
         }
       } else if (network && number) {
         // Используем IP адрес, отправленный устройством
         deviceIP = `${network}${number}`;
         networkIP = network;
         deviceNumber = number;
-        console.log('Using device-provided IP:', deviceIP);
+        console.log('[Device] Using device-provided IP:', deviceIP);
       } else if (network && !number) {
         // Если передан только network (например, "192.168.1."), извлекаем IP из req.ip
         const forwardedFor = req.headers['x-forwarded-for'] as string;
@@ -108,13 +108,13 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
           deviceIP = normalizedIP;
           networkIP = network;
           deviceNumber = normalizedIP.split('.').pop() || '1';
-          console.log('Using server IP that matches device network:', deviceIP);
+          console.log('[Device] Using server IP that matches device network:', deviceIP);
         } else {
           // Если не соответствует, используем переданный network + последний октет из serverIP
           deviceIP = `${network}${normalizedIP.split('.').pop() || '1'}`;
           networkIP = network;
           deviceNumber = normalizedIP.split('.').pop() || '1';
-          console.log('Using device network with server IP last octet:', deviceIP);
+          console.log('[Device] Using device network with server IP last octet:', deviceIP);
         }
       } else {
         // Пытаемся получить реальный IP из заголовков (для NAT/Proxy)
@@ -131,7 +131,7 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
                   'Unknown';
         const normalizedIP = deviceIP.replace(/^::ffff:/, '');
         
-        console.log('Device IP detection (fallback):', {
+        console.log('[Device] Device IP detection (fallback):', {
           'x-forwarded-for': forwardedFor,
           'x-real-ip': realIP,
           'x-client-ip': clientIP,
@@ -146,7 +146,7 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
         deviceNumber = normalizedIP.split('.').pop() || '1';
       }
 
-      console.log('Final device IP data:', {
+      console.log('[Device] Final device IP data:', {
         deviceIP,
         networkIP,
         deviceNumber,
@@ -178,7 +178,7 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
           },
           select: { id: true, network: true, number: true, name: true, vendor: true, os: true, macAddress: true }
         });
-        console.log('Search by MAC address:', deviceData.macAddress, 'Found:', !!existingDevice);
+        console.log('[Device] Search by MAC address:', deviceData.macAddress, 'Found:', !!existingDevice);
       }
       
       // Специальная проверка для веб-плеера по userEmail + vendor + macAddress
@@ -192,7 +192,7 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
           },
           select: { id: true, network: true, number: true, name: true, vendor: true, os: true, macAddress: true }
         });
-        console.log('Search by web player email+vendor+mac: Found:', !!existingDevice);
+        console.log('[Device] Search by web player email+vendor+mac: Found:', !!existingDevice);
       }
       
       // Приоритет 2: По deviceId/deviceUuid (если не найден по MAC)
@@ -205,7 +205,7 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
             },
             select: { id: true, network: true, number: true, name: true, vendor: true, os: true, macAddress: true }
           });
-          console.log('Search by deviceId/deviceUuid:', deviceIdentifier, 'Found:', !!existingDevice);
+          console.log('[Device] Search by deviceId/deviceUuid:', deviceIdentifier, 'Found:', !!existingDevice);
         }
       }
       
@@ -220,7 +220,7 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
           },
           select: { id: true, network: true, number: true, name: true, vendor: true, os: true, macAddress: true }
         });
-        console.log('Search by vendor+os+name: Found:', !!existingDevice);
+        console.log('[Device] Search by vendor+os+name: Found:', !!existingDevice);
       }
       
       // Приоритет 4: Только по vendor + os (если не найден по полной комбинации)
@@ -233,12 +233,12 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
           },
           select: { id: true, network: true, number: true, name: true, vendor: true, os: true, macAddress: true }
         });
-        console.log('Search by vendor+os: Found:', !!existingDevice);
+        console.log('[Device] Search by vendor+os: Found:', !!existingDevice);
       }
 
       let device;
       if (existingDevice) {
-        console.log('Found existing device:', {
+        console.log('[Device] Found existing device:', {
           id: existingDevice.id,
           oldIP: existingDevice.network + existingDevice.number,
           newIP: deviceData.network + deviceData.number,
@@ -263,12 +263,12 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
           }
         });
         
-        console.log('Device updated successfully:', {
+        console.log('[Device] Device updated successfully:', {
           id: device.id,
           newIP: device.network + device.number
         });
       } else {
-        console.log('Creating new device:', {
+        console.log('[Device] Creating new device:', {
           name: deviceData.name,
           IP: deviceData.network + deviceData.number,
           branchId: deviceData.branchId
@@ -279,7 +279,7 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
           data: deviceData
         });
         
-        console.log('New device created:', {
+        console.log('[Device] New device created:', {
           id: device.id,
           IP: device.network + device.number
         });
@@ -296,12 +296,12 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
     });
 
   } catch (error) {
-    console.error('Error creating/updating device:', error);
+    console.error('[Device] Error creating/updating device:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     const errorStack = error instanceof Error ? error.stack : undefined;
     const errorName = error instanceof Error ? error.name : 'Unknown';
     
-    console.error('Error details:', {
+    console.error('[Device] Error details:', {
       message: errorMessage,
       stack: errorStack,
       name: errorName
@@ -326,8 +326,7 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
     
     // Обновляем heartbeat store (для быстрого доступа)
     heartbeatStore.set(deviceId, now);
-    console.log(`💓 [Heartbeat] Updated heartbeatStore for device ${deviceId} at ${nowDate.toISOString()}`);
-    console.log(`💓 [Heartbeat] HeartbeatStore size: ${heartbeatStore.size}, keys:`, Array.from(heartbeatStore.keys()).slice(0, 5));
+    // Логирование heartbeat отключено для уменьшения количества логов
 
     // Подготавливаем данные для обновления
     const updateData: any = { lastSeen: nowDate };
@@ -341,19 +340,11 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
     // Если есть userEmail, обновляем его
     if (userEmail) {
       updateData.userEmail = sanitizeString(userEmail);
-      console.log('Updating device userEmail from heartbeat:', {
-        deviceId,
-        userEmail: updateData.userEmail
-      });
     }
     
     // Если есть MAC адрес, обновляем его
     if (macAddress) {
       updateData.macAddress = sanitizeString(macAddress);
-      console.log('Updating device MAC address from heartbeat:', {
-        deviceId,
-        macAddress: updateData.macAddress
-      });
     }
     
     // Если есть текущий IP, обновляем IP адрес
@@ -362,12 +353,6 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
       if (ipParts.length === 4) {
         updateData.network = ipParts.slice(0, 3).join('.') + '.';
         updateData.number = ipParts[3];
-        console.log('Updating device IP from heartbeat:', {
-          deviceId,
-          currentIP,
-          network: updateData.network,
-          number: updateData.number
-        });
       }
     }
 
@@ -380,14 +365,12 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
       existingDevice = await prisma.devices.findUnique({
         where: { id: deviceId }
       });
-      console.log(`🔍 [Heartbeat] Search by deviceId ${deviceId}: Found:`, !!existingDevice);
       
       // Приоритет 2: По MAC адресу (если не найден по deviceId)
       if (!existingDevice && updateData.macAddress) {
         existingDevice = await prisma.devices.findFirst({
           where: { macAddress: updateData.macAddress }
         });
-        console.log(`🔍 [Heartbeat] Search by MAC ${updateData.macAddress}: Found:`, !!existingDevice);
       }
       
       // Приоритет 3: Специальная проверка для веб-плеера по userEmail + vendor + macAddress
@@ -399,7 +382,6 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
             macAddress: updateData.macAddress
           }
         });
-        console.log(`🔍 [Heartbeat] Search by web player email+vendor+mac: Found:`, !!existingDevice);
       }
       
       // Приоритет 4: По userEmail + vendor (если не найден по MAC)
@@ -410,7 +392,6 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
             vendor: 'Web Browser'
           }
         });
-        console.log(`🔍 [Heartbeat] Search by userEmail+vendor: Found:`, !!existingDevice);
       }
 
       if (existingDevice) {
@@ -421,12 +402,9 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
           where: { id: updateDeviceId }, 
           data: updateData
         });
-        console.log(`✅ [Heartbeat] Device ${updateDeviceId} updated successfully`);
-        console.log(`💓 [Heartbeat] Device ${updateDeviceId} is now online (heartbeat updated)`);
         
         // Если найденное устройство имеет другой ID, обновляем heartbeatStore
         if (updateDeviceId !== deviceId) {
-          console.log(`🔄 [Heartbeat] Device ID mismatch: request ${deviceId} -> database ${updateDeviceId}`);
           heartbeatStore.set(updateDeviceId, now);
         }
       } else {
@@ -465,19 +443,16 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
         await prisma.devices.create({
           data: newDeviceData
         });
-        console.log(`✅ [Heartbeat] New device ${deviceId} created successfully in branch: ${firstBranch.name} (${firstBranch.uuid})`);
       }
     } catch (error) {
-      console.error('Error updating/creating device in heartbeat:', error);
+      console.error('[Device] Error updating/creating device in heartbeat:', error);
       // Не прерываем выполнение, но логируем ошибку
       // HeartbeatStore уже обновлен, что достаточно для отслеживания онлайн статуса
     }
 
-    console.log('Heartbeat received from device:', deviceId, 'at', nowDate.toISOString());
-
     return res.json({ success: true, serverTime: nowDate.toISOString() });
   } catch (error) {
-    console.error('Error on heartbeat:', error);
+    console.error('[Device] Error on heartbeat:', error);
     return res.status(500).json({ success: false, error: 'Heartbeat error' });
   }
 };
@@ -487,7 +462,7 @@ export const getDeviceByIP = async (req: Request, res: Response): Promise<any> =
   try {
     const { ip } = req.params;
     
-    console.log('Getting device by IP:', ip);
+    console.log('[Device] Getting device by IP:', ip);
     
     // Ищем устройство по IP адресу
     let device = null;
@@ -539,11 +514,11 @@ export const getDeviceByIP = async (req: Request, res: Response): Promise<any> =
     }
 
     if (!device) {
-      console.log('Device not found by IP:', ip);
+      console.log('[Device] Device not found by IP:', ip);
       return res.status(404).json({ error: 'Устройство с таким IP адресом не найдено' });
     }
 
-    console.log('Device found by IP:', {
+    console.log('[Device] Device found by IP:', {
       id: device.id,
       name: device.name,
       network: device.network,
@@ -557,7 +532,7 @@ export const getDeviceByIP = async (req: Request, res: Response): Promise<any> =
       data: device
     });
   } catch (error) {
-    console.error('Error fetching device by IP:', error);
+    console.error('[Device] Error fetching device by IP:', error);
     return res.status(500).json({ error: 'Ошибка при поиске устройства по IP' });
   }
 };
@@ -567,7 +542,7 @@ export const getDeviceByMAC = async (req: Request, res: Response): Promise<any> 
   try {
     const { macAddress } = req.params;
     
-    console.log('Getting device by MAC address:', macAddress);
+    console.log('[Device] Getting device by MAC address:', macAddress);
     
     const device = await prisma.devices.findFirst({
       where: { macAddress },
@@ -582,11 +557,11 @@ export const getDeviceByMAC = async (req: Request, res: Response): Promise<any> 
     });
 
     if (!device) {
-      console.log('Device not found by MAC address:', macAddress);
+      console.log('[Device] Device not found by MAC address:', macAddress);
       return res.status(404).json({ error: 'Устройство с таким MAC адресом не найдено' });
     }
 
-    console.log('Device found by MAC address:', {
+    console.log('[Device] Device found by MAC address:', {
       id: device.id,
       name: device.name,
       macAddress: device.macAddress,
@@ -600,7 +575,7 @@ export const getDeviceByMAC = async (req: Request, res: Response): Promise<any> 
       data: device
     });
   } catch (error) {
-    console.error('Error fetching device by MAC address:', error);
+    console.error('[Device] Error fetching device by MAC address:', error);
     return res.status(500).json({ error: 'Ошибка при поиске устройства по MAC адресу' });
   }
 };
@@ -610,7 +585,7 @@ export const getDeviceById = async (req: Request, res: Response): Promise<any> =
   try {
     const { id } = req.params;
     
-    console.log('Getting device by ID:', id);
+    console.log('[Device] Getting device by ID:', id);
     
     const device = await prisma.devices.findUnique({
       where: { id },
@@ -625,11 +600,11 @@ export const getDeviceById = async (req: Request, res: Response): Promise<any> =
     });
 
     if (!device) {
-      console.log('Device not found:', id);
+      console.log('[Device] Device not found:', id);
       return res.status(404).json({ error: 'Устройство не найдено' });
     }
 
-    console.log('Device found:', {
+    console.log('[Device] Device found:', {
       id: device.id,
       name: device.name,
       network: device.network,
@@ -642,7 +617,7 @@ export const getDeviceById = async (req: Request, res: Response): Promise<any> =
       data: device
     });
   } catch (error) {
-    console.error('Error fetching device by ID:', error);
+    console.error('[Device] Error fetching device by ID:', error);
     return res.status(500).json({ error: 'Ошибка при получении устройства' });
   }
 };
@@ -673,7 +648,7 @@ export const updateDeviceIP = async (req: Request, res: Response): Promise<any> 
       return res.status(400).json({ error: 'Необходимо указать deviceIP или network+number' });
     }
 
-    console.log('Updating device IP:', {
+    console.log('[Device] Updating device IP:', {
       deviceId,
       deviceIP,
       network: networkIP,
@@ -695,7 +670,7 @@ export const updateDeviceIP = async (req: Request, res: Response): Promise<any> 
       message: `IP адрес обновлен на ${networkIP}${deviceNumber}`
     });
   } catch (error) {
-    console.error('Error updating device IP:', error);
+    console.error('[Device] Error updating device IP:', error);
     return res.status(500).json({ error: 'Ошибка при обновлении IP адреса устройства' });
   }
 };
@@ -711,7 +686,7 @@ export const getDeviceByBranchId = async (req: Request, res: Response): Promise<
     if (!device) return res.status(404).json({ error: 'Устройство не найдено' });
     return res.status(200).json(device);
   } catch (error) {
-    console.error('Error fetching device:', error);
+    console.error('[Device] Error fetching device:', error);
     return res.status(500).json({ error: 'Ошибка при получении устройства' });
   }
 };
@@ -721,7 +696,7 @@ export const getAllDevices = async (req: Request, res: Response): Promise<any> =
     const devices = await prisma.devices.findMany({ include: { branch: { select: { uuid: true, name: true, typeOfDist: true, city: true, address: true } } }, orderBy: { createdAt: 'desc' } });
     return res.status(200).json(devices);
   } catch (error) {
-    console.error('Error fetching devices:', error);
+    console.error('[Device] Error fetching devices:', error);
     return res.status(500).json({ error: 'Ошибка при получении устройств' });
   }
 };
@@ -738,7 +713,7 @@ export const deleteDevice = async (req: Request, res: Response): Promise<any> =>
     await prisma.devices.delete({ where: { id } });
     return res.status(200).json({ success: true, message: 'Устройство успешно удалено' });
   } catch (error) {
-    console.error('Error deleting device:', error);
+    console.error('[Device] Error deleting device:', error);
     return res.status(500).json({ error: 'Ошибка при удалении устройства' });
   }
 };

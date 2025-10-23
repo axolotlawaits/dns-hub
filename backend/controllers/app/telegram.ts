@@ -37,13 +37,13 @@ class TelegramService {
   private initializeBot(): void {
     const token = process.env.TELEGRAM_BOT_TOKEN;
     if (!token) {
-      console.error('TELEGRAM_BOT_TOKEN not found');
+      console.error('[Telegram] TELEGRAM_BOT_TOKEN not found');
       return;
     }
     
     const botName = process.env.TELEGRAM_BOT_NAME;
     if (!botName) {
-      console.error('TELEGRAM_BOT_NAME not found');
+      console.error('[Telegram] TELEGRAM_BOT_NAME not found');
       return;
     }
     
@@ -89,14 +89,14 @@ class TelegramService {
           name: user.name,
         };
       } catch (error) {
-        console.error('Link error:', error);
+        console.error('[Telegram] Link error:', error);
         await ctx.reply('❌ Ошибка привязки. Пожалуйста, попробуйте снова');
       }
     });
 
     // 5. Обработка ошибок
     this.bot.catch((err) => {
-      console.error('Bot error:', err);
+      console.error('[Telegram] Bot error:', err);
     });
   }
 
@@ -107,7 +107,7 @@ class TelegramService {
     }
     
     if (!this.bot) {
-      console.error('Bot not initialized');
+      console.error('[Telegram] Bot not initialized');
       return false;
     }
 
@@ -121,7 +121,7 @@ class TelegramService {
       this.retryCount = 0;
       return true;
     } catch (error) {
-      console.error('Failed to start bot:', error);
+      console.error('[Telegram] Failed to start bot:', error);
 
       if (this.retryCount < this.MAX_RETRIES) {
         this.retryCount++;
@@ -142,7 +142,7 @@ class TelegramService {
       await this.bot.stop();
       this.isRunning = false;
     } catch (error) {
-      console.error('Error stopping bot:', error);
+      console.error('[Telegram] Error stopping bot:', error);
     }
   }
 
@@ -152,7 +152,7 @@ class TelegramService {
     chatId: string
   ): Promise<boolean> {
     if (!this.isRunning || !this.bot) {
-      console.error('Bot is not running');
+      console.error('[Telegram] Bot is not running');
       return false;
     }
 
@@ -164,7 +164,7 @@ class TelegramService {
       );
       return true;
     } catch (error) {
-      console.error('Send error:', error);
+      console.error('[Telegram] Send error:', error);
       if (error instanceof Error && error.message.includes('chat not found')) {
         await this.handleInvalidChat(chatId);
       }
@@ -177,7 +177,7 @@ class TelegramService {
     try {
       await axios.post(`${API}/telegram/status/${userId}`, { userId });
     } catch (error) {
-      console.error('Frontend notify error:', error);
+      console.error('[Telegram] Frontend notify error:', error);
     }
   }
 
@@ -188,7 +188,7 @@ class TelegramService {
         data: { telegramChatId: null },
       });
     } catch (error) {
-      console.error('Database error in handleInvalidChat:', error);
+      console.error('[Telegram] Database error in handleInvalidChat:', error);
     }
   }
 
