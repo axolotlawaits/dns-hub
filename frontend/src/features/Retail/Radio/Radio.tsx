@@ -1379,30 +1379,7 @@ const RadioAdmin: React.FC = () => {
               WebkitBackdropFilter: 'blur(8px)'
             }}
           >
-            {hasReadOnlyAccess ? (
-              // Для пользователей с доступом только для чтения показываем только заголовок
-              <Group justify="space-between" align="center">
-                    <div>
-                  <Title order={3} size="h4" style={{ color: 'var(--theme-text-primary)' }}>
-                    Устройства
-                  </Title>
-                  <Text size="sm" c="dimmed">
-                    Управление устройствами вашего филиала
-                  </Text>
-                    </div>
-                <div style={{
-                  padding: '6px 12px',
-                  backgroundColor: 'var(--color-primary-500)',
-                  borderRadius: '20px',
-                  color: 'white',
-                  fontSize: '12px',
-                  fontWeight: '500'
-                }}>
-                  {currentBranchDevices.length} устройств
-                </div>
-                  </Group>
-            ) : (
-              // Для пользователей с полным доступом показываем вкладки
+            {/* Показываем вкладки всем пользователям */}
               <Tabs 
                 value={activeTab}
                 onChange={(value) => setActiveTab(value || "devices")}
@@ -2424,126 +2401,9 @@ const RadioAdmin: React.FC = () => {
 
               </Box>
             </Tabs>
-            )}
           </Paper>
 
-          {/* Контент для пользователей с доступом только для чтения */}
-          {hasReadOnlyAccess && (
-          <Stack gap="md">
-              {/* Статистика устройств */}
-              {stats && (
-                <Paper p="md" withBorder className="radio-stats-card">
-                  <Group justify="space-between" align="center">
-                    <div>
-                      <Text size="lg" fw={600} style={{ color: 'var(--theme-text-primary)' }}>
-                        Статистика устройств
-                      </Text>
-                      <Text size="sm" c="dimmed">
-                        Общая информация по устройствам
-                      </Text>
-                    </div>
-                    <Group gap="lg">
-                      <div style={{ textAlign: 'center' }}>
-                        <Text size="xl" fw={700} style={{ color: 'var(--color-primary-500)' }}>
-                          {stats.totalDevices}
-                        </Text>
-                        <Text size="xs" c="dimmed">Всего устройств</Text>
-                      </div>
-                      <div style={{ textAlign: 'center' }}>
-                        <Text size="xl" fw={700} c="green">
-                          {currentBranchDevices.filter(device => statusMap[device.id]).length}
-                        </Text>
-                        <Text size="xs" c="dimmed">Онлайн</Text>
-                      </div>
-                      <div style={{ textAlign: 'center' }}>
-                        <Text size="xl" fw={700} c="red">
-                          {currentBranchDevices.filter(device => !statusMap[device.id]).length}
-                        </Text>
-                        <Text size="xs" c="dimmed">Офлайн</Text>
-                      </div>
-                    </Group>
-                  </Group>
-                </Paper>
-              )}
-
-              {/* Устройства */}
-              <Stack gap="md">
-                {hasReadOnlyAccess && user && (
-                  <Paper p="md" withBorder className="radio-device-card">
-                    <Group justify="space-between" mb="md">
-                      <div>
-                        <Title order={4} size="h5">{user.branch}</Title>
-                        <Text size="sm" c="dimmed">Ваш филиал</Text>
-                      </div>
-                      <div style={{
-                        padding: '6px 12px',
-                        backgroundColor: 'var(--color-primary-500)',
-                        borderRadius: '20px',
-                        color: 'white',
-                        fontSize: '12px',
-                        fontWeight: '500'
-                      }}>
-                        {currentBranchDevices.length} устройств
-                      </div>
-                    </Group>
-
-                    <Stack gap="sm">
-                      {currentBranchDevices.map((device) => {
-                        const online = !!statusMap[device.id];
-                        return (
-                          <div 
-                            key={device.id} 
-                            style={{ 
-                              padding: '16px',
-                              backgroundColor: 'var(--theme-bg-elevated)',
-                              borderRadius: '8px',
-                              border: '1px solid var(--theme-border)',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s ease'
-                            }}
-                            onClick={() => openDeviceModal(device)}
-                            onMouseEnter={(e) => e.currentTarget.style.boxShadow = 'var(--mantine-shadow-sm)'}
-                            onMouseLeave={(e) => e.currentTarget.style.boxShadow = 'none'}
-                          >
-                            <Group justify="space-between" align="center">
-                              <div>
-                                <Group gap="xs" align="center">
-                                  <Text fw={500} size="sm" style={{ color: 'var(--theme-text-primary)' }}>{device.name}</Text>
-                                  {deviceUpdates[device.id] && (
-                                    <Badge size="xs" color="blue" variant="light">
-                                      Обновление
-                                    </Badge>
-                                  )}
-                                </Group>
-                                <Text size="xs" c="dimmed" mt={4}>
-                                  {device.network} • {device.vendor}
-                                </Text>
-                              </div>
-                              <Group gap="xs" align="center">
-                                <Badge 
-                                  size="sm" 
-                                  color={online ? 'green' : 'gray'} 
-                                  variant="filled"
-                                  style={{
-                                    fontSize: '11px',
-                                    fontWeight: '500'
-                                  }}
-                                >
-                                  {online ? 'Онлайн' : 'Офлайн'}
-                                </Badge>
-                              </Group>
-                            </Group>
-                          </div>
-                        );
-                      })}
-                    </Stack>
-                  </Paper>
-                )}
-              </Stack>
-            </Stack>
-          )}
-        </Stack>
-      </Box>
+      </Stack>
 
       {/* Upload Modal using DynamicFormModal */}
       <DynamicFormModal
@@ -3076,6 +2936,7 @@ const RadioAdmin: React.FC = () => {
         size="lg"
       />
 
+    </Box>
     </DndProviderWrapper>
   );
 };
