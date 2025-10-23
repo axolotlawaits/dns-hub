@@ -588,13 +588,23 @@ const RadioAdmin: React.FC = () => {
     try {
       // Используем devices-status вместо devices-status-ping для розницы (включает веб-плеер)
       const statusResp = await axios.get(`${API_BASE}/devices-status`);
+      console.log('📊 [Radio] Полный ответ статусов:', statusResp.data);
       const arr = (statusResp.data && statusResp.data.data) ? statusResp.data.data : [];
+      console.log('📊 [Radio] Массив статусов:', arr);
+      console.log('📊 [Radio] Размер массива:', arr.length);
+      
       const sm: Record<string, boolean> = {};
       for (const item of arr) {
         sm[item.deviceId] = !!item.online;
+        // Логируем первые 10 устройств
+        if (Object.keys(sm).length <= 10) {
+          console.log(`📊 [Radio] Device ${item.deviceId}: online=${item.online}`);
+        }
       }
+      
       setStatusMap(sm);
       console.log('📊 [Radio] Статусы устройств обновлены:', Object.values(sm).filter(Boolean).length, 'онлайн из', Object.keys(sm).length);
+      console.log('📊 [Radio] Созданный statusMap:', sm);
     } catch (e) {
       console.error('❌ [Radio] Ошибка загрузки статусов устройств:', e);
     }
@@ -653,6 +663,10 @@ const RadioAdmin: React.FC = () => {
 
           // Загружаем статусы устройств через ping
       await loadDeviceStatuses();
+      
+      // Логируем после загрузки статусов
+      console.log('🔍 [Radio] После загрузки статусов - branchesWithDevices.length:', mapped.length);
+      console.log('🔍 [Radio] После загрузки статусов - всего устройств:', mapped.reduce((total, branch) => total + branch.devices.length, 0));
 
       const sd = (statsResponse.data && statsResponse.data.data) ? statsResponse.data.data : {};
       console.log('Stats response:', statsResponse.data);
@@ -2042,7 +2056,14 @@ const RadioAdmin: React.FC = () => {
                               fontSize: 'var(--font-size-xl)'
                             }}
                           >
-                            {currentBranchDevices.filter(device => statusMap[device.id]).length}
+                            {(() => {
+                              const active = currentBranchDevices.filter(device => statusMap[device.id]).length;
+                              const total = currentBranchDevices.length;
+                              console.log('🔍 [Radio] Активные устройства:', active, 'из', total, 'total');
+                              console.log('🔍 [Radio] statusMap:', statusMap);
+                              console.log('🔍 [Radio] currentBranchDevices count:', currentBranchDevices.length);
+                              return active;
+                            })()}
                           </Text>
                     </div>
                   </Group>

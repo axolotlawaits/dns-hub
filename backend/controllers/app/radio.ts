@@ -327,6 +327,11 @@ export const getDevicesStatus = async (req: Request, res: Response) => {
       where, 
       select: { id: true, branchId: true, lastSeen: true } 
     });
+    
+    console.log(`📊 [getDevicesStatus] Всего устройств в БД: ${devices.length}`);
+    console.log(`📊 [getDevicesStatus] Размер heartbeatStore: ${heartbeatStore.size()}`);
+    console.log(`📊 [getDevicesStatus] Ключи в heartbeatStore:`, Array.from(heartbeatStore.keys()).slice(0, 10));
+    
     const now = Date.now();
     const ONLINE_THRESHOLD_MS = 2 * 60 * 1000;
 
@@ -340,17 +345,17 @@ export const getDevicesStatus = async (req: Request, res: Response) => {
       const timeDiff = lastSeenTime ? (now - lastSeenTime) : null;
       const online = lastSeenTime ? (timeDiff! <= ONLINE_THRESHOLD_MS) : false;
       
-      // Детальное логирование отключено для уменьшения количества логов
-      // if (devices.indexOf(d) < 5) {
-      //   console.log(`📊 [getDevicesStatus] Device ${d.id}:`, {
-      //     lastSeenMem: lastSeenMem ? new Date(lastSeenMem).toISOString() : 'none',
-      //     lastSeenDb: lastSeenDb ? new Date(lastSeenDb).toISOString() : 'none',
-      //     lastSeenTime: lastSeenTime ? new Date(lastSeenTime).toISOString() : 'none',
-      //     timeDiff: timeDiff,
-      //     threshold: ONLINE_THRESHOLD_MS,
-      //     online
-      //   });
-      // }
+      // Детальное логирование для первых 10 устройств
+      if (devices.indexOf(d) < 10) {
+        console.log(`📊 [getDevicesStatus] Device ${d.id}:`, {
+          lastSeenMem: lastSeenMem ? new Date(lastSeenMem).toISOString() : 'none',
+          lastSeenDb: lastSeenDb ? new Date(lastSeenDb).toISOString() : 'none',
+          lastSeenTime: lastSeenTime ? new Date(lastSeenTime).toISOString() : 'none',
+          timeDiff: timeDiff,
+          threshold: ONLINE_THRESHOLD_MS,
+          online
+        });
+      }
       
       return { 
         deviceId: d.id, 
