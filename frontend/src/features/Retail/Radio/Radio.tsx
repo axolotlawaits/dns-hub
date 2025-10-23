@@ -586,8 +586,8 @@ const RadioAdmin: React.FC = () => {
   // Функция для загрузки статусов устройств
   const loadDeviceStatuses = useCallback(async () => {
     try {
-      // Используем devices-status вместо devices-status-ping для розницы (включает веб-плеер)
-      const statusResp = await axios.get(`${API_BASE}/devices-status`);
+      // Используем devices-status-ping для реального статуса через WebSocket
+      const statusResp = await axios.get(`${API_BASE}/devices-status-ping`);
       console.log('📊 [Radio] Полный ответ статусов:', statusResp.data);
       const arr = (statusResp.data && statusResp.data.data) ? statusResp.data.data : [];
       console.log('📊 [Radio] Массив статусов:', arr);
