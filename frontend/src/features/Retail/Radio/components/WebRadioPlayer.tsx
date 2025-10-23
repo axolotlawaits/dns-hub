@@ -580,16 +580,42 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       setPlaybackState('error');
     };
 
+    const handleStalled = () => {
+      console.warn('⚠️ [WebRadioPlayer] Поток остановился (stalled)');
+      // Не устанавливаем ошибку, просто логируем
+    };
+
+    const handleWaiting = () => {
+      console.warn('⏳ [WebRadioPlayer] Буферизация (waiting)');
+      // Не устанавливаем ошибку, просто логируем
+    };
+
+    const handleCanPlay = () => {
+      console.log('✅ [WebRadioPlayer] Аудио готово к воспроизведению');
+    };
+
+    const handleLoadStart = () => {
+      console.log('🔄 [WebRadioPlayer] Начало загрузки аудио');
+    };
+
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('ended', handleEnded);
     audio.addEventListener('error', handleError);
+    audio.addEventListener('stalled', handleStalled);
+    audio.addEventListener('waiting', handleWaiting);
+    audio.addEventListener('canplay', handleCanPlay);
+    audio.addEventListener('loadstart', handleLoadStart);
 
     return () => {
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('error', handleError);
+      audio.removeEventListener('stalled', handleStalled);
+      audio.removeEventListener('waiting', handleWaiting);
+      audio.removeEventListener('canplay', handleCanPlay);
+      audio.removeEventListener('loadstart', handleLoadStart);
     };
   }, [findNextTrack, playTrack, playStream, isPlayingStream]);
 
@@ -891,7 +917,12 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       )}
 
       {/* Скрытый аудио элемент */}
-      <audio ref={audioRef} preload="metadata" />
+      <audio 
+        ref={audioRef} 
+        preload="auto"
+        crossOrigin="anonymous"
+        playsInline
+      />
 
       {/* Модальное окно для смены времени */}
       <CustomModal

@@ -329,7 +329,7 @@ export const getDevicesStatus = async (req: Request, res: Response) => {
     });
     
     console.log(`📊 [getDevicesStatus] Всего устройств в БД: ${devices.length}`);
-    console.log(`📊 [getDevicesStatus] Размер heartbeatStore: ${heartbeatStore.size()}`);
+    console.log(`📊 [getDevicesStatus] Размер heartbeatStore: ${heartbeatStore.size}`);
     console.log(`📊 [getDevicesStatus] Ключи в heartbeatStore:`, Array.from(heartbeatStore.keys()).slice(0, 10));
     
     const now = Date.now();
@@ -380,9 +380,8 @@ export const getDevicesStatusPing = async (req: Request, res: Response) => {
     if (branchId) where.branchId = String(branchId);
 
     console.log('🔍 [getDevicesStatusPing] Поиск устройств с фильтром:', where);
-    const devices = await prisma.devices.findMany({ where, select: { id: true, branchId: true } });
+    const devices = await prisma.devices.findMany({ where, select: { id: true, branchId: true, vendor: true } });
     console.log('📱 [getDevicesStatusPing] Найдено устройств:', devices.length);
-    console.log('📱 [getDevicesStatusPing] Список устройств:', devices.map(d => ({ id: d.id, branchId: d.branchId })));
     
     const deviceIds = devices.map(d => d.id);
     console.log('🆔 [getDevicesStatusPing] ID устройств для пинга:', deviceIds);
@@ -391,7 +390,26 @@ export const getDevicesStatusPing = async (req: Request, res: Response) => {
     const pingResults = await socketService.pingDevices(deviceIds, 1500);
     console.log('🏓 [getDevicesStatusPing] Результаты пинга:', pingResults);
 
-    const data = devices.map((d) => ({ deviceId: d.id, branchId: d.branchId, online: !!pingResults[d.id]?.online, rttMs: pingResults[d.id]?.rttMs ?? null }));
+    // Комбинированный статус: для WebSocket устройств используем ping, для остальных (веб плеер) используем heartbeatStore
+    const now = Date.now();
+    const ONLINE_THRESHOLD_MS = 2 * 60 * 1000;
+    
+    const data = devices.map((d) => {
+      // Проверяем, является ли это веб плеером (vendor === 'Web Browser' или начинается с 'Web')
+      const isWebPlayer = d.vendor === 'Web Browser' || d.vendor?.startsWith('Web');
+      
+      if (isWebPlayer) {
+        // Для веб плеера используем heartbeatStore
+        const lastSeenMem = heartbeatStore.get(d.id);
+        const timeDiff = lastSeenMem ? (now - lastSeenMem) : null;
+        const online = lastSeenMem ? (timeDiff! <= ONLINE_THRESHOLD_MS) : false;
+        return { deviceId: d.id, branchId: d.branchId, online, rttMs: null, source: 'heartbeat' };
+      } else {
+        // Для обычных устройств используем WebSocket ping
+        return { deviceId: d.id, branchId: d.branchId, online: !!pingResults[d.id]?.online, rttMs: pingResults[d.id]?.rttMs ?? null, source: 'websocket' };
+      }
+    });
+    
     console.log('📊 [getDevicesStatusPing] Финальные данные:', data);
     console.log('📊 [getDevicesStatusPing] Онлайн устройств:', data.filter(d => d.online).length);
 
