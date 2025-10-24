@@ -379,16 +379,11 @@ export const getDevicesStatusPing = async (req: Request, res: Response) => {
     const where: any = {};
     if (branchId) where.branchId = String(branchId);
 
-    console.log('🔍 [getDevicesStatusPing] Поиск устройств с фильтром:', where);
     const devices = await prisma.devices.findMany({ where, select: { id: true, branchId: true, vendor: true } });
-    console.log('📱 [getDevicesStatusPing] Найдено устройств:', devices.length);
-    
     const deviceIds = devices.map(d => d.id);
-    console.log('🆔 [getDevicesStatusPing] ID устройств для пинга:', deviceIds);
 
     const socketService = SocketIOService.getInstance();
     const pingResults = await socketService.pingDevices(deviceIds, 1500);
-    console.log('🏓 [getDevicesStatusPing] Результаты пинга:', pingResults);
 
     // Комбинированный статус: для WebSocket устройств используем ping, для остальных (веб плеер) используем heartbeatStore
     const now = Date.now();
@@ -410,8 +405,8 @@ export const getDevicesStatusPing = async (req: Request, res: Response) => {
       }
     });
     
-    console.log('📊 [getDevicesStatusPing] Финальные данные:', data);
-    console.log('📊 [getDevicesStatusPing] Онлайн устройств:', data.filter(d => d.online).length);
+    const onlineCount = data.filter(d => d.online).length;
+    console.log(`📊 [getDevicesStatusPing] Онлайн устройств: ${onlineCount}/${devices.length}`);
 
     res.json({ success: true, data });
   } catch (error) {
