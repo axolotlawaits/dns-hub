@@ -175,29 +175,8 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     }
     
     if (!browserId) {
-      // Создаем уникальный идентификатор на основе характеристик браузера + пользователя
-      const fingerprint = [
-        user.email, // Добавляем email пользователя для уникальности
-        navigator.userAgent,
-        navigator.language,
-        screen.width + 'x' + screen.height,
-        new Date().getTimezoneOffset(),
-        window.location.hostname
-      ].join('|');
-      
-      // Хешируем для получения короткого ID
-      try {
-        browserId = 'web-' + btoa(fingerprint).substring(0, 16).replace(/[^a-zA-Z0-9]/g, '');
-      } catch (error) {
-        // Fallback если btoa недоступен - используем простой хеш
-        let hash = 0;
-        for (let i = 0; i < fingerprint.length; i++) {
-          const char = fingerprint.charCodeAt(i);
-          hash = ((hash << 5) - hash) + char;
-          hash = hash & hash; // Convert to 32bit integer
-        }
-        browserId = 'web-' + Math.abs(hash).toString(36).substring(0, 16);
-      }
+      // Генерируем UUID для устройства
+      browserId = 'web-' + crypto.randomUUID();
       
       try {
         localStorage.setItem(storageKey, browserId);
@@ -229,7 +208,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       const deviceData = {
         userEmail: user.email,
         branchType: branchType,
-        deviceName: `DNS Radio Web (${browserId})`,
+        deviceName: `DNS Radio Web (${user.email.split('@')[0]})`,
         vendor: 'Web Browser',
         network: userIP.includes('.') ? userIP.split('.').slice(0, 3).join('.') + '.' : userIP,
         number: userIP.includes('.') ? userIP.split('.')[3] || '1' : '1',
@@ -444,7 +423,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       }
       
       const heartbeatData = {
-        deviceId: browserId,
+        deviceName: `DNS Radio Web (${user.email.split('@')[0]})`,
         appVersion: '1.0.0',
         macAddress: browserId,
         currentIP: userIP,
