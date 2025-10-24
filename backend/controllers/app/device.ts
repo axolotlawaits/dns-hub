@@ -317,8 +317,17 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
 export const heartbeat = async (req: Request, res: Response): Promise<any> => {
   try {
     const { deviceId, deviceName, appVersion, macAddress, currentIP, userEmail } = req.body || {};
+    
+    console.log(`🔍 [Heartbeat] Получен запрос:`, { deviceId, deviceName, userEmail, macAddress });
+    
     if (!deviceId && !deviceName) {
+      console.log(`❌ [Heartbeat] Ошибка: deviceId или deviceName обязателен`);
       return res.status(400).json({ success: false, error: 'deviceId или deviceName обязателен' });
+    }
+    
+    if (!userEmail) {
+      console.log(`❌ [Heartbeat] Ошибка: userEmail обязателен`);
+      return res.status(400).json({ success: false, error: 'userEmail обязателен' });
     }
 
     const now = Date.now();
