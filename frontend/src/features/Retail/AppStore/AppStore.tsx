@@ -49,7 +49,6 @@ const AppStore: React.FC = () => {
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
   
   // Состояние загрузки
-  const [downloadingApp, setDownloadingApp] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState(0);
 
   // Фильтры
@@ -187,7 +186,6 @@ const AppStore: React.FC = () => {
 
   // Скачивание приложения
   const handleDownload = async (appId: string) => {
-    setDownloadingApp(appId);
     setDownloadModalOpen(true);
     setDownloadProgress(0);
     
@@ -233,20 +231,17 @@ const AppStore: React.FC = () => {
         
         setTimeout(() => {
           setDownloadModalOpen(false);
-          setDownloadingApp(null);
           setDownloadProgress(0);
           notificationSystem.addNotification('Успех', 'Приложение скачано', 'success');
         }, 500);
       } else {
         clearInterval(progressInterval);
         setDownloadModalOpen(false);
-        setDownloadingApp(null);
         setDownloadProgress(0);
         notificationSystem.addNotification('Ошибка', 'Ошибка при скачивании', 'error');
       }
     } catch (error) {
       setDownloadModalOpen(false);
-      setDownloadingApp(null);
       setDownloadProgress(0);
       notificationSystem.addNotification('Ошибка', 'Ошибка при скачивании', 'error');
     }
