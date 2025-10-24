@@ -59,13 +59,14 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
 
   const clearData = useCallback(() => {
     setBranchResult([])
+    setBranchByAddressResult([])
     setEmployeeResult([])
     setToolResult([])
   }, [])
 
 
   const renderSearchResults = () => {
-    const hasResults = branchResult.length > 0 || employeeResult.length > 0 || toolResult.length > 0
+    const hasResults = branchResult.length > 0 || branchByAddressResult.length > 0 || employeeResult.length > 0 || toolResult.length > 0
     
     if (!hasResults && text) {
       return (
@@ -121,7 +122,7 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
 
     return (
       <Stack gap="lg">
-        {branchResult.length > 0 && (
+        {(branchResult.length > 0 || branchByAddressResult.length  > 0) && (
           <Box>
             <Box
               style={{
@@ -149,7 +150,7 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
                     variant="light" 
                     color="blue"
                   >
-                    {branchResult.length}
+                    {curBranchTypeData.length}
                   </Badge>
                 </Group>
                 <Group>
@@ -531,7 +532,7 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
               {renderSearchResults()}
               
               {/* Кнопка для перехода к общей странице поиска - показываем только если есть результаты */}
-              {(branchResult.length > 0 || employeeResult.length > 0 || toolResult.length > 0) && (
+              {(branchResult.length > 0 || branchByAddressResult.length > 0 || employeeResult.length > 0 || toolResult.length > 0) && (
                 <Box mt="md" style={{ textAlign: 'center' }}>
                   <Button
                     variant="outline"
