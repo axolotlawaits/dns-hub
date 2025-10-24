@@ -430,6 +430,8 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
         userEmail: user.email
       };
 
+      console.log('🔍 [WebRadioPlayer] Отправляем heartbeat:', heartbeatData);
+
       const response = await fetch(`${API}/device/heartbeat`, {
         method: 'POST',
         headers: {
@@ -604,12 +606,16 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     };
   }, [findNextTrack, playTrack, playStream, isPlayingStream]);
 
-  // Отправляем heartbeat каждые 30 секунд
+  // Отправляем heartbeat каждые 30 секунд только когда вкладка активна
   useEffect(() => {
+    if (!isActive) {
+      return; // Не запускаем интервал если вкладка неактивна
+    }
+    
     const interval = setInterval(sendHeartbeat, 30000);
     sendHeartbeat(); // Отправляем сразу
     return () => clearInterval(interval);
-  }, [sendHeartbeat]);
+  }, [sendHeartbeat, isActive]);
 
   // Контроль активности вкладки - останавливаем плеер при переключении
   useEffect(() => {
