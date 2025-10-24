@@ -153,8 +153,8 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
                   </Badge>
                 </Group>
                 <Group>
-                  <Button size="xs" variant="light" onClick={() => setBranchType('name')}>По наименованию</Button>
-                  <Button size="xs" variant="light" onClick={() => setBranchType('address')}>По адресу</Button>
+                  <Button size="xs" variant={branchType === 'name' ? 'filled' : 'light'} onClick={() => setBranchType('name')}>По наименованию</Button>
+                  <Button size="xs" variant={branchType === 'address' ? 'filled' : 'light'} onClick={() => setBranchType('address')}>По адресу</Button>
                 </Group>
               </Group>
             </Box>
@@ -539,7 +539,7 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
                     size="md"
                     onClick={() => {
                       if (text.trim()) {
-                        navigate(`/search?text=${encodeURIComponent(text)}`);
+                        navigate(`/search?text=${encodeURIComponent(text)}&branchSearchType=${branchType}`);
                         handleClose();
                         clearData();
                         setText('');

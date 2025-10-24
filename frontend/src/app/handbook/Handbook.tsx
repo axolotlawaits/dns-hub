@@ -29,17 +29,17 @@ function Handbook() {
   const [tools, setTools] = useState<Tool[]>([])
   const [searchFilter, setSearchFilter] = useState<string | null>('')
   const query = searchParams.get('text')
+  const branchTypeQuery = searchParams.get('branchSearchType')
   const [cities, setCities] = useState<string[]>([])
   const [cityFilter, setCityFilter] = useState<string | null>('')
   const [positions, setPositions] = useState<string[]>([])
   const [positionFilter, setPositionFilter] = useState<string | null>('')
 
   const getSearchResults = async () => {
-    const response = await fetch(`${API}/search/all?text=${query}`)
+    const response = await fetch(`${API}/search/all?text=${query}&branchSearchType=${branchTypeQuery}`)
     const json = await response.json()
     if (response.ok) {
       setBranches(json.branches)
-      console.log(json.users)
       setEmployees(json.users)
       setTools(json.tools)
     }
