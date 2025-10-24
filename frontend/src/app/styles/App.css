@@ -168,6 +168,7 @@ a:active {
   background: transparent;
   border: 0px;
   box-sizing: border-box;
+  z-index: 1040;
 }
 
 #footer {
