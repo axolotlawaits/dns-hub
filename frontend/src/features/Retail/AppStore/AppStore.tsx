@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {  Paper,  Text,  Button,  Group,  Modal,  LoadingOverlay, Badge, ActionIcon, Select, Grid, Card, Stack, Avatar, Divider, Box, Center, Menu, Collapse, ThemeIcon } from '@mantine/core';
+import {  Paper,  Text,  Button,  Group,  Modal,  LoadingOverlay, Badge, ActionIcon, Select, Grid, Card, Stack, Avatar, Divider, Box, Center, Menu, Collapse, ThemeIcon, Progress } from '@mantine/core';
 import {  IconUpload,  IconDownload,  IconPlus,  IconEdit,  IconTrash,  IconApps, IconDeviceMobile, IconDeviceDesktop, IconTool, IconArchive, IconDots, IconCalendar, IconUsers, IconChevronDown, IconChevronUp, IconFileText } from '@tabler/icons-react';
 import { notificationSystem } from '../../../utils/Push';
 import { API } from '../../../config/constants';
@@ -46,6 +46,11 @@ const AppStore: React.FC = () => {
   const [editAppModalOpen, setEditAppModalOpen] = useState(false);
   const [uploadVersionModalOpen, setUploadVersionModalOpen] = useState(false);
   const [deleteAppModalOpen, setDeleteAppModalOpen] = useState(false);
+  const [downloadModalOpen, setDownloadModalOpen] = useState(false);
+  
+  // Состояние загрузки
+  const [downloadingApp, setDownloadingApp] = useState<string | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState(0);
 
   // Фильтры
   const [categoryFilter, setCategoryFilter] = useState<string>('');
@@ -182,7 +187,22 @@ const AppStore: React.FC = () => {
 
   // Скачивание приложения
   const handleDownload = async (appId: string) => {
+    setDownloadingApp(appId);
+    setDownloadModalOpen(true);
+    setDownloadProgress(0);
+    
     try {
+      // Симулируем прогресс загрузки
+      const progressInterval = setInterval(() => {
+        setDownloadProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(progressInterval);
+            return prev;
+          }
+          return prev + Math.random() * 10;
+        });
+      }, 200);
+      
       const response = await fetch(`${API}/retail/app-store/${appId}/download`);
       
       if (response.ok) {
@@ -195,9 +215,7 @@ const AppStore: React.FC = () => {
           const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
           if (fileNameMatch) {
             fileName = fileNameMatch[1];
-          } else {
           }
-        } else {
         }
         
         const blob = await response.blob();
@@ -210,11 +228,26 @@ const AppStore: React.FC = () => {
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
         
-        notificationSystem.addNotification('Успех', 'Приложение скачано', 'success');
+        clearInterval(progressInterval);
+        setDownloadProgress(100);
+        
+        setTimeout(() => {
+          setDownloadModalOpen(false);
+          setDownloadingApp(null);
+          setDownloadProgress(0);
+          notificationSystem.addNotification('Успех', 'Приложение скачано', 'success');
+        }, 500);
       } else {
+        clearInterval(progressInterval);
+        setDownloadModalOpen(false);
+        setDownloadingApp(null);
+        setDownloadProgress(0);
         notificationSystem.addNotification('Ошибка', 'Ошибка при скачивании', 'error');
       }
     } catch (error) {
+      setDownloadModalOpen(false);
+      setDownloadingApp(null);
+      setDownloadProgress(0);
       notificationSystem.addNotification('Ошибка', 'Ошибка при скачивании', 'error');
     }
   };
@@ -729,6 +762,41 @@ const AppStore: React.FC = () => {
             </Group>
           </Modal>
         )}
+
+        {/* Модальное окно прогресса загрузки */}
+        <Modal
+          opened={downloadModalOpen}
+          onClose={() => {}}
+          title="Загрузка приложения"
+          size="sm"
+          closeOnClickOutside={false}
+          closeOnEscape={false}
+          withCloseButton={false}
+        >
+          <Stack gap="md" align="center">
+            <ThemeIcon size={60} radius="xl" color="blue">
+              <IconDownload size={30} />
+            </ThemeIcon>
+            <Text ta="center" fw={500}>
+              Загружаем приложение...
+            </Text>
+            <Box w="100%">
+              <Progress 
+                value={downloadProgress} 
+                size="lg" 
+                radius="xl"
+                color="blue"
+                animated
+              />
+              <Text size="sm" c="dimmed" ta="center" mt="xs">
+                {Math.round(downloadProgress)}%
+              </Text>
+            </Box>
+            <Text size="sm" c="dimmed" ta="center">
+              Пожалуйста, подождите...
+            </Text>
+          </Stack>
+        </Modal>
       </Box>
     </DndProviderWrapper>
   );
