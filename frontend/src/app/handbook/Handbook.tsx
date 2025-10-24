@@ -46,7 +46,7 @@ function Handbook() {
   }
 
   const getBranches = async () => {
-    const response = await fetch(`${API}/search/branch?text=${query}&city=${cityFilter || ''}`)
+    const response = await fetch(`${API}/search/branch?text=${query}&branchSearchType=${branchTypeQuery}&city=${cityFilter || ''}`)
     const json = await response.json()
     if (response.ok) {
       setBranches(json)

@@ -38,7 +38,7 @@ export const searchAll = async (req: Request, res: Response): Promise<any>  => {
   } else if (branchSearchType === 'address') {
     branchWhere = {address: {contains: text, mode: 'insensitive'}, status: {in: [0, 1]}}
   }
-  console.log(branchSearchType, 'in all')
+
   const [branches, users, tools] = await Promise.all([
     prisma.branch.findMany({
       where: branchWhere,
@@ -96,9 +96,17 @@ export const getBranch = async (req: Request, res: Response): Promise<any>  => {
 export const searchBranches = async (req: Request, res: Response): Promise<any>  => {
   const text = req.query.text as string
   const city = (req.query.city as string) || undefined
+  const branchSearchType = req.query.branchSearchType as string 
 
+  let where
+  if (branchSearchType === 'name') {
+    where = {name: {contains: text, mode: 'insensitive'}, city, status: {in: [0, 1]}}
+  } else if (branchSearchType === 'address') {
+    where = {address: {contains: text, mode: 'insensitive'}, city, status: {in: [0, 1]}}
+  }
+  console.log(branchSearchType)
   const result = await prisma.branch.findMany({
-    where: {name: {contains: text, mode: 'insensitive'}, city: city, status: {in: [0, 1]}},
+    where,
     take: 20,
     include: {userData: true, images: true}
   })
