@@ -30,10 +30,14 @@ const createDeviceSchema = z.object({
 });
 
 const heartbeatSchema = z.object({
-  deviceId: z.string().min(1, 'deviceId обязателен'),
+  deviceId: z.string().optional(),
+  deviceName: z.string().optional(),
   appVersion: z.string().optional(),
   macAddress: z.string().optional(),
-  currentIP: z.string().optional()
+  currentIP: z.string().optional(),
+  userEmail: z.string().email().optional()
+}).refine((data) => data.deviceId || data.deviceName, {
+  message: 'deviceId или deviceName обязателен'
 });
 
 const updateDeviceIPSchema = z.object({

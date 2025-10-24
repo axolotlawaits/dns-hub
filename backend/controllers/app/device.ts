@@ -329,6 +329,8 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
       console.log(`❌ [Heartbeat] Ошибка: userEmail обязателен`);
       return res.status(400).json({ success: false, error: 'userEmail обязателен' });
     }
+    
+    console.log(`🔍 [Heartbeat] Продолжаем обработку для userEmail: ${userEmail}`);
 
     const now = Date.now();
     const nowDate = new Date(now);
