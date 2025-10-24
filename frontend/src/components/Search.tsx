@@ -21,10 +21,14 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
   const opened = externalOpened !== undefined ? externalOpened : internalOpened
   const handleClose = externalOnClose || close
   const [branchResult, setBranchResult] = useState<BranchType[]>([])
+  const [branchByAddressResult, setBranchByAddressResult] = useState<BranchType[]>([])
+  const [branchType, setBranchType] = useState('name')
   const [employeeResult, setEmployeeResult] = useState<EmployeeType[]>([])
   const [toolResult, setToolResult] = useState<Tool[]>([])
   const navigate = useNavigate()
   const [text, setText] = useState("")
+
+  let curBranchTypeData = branchType === 'name' ? branchResult : branchByAddressResult
 
   const onSearch = useCallback(async (text: string) => {
     if (!text.trim()) {
@@ -33,10 +37,11 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
     }
     
     try {
-    const response = await fetch(`${API}/search?text=${text}`)
-    const json = await response.json()
-    if (response.ok) {
+      const response = await fetch(`${API}/search?text=${text}`)
+      const json = await response.json()
+      if (response.ok) {
         setBranchResult(json.branches || [])
+        setBranchByAddressResult(json.branchesByAddress || [])
         setEmployeeResult(json.users || [])
         setToolResult(json.tools || [])
       }
@@ -127,28 +132,34 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
                 border: '1px solid var(--theme-border-primary)'
               }}
             >
-              <Group gap="md" align="center">
-                <ThemeIcon 
-                  size="lg" 
-                  color="blue" 
-                  variant="light"
-                >
-                  <IconBuilding size={20} />
-                </ThemeIcon>
-                <Text size="lg" fw={600} style={{ color: 'var(--theme-text-primary)' }}>
-                  Филиалы
-                </Text>
-                <Badge 
-                  size="lg" 
-                  variant="light" 
-                  color="blue"
-                >
-                  {branchResult.length}
-                </Badge>
+              <Group gap="md" align="center" justify="space-between">
+                <Group>
+                  <ThemeIcon 
+                    size="lg" 
+                    color="blue" 
+                    variant="light"
+                  >
+                    <IconBuilding size={20} />
+                  </ThemeIcon>
+                  <Text size="lg" fw={600} style={{ color: 'var(--theme-text-primary)' }}>
+                    Филиалы
+                  </Text>
+                  <Badge 
+                    size="lg" 
+                    variant="light" 
+                    color="blue"
+                  >
+                    {branchResult.length}
+                  </Badge>
+                </Group>
+                <Group>
+                  <Button size="xs" variant="light" onClick={() => setBranchType('name')}>По наименованию</Button>
+                  <Button size="xs" variant="light" onClick={() => setBranchType('address')}>По адресу</Button>
+                </Group>
               </Group>
             </Box>
             <Stack gap="sm">
-              {branchResult.slice(0, 3).map(branch => (
+              {curBranchTypeData.slice(0, 3).map(branch => (
                 <Card
                   key={branch.uuid}
                   radius="lg"
@@ -163,14 +174,12 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
                   }}
                   onClick={() => onResultClick(`/branch/${branch.uuid}`)}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--color-primary-300)'
-                    e.currentTarget.style.background = 'var(--color-primary-50)'
+                    e.currentTarget.style.borderColor = 'var(--color-primary-300)'                   
                     e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.15)'
                     e.currentTarget.style.transform = 'translateY(-1px)'
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.borderColor = 'var(--theme-border-primary)'
-                    e.currentTarget.style.background = 'var(--theme-bg-elevated)'
                     e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)'
                     e.currentTarget.style.transform = 'translateY(0)'
                   }}

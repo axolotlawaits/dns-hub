@@ -3,9 +3,13 @@ import { prisma } from '../../server.js';
 
 export const quickSearch = async (req: Request, res: Response): Promise<any>  => {
   const text = req.query.text as string
-  const [branches, users, tools] = await Promise.all([
+  const [branches, branchesByAddress, users, tools] = await Promise.all([
     prisma.branch.findMany({
       where: {name: {contains: text, mode: 'insensitive'}, status: {in: [0, 1]}},
+      take: 5
+    }),
+    prisma.branch.findMany({
+      where: {address: {contains: text, mode: 'insensitive'}, status: {in: [0, 1]}},
       take: 5
     }),
     prisma.userData.findMany({
@@ -17,9 +21,9 @@ export const quickSearch = async (req: Request, res: Response): Promise<any>  =>
       take: 2
     })
   ])
-
+  console.log(branches, branchesByAddress)
   if (branches) {
-    return res.status(200).json({branches, users, tools})
+    return res.status(200).json({branches, branchesByAddress, users, tools})
   }
   res.status(400).json({error: 'ошибка при поиске филиалов'})
 }
