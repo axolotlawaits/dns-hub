@@ -406,10 +406,10 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
         radius="lg"
         centered
         withCloseButton={false}
+        withOverlay={false}
         zIndex={2000}
         closeOnClickOutside
-        closeOnEscape
-        withOverlay={false}
+        closeOnEscape      
         styles={{
           content: {
             width: '100%',
@@ -433,49 +433,32 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
               }}
             >
               <Group gap="md" align="center" style={{ width: '100%' }}>
-                <ThemeIcon
-                  size="xl"
-                  color="white"
-                  variant="light"
-                  style={{
-                    background: 'rgba(255, 255, 255, 0.2)',
-                    backdropFilter: 'blur(10px)',
-                    border: '1px solid rgba(255, 255, 255, 0.3)',
-                    '@media (max-width: 768px)': {
-                      width: '40px',
-                      height: '40px'
-                    }
-                  }}
-                >
-                  <IconSearch size={24} />
-                </ThemeIcon>
                 <Box style={{ flex: 1 }}>
                   <Group justify="space-between" align="center" mb="sm">
-                    <Text 
-                      size="xl" 
-                      fw={700} 
-                      style={{ 
-                        color: 'white',
-                        '@media (max-width: 768px)': {
-                          fontSize: '18px'
-                        }
-                      }}
-                    >
-                      Поиск по системе
-                    </Text>
+                    {(branchResult.length > 0 || branchByAddressResult.length > 0 || employeeResult.length > 0 || toolResult.length > 0) && (
+                      <Button
+                        variant="outline"
+                        color="white"
+                        size="sm"
+                        onClick={() => {
+                          if (text.trim()) {
+                            navigate(`/search?text=${encodeURIComponent(text)}&branchSearchType=${branchType}`);
+                            handleClose();
+                            clearData();
+                            setText('');
+                          }
+                        }}
+                        disabled={!text.trim()}
+                      >
+                        На страницу расширенного поиска
+                      </Button>
+                    )}
                     <ActionIcon
-                      size="lg"
-                      variant="subtle"
+                      size={36}
+                      variant="outline"
                       color="white"
                       onClick={() => { handleClose(); clearData(); setText(''); }}
-                      style={{
-                        background: 'rgba(255, 255, 255, 0.2)',
-                        backdropFilter: 'blur(10px)',
-                        border: '1px solid rgba(255, 255, 255, 0.3)',
-                        '&:hover': {
-                          background: 'rgba(255, 255, 255, 0.3)'
-                        }
-                      }}
+
                     >
                       <IconX size={20} />
                     </ActionIcon>
@@ -530,36 +513,6 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
               }}
             >
               {renderSearchResults()}
-              
-              {/* Кнопка для перехода к общей странице поиска - показываем только если есть результаты */}
-              {(branchResult.length > 0 || branchByAddressResult.length > 0 || employeeResult.length > 0 || toolResult.length > 0) && (
-                <Box mt="md" style={{ textAlign: 'center' }}>
-                  <Button
-                    variant="outline"
-                    color="blue"
-                    size="md"
-                    onClick={() => {
-                      if (text.trim()) {
-                        navigate(`/search?text=${encodeURIComponent(text)}&branchSearchType=${branchType}`);
-                        handleClose();
-                        clearData();
-                        setText('');
-                      }
-                    }}
-                    disabled={!text.trim()}
-                    style={{
-                      borderColor: 'var(--color-primary-300)',
-                      color: 'var(--color-primary-600)',
-                      '&:hover': {
-                        backgroundColor: 'var(--color-primary-50)',
-                        borderColor: 'var(--color-primary-400)'
-                      }
-                    }}
-                  >
-                    Перейти к полному поиску
-                  </Button>
-                </Box>
-              )}
             </Box>
         </Box>
       </Modal>
