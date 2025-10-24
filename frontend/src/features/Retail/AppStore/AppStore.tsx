@@ -43,7 +43,9 @@ const AppStore: React.FC = () => {
   
   // Модальные окна
   const [createAppModalOpen, setCreateAppModalOpen] = useState(false);
+  const [createAppLoading, setCreateAppLoading] = useState(false);
   const [editAppModalOpen, setEditAppModalOpen] = useState(false);
+  const [editAppLoading, setEditAppLoading] = useState(false);
   const [uploadVersionModalOpen, setUploadVersionModalOpen] = useState(false);
   const [deleteAppModalOpen, setDeleteAppModalOpen] = useState(false);
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
@@ -108,6 +110,7 @@ const AppStore: React.FC = () => {
 
   // Создание приложения
   const handleCreateApp = async (values: any) => {
+    setCreateAppLoading(true);
     try {
       const response = await fetch(`${API}/retail/app-store`, {
         method: 'POST',
@@ -126,13 +129,16 @@ const AppStore: React.FC = () => {
       }
     } catch (error) {
       notificationSystem.addNotification('Ошибка', 'Ошибка при создании приложения', 'error');
+    } finally {
+      setCreateAppLoading(false);
     }
   };
 
   // Редактирование приложения
   const handleEditApp = async (values: any) => {
     if (!selectedApp) return;
-
+    
+    setEditAppLoading(true);
     try {
       const response = await fetch(`${API}/retail/app-store/${selectedApp.id}`, {
         method: 'PUT',
@@ -151,6 +157,8 @@ const AppStore: React.FC = () => {
       }
     } catch (error) {
       notificationSystem.addNotification('Ошибка', 'Ошибка при обновлении приложения', 'error');
+    } finally {
+      setEditAppLoading(false);
     }
   };
 
@@ -578,6 +586,7 @@ const AppStore: React.FC = () => {
             onClose={() => setCreateAppModalOpen(false)}
             title="Создать приложение"
             mode="create"
+            loading={createAppLoading}
             fields={[
               {
                 name: 'name',
@@ -640,6 +649,7 @@ const AppStore: React.FC = () => {
             onClose={() => setEditAppModalOpen(false)}
             title={`Редактировать приложение - ${selectedApp?.name}`}
             mode="edit"
+            loading={editAppLoading}
             fields={[
               {
                 name: 'name',

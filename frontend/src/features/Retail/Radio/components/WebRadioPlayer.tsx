@@ -149,6 +149,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
   const [musicTracks, setMusicTracks] = useState<MusicTrack[]>([]);
   const [songsPlayed, setSongsPlayed] = useState(0);
   const [isPlayingStream, setIsPlayingStream] = useState(false);
+  const [currentStreamIndex, setCurrentStreamIndex] = useState(0);
   
   // Состояние UI
   const [error, setError] = useState<string | null>(null);
@@ -309,6 +310,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     try {
       setError(null);
       
+      console.log('🔄 [WebRadioPlayer] Загружаем потоки...');
       const response = await fetch(`${API}/radio/streams`);
       if (!response.ok) {
         throw new Error('Ошибка загрузки потоков');
@@ -316,14 +318,30 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       
       const data = await response.json();
       if (data.success && data.data) {
+        console.log('✅ [WebRadioPlayer] Загружено потоков:', data.data.length);
+        console.log('📋 [WebRadioPlayer] Потоки:', data.data.map((s: RadioStream) => ({
+          id: s.id,
+          name: s.name,
+          isActive: s.isActive,
+          attachment: s.attachment
+        })));
+        
         setStreams(data.data);
+        // Сбрасываем индекс потока при загрузке новых потоков
+        setCurrentStreamIndex(0);
+        
         // Автоматически выбираем первый активный поток
-        const activeStream = data.data.find((stream: RadioStream) => stream.isActive);
-        if (activeStream) {
-          setCurrentStream(activeStream);
+        const activeStreams = data.data.filter((stream: RadioStream) => stream.isActive);
+        if (activeStreams.length > 0) {
+          const firstStream = activeStreams[0];
+          console.log('🎯 [WebRadioPlayer] Выбран первый активный поток:', firstStream.name, 'из', activeStreams.length, 'потоков');
+          setCurrentStream(firstStream);
+        } else {
+          console.log('⚠️ [WebRadioPlayer] Нет активных потоков');
         }
       }
     } catch (err) {
+      console.error('❌ [WebRadioPlayer] Ошибка загрузки потоков:', err);
       setError(err instanceof Error ? err.message : 'Неизвестная ошибка');
     }
   }, []);
@@ -454,15 +472,23 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
 
   // Логика выбора следующего трека/потока
   const findNextTrack = useCallback(() => {
-    // Проверяем, нужно ли вклинить поток (каждые 3 трека)
-    const shouldPlayStream = songsPlayed > 0 && songsPlayed % 3 === 0;
+    // Увеличиваем счетчик песен ПЕРЕД проверкой потока (как в Android версии)
+    const newSongsPlayed = songsPlayed + 1;
     
-    if (shouldPlayStream && streams.length > 0 && !isPlayingStream) {
-      // Выбираем первый активный поток
-      const activeStream = streams.find(stream => stream.isActive);
-      if (activeStream) {
-        // console.log('🎵 [WebRadioPlayer] Время для потока:', activeStream.name);
-        return { type: 'stream', content: activeStream };
+    // Проверяем, нужно ли вклинить поток (каждые 3 трека)
+    const shouldPlayStream = newSongsPlayed > 0 && newSongsPlayed % 3 === 0 && !isPlayingStream;
+    
+    console.log('🎵 [WebRadioPlayer] findNextTrack - songsPlayed:', songsPlayed, 'newSongsPlayed:', newSongsPlayed, 'shouldPlayStream:', shouldPlayStream, 'isPlayingStream:', isPlayingStream);
+    
+    if (shouldPlayStream && streams.length > 0) {
+      // Получаем только активные потоки
+      const activeStreams = streams.filter(stream => stream.isActive);
+      
+      if (activeStreams.length > 0) {
+        // Выбираем следующий поток по порядку
+        const nextStream = activeStreams[currentStreamIndex % activeStreams.length];
+        console.log('🎵 [WebRadioPlayer] Время для потока:', nextStream.name, 'индекс:', currentStreamIndex % activeStreams.length);
+        return { type: 'stream', content: nextStream };
       }
     }
     
@@ -473,13 +499,13 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       const nextTrack = musicTracks.find(track => track.index === nextIndex);
       
       if (nextTrack) {
-        // console.log('🎵 [WebRadioPlayer] Следующий трек:', nextTrack.fileName, 'индекс:', nextIndex);
+        console.log('🎵 [WebRadioPlayer] Следующий трек:', nextTrack.fileName, 'индекс:', nextIndex);
         return { type: 'track', content: nextTrack };
       }
     }
     
     return null;
-  }, [songsPlayed, streams, isPlayingStream, musicTracks, currentTrack]);
+  }, [songsPlayed, streams, isPlayingStream, musicTracks, currentTrack, currentStreamIndex]);
 
   // Воспроизведение трека
   const playTrack = useCallback(async (track: MusicTrack) => {
@@ -507,6 +533,21 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
   const playStream = useCallback(async (stream: RadioStream) => {
     if (!audioRef.current) return;
     
+    // Проверяем, что поток активен и имеет файл
+    if (!stream.isActive) {
+      console.error('❌ [WebRadioPlayer] Поток неактивен:', stream.name);
+      setError('Поток неактивен');
+      setPlaybackState('error');
+      return;
+    }
+
+    if (!stream.attachment) {
+      console.error('❌ [WebRadioPlayer] У потока нет файла:', stream.name);
+      setError('У потока нет файла для воспроизведения');
+      setPlaybackState('error');
+      return;
+    }
+
     try {
       setPlaybackState('loading');
       setCurrentStream(stream);
@@ -514,11 +555,13 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       setIsPlayingStream(true);
       
       const streamUrl = `${API}/radio/stream/${stream.id}/play`;
+      console.log('🎵 [WebRadioPlayer] Воспроизводим поток:', stream.name, 'URL:', streamUrl);
+      console.log('🎵 [WebRadioPlayer] Поток активен:', stream.isActive, 'Файл:', stream.attachment);
+      
       audioRef.current.src = streamUrl;
       await audioRef.current.play();
       setPlaybackState('playing');
       setError(null);
-      // console.log('🎵 [WebRadioPlayer] Воспроизводим поток:', stream.name);
     } catch (err) {
       console.error('❌ [WebRadioPlayer] Ошибка воспроизведения потока:', err);
       setError('Не удалось воспроизвести поток');
@@ -544,15 +587,19 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     };
 
     const handleEnded = async () => {
-      // console.log('🎵 [WebRadioPlayer] Трек/поток завершен');
+      console.log('🎵 [WebRadioPlayer] Трек/поток завершен');
       
       if (isPlayingStream) {
         // Если играл поток, сбрасываем флаг и переключаемся на музыку
-        // console.log('🎵 [WebRadioPlayer] Поток завершен, переключаемся на музыку');
+        console.log('🎵 [WebRadioPlayer] Поток завершен, переключаемся на музыку');
         setIsPlayingStream(false);
         setCurrentStream(null);
+        // Увеличиваем индекс потока для следующего воспроизведения
+        setCurrentStreamIndex(prev => prev + 1);
+        // После потока НЕ увеличиваем счетчик песен, чтобы продолжить цикл с того же места
       } else {
         // Если играл трек, увеличиваем счетчик
+        console.log('🎵 [WebRadioPlayer] Трек завершен, увеличиваем счетчик песен');
         setSongsPlayed(prev => prev + 1);
       }
       
@@ -571,26 +618,55 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
 
     const handleError = (event: any) => {
       console.error('❌ [WebRadioPlayer] Ошибка воспроизведения:', event);
-      setError('Ошибка воспроизведения аудио. Проверьте формат файла и соединение.');
+      console.error('❌ [WebRadioPlayer] Error details:', event.target?.error);
+      console.error('❌ [WebRadioPlayer] Audio src:', event.target?.src);
+      console.error('❌ [WebRadioPlayer] Audio networkState:', event.target?.networkState);
+      console.error('❌ [WebRadioPlayer] Audio readyState:', event.target?.readyState);
+      
+      let errorMessage = 'Ошибка воспроизведения аудио. Проверьте формат файла и соединение.';
+      
+      if (event.target?.error) {
+        const error = event.target.error;
+        switch (error.code) {
+          case error.MEDIA_ERR_ABORTED:
+            errorMessage = 'Воспроизведение было прервано';
+            break;
+          case error.MEDIA_ERR_NETWORK:
+            errorMessage = 'Ошибка сети при загрузке аудио';
+            break;
+          case error.MEDIA_ERR_DECODE:
+            errorMessage = 'Ошибка декодирования аудио';
+            break;
+          case error.MEDIA_ERR_SRC_NOT_SUPPORTED:
+            errorMessage = 'Формат аудио не поддерживается или файл не найден';
+            break;
+        }
+      }
+      
+      setError(errorMessage);
       setPlaybackState('error');
     };
 
     const handleStalled = () => {
-      // console.warn('⚠️ [WebRadioPlayer] Поток остановился (stalled)');
-      // Не устанавливаем ошибку, просто логируем
+      console.warn('⚠️ [WebRadioPlayer] Поток остановился (stalled)');
+      // Не меняем состояние, просто логируем - браузер попытается восстановить
     };
 
     const handleWaiting = () => {
-      // console.warn('⏳ [WebRadioPlayer] Буферизация (waiting)');
-      // Не устанавливаем ошибку, просто логируем
+      console.warn('⏳ [WebRadioPlayer] Буферизация (waiting)');
+      // Не меняем состояние, просто логируем - браузер попытается восстановить
     };
 
     const handleCanPlay = () => {
-      // console.log('✅ [WebRadioPlayer] Аудио готово к воспроизведению');
+      console.log('✅ [WebRadioPlayer] Аудио готово к воспроизведению');
+    };
+
+    const handleCanPlayThrough = () => {
+      console.log('✅ [WebRadioPlayer] Аудио готово к воспроизведению без прерываний');
     };
 
     const handleLoadStart = () => {
-      // console.log('🔄 [WebRadioPlayer] Начало загрузки аудио');
+      console.log('🔄 [WebRadioPlayer] Начало загрузки аудио');
     };
 
     audio.addEventListener('timeupdate', handleTimeUpdate);
@@ -600,6 +676,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     audio.addEventListener('stalled', handleStalled);
     audio.addEventListener('waiting', handleWaiting);
     audio.addEventListener('canplay', handleCanPlay);
+    audio.addEventListener('canplaythrough', handleCanPlayThrough);
     audio.addEventListener('loadstart', handleLoadStart);
 
     return () => {
@@ -610,6 +687,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       audio.removeEventListener('stalled', handleStalled);
       audio.removeEventListener('waiting', handleWaiting);
       audio.removeEventListener('canplay', handleCanPlay);
+      audio.removeEventListener('canplaythrough', handleCanPlayThrough);
       audio.removeEventListener('loadstart', handleLoadStart);
     };
   }, [findNextTrack, playTrack, playStream, isPlayingStream]);
@@ -658,6 +736,35 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
         console.error('❌ [WebRadioPlayer] Ошибка возобновления:', err);
         setError('Не удалось возобновить воспроизведение');
         setPlaybackState('error');
+      }
+    } else if (playbackState === 'stopped' || playbackState === 'error') {
+      // Если есть текущий поток или трек, пытаемся возобновить его
+      if (currentStream) {
+        try {
+          await playStream(currentStream);
+        } catch (err) {
+          console.error('❌ [WebRadioPlayer] Ошибка возобновления потока:', err);
+          setError('Не удалось возобновить поток');
+        }
+      } else if (currentTrack) {
+        try {
+          await playTrack(currentTrack);
+        } catch (err) {
+          console.error('❌ [WebRadioPlayer] Ошибка возобновления трека:', err);
+          setError('Не удалось возобновить трек');
+        }
+      } else {
+        // Если нет текущего контента, начинаем воспроизведение с начала
+        const nextContent = findNextTrack();
+        if (nextContent) {
+          if (nextContent.type === 'track') {
+            await playTrack(nextContent.content as MusicTrack);
+          } else if (nextContent.type === 'stream') {
+            await playStream(nextContent.content as RadioStream);
+          }
+        } else {
+          setError('Нет контента для воспроизведения');
+        }
       }
     } else {
       // Начинаем воспроизведение
@@ -948,6 +1055,8 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
         preload="auto"
         crossOrigin="anonymous"
         playsInline
+        controls={false}
+        style={{ display: 'none' }}
       />
 
       {/* Модальное окно для смены времени */}
