@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import { prisma } from '../../server.js';
+import { Prisma } from '@prisma/client';
 
 export const quickSearch = async (req: Request, res: Response): Promise<any>  => {
   const text = req.query.text as string
@@ -32,7 +33,7 @@ export const searchAll = async (req: Request, res: Response): Promise<any>  => {
   const text = req.query.text as string
   const branchSearchType = req.query.branchSearchType as string 
 
-  let branchWhere
+  let branchWhere: Prisma.BranchWhereInput | undefined
   if (branchSearchType === 'name') {
     branchWhere = {name: {contains: text, mode: 'insensitive'}, status: {in: [0, 1]}}
   } else if (branchSearchType === 'address') {
@@ -98,13 +99,13 @@ export const searchBranches = async (req: Request, res: Response): Promise<any> 
   const city = (req.query.city as string) || undefined
   const branchSearchType = req.query.branchSearchType as string 
 
-  let where
+  let where: Prisma.BranchWhereInput | undefined
   if (branchSearchType === 'name') {
     where = {name: {contains: text, mode: 'insensitive'}, city, status: {in: [0, 1]}}
   } else if (branchSearchType === 'address') {
     where = {address: {contains: text, mode: 'insensitive'}, city, status: {in: [0, 1]}}
   }
-  console.log(branchSearchType)
+
   const result = await prisma.branch.findMany({
     where,
     take: 20,
