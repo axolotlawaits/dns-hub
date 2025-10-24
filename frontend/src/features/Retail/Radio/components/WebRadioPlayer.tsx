@@ -14,7 +14,8 @@ import {
   IconPlayerPause, 
   IconClock,
   IconWifi, 
-  IconWifiOff
+  IconWifiOff,
+  IconBug
 } from '@tabler/icons-react';
 import { CustomModal } from '../../../../utils/CustomModal';
 import { API } from '../../../../config/constants';
@@ -95,7 +96,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
           const ipMatch = candidate.match(/([0-9]{1,3}(\.[0-9]{1,3}){3})/);
           if (ipMatch && !ipMatch[1].startsWith('127.') && !ipMatch[1].startsWith('169.254.')) {
             setUserIP(ipMatch[1]);
-            console.log('🌐 [WebRadioPlayer] Получен локальный IP устройства:', ipMatch[1]);
+            // console.log('🌐 [WebRadioPlayer] Получен локальный IP устройства:', ipMatch[1]);
             pc.close();
           }
         }
@@ -105,7 +106,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       setTimeout(() => {
         if (userIP === 'localhost') {
           setUserIP(window.location.hostname);
-          console.log('⚠️ [WebRadioPlayer] Используем hostname как fallback:', window.location.hostname);
+          // console.log('⚠️ [WebRadioPlayer] Используем hostname как fallback:', window.location.hostname);
         }
         pc.close();
       }, 3000);
@@ -138,8 +139,8 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
   // Состояние воспроизведения
   const [playbackState, setPlaybackState] = useState<PlaybackState>('stopped');
   const [downloadState] = useState<DownloadState>('idle');
-  const [volume] = useState(80);
-  const [isMuted] = useState(false);
+  // const [volume, setVolume] = useState(80);
+  // const [isMuted, setIsMuted] = useState(false);
   
   // Состояние контента
   const [currentStream, setCurrentStream] = useState<RadioStream | null>(null);
@@ -156,7 +157,20 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
   const [downloadedCount] = useState(0);
   const [totalFiles] = useState(0);
   
+  // Состояние для прогресс-бара
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  // const [isSeeking, setIsSeeking] = useState(false);
+  
   const audioRef = useRef<HTMLAudioElement>(null);
+
+  // Функция форматирования времени
+  const formatTime = useCallback((seconds: number): string => {
+    if (!isFinite(seconds)) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }, []);
 
   // Создание стабильного идентификатора браузера с учетом пользователя
   const getBrowserFingerprint = useCallback(() => {
@@ -227,7 +241,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       });
 
       if (response.ok) {
-        console.log('✅ [WebRadioPlayer] Успешно зарегистрирован как устройство');
+        // console.log('✅ [WebRadioPlayer] Успешно зарегистрирован как устройство');
       } else {
         console.log('⚠️ [WebRadioPlayer] Ошибка регистрации устройства:', response.status);
       }
@@ -248,7 +262,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
             if (data.success && data.folders && data.folders.length > 0) {
               // Берем первую папку (текущий месяц)
               const currentFolder = data.folders[0];
-              console.log('🎵 [WebRadioPlayer] Текущая папка с музыкой:', currentFolder.name);
+              // console.log('🎵 [WebRadioPlayer] Текущая папка с музыкой:', currentFolder.name);
               return currentFolder.name;
             }
       return null;
@@ -279,8 +293,8 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
             index: index // Добавляем индекс для сортировки
           }));
         setMusicTracks(musicTracks);
-        console.log('🎵 [WebRadioPlayer] Загружено треков:', musicTracks.length);
-        console.log('🎵 [WebRadioPlayer] Порядок треков:', musicTracks.map((t: any) => `${t.index}: ${t.fileName}`));
+        // console.log('🎵 [WebRadioPlayer] Загружено треков:', musicTracks.length);
+        // console.log('🎵 [WebRadioPlayer] Порядок треков:', musicTracks.map((t: any) => `${t.index}: ${t.fileName}`));
         return musicTracks;
       }
       return [];
@@ -339,16 +353,6 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       });
     }
   }, [registerWebPlayer, isRegistered]);
-
-
-  // Обновление громкости
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = isMuted ? 0 : volume / 100;
-    }
-  }, [volume, isMuted]);
-
-
 
   // Проверка времени работы
   const isWithinWorkingTime = useCallback((): boolean => {
@@ -430,7 +434,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
         userEmail: user.email
       };
 
-      console.log('🔍 [WebRadioPlayer] Отправляем heartbeat:', heartbeatData);
+      // console.log('🔍 [WebRadioPlayer] Отправляем heartbeat:', heartbeatData);
 
       const response = await fetch(`${API}/device/heartbeat`, {
         method: 'POST',
@@ -441,7 +445,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       });
 
       if (response.ok) {
-        console.log('💓 [WebRadioPlayer] Heartbeat отправлен');
+        // console.log('💓 [WebRadioPlayer] Heartbeat отправлен');
       }
     } catch (err) {
       console.log('⚠️ [WebRadioPlayer] Ошибка heartbeat:', err);
@@ -457,7 +461,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       // Выбираем первый активный поток
       const activeStream = streams.find(stream => stream.isActive);
       if (activeStream) {
-        console.log('🎵 [WebRadioPlayer] Время для потока:', activeStream.name);
+        // console.log('🎵 [WebRadioPlayer] Время для потока:', activeStream.name);
         return { type: 'stream', content: activeStream };
       }
     }
@@ -469,7 +473,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       const nextTrack = musicTracks.find(track => track.index === nextIndex);
       
       if (nextTrack) {
-        console.log('🎵 [WebRadioPlayer] Следующий трек:', nextTrack.fileName, 'индекс:', nextIndex);
+        // console.log('🎵 [WebRadioPlayer] Следующий трек:', nextTrack.fileName, 'индекс:', nextIndex);
         return { type: 'track', content: nextTrack };
       }
     }
@@ -491,7 +495,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       await audioRef.current.play();
       setPlaybackState('playing');
       setError(null);
-      console.log('🎵 [WebRadioPlayer] Воспроизводим трек:', track.fileName);
+      // console.log('🎵 [WebRadioPlayer] Воспроизводим трек:', track.fileName);
     } catch (err) {
       console.error('❌ [WebRadioPlayer] Ошибка воспроизведения трека:', err);
       setError('Не удалось воспроизвести трек');
@@ -514,7 +518,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       await audioRef.current.play();
       setPlaybackState('playing');
       setError(null);
-      console.log('🎵 [WebRadioPlayer] Воспроизводим поток:', stream.name);
+      // console.log('🎵 [WebRadioPlayer] Воспроизводим поток:', stream.name);
     } catch (err) {
       console.error('❌ [WebRadioPlayer] Ошибка воспроизведения потока:', err);
       setError('Не удалось воспроизвести поток');
@@ -528,19 +532,23 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     if (!audio) return;
 
     const handleTimeUpdate = () => {
-      // Обновляем время воспроизведения (пока не используется)
+      if (audio) {
+        setCurrentTime(audio.currentTime);
+      }
     };
 
     const handleLoadedMetadata = () => {
-      // Метаданные загружены
+      if (audio) {
+        setDuration(audio.duration || 0);
+      }
     };
 
     const handleEnded = async () => {
-      console.log('🎵 [WebRadioPlayer] Трек/поток завершен');
+      // console.log('🎵 [WebRadioPlayer] Трек/поток завершен');
       
       if (isPlayingStream) {
         // Если играл поток, сбрасываем флаг и переключаемся на музыку
-        console.log('🎵 [WebRadioPlayer] Поток завершен, переключаемся на музыку');
+        // console.log('🎵 [WebRadioPlayer] Поток завершен, переключаемся на музыку');
         setIsPlayingStream(false);
         setCurrentStream(null);
       } else {
@@ -568,21 +576,21 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     };
 
     const handleStalled = () => {
-      console.warn('⚠️ [WebRadioPlayer] Поток остановился (stalled)');
+      // console.warn('⚠️ [WebRadioPlayer] Поток остановился (stalled)');
       // Не устанавливаем ошибку, просто логируем
     };
 
     const handleWaiting = () => {
-      console.warn('⏳ [WebRadioPlayer] Буферизация (waiting)');
+      // console.warn('⏳ [WebRadioPlayer] Буферизация (waiting)');
       // Не устанавливаем ошибку, просто логируем
     };
 
     const handleCanPlay = () => {
-      console.log('✅ [WebRadioPlayer] Аудио готово к воспроизведению');
+      // console.log('✅ [WebRadioPlayer] Аудио готово к воспроизведению');
     };
 
     const handleLoadStart = () => {
-      console.log('🔄 [WebRadioPlayer] Начало загрузки аудио');
+      // console.log('🔄 [WebRadioPlayer] Начало загрузки аудио');
     };
 
     audio.addEventListener('timeupdate', handleTimeUpdate);
@@ -620,7 +628,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
   // Контроль активности вкладки - останавливаем плеер при переключении
   useEffect(() => {
     if (!isActive && playbackState === 'playing') {
-      console.log('🔄 [WebRadioPlayer] Вкладка неактивна, останавливаем плеер');
+      // console.log('🔄 [WebRadioPlayer] Вкладка неактивна, останавливаем плеер');
       setPlaybackState('paused');
       if (audioRef.current) {
         audioRef.current.pause();
@@ -714,11 +722,12 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
                 {new Date().toLocaleDateString('ru-RU', { 
                   month: 'long', 
                   year: 'numeric' 
-                })}
+                })} 
               </Text>
               <Text size="sm" c="dimmed" style={{ fontFamily: 'var(--font-family-primary)' }}>
                 {new Date().toLocaleDateString('ru-RU')}
               </Text>
+
             </Box>
           </Group>
           
@@ -822,6 +831,26 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
             )}
           </Box>
 
+          {/* Прогресс воспроизведения */}
+          {duration > 0 && (
+            <Box style={{ width: '100%', maxWidth: '400px' }}>
+              <Progress 
+                value={(currentTime / duration) * 100} 
+                size="md" 
+                radius="xl"
+                style={{ marginBottom: 'var(--space-2)' }}
+              />
+              <Group justify="space-between" gap="xs">
+                <Text size="xs" c="dimmed">
+                  {formatTime(currentTime)}
+                </Text>
+                <Text size="xs" c="dimmed">
+                  {formatTime(duration)}
+                </Text>
+              </Group>
+            </Box>
+          )}
+
           {/* Прогресс загрузки */}
           {downloadState === 'downloading' && (
             <Box style={{ width: '100%', maxWidth: '300px' }}>
@@ -879,9 +908,15 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
                 {isWithinWorkingTime() ? 'Рабочее время' : 'Вне рабочего времени'}
               </Text>
             </Group>
+            <Group gap="xs" align="center">
+              <IconBug size={14} color="var(--theme-text-secondary)" />
+              <Text size="xs" c="dimmed">
+                Версия: 1.1.3
+              </Text>
+            </Group>
             {downloadState === 'complete' && (
               <Text size="xs" c="dimmed">
-                Готово: {downloadedCount} файлов
+                Готово: {downloadedCount} файлов • v1.1.3
               </Text>
             )}
           </Box>

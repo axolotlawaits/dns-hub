@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import {Container,Title,Paper,Text,Button,Group,Stack,Modal,LoadingOverlay, Tabs, Box, Progress, Badge} from '@mantine/core';
 import { TimeInput } from '@mantine/dates';
-import {  IconUpload,  IconMusic,  IconClock,  IconDeviceMobile,  IconBuilding, IconEdit, IconCheck, IconRefresh, IconPower, IconBattery, IconWifi, IconCalendar, IconPlayerPlay, IconPlayerPause, IconWifiOff, IconX, IconRadio, IconDownload, IconAlertCircle, IconChevronDown, IconChevronRight, IconChevronsDown, IconChevronsUp, IconSearch } from '@tabler/icons-react';
+import {  IconUpload,  IconMusic,  IconClock,  IconDeviceMobile,  IconBuilding, IconEdit, IconCheck, IconRefresh, IconPower, IconBattery, IconWifi, IconCalendar, IconPlayerPlay, IconPlayerPause, IconWifiOff, IconX, IconRadio, IconDownload, IconAlertCircle, IconChevronDown, IconChevronRight, IconChevronsDown, IconChevronsUp, IconSearch, IconTrash } from '@tabler/icons-react';
 import { notificationSystem } from '../../../utils/Push';
 import { API } from '../../../config/constants';
 import { DynamicFormModal, FormField } from '../../../utils/formModal';
@@ -588,27 +588,54 @@ const RadioAdmin: React.FC = () => {
     try {
       // Используем devices-status-ping для реального статуса через WebSocket
       const statusResp = await axios.get(`${API_BASE}/devices-status-ping`);
-      console.log('📊 [Radio] Полный ответ статусов:', statusResp.data);
+      // console.log('📊 [Radio] Полный ответ статусов:', statusResp.data);
       const arr = (statusResp.data && statusResp.data.data) ? statusResp.data.data : [];
-      console.log('📊 [Radio] Массив статусов:', arr);
-      console.log('📊 [Radio] Размер массива:', arr.length);
+      // console.log('📊 [Radio] Массив статусов:', arr);
+      // console.log('📊 [Radio] Размер массива:', arr.length);
       
       const sm: Record<string, boolean> = {};
       for (const item of arr) {
         sm[item.deviceId] = !!item.online;
         // Логируем первые 10 устройств
-        if (Object.keys(sm).length <= 10) {
-          console.log(`📊 [Radio] Device ${item.deviceId}: online=${item.online}`);
-        }
+        // if (Object.keys(sm).length <= 10) {
+        //   console.log(`📊 [Radio] Device ${item.deviceId}: online=${item.online}`);
+        // }
       }
       
       setStatusMap(sm);
-      console.log('📊 [Radio] Статусы устройств обновлены:', Object.values(sm).filter(Boolean).length, 'онлайн из', Object.keys(sm).length);
-      console.log('📊 [Radio] Созданный statusMap:', sm);
+      // console.log('📊 [Radio] Статусы устройств обновлены:', Object.values(sm).filter(Boolean).length, 'онлайн из', Object.keys(sm).length);
+      // console.log('📊 [Radio] Созданный statusMap:', sm);
     } catch (e) {
       console.error('❌ [Radio] Ошибка загрузки статусов устройств:', e);
     }
   }, []);
+
+  // Функция для удаления устройства
+  const deleteDevice = useCallback(async (deviceId: string) => {
+    try {
+      await axios.delete(`${API_BASE}/device/${deviceId}`);
+      notificationSystem.addNotification('Успешно', 'Устройство успешно удалено', 'success');
+      // Перезагружаем данные - будет определена позже
+      window.location.reload();
+    } catch (error) {
+      console.error('❌ [Radio] Ошибка удаления устройства:', error);
+      notificationSystem.addNotification('Ошибка', 'Ошибка удаления устройства', 'error');
+    }
+  }, []);
+
+  // Функция для обновления статуса устройства
+  const refreshDeviceStatus = useCallback(async (deviceId: string) => {
+    try {
+      // Отправляем ping конкретному устройству
+      await axios.post(`${API_BASE}/device/${deviceId}/ping`);
+      notificationSystem.addNotification('Успешно', 'Статус устройства обновлен', 'success');
+      // Перезагружаем статусы
+      await loadDeviceStatuses();
+    } catch (error) {
+      console.error('❌ [Radio] Ошибка обновления статуса устройства:', error);
+      notificationSystem.addNotification('Ошибка', 'Ошибка обновления статуса устройства', 'error');
+    }
+  }, [loadDeviceStatuses]);
 
   const loadData = useCallback(async () => {
     try {
@@ -665,12 +692,12 @@ const RadioAdmin: React.FC = () => {
       await loadDeviceStatuses();
       
       // Логируем после загрузки статусов
-      console.log('🔍 [Radio] После загрузки статусов - branchesWithDevices.length:', mapped.length);
-      console.log('🔍 [Radio] После загрузки статусов - всего устройств:', mapped.reduce((total, branch) => total + branch.devices.length, 0));
+      // console.log('🔍 [Radio] После загрузки статусов - branchesWithDevices.length:', mapped.length);
+      // console.log('🔍 [Radio] После загрузки статусов - всего устройств:', mapped.reduce((total, branch) => total + branch.devices.length, 0));
 
       const sd = (statsResponse.data && statsResponse.data.data) ? statsResponse.data.data : {};
-      console.log('Stats response:', statsResponse.data);
-      console.log('Stats data:', sd);
+      // console.log('Stats response:', statsResponse.data);
+      // console.log('Stats data:', sd);
       setStats({
         totalDevices: sd.totalDevices ?? 0,
         activeDevices: sd.activeDevices ?? 0,
@@ -2058,10 +2085,10 @@ const RadioAdmin: React.FC = () => {
                           >
                             {(() => {
                               const active = currentBranchDevices.filter(device => statusMap[device.id]).length;
-                              const total = currentBranchDevices.length;
-                              console.log('🔍 [Radio] Активные устройства:', active, 'из', total, 'total');
-                              console.log('🔍 [Radio] statusMap:', statusMap);
-                              console.log('🔍 [Radio] currentBranchDevices count:', currentBranchDevices.length);
+                              // const total = currentBranchDevices.length;
+                              // console.log('🔍 [Radio] Активные устройства:', active, 'из', total, 'total');
+                              // console.log('🔍 [Radio] statusMap:', statusMap);
+                              // console.log('🔍 [Radio] currentBranchDevices count:', currentBranchDevices.length);
                               return active;
                             })()}
                           </Text>
@@ -2388,11 +2415,47 @@ const RadioAdmin: React.FC = () => {
                                     {online ? 'Онлайн' : 'Оффлайн'}
                                   </Badge>
                                   
-                                    <Text size="xs" style={{ color: 'var(--theme-text-secondary)' }}>
+                                  <Text size="xs" style={{ color: 'var(--theme-text-secondary)' }}>
                                     {formatTime(device.timeFrom)} - {formatTime(device.timeUntil)}
                                   </Text>
                                   
+                                  <Group gap="xs">
+                                    {/* Кнопка обновления статуса - только для не веб-плееров */}
+                                    {device.vendor !== 'Web Browser' && (
+                                      <Button
+                                        size="xs"
+                                        variant="subtle"
+                                        color="blue"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          refreshDeviceStatus(device.id);
+                                        }}
+                                        title="Обновить статус"
+                                      >
+                                        <IconRefresh size={14} />
+                                      </Button>
+                                    )}
+                                    
+                                    {/* Кнопка удаления - только для оффлайн устройств */}
+                                    {!online && (
+                                      <Button
+                                        size="xs"
+                                        variant="subtle"
+                                        color="red"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (window.confirm(`Вы уверены, что хотите удалить устройство "${device.name}"?`)) {
+                                            deleteDevice(device.id);
+                                          }
+                                        }}
+                                        title="Удалить устройство"
+                                      >
+                                        <IconTrash size={14} />
+                                      </Button>
+                                    )}
+                                    
                                     <IconEdit size={16} style={{ color: 'var(--theme-text-secondary)' }} />
+                                  </Group>
                                 </Group>
                               </Group>
                             </div>

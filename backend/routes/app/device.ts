@@ -76,4 +76,10 @@ router.get('/all', getAllDevices);
 // Удаление устройства
 router.delete('/:id', deleteDevice);
 
+// Ping устройства для обновления статуса
+router.post('/:id/ping', (req, res) => {
+  // Просто возвращаем успех, так как ping логика уже есть в socketio
+  res.json({ success: true, message: 'Ping sent' });
+});
+
 export default router;

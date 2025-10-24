@@ -318,7 +318,7 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
   try {
     const { deviceId, deviceName, appVersion, macAddress, currentIP, userEmail } = req.body || {};
     
-    console.log(`🔍 [Heartbeat] Получен запрос:`, { deviceId, deviceName, userEmail, macAddress });
+    // console.log(`🔍 [Heartbeat] Получен запрос:`, { deviceId, deviceName, userEmail, macAddress });
     
     if (!deviceId && !deviceName) {
       console.log(`❌ [Heartbeat] Ошибка: deviceId или deviceName обязателен`);
@@ -330,17 +330,18 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
       return res.status(400).json({ success: false, error: 'userEmail обязателен' });
     }
     
-    console.log(`🔍 [Heartbeat] Продолжаем обработку для userEmail: ${userEmail}`);
+    // console.log(`🔍 [Heartbeat] Продолжаем обработку для userEmail: ${userEmail}`);
 
     const now = Date.now();
     const nowDate = new Date(now);
     
-    // Определяем deviceId для heartbeat store
-    const storeKey = deviceId || deviceName;
+    // Определяем ключ для heartbeat store
+    // Для веб-плеера используем deviceName, для обычных устройств - deviceId
+    const storeKey = deviceName || deviceId;
     
     // Обновляем heartbeat store (для быстрого доступа)
     heartbeatStore.set(storeKey, now);
-    // Логирование heartbeat отключено для уменьшения количества логов
+    // console.log(`💓 [Heartbeat] Сохраняем в heartbeatStore: key="${storeKey}", time=${now}`);
 
     // Подготавливаем данные для обновления
     const updateData: any = { lastSeen: nowDate };
@@ -379,29 +380,29 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
       // Получаем branchId пользователя из базы
       let userBranchId = null;
       if (updateData.userEmail) {
-        console.log(`🔍 [Heartbeat] Ищем пользователя по email: ${updateData.userEmail}`);
+        // console.log(`🔍 [Heartbeat] Ищем пользователя по email: ${updateData.userEmail}`);
         const user = await prisma.user.findUnique({
           where: { email: updateData.userEmail },
           select: { branch: true }
         });
-        console.log(`🔍 [Heartbeat] Найденный пользователь:`, user);
+        // console.log(`🔍 [Heartbeat] Найденный пользователь:`, user);
         if (user?.branch) {
           const branch = await prisma.branch.findFirst({
             where: { name: user.branch },
             select: { uuid: true }
           });
           userBranchId = branch?.uuid || null;
-          console.log(`🔍 [Heartbeat] Найденный филиал:`, branch);
+          // console.log(`🔍 [Heartbeat] Найденный филиал:`, branch);
         }
       }
-      console.log(`🔍 [Heartbeat] userBranchId: ${userBranchId}`);
+      // console.log(`🔍 [Heartbeat] userBranchId: ${userBranchId}`);
       
       // Ищем существующее устройство по приоритету
       let existingDevice = null;
       
       // Для веб-плеера ищем только по userEmail + branchId + vendor
       if (updateData.userEmail && userBranchId) {
-        console.log(`🔍 [Heartbeat] Поиск по userEmail + branchId + vendor: email=${updateData.userEmail}, branchId=${userBranchId}`);
+        // console.log(`🔍 [Heartbeat] Поиск по userEmail + branchId + vendor: email=${updateData.userEmail}, branchId=${userBranchId}`);
         existingDevice = await prisma.devices.findFirst({
           where: {
             userEmail: updateData.userEmail,
@@ -409,24 +410,24 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
             vendor: 'Web Browser'
           }
         });
-        console.log(`🔍 [Heartbeat] Результат поиска по userEmail + branchId + vendor:`, existingDevice ? 'найдено' : 'не найдено');
+        // console.log(`🔍 [Heartbeat] Результат поиска по userEmail + branchId + vendor:`, existingDevice ? 'найдено' : 'не найдено');
       }
       
       // Для обычных устройств ищем по deviceId или macAddress
       if (!existingDevice && deviceId) {
-        console.log(`🔍 [Heartbeat] Поиск по deviceId: ${deviceId}`);
+        // console.log(`🔍 [Heartbeat] Поиск по deviceId: ${deviceId}`);
         existingDevice = await prisma.devices.findUnique({
           where: { id: deviceId }
         });
-        console.log(`🔍 [Heartbeat] Результат поиска по deviceId:`, existingDevice ? 'найдено' : 'не найдено');
+        // console.log(`🔍 [Heartbeat] Результат поиска по deviceId:`, existingDevice ? 'найдено' : 'не найдено');
       }
       
       if (!existingDevice && updateData.macAddress && !updateData.macAddress.startsWith('web-')) {
-        console.log(`🔍 [Heartbeat] Поиск по macAddress: ${updateData.macAddress}`);
+        // console.log(`🔍 [Heartbeat] Поиск по macAddress: ${updateData.macAddress}`);
         existingDevice = await prisma.devices.findFirst({
           where: { macAddress: updateData.macAddress }
         });
-        console.log(`🔍 [Heartbeat] Результат поиска по macAddress:`, existingDevice ? 'найдено' : 'не найдено');
+        // console.log(`🔍 [Heartbeat] Результат поиска по macAddress:`, existingDevice ? 'найдено' : 'не найдено');
       }
 
       if (existingDevice) {
@@ -451,7 +452,7 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
               data: updateData
             });
             
-            console.log(`✅ [Heartbeat] Web player updated: ${updateDeviceId}`);
+            // console.log(`✅ [Heartbeat] Web player updated: ${updateDeviceId}`);
           }
         } else {
           // Для обычных устройств проверяем только deviceId
@@ -465,7 +466,7 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
               data: updateData
             });
             
-            console.log(`✅ [Heartbeat] Device updated: ${updateDeviceId}`);
+            // console.log(`✅ [Heartbeat] Device updated: ${updateDeviceId}`);
           }
         }
       }
@@ -477,7 +478,7 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
           return res.status(400).json({ success: false, error: 'userEmail required for new device' });
         }
         
-        console.log(`🆕 [Heartbeat] Создаем новое устройство для deviceName: ${deviceName || deviceId}`);
+        // console.log(`🆕 [Heartbeat] Создаем новое устройство для deviceName: ${deviceName || deviceId}`);
         
         // Сначала находим первый доступный branchId
         const firstBranch = await prisma.branch.findFirst({
@@ -504,17 +505,17 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
           lastSeen: updateData.lastSeen
         };
 
-        console.log(`🆕 [Heartbeat] Данные для создания устройства:`, newDeviceData);
+        // console.log(`🆕 [Heartbeat] Данные для создания устройства:`, newDeviceData);
         
         try {
           await prisma.devices.create({
             data: newDeviceData
           });
-          console.log(`✅ [Heartbeat] Устройство создано успешно: ${deviceId}`);
+          // console.log(`✅ [Heartbeat] Устройство создано успешно: ${deviceId}`);
         } catch (createError: any) {
           if (createError.code === 'P2002' && createError.meta?.target?.includes('id')) {
             // Устройство с таким ID уже существует, попробуем найти и обновить его
-            console.log(`🔄 [Heartbeat] Устройство уже существует, ищем по deviceName: ${deviceName}`);
+            // console.log(`🔄 [Heartbeat] Устройство уже существует, ищем по deviceName: ${deviceName}`);
             const foundDevice = await prisma.devices.findFirst({
               where: {
                 name: deviceName,
@@ -529,7 +530,7 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
                 where: { id: foundDevice.id },
                 data: updateData
               });
-              console.log(`✅ [Heartbeat] Устройство обновлено: ${foundDevice.id}`);
+              // console.log(`✅ [Heartbeat] Устройство обновлено: ${foundDevice.id}`);
             } else {
               console.warn(`⚠️ [Heartbeat] Устройство не найдено для обновления: ${deviceName}`);
             }

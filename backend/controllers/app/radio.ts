@@ -366,7 +366,7 @@ export const getDevicesStatusPing = async (req: Request, res: Response) => {
     const where: any = {};
     if (branchId) where.branchId = String(branchId);
 
-    const devices = await prisma.devices.findMany({ where, select: { id: true, branchId: true, vendor: true } });
+    const devices = await prisma.devices.findMany({ where, select: { id: true, branchId: true, vendor: true, name: true } });
     const deviceIds = devices.map(d => d.id);
 
     const socketService = SocketIOService.getInstance();
@@ -382,9 +382,12 @@ export const getDevicesStatusPing = async (req: Request, res: Response) => {
       
       if (isWebPlayer) {
         // Для веб плеера используем heartbeatStore
-        const lastSeenMem = heartbeatStore.get(d.id);
+        // Ищем по deviceName, так как веб-плеер сохраняется в heartbeatStore по deviceName
+        const deviceName = d.name || `DNS Radio Web (${d.id})`;
+        const lastSeenMem = heartbeatStore.get(deviceName);
         const timeDiff = lastSeenMem ? (now - lastSeenMem) : null;
         const online = lastSeenMem ? (timeDiff! <= ONLINE_THRESHOLD_MS) : false;
+        // console.log(`🔍 [getDevicesStatusPing] Web player ${d.id} (${deviceName}): lastSeen=${lastSeenMem}, timeDiff=${timeDiff}, online=${online}`);
         return { deviceId: d.id, branchId: d.branchId, online, rttMs: null, source: 'heartbeat' };
       } else {
         // Для обычных устройств используем WebSocket ping
