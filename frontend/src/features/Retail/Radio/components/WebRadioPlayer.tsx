@@ -158,9 +158,14 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
   
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  // Создание стабильного идентификатора браузера
+  // Создание стабильного идентификатора браузера с учетом пользователя
   const getBrowserFingerprint = useCallback(() => {
-    const storageKey = 'dns-radio-web-player-id';
+    if (!user?.email) {
+      console.warn('Пользователь не найден, не можем создать уникальный ID');
+      return 'web-unknown';
+    }
+    
+    const storageKey = `dns-radio-web-player-id-${user.email}`;
     let browserId: string | null = null;
     
     try {
@@ -170,8 +175,9 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     }
     
     if (!browserId) {
-      // Создаем уникальный идентификатор на основе характеристик браузера
+      // Создаем уникальный идентификатор на основе характеристик браузера + пользователя
       const fingerprint = [
+        user.email, // Добавляем email пользователя для уникальности
         navigator.userAgent,
         navigator.language,
         screen.width + 'x' + screen.height,
@@ -201,7 +207,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     }
     
     return browserId;
-  }, []);
+  }, [user?.email]);
 
   // Регистрация веб-плеера как устройства
   const registerWebPlayer = useCallback(async () => {

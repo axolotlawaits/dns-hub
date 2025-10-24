@@ -492,11 +492,24 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
 
         console.log(`🆕 [Heartbeat] Данные для создания устройства:`, newDeviceData);
         
-        await prisma.devices.create({
-          data: newDeviceData
-        });
-        
-        console.log(`✅ [Heartbeat] Устройство создано успешно: ${deviceId}`);
+        try {
+          await prisma.devices.create({
+            data: newDeviceData
+          });
+          console.log(`✅ [Heartbeat] Устройство создано успешно: ${deviceId}`);
+        } catch (createError: any) {
+          if (createError.code === 'P2002' && createError.meta?.target?.includes('id')) {
+            // Устройство с таким ID уже существует, попробуем обновить его
+            console.log(`🔄 [Heartbeat] Устройство с ID ${deviceId} уже существует, обновляем...`);
+            await prisma.devices.update({
+              where: { id: deviceId },
+              data: updateData
+            });
+            console.log(`✅ [Heartbeat] Устройство обновлено: ${deviceId}`);
+          } else {
+            throw createError;
+          }
+        }
       }
     } catch (error) {
       console.error('[Device] Error updating/creating device in heartbeat:', error);
