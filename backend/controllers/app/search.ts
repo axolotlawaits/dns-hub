@@ -3,9 +3,13 @@ import { prisma } from '../../server.js';
 
 export const quickSearch = async (req: Request, res: Response): Promise<any>  => {
   const text = req.query.text as string
-  const [branches, users, tools] = await Promise.all([
+  const [branches, branchesByAddress, users, tools] = await Promise.all([
     prisma.branch.findMany({
       where: {name: {contains: text, mode: 'insensitive'}, status: {in: [0, 1]}},
+      take: 5
+    }),
+    prisma.branch.findMany({
+      where: {address: {contains: text, mode: 'insensitive'}, status: {in: [0, 1]}},
       take: 5
     }),
     prisma.userData.findMany({
@@ -19,16 +23,25 @@ export const quickSearch = async (req: Request, res: Response): Promise<any>  =>
   ])
 
   if (branches) {
-    return res.status(200).json({branches, users, tools})
+    return res.status(200).json({branches, branchesByAddress, users, tools})
   }
   res.status(400).json({error: 'ошибка при поиске филиалов'})
 }
 
 export const searchAll = async (req: Request, res: Response): Promise<any>  => {
   const text = req.query.text as string
+  const branchSearchType = req.query.branchSearchType as string 
+
+  let branchWhere
+  if (branchSearchType === 'name') {
+    branchWhere = {name: {contains: text, mode: 'insensitive'}, status: {in: [0, 1]}}
+  } else if (branchSearchType === 'address') {
+    branchWhere = {address: {contains: text, mode: 'insensitive'}, status: {in: [0, 1]}}
+  }
+
   const [branches, users, tools] = await Promise.all([
     prisma.branch.findMany({
-      where: {name: {contains: text, mode: 'insensitive'}, status: {in: [0, 1]}},
+      where: branchWhere,
       include: {userData: true, images: true},
       take: 10
     }),
@@ -83,10 +96,18 @@ export const getBranch = async (req: Request, res: Response): Promise<any>  => {
 export const searchBranches = async (req: Request, res: Response): Promise<any>  => {
   const text = req.query.text as string
   const city = (req.query.city as string) || undefined
+  const branchSearchType = req.query.branchSearchType as string 
 
+  let where
+  if (branchSearchType === 'name') {
+    where = {name: {contains: text, mode: 'insensitive'}, city, status: {in: [0, 1]}}
+  } else if (branchSearchType === 'address') {
+    where = {address: {contains: text, mode: 'insensitive'}, city, status: {in: [0, 1]}}
+  }
+  console.log(branchSearchType)
   const result = await prisma.branch.findMany({
-    where: {name: {contains: text, mode: 'insensitive'}, city: city, status: {in: [0, 1]}},
-    take: 10,
+    where,
+    take: 20,
     include: {userData: true, images: true}
   })
   if (result) {
@@ -129,7 +150,7 @@ export const searchEmployees = async (req: Request, res: Response): Promise<any>
 
   const employees = await prisma.userData.findMany({
     where: {fio: {contains: text, mode: 'insensitive'}, position: {name: positionName}},
-    take: 10,
+    take: 20,
     include: {branch: true, position: true}
   })
   if (employees) {

@@ -29,24 +29,24 @@ function Handbook() {
   const [tools, setTools] = useState<Tool[]>([])
   const [searchFilter, setSearchFilter] = useState<string | null>('')
   const query = searchParams.get('text')
+  const branchTypeQuery = searchParams.get('branchSearchType')
   const [cities, setCities] = useState<string[]>([])
   const [cityFilter, setCityFilter] = useState<string | null>('')
   const [positions, setPositions] = useState<string[]>([])
   const [positionFilter, setPositionFilter] = useState<string | null>('')
 
   const getSearchResults = async () => {
-    const response = await fetch(`${API}/search/all?text=${query}`)
+    const response = await fetch(`${API}/search/all?text=${query}&branchSearchType=${branchTypeQuery}`)
     const json = await response.json()
     if (response.ok) {
       setBranches(json.branches)
-      console.log(json.users)
       setEmployees(json.users)
       setTools(json.tools)
     }
   }
 
   const getBranches = async () => {
-    const response = await fetch(`${API}/search/branch?text=${query}&city=${cityFilter || ''}`)
+    const response = await fetch(`${API}/search/branch?text=${query}&branchSearchType=${branchTypeQuery}&city=${cityFilter || ''}`)
     const json = await response.json()
     if (response.ok) {
       setBranches(json)
@@ -106,12 +106,12 @@ function Handbook() {
     getSearchResults()
   }
   return (
-    <Box p="xl" style={{ maxWidth: '1400px', margin: '0 auto' }}>
-      <Stack gap="xl">
+    <Box  style={{ maxWidth: '1400px', margin: '0 auto' }}>
+      <Stack gap="md">
         {/* Заголовок */}
         <Paper
           radius="lg"
-          p="xl"
+          p={20}
           style={{
             background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, rgba(255, 255, 255, 0.05) 100%)',
             border: '1px solid var(--theme-border-primary)',
@@ -119,10 +119,10 @@ function Handbook() {
           }}
         >
           <Group gap="md" align="center" mb="md">
-            <ThemeIcon size="xl" color="blue" variant="light">
-              <IconSearch size={28} />
+            <ThemeIcon size="lg" color="blue" variant="light">
+              <IconSearch size={22} />
             </ThemeIcon>
-            <Title order={1} style={{ color: 'var(--theme-text-primary)' }}>
+            <Title size={26} order={1} style={{ color: 'var(--theme-text-primary)' }}>
               Поиск по системе
             </Title>
           </Group>
@@ -132,13 +132,13 @@ function Handbook() {
           </Text>
           
           <Group gap="md">
-            <Badge size="lg" variant="light" color="blue" leftSection={<IconTool size={16} />}>
+            <Badge size="md" variant="light" color="blue" leftSection={<IconTool size={16} />}>
               Инструменты: {tools.length}
             </Badge>
-            <Badge size="lg" variant="light" color="green" leftSection={<IconBuilding size={16} />}>
+            <Badge size="md" variant="light" color="green" leftSection={<IconBuilding size={16} />}>
               Филиалы: {branches.length}
             </Badge>
-            <Badge size="lg" variant="light" color="orange" leftSection={<IconUsers size={16} />}>
+            <Badge size="md" variant="light" color="orange" leftSection={<IconUsers size={16} />}>
               Сотрудники: {employees.length}
             </Badge>
           </Group>
@@ -147,7 +147,7 @@ function Handbook() {
         {/* Фильтры */}
         <Paper
           radius="lg"
-          p="xl"
+          p={20}
           style={{
             background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, rgba(255, 255, 255, 0.05) 100%)',
             border: '1px solid var(--theme-border-primary)',
@@ -263,7 +263,7 @@ function Handbook() {
         {branches.length > 0 && (
           <Paper
             radius="lg"
-            p="xl"
+            p={20}
             style={{
               background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, rgba(255, 255, 255, 0.05) 100%)',
               border: '1px solid var(--theme-border-primary)',

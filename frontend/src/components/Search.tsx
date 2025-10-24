@@ -21,10 +21,14 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
   const opened = externalOpened !== undefined ? externalOpened : internalOpened
   const handleClose = externalOnClose || close
   const [branchResult, setBranchResult] = useState<BranchType[]>([])
+  const [branchByAddressResult, setBranchByAddressResult] = useState<BranchType[]>([])
+  const [branchType, setBranchType] = useState('name')
   const [employeeResult, setEmployeeResult] = useState<EmployeeType[]>([])
   const [toolResult, setToolResult] = useState<Tool[]>([])
   const navigate = useNavigate()
   const [text, setText] = useState("")
+
+  let curBranchTypeData = branchType === 'name' ? branchResult : branchByAddressResult
 
   const onSearch = useCallback(async (text: string) => {
     if (!text.trim()) {
@@ -33,10 +37,11 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
     }
     
     try {
-    const response = await fetch(`${API}/search?text=${text}`)
-    const json = await response.json()
-    if (response.ok) {
+      const response = await fetch(`${API}/search?text=${text}`)
+      const json = await response.json()
+      if (response.ok) {
         setBranchResult(json.branches || [])
+        setBranchByAddressResult(json.branchesByAddress || [])
         setEmployeeResult(json.users || [])
         setToolResult(json.tools || [])
       }
@@ -54,13 +59,14 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
 
   const clearData = useCallback(() => {
     setBranchResult([])
+    setBranchByAddressResult([])
     setEmployeeResult([])
     setToolResult([])
   }, [])
 
 
   const renderSearchResults = () => {
-    const hasResults = branchResult.length > 0 || employeeResult.length > 0 || toolResult.length > 0
+    const hasResults = branchResult.length > 0 || branchByAddressResult.length > 0 || employeeResult.length > 0 || toolResult.length > 0
     
     if (!hasResults && text) {
       return (
@@ -116,7 +122,7 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
 
     return (
       <Stack gap="lg">
-        {branchResult.length > 0 && (
+        {(branchResult.length > 0 || branchByAddressResult.length  > 0) && (
           <Box>
             <Box
               style={{
@@ -127,28 +133,34 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
                 border: '1px solid var(--theme-border-primary)'
               }}
             >
-              <Group gap="md" align="center">
-                <ThemeIcon 
-                  size="lg" 
-                  color="blue" 
-                  variant="light"
-                >
-                  <IconBuilding size={20} />
-                </ThemeIcon>
-                <Text size="lg" fw={600} style={{ color: 'var(--theme-text-primary)' }}>
-                  Филиалы
-                </Text>
-                <Badge 
-                  size="lg" 
-                  variant="light" 
-                  color="blue"
-                >
-                  {branchResult.length}
-                </Badge>
+              <Group gap="md" align="center" justify="space-between">
+                <Group>
+                  <ThemeIcon 
+                    size="lg" 
+                    color="blue" 
+                    variant="light"
+                  >
+                    <IconBuilding size={20} />
+                  </ThemeIcon>
+                  <Text size="lg" fw={600} style={{ color: 'var(--theme-text-primary)' }}>
+                    Филиалы
+                  </Text>
+                  <Badge 
+                    size="lg" 
+                    variant="light" 
+                    color="blue"
+                  >
+                    {curBranchTypeData.length}
+                  </Badge>
+                </Group>
+                <Group>
+                  <Button size="xs" variant={branchType === 'name' ? 'filled' : 'light'} onClick={() => setBranchType('name')}>По наименованию</Button>
+                  <Button size="xs" variant={branchType === 'address' ? 'filled' : 'light'} onClick={() => setBranchType('address')}>По адресу</Button>
+                </Group>
               </Group>
             </Box>
             <Stack gap="sm">
-              {branchResult.slice(0, 3).map(branch => (
+              {curBranchTypeData.slice(0, 3).map(branch => (
                 <Card
                   key={branch.uuid}
                   radius="lg"
@@ -163,14 +175,12 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
                   }}
                   onClick={() => onResultClick(`/branch/${branch.uuid}`)}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--color-primary-300)'
-                    e.currentTarget.style.background = 'var(--color-primary-50)'
+                    e.currentTarget.style.borderColor = 'var(--color-primary-300)'                   
                     e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.15)'
                     e.currentTarget.style.transform = 'translateY(-1px)'
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.borderColor = 'var(--theme-border-primary)'
-                    e.currentTarget.style.background = 'var(--theme-bg-elevated)'
                     e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)'
                     e.currentTarget.style.transform = 'translateY(0)'
                   }}
@@ -396,10 +406,10 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
         radius="lg"
         centered
         withCloseButton={false}
+        withOverlay={false}
         zIndex={2000}
         closeOnClickOutside
-        closeOnEscape
-        withOverlay={false}
+        closeOnEscape      
         styles={{
           content: {
             width: '100%',
@@ -423,49 +433,32 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
               }}
             >
               <Group gap="md" align="center" style={{ width: '100%' }}>
-                <ThemeIcon
-                  size="xl"
-                  color="white"
-                  variant="light"
-                  style={{
-                    background: 'rgba(255, 255, 255, 0.2)',
-                    backdropFilter: 'blur(10px)',
-                    border: '1px solid rgba(255, 255, 255, 0.3)',
-                    '@media (max-width: 768px)': {
-                      width: '40px',
-                      height: '40px'
-                    }
-                  }}
-                >
-                  <IconSearch size={24} />
-                </ThemeIcon>
                 <Box style={{ flex: 1 }}>
                   <Group justify="space-between" align="center" mb="sm">
-                    <Text 
-                      size="xl" 
-                      fw={700} 
-                      style={{ 
-                        color: 'white',
-                        '@media (max-width: 768px)': {
-                          fontSize: '18px'
-                        }
-                      }}
-                    >
-                      Поиск по системе
-                    </Text>
+                    {(branchResult.length > 0 || branchByAddressResult.length > 0 || employeeResult.length > 0 || toolResult.length > 0) && (
+                      <Button
+                        variant="outline"
+                        color="white"
+                        size="sm"
+                        onClick={() => {
+                          if (text.trim()) {
+                            navigate(`/search?text=${encodeURIComponent(text)}&branchSearchType=${branchType}`);
+                            handleClose();
+                            clearData();
+                            setText('');
+                          }
+                        }}
+                        disabled={!text.trim()}
+                      >
+                        На страницу расширенного поиска
+                      </Button>
+                    )}
                     <ActionIcon
-                      size="lg"
-                      variant="subtle"
+                      size={36}
+                      variant="outline"
                       color="white"
                       onClick={() => { handleClose(); clearData(); setText(''); }}
-                      style={{
-                        background: 'rgba(255, 255, 255, 0.2)',
-                        backdropFilter: 'blur(10px)',
-                        border: '1px solid rgba(255, 255, 255, 0.3)',
-                        '&:hover': {
-                          background: 'rgba(255, 255, 255, 0.3)'
-                        }
-                      }}
+
                     >
                       <IconX size={20} />
                     </ActionIcon>
@@ -520,36 +513,6 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
               }}
             >
               {renderSearchResults()}
-              
-              {/* Кнопка для перехода к общей странице поиска - показываем только если есть результаты */}
-              {(branchResult.length > 0 || employeeResult.length > 0 || toolResult.length > 0) && (
-                <Box mt="md" style={{ textAlign: 'center' }}>
-                  <Button
-                    variant="outline"
-                    color="blue"
-                    size="md"
-                    onClick={() => {
-                      if (text.trim()) {
-                        navigate(`/search?text=${encodeURIComponent(text)}`);
-                        handleClose();
-                        clearData();
-                        setText('');
-                      }
-                    }}
-                    disabled={!text.trim()}
-                    style={{
-                      borderColor: 'var(--color-primary-300)',
-                      color: 'var(--color-primary-600)',
-                      '&:hover': {
-                        backgroundColor: 'var(--color-primary-50)',
-                        borderColor: 'var(--color-primary-400)'
-                      }
-                    }}
-                  >
-                    Перейти к полному поиску
-                  </Button>
-                </Box>
-              )}
             </Box>
         </Box>
       </Modal>
