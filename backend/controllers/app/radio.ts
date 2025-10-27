@@ -109,14 +109,7 @@ export const createMusicFolder = async (req: Request, res: Response): Promise<an
 
 export const uploadMusic = async (req: Request, res: Response): Promise<any> => {
   try {
-    console.log('[Radio] Upload request received:', {
-      body: req.body,
-      file: req.file,
-      files: req.files
-    });
-    
     if (!req.file) {
-      console.log('[Radio] No file in request');
       return res.status(400).json({ error: 'Файл не загружен' });
     }
     
@@ -124,16 +117,8 @@ export const uploadMusic = async (req: Request, res: Response): Promise<any> => 
     const fileName = req.file.filename;
     const filePath = req.file.path; // Файл уже в правильном месте благодаря middleware
     
-    console.log('[Radio] File details:', {
-      originalName: req.file.originalname,
-      filePath: filePath,
-      fileExists: fs.existsSync(filePath),
-      fileSize: req.file.size
-    });
-    
     // Проверяем, что файл существует
     if (!fs.existsSync(filePath)) {
-      console.error('[Radio] File does not exist:', filePath);
       return res.status(500).json({ error: 'Файл не найден' });
     }
     
@@ -1200,8 +1185,6 @@ export const downloadStreamFile = async (req: Request, res: Response): Promise<a
 export const playRadioStream = async (req: Request, res: Response): Promise<any> => {
   try {
     const { id } = req.params;
-    
-    console.log('🎵 [playRadioStream] Запрос на проигрывание потока:', id);
 
     // Получаем поток из базы данных
     const stream = await prisma.radioStream.findUnique({
@@ -1209,18 +1192,15 @@ export const playRadioStream = async (req: Request, res: Response): Promise<any>
     });
 
     if (!stream) {
-      console.log('❌ [playRadioStream] Поток не найден:', id);
       return res.status(404).json({ error: 'Поток не найден' });
     }
 
     if (!stream.isActive) {
-      console.log('⚠️ [playRadioStream] Поток неактивен:', id);
       return res.status(400).json({ error: 'Поток неактивен' });
     }
 
     // Проверяем, есть ли файл для проигрывания
     if (!stream.attachment) {
-      console.log('❌ [playRadioStream] У потока нет файла для проигрывания:', id);
       return res.status(400).json({ error: 'У потока нет файла для проигрывания' });
     }
 
@@ -1228,7 +1208,45 @@ export const playRadioStream = async (req: Request, res: Response): Promise<any>
     
     // Проверяем существование файла
     if (!fs.existsSync(filePath)) {
-      console.log('❌ [playRadioStream] Файл не найден:', filePath);
+      // Пытаемся найти файл с исправленным названием
+      const streamDir = path.join(process.cwd(), 'public', 'retail', 'radio', 'stream');
+      const files = fs.existsSync(streamDir) ? fs.readdirSync(streamDir) : [];
+      
+      // Ищем файл, который может соответствовать нашему потоку
+      const matchingFile = files.find(file => {
+        const correctedFile = decodeRussianFileName(file);
+        return file === stream.attachment || correctedFile === stream.attachment;
+      });
+      
+      if (matchingFile) {
+        const correctedFilePath = path.join(streamDir, matchingFile);
+        
+        // Отправляем файл с исправленным путем
+        const ext = path.extname(stream.attachment).toLowerCase();
+        let contentType = 'audio/mpeg';
+        
+        switch (ext) {
+          case '.mp3': contentType = 'audio/mpeg'; break;
+          case '.wav': contentType = 'audio/wav'; break;
+          case '.ogg': contentType = 'audio/ogg'; break;
+          case '.aac': contentType = 'audio/aac'; break;
+          case '.m4a': contentType = 'audio/mp4'; break;
+        }
+        
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Accept-Ranges', 'bytes');
+        res.setHeader('Cache-Control', 'no-cache');
+        
+        res.sendFile(correctedFilePath, (err) => {
+          if (err) {
+            if (!res.headersSent) {
+              res.status(500).json({ error: 'Ошибка при проигрывании потока' });
+            }
+          }
+        });
+        return;
+      }
+      
       return res.status(404).json({ error: 'Файл потока не найден' });
     }
 

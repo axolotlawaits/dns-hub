@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { 
   Paper, 
   Group, 
@@ -15,11 +15,13 @@ import {
   IconClock,
   IconWifi, 
   IconWifiOff,
-  IconBug
+  IconBug,
+  IconPlayerSkipForward
 } from '@tabler/icons-react';
 import { CustomModal } from '../../../../utils/CustomModal';
 import { API } from '../../../../config/constants';
 import { useUserContext } from '../../../../hooks/useUserContext';
+import { useAccessContext } from '../../../../hooks/useAccessContext';
 
 interface WebRadioPlayerProps {
   className?: string;
@@ -69,9 +71,28 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
   isActive = true
 }) => {
   const { user } = useUserContext();
+  const { access } = useAccessContext();
   
   // Состояние для IP пользователя
   const [userIP, setUserIP] = useState<string>('localhost');
+  
+  // Проверяем доступ к Radio инструменту
+  const hasRadioFullAccess = useMemo(() => {
+    if (!user || !access) return false;
+    
+    // Проверяем роль пользователя
+    if (['DEVELOPER', 'ADMIN'].includes(user.role)) {
+      return true;
+    }
+    
+    // Проверяем доступ через groups
+    const radioAccess = access.find(tool => 
+      tool.link === 'retail/radio' || tool.link === '/retail/radio'
+    );
+    
+    // Проверяем, что доступ FULL
+    return radioAccess?.accessLevel === 'FULL';
+  }, [user, access]);
   
   // Состояние для модального окна смены времени
   const [timeModalOpen, setTimeModalOpen] = useState(false);
@@ -150,6 +171,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
   const [songsPlayed, setSongsPlayed] = useState(0);
   const [isPlayingStream, setIsPlayingStream] = useState(false);
   const [currentStreamIndex, setCurrentStreamIndex] = useState(0);
+  const [lastTrackIndex, setLastTrackIndex] = useState(-1);
   
   // Состояние UI
   const [error, setError] = useState<string | null>(null);
@@ -310,7 +332,6 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     try {
       setError(null);
       
-      console.log('🔄 [WebRadioPlayer] Загружаем потоки...');
       const response = await fetch(`${API}/radio/streams`);
       if (!response.ok) {
         throw new Error('Ошибка загрузки потоков');
@@ -318,14 +339,6 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       
       const data = await response.json();
       if (data.success && data.data) {
-        console.log('✅ [WebRadioPlayer] Загружено потоков:', data.data.length);
-        console.log('📋 [WebRadioPlayer] Потоки:', data.data.map((s: RadioStream) => ({
-          id: s.id,
-          name: s.name,
-          isActive: s.isActive,
-          attachment: s.attachment
-        })));
-        
         setStreams(data.data);
         // Сбрасываем индекс потока при загрузке новых потоков
         setCurrentStreamIndex(0);
@@ -334,10 +347,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
         const activeStreams = data.data.filter((stream: RadioStream) => stream.isActive);
         if (activeStreams.length > 0) {
           const firstStream = activeStreams[0];
-          console.log('🎯 [WebRadioPlayer] Выбран первый активный поток:', firstStream.name, 'из', activeStreams.length, 'потоков');
           setCurrentStream(firstStream);
-        } else {
-          console.log('⚠️ [WebRadioPlayer] Нет активных потоков');
         }
       }
     } catch (err) {
@@ -432,7 +442,6 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     try {
       // Проверяем, что вкладка активна
       if (!isActive) {
-        console.log('💓 [WebRadioPlayer] Вкладка неактивна, пропускаем heartbeat');
         return;
       }
 
@@ -440,13 +449,12 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       
       // Проверяем что у нас есть пользователь
       if (!user?.email) {
-        console.warn('Пользователь не найден, пропускаем heartbeat');
         return;
       }
       
       const heartbeatData = {
         deviceName: `DNS Radio Web (${user.email.split('@')[0]})`,
-        appVersion: '1.0.0',
+        appVersion: '1.1.3',
         macAddress: browserId,
         currentIP: userIP,
         userEmail: user.email
@@ -471,14 +479,13 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
   }, [getBrowserFingerprint, user?.email, userIP, isActive]);
 
   // Логика выбора следующего трека/потока
-  const findNextTrack = useCallback(() => {
-    // Увеличиваем счетчик песен ПЕРЕД проверкой потока (как в Android версии)
-    const newSongsPlayed = songsPlayed + 1;
-    
-    // Проверяем, нужно ли вклинить поток (каждые 3 трека)
-    const shouldPlayStream = newSongsPlayed > 0 && newSongsPlayed % 3 === 0 && !isPlayingStream;
-    
-    console.log('🎵 [WebRadioPlayer] findNextTrack - songsPlayed:', songsPlayed, 'newSongsPlayed:', newSongsPlayed, 'shouldPlayStream:', shouldPlayStream, 'isPlayingStream:', isPlayingStream);
+  const findNextTrack = useCallback((songsCount: number) => {
+    // Проверяем, нужно ли вклинить поток
+    // Каждый 4-й элемент должен быть потоком (после каждых 3-х треков)
+    // Схема: 1трек, 2трек, 3трек, поток, 4трек, 5трек, 6трек, поток...
+    // songsCount: 3(после 3-го трека) -> поток
+    // songsCount: 7(после 6-го трека) -> поток
+    const shouldPlayStream = songsCount > 0 && (songsCount + 1) % 4 === 0;
     
     if (shouldPlayStream && streams.length > 0) {
       // Получаем только активные потоки
@@ -487,25 +494,24 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       if (activeStreams.length > 0) {
         // Выбираем следующий поток по порядку
         const nextStream = activeStreams[currentStreamIndex % activeStreams.length];
-        console.log('🎵 [WebRadioPlayer] Время для потока:', nextStream.name, 'индекс:', currentStreamIndex % activeStreams.length);
         return { type: 'stream', content: nextStream };
       }
     }
     
     // Иначе играем следующий музыкальный трек
     if (musicTracks.length > 0) {
-      const currentIndex = currentTrack ? currentTrack.index : -1;
-      const nextIndex = (currentIndex + 1) % musicTracks.length;
+      // Используем lastTrackIndex для расчета следующего трека
+      const currentIndex = lastTrackIndex >= 0 ? lastTrackIndex : -1;
+      const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % musicTracks.length : 0;
       const nextTrack = musicTracks.find(track => track.index === nextIndex);
       
       if (nextTrack) {
-        console.log('🎵 [WebRadioPlayer] Следующий трек:', nextTrack.fileName, 'индекс:', nextIndex);
         return { type: 'track', content: nextTrack };
       }
     }
     
     return null;
-  }, [songsPlayed, streams, isPlayingStream, musicTracks, currentTrack, currentStreamIndex]);
+  }, [streams, musicTracks, currentStreamIndex, lastTrackIndex]);
 
   // Воспроизведение трека
   const playTrack = useCallback(async (track: MusicTrack) => {
@@ -514,6 +520,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     try {
       setPlaybackState('loading');
       setCurrentTrack(track);
+      setLastTrackIndex(track.index); // Сохраняем индекс последнего трека
       setCurrentStream(null);
       setIsPlayingStream(false);
       
@@ -521,7 +528,6 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       await audioRef.current.play();
       setPlaybackState('playing');
       setError(null);
-      // console.log('🎵 [WebRadioPlayer] Воспроизводим трек:', track.fileName);
     } catch (err) {
       console.error('❌ [WebRadioPlayer] Ошибка воспроизведения трека:', err);
       setError('Не удалось воспроизвести трек');
@@ -551,12 +557,9 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     try {
       setPlaybackState('loading');
       setCurrentStream(stream);
-      setCurrentTrack(null);
       setIsPlayingStream(true);
       
       const streamUrl = `${API}/radio/stream/${stream.id}/play`;
-      console.log('🎵 [WebRadioPlayer] Воспроизводим поток:', stream.name, 'URL:', streamUrl);
-      console.log('🎵 [WebRadioPlayer] Поток активен:', stream.isActive, 'Файл:', stream.attachment);
       
       audioRef.current.src = streamUrl;
       await audioRef.current.play();
@@ -586,35 +589,53 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       }
     };
 
-    const handleEnded = async () => {
-      console.log('🎵 [WebRadioPlayer] Трек/поток завершен');
-      
-      if (isPlayingStream) {
-        // Если играл поток, сбрасываем флаг и переключаемся на музыку
-        console.log('🎵 [WebRadioPlayer] Поток завершен, переключаемся на музыку');
-        setIsPlayingStream(false);
-        setCurrentStream(null);
-        // Увеличиваем индекс потока для следующего воспроизведения
-        setCurrentStreamIndex(prev => prev + 1);
-        // После потока НЕ увеличиваем счетчик песен, чтобы продолжить цикл с того же места
-      } else {
-        // Если играл трек, увеличиваем счетчик
-        console.log('🎵 [WebRadioPlayer] Трек завершен, увеличиваем счетчик песен');
-        setSongsPlayed(prev => prev + 1);
-      }
-      
-      // Автоматически переключаем на следующий контент
-      const nextContent = findNextTrack();
-      if (nextContent) {
-        if (nextContent.type === 'track') {
-          await playTrack(nextContent.content as MusicTrack);
-        } else if (nextContent.type === 'stream') {
-          await playStream(nextContent.content as RadioStream);
+                                                                             const handleEnded = async () => {
+       let nextSongsPlayed = songsPlayed;
+       
+       if (isPlayingStream) {
+         // Если играл поток, сбрасываем флаг и переключаемся на музыку
+         setIsPlayingStream(false);
+         setCurrentStream(null);
+         // Увеличиваем индекс потока для следующего воспроизведения
+         setCurrentStreamIndex(prev => prev + 1);
+         // После потока увеличиваем счетчик на 1, чтобы начать новый цикл из 3 треков
+         // Например: было 3 трека (songsPlayed=3) -> поток -> songsPlayed=4 (первый трек новой группы)
+         nextSongsPlayed = songsPlayed + 1;
+         setSongsPlayed(nextSongsPlayed);
+       } else {
+        // Если играл трек, проверяем, не завершился ли цикл
+        if (currentTrack && musicTracks.length > 0) {
+          const currentIndex = currentTrack.index;
+          const lastIndex = musicTracks.length - 1;
+          
+          if (currentIndex === lastIndex) {
+            // Цикл завершен, сбрасываем счетчик на 1
+            nextSongsPlayed = 1;
+            setSongsPlayed(1);
+          } else {
+            // Увеличиваем счетчик только если цикл не завершен
+            nextSongsPlayed = songsPlayed + 1;
+            setSongsPlayed(nextSongsPlayed);
+          }
+        } else {
+          nextSongsPlayed = songsPlayed + 1;
+          setSongsPlayed(nextSongsPlayed);
         }
-      } else {
-        setPlaybackState('stopped');
       }
-    };
+      
+      // Вычисляем следующий контент с учетом обновленного счетчика
+      const nextContent = findNextTrack(nextSongsPlayed);
+      
+             if (nextContent) {
+         if (nextContent.type === 'track') {
+           await playTrack(nextContent.content as MusicTrack);
+         } else if (nextContent.type === 'stream') {
+           await playStream(nextContent.content as RadioStream);
+         }
+       } else {
+         setPlaybackState('stopped');
+       }
+     };
 
     const handleError = (event: any) => {
       console.error('❌ [WebRadioPlayer] Ошибка воспроизведения:', event);
@@ -648,25 +669,23 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     };
 
     const handleStalled = () => {
-      console.warn('⚠️ [WebRadioPlayer] Поток остановился (stalled)');
       // Не меняем состояние, просто логируем - браузер попытается восстановить
     };
 
     const handleWaiting = () => {
-      console.warn('⏳ [WebRadioPlayer] Буферизация (waiting)');
       // Не меняем состояние, просто логируем - браузер попытается восстановить
     };
 
     const handleCanPlay = () => {
-      console.log('✅ [WebRadioPlayer] Аудио готово к воспроизведению');
+      // Аудио готово к воспроизведению
     };
 
     const handleCanPlayThrough = () => {
-      console.log('✅ [WebRadioPlayer] Аудио готово к воспроизведению без прерываний');
+      // Аудио готово к воспроизведению без прерываний
     };
 
     const handleLoadStart = () => {
-      console.log('🔄 [WebRadioPlayer] Начало загрузки аудио');
+      // Начало загрузки аудио
     };
 
     audio.addEventListener('timeupdate', handleTimeUpdate);
@@ -755,7 +774,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
         }
       } else {
         // Если нет текущего контента, начинаем воспроизведение с начала
-        const nextContent = findNextTrack();
+        const nextContent = findNextTrack(songsPlayed);
         if (nextContent) {
           if (nextContent.type === 'track') {
             await playTrack(nextContent.content as MusicTrack);
@@ -768,7 +787,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       }
     } else {
       // Начинаем воспроизведение
-      const nextContent = findNextTrack();
+      const nextContent = findNextTrack(songsPlayed);
       if (nextContent) {
         if (nextContent.type === 'track') {
           await playTrack(nextContent.content as MusicTrack);
@@ -780,6 +799,20 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       }
     }
   };
+
+     // Обработчик переключения на следующий трек
+   const handleNextTrack = async () => {
+     if (!audioRef.current) return;
+     
+     // Останавливаем текущее воспроизведение
+     audioRef.current.pause();
+     
+     // Вызываем handleEnded для переключения на следующий трек
+     const audio = audioRef.current;
+     if (audio) {
+       audio.dispatchEvent(new Event('ended'));
+     }
+   };
 
 
   return (
@@ -860,40 +893,62 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
             gap: 'var(--space-4)'
           }}
         >
-          {/* Кнопка воспроизведения */}
-          <Button
-            size="xl"
-            radius="xl"
-            leftSection={
-              playbackState === 'loading' ? 
-                <div style={{ 
-                  width: '32px', 
-                  height: '32px', 
-                  
-                  borderTop: '3px solid transparent', 
-                  borderRadius: '50%', 
-                  animation: 'spin 1s linear infinite' 
-                }} /> :
-                playbackState === 'playing' ? 
-                  <IconPlayerPause size={32} /> : 
-                  <IconPlayerPlay size={32} />
-            }
-            onClick={handlePlayPause}
-            disabled={!isWithinWorkingTime() || (!currentStream && !currentTrack) || playbackState === 'loading'}
-            style={{
-              width: '80px',
-              height: '80px',
-              background: playbackState === 'loading' ? 
-                'linear-gradient(135deg, var(--color-gray-500), var(--color-gray-600))' :
-                'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
-              border: 'none',
-              boxShadow: 'var(--theme-shadow-lg)',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-          />
+                     {/* Группа кнопок управления */}
+           <Group gap="md" align="center">
+             {/* Кнопка воспроизведения */}
+             <Button
+               size="xl"
+               radius="xl"
+               leftSection={
+                 playbackState === 'loading' ? 
+                   <div style={{ 
+                     width: '32px', 
+                     height: '32px', 
+                     
+                     borderTop: '3px solid transparent', 
+                     borderRadius: '50%', 
+                     animation: 'spin 1s linear infinite' 
+                   }} /> :
+                   playbackState === 'playing' ? 
+                     <IconPlayerPause size={32} /> : 
+                     <IconPlayerPlay size={32} />
+               }
+               onClick={handlePlayPause}
+               disabled={!isWithinWorkingTime() || (!currentStream && !currentTrack) || playbackState === 'loading'}
+               style={{
+                 width: '80px',
+                 height: '80px',
+                 background: playbackState === 'loading' ? 
+                   'linear-gradient(135deg, var(--color-gray-500), var(--color-gray-600))' :
+                   'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
+                 border: 'none',
+                 boxShadow: 'var(--theme-shadow-lg)',
+                 borderRadius: '50%',
+                 display: 'flex',
+                 alignItems: 'center',
+                 justifyContent: 'center'
+               }}
+             />
+             
+                           {/* Кнопка следующего трека - только для пользователей с полным доступом */}
+              {hasRadioFullAccess && (
+                <Button
+                  size="lg"
+                  radius="xl"
+                  leftSection={<IconPlayerSkipForward size={24} />}
+                  onClick={handleNextTrack}
+                  disabled={!isWithinWorkingTime() || (!currentStream && !currentTrack)}
+                  variant="light"
+                  style={{
+                    background: 'var(--theme-bg-elevated)',
+                    border: '1px solid var(--theme-border)',
+                    boxShadow: 'var(--theme-shadow-sm)'
+                  }}
+                >
+                  Далее
+                </Button>
+              )}
+           </Group>
 
           {/* Текущий трек/поток */}
           <Box style={{ textAlign: 'center', maxWidth: '400px' }}>

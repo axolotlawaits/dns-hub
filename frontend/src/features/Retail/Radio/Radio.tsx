@@ -793,7 +793,6 @@ const RadioAdmin: React.FC = () => {
     // Проверяем, что версии содержат хотя бы одну цифру
     if (!cleanVersion1 || !cleanVersion2 || 
         !/\d/.test(cleanVersion1) || !/\d/.test(cleanVersion2)) {
-      console.log('compareVersions: Invalid version format, returning 0');
       return 0;
     }
     
@@ -802,39 +801,23 @@ const RadioAdmin: React.FC = () => {
     
     // Проверяем, что все части версий являются числами
     if (v1Parts.some(isNaN) || v2Parts.some(isNaN)) {
-      console.log('compareVersions: Non-numeric version parts, returning 0');
       return 0;
     }
     
     const maxLength = Math.max(v1Parts.length, v2Parts.length);
     
-    console.log('compareVersions:', {
-      version1,
-      version2,
-      cleanVersion1,
-      cleanVersion2,
-      v1Parts,
-      v2Parts,
-      maxLength
-    });
-    
     for (let i = 0; i < maxLength; i++) {
       const v1Part = v1Parts[i] || 0;
       const v2Part = v2Parts[i] || 0;
       
-      console.log(`Comparing part ${i}: ${v1Part} vs ${v2Part}`);
-      
       if (v1Part > v2Part) {
-        console.log('Result: 1 (version1 > version2)');
         return 1;
       }
       if (v1Part < v2Part) {
-        console.log('Result: -1 (version1 < version2)');
         return -1;
       }
     }
     
-    console.log('Result: 0 (versions equal)');
     return 0;
   };
 
