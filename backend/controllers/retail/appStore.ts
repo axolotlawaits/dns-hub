@@ -349,21 +349,26 @@ export const downloadLatestVersion = async (req: Request, res: Response): Promis
       res.setHeader('Accept-Ranges', 'bytes');
       res.setHeader('Content-Length', chunksize);
       res.setHeader('Content-Type', 'application/octet-stream');
+      // Disable proxy buffering (e.g., nginx) to avoid stalled progress at 0%
+      res.setHeader('X-Accel-Buffering', 'no');
       // Используем RFC 5987 для поддержки Unicode имен файлов
       const encodedFileName = encodeURIComponent(downloadFileName);
       res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"; filename*=UTF-8''${encodedFileName}`);
-      // Определяем стратегию кеширования на основе User-Agent
-      const userAgent = req.headers['user-agent'] || '';
-      const isProblematicBrowser = userAgent.includes('Chrome/') && userAgent.includes('Mobile') || 
-                                  userAgent.includes('Safari/') && userAgent.includes('Mobile') ||
-                                  userAgent.includes('Edge/');
-      
-      if (isProblematicBrowser) {
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate'); // Отключаем кеш для проблемных браузеров
-        console.log(`[Download] Disabled caching for problematic browser: ${userAgent}`);
-      } else {
-        res.setHeader('Cache-Control', 'public, max-age=3600'); // Кеширование на 1 час для обычных браузеров
-      res.setHeader('Connection', 'keep-alive'); // Поддержка keep-alive
+      // Полностью отключаем кеш для того, чтобы всегда скачивалась последняя активная версия
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.setHeader('Connection', 'keep-alive');
+      // Валидаторы ответа
+      try {
+        const stats = fs.statSync(filePath);
+        res.setHeader('Last-Modified', stats.mtime.toUTCString());
+        res.setHeader('ETag', `${stats.size}-${Math.floor(stats.mtimeMs)}`);
+      } catch {}
+
+      // Flush headers early so clients show progress immediately
+      if (typeof (res as any).flushHeaders === 'function') {
+        (res as any).flushHeaders();
       }
 
       // Создаем поток для чтения части файла с оптимизированными настройками
@@ -372,6 +377,9 @@ export const downloadLatestVersion = async (req: Request, res: Response): Promis
         end,
         highWaterMark: 64 * 1024, // 64KB буфер для лучшей производительности
         autoClose: true
+      });
+      fileStream.on('open', () => {
+        console.log('[Download] Range file stream opened');
       });
       
       let bytesSent = 0;
@@ -416,13 +424,30 @@ export const downloadLatestVersion = async (req: Request, res: Response): Promis
     const encodedFileName = encodeURIComponent(downloadFileName);
     res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"; filename*=UTF-8''${encodedFileName}`);
     res.setHeader('Accept-Ranges', 'bytes');
-    res.setHeader('Cache-Control', 'public, max-age=3600'); // Кеширование на 1 час
-    res.setHeader('Connection', 'keep-alive'); // Поддержка keep-alive
+    // Полностью отключаем кеш, чтобы исключить выдачу старого файла
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Connection', 'keep-alive');
+    // Валидаторы ответа
+    try {
+      const stats = fs.statSync(filePath);
+      res.setHeader('Last-Modified', stats.mtime.toUTCString());
+      res.setHeader('ETag', `${stats.size}-${Math.floor(stats.mtimeMs)}`);
+    } catch {}
+
+    // Flush headers early so clients show progress immediately
+    if (typeof (res as any).flushHeaders === 'function') {
+      (res as any).flushHeaders();
+    }
     
     // Создаем поток для чтения файла с оптимизированными настройками
     const fileStream = fs.createReadStream(filePath, {
       highWaterMark: 64 * 1024, // 64KB буфер для лучшей производительности
       autoClose: true
+    });
+    fileStream.on('open', () => {
+      console.log('[Download] File stream opened');
     });
     
     // Таймаут для скачивания (30 минут)
