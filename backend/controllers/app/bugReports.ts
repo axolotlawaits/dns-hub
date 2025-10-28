@@ -17,7 +17,7 @@ const createBugReportSchema = z.object({
   
   // Поля пользователя и филиала
   userId: z.string().optional(),
-  userEmail: z.string().email().optional(),
+  userEmail: z.string().optional(),
   branchType: z.string().optional(),
   branchName: z.string().optional(),
   
