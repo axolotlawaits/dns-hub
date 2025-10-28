@@ -190,8 +190,33 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     if (!user?.id || !tempBranchType) return;
 
     try {
-      // Обновляем typeOfDist филиала пользователя в базе данных
-      const response = await fetch(`${API}/branch/${user.branch}/typeOfDist`, {
+      // Требуется UUID филиала для PATCH /search/branch/:id/typeOfDist
+      let branchUuid: string | null = (user as any)?.branchUuid || null;
+
+      // Если UUID отсутствует или в user.branch явно не UUID — ищем по имени
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (!branchUuid) {
+        if (user.branch && uuidRegex.test(user.branch)) {
+          branchUuid = user.branch;
+        } else if (user.branch) {
+          const query = encodeURIComponent(user.branch);
+          const searchResp = await fetch(`${API}/search/branch?text=${query}&branchSearchType=name`);
+          if (searchResp.ok) {
+            const branches = await searchResp.json();
+            const exact = Array.isArray(branches)
+              ? branches.find((b: any) => b.name?.toLowerCase() === user.branch.toLowerCase())
+              : null;
+            branchUuid = exact?.uuid || branches?.[0]?.uuid || null;
+          }
+        }
+      }
+
+      if (!branchUuid) {
+        console.error('Не удалось определить UUID филиала для обновления typeOfDist');
+        return;
+      }
+
+      const response = await fetch(`${API}/search/branch/${branchUuid}/typeOfDist`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -200,13 +225,11 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       });
 
       if (response.ok) {
-        // Сохраняем в localStorage для локального кэша
         localStorage.setItem(`web-radio-player-branch-type-${user.email}`, tempBranchType);
         setLocalBranchType(tempBranchType);
         setBranchTypeModalOpen(false);
-        // Сбрасываем счетчики при смене типа филиала
         setSongsPlayed(0);
-        setCurrentStreamIndex(0);
+        lastPlayedStreamIndexRef.current = -1;
         setLastTrackIndex(-1);
       } else {
         console.error('Ошибка обновления типа филиала в базе данных');
@@ -219,18 +242,37 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
   // Состояние воспроизведения
   const [playbackState, setPlaybackState] = useState<PlaybackState>('stopped');
   const [downloadState] = useState<DownloadState>('idle');
-  // const [volume, setVolume] = useState(80);
-  // const [isMuted, setIsMuted] = useState(false);
+  // Убрали пользовательскую регулировку громкости
   
   // Состояние контента
   const [currentStream, setCurrentStream] = useState<RadioStream | null>(null);
   const [currentTrack, setCurrentTrack] = useState<MusicTrack | null>(null);
+  // Отложенное отображение названия: устанавливаем только после старта воспроизведения
+  const [pendingStream, setPendingStream] = useState<RadioStream | null>(null);
+  const [pendingTrack, setPendingTrack] = useState<MusicTrack | null>(null);
   const [streams, setStreams] = useState<RadioStream[]>([]);
   const [musicTracks, setMusicTracks] = useState<MusicTrack[]>([]);
   const [songsPlayed, setSongsPlayed] = useState(0);
   const [isPlayingStream, setIsPlayingStream] = useState(false);
-  const [currentStreamIndex, setCurrentStreamIndex] = useState(0);
+  const lastPlayedStreamIndexRef = useRef<number>(-1);
   const [lastTrackIndex, setLastTrackIndex] = useState(-1);
+  
+  // Ключ для хранения индекса ротации в localStorage (чтобы переживать HMR/перезагрузки)
+  const rotationStorageKey = useMemo(() => {
+    const email = user?.email || 'unknown';
+    const type = (localBranchType || 'default').toLowerCase();
+    return `web-radio-last-stream-index-${email}-${type}`;
+  }, [user?.email, localBranchType]);
+
+  // Отпечаток активных потоков (по id) для отслеживания изменений списка
+  const activeStreamsFingerprint = useMemo(() => {
+    const norm = (v: string | undefined | null) => (v || '').trim().toLowerCase();
+    let active = streams.filter(s => s.isActive && norm(s.branchTypeOfDist) === norm(localBranchType));
+    if (active.length === 0) active = streams.filter(s => s.isActive);
+    // Стабильный порядок по name/id
+    const sorted = [...active].sort((a, b) => (a.name || '').localeCompare(b.name || '') || a.id.localeCompare(b.id));
+    return sorted.map(s => s.id).join('|');
+  }, [streams, localBranchType]);
   
   // Состояние UI
   const [error, setError] = useState<string | null>(null);
@@ -238,6 +280,19 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
   const [downloadProgress] = useState(0);
   const [downloadedCount] = useState(0);
   const [totalFiles] = useState(0);
+  
+  // Обложки альбомов отключены для производительности
+  
+  // Адаптивное качество потока
+  const [streamQuality, setStreamQuality] = useState<'high' | 'medium' | 'low'>('high');
+  const networkSpeedRef = useRef<number>(0);
+  
+  // Ретрай на ошибки загрузки
+  const retryCountsRef = useRef<Record<string, number>>({});
+  
+  // Буферизация следующего трека
+  const [nextTrackBuffered, setNextTrackBuffered] = useState(false);
+  const nextAudioRef = useRef<HTMLAudioElement | null>(null);
   
   // Состояние для прогресс-бара
   const [currentTime, setCurrentTime] = useState(0);
@@ -399,21 +454,32 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       const data = await response.json();
       if (data.success && data.data) {
         setStreams(data.data);
-        // Сбрасываем индекс потока при загрузке новых потоков
-        setCurrentStreamIndex(0);
-        
-        // Автоматически выбираем первый активный поток
-        const activeStreams = data.data.filter((stream: RadioStream) => stream.isActive);
-        if (activeStreams.length > 0) {
-          const firstStream = activeStreams[0];
-          setCurrentStream(firstStream);
-        }
       }
     } catch (err) {
       console.error('❌ [WebRadioPlayer] Ошибка загрузки потоков:', err);
       setError(err instanceof Error ? err.message : 'Неизвестная ошибка');
     }
   }, []);
+
+  // Восстанавливаем индекс ротации при монтировании/смене пользователя или формата
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(rotationStorageKey);
+      if (saved !== null) {
+        const parsed = parseInt(saved, 10);
+        if (!Number.isNaN(parsed)) {
+          lastPlayedStreamIndexRef.current = parsed;
+          // state index removed; ref is authoritative
+        }
+      }
+    } catch {}
+  }, [rotationStorageKey]);
+
+  // Сбрасываем индекс ротации при изменении активного списка потоков (как Android setActiveStreams)
+  useEffect(() => {
+    // state index removed
+    try { localStorage.setItem(rotationStorageKey, String(-1)); } catch {}
+  }, [activeStreamsFingerprint, rotationStorageKey]);
 
   // Инициализация при загрузке компонента
   useEffect(() => {
@@ -469,10 +535,26 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
         cache: 'no-cache'
       });
       setIsOnline(response.ok);
+      
+      // Определяем скорость сети для адаптивного качества
+      if (response.ok && (navigator as any).connection) {
+        const connection = (navigator as any).connection;
+        const downlink = connection.downlink || 0;
+        networkSpeedRef.current = downlink;
+        
+        // Устанавливаем качество на основе скорости
+        if (downlink >= 5) {
+          setStreamQuality('high');
+        } else if (downlink >= 2) {
+          setStreamQuality('medium');
+        } else {
+          setStreamQuality('low');
+        }
+      }
     } catch {
       setIsOnline(false);
     }
-  }, []);
+  }, [API]);
 
   // Проверка времени работы
   useEffect(() => {
@@ -496,6 +578,13 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     return () => clearInterval(interval);
   }, [checkInternetConnection]);
 
+  // Громкость фиксирована на максимум для стабильного звука
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = 1;
+    }
+  }, []);
+
   // Heartbeat для веб-плеера
   const sendHeartbeat = useCallback(async () => {
     try {
@@ -513,7 +602,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       
       const heartbeatData = {
         deviceName: `DNS Radio Web (${user.email.split('@')[0]})`,
-        appVersion: '1.1.3',
+        appVersion: '1.1.4',
         macAddress: browserId,
         currentIP: userIP,
         userEmail: user.email
@@ -544,18 +633,35 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     // Схема: 1трек, 2трек, 3трек, поток, 4трек, 5трек, 6трек, поток...
     // songsCount: 3(после 3-го трека) -> поток
     // songsCount: 7(после 6-го трека) -> поток
-    const shouldPlayStream = songsCount > 0 && (songsCount + 1) % 4 === 0;
+    // Android logic: every 3 songs, insert a stream (3, 6, 9, ...)
+    const shouldPlayStream = songsCount > 0 && songsCount % 3 === 0;
     
     if (shouldPlayStream && streams.length > 0) {
-      // Получаем только активные потоки, соответствующие типу филиала
-      const activeStreams = streams.filter(stream => 
-        stream.isActive && stream.branchTypeOfDist === localBranchType
+      // Активные потоки по типу филиала, сравнение без регистра и с trim
+      const norm = (v: string | undefined | null) => (v || '').trim().toLowerCase();
+      let activeStreams = streams.filter(stream => 
+        stream.isActive && norm(stream.branchTypeOfDist) === norm(localBranchType)
       );
-      
+
+      // Фолбэк: если по типу ничего не нашли, используем все активные
+      if (activeStreams.length === 0) {
+        activeStreams = streams.filter(stream => stream.isActive);
+      }
+
       if (activeStreams.length > 0) {
-        // Выбираем следующий поток по порядку из фильтрованных по типу филиала
-        const nextStream = activeStreams[currentStreamIndex % activeStreams.length];
-        return { type: 'stream', content: nextStream };
+        // Простая ротация как в Android версии (без сайд-эффектов здесь)
+        const currentIndex = lastPlayedStreamIndexRef.current;
+        const nextStreamIndex = (currentIndex + 1) % activeStreams.length;
+        const nextStream = activeStreams[nextStreamIndex];
+        
+        console.log('[WebRadio] Simple rotation:',
+          `songsCount=${songsCount}`,
+          `lastIndex=${currentIndex}`,
+          `nextIndex=${nextStreamIndex}`,
+          `selected=${nextStream?.name}`
+        );
+
+        return { type: 'stream', content: nextStream, index: nextStreamIndex } as const;
       }
     }
     
@@ -567,37 +673,81 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       const nextTrack = musicTracks.find(track => track.index === nextIndex);
       
       if (nextTrack) {
-        return { type: 'track', content: nextTrack };
+        return { type: 'track', content: nextTrack } as const;
       }
     }
     
     return null;
-  }, [streams, musicTracks, currentStreamIndex, lastTrackIndex, localBranchType]);
+  }, [streams, musicTracks, lastTrackIndex, localBranchType, rotationStorageKey]);
+
+  // Буферизация следующего трека
+  const bufferNextTrack = useCallback(async () => {
+    if (!nextAudioRef.current) {
+      nextAudioRef.current = document.createElement('audio');
+      nextAudioRef.current.preload = 'auto';
+      nextAudioRef.current.crossOrigin = 'anonymous';
+    }
+    
+    const nextContent = findNextTrack(songsPlayed + 1);
+    if (!nextContent || nextContent.type === 'stream') {
+      setNextTrackBuffered(false);
+      return;
+    }
+    
+    const nextTrack = nextContent.content as MusicTrack;
+    if (nextTrack.url) {
+      setNextTrackBuffered(false);
+      const audio = nextAudioRef.current;
+      audio.src = nextTrack.url;
+      audio.load();
+      
+      // Отслеживаем прогресс буферизации
+      const interval = setInterval(() => {
+        if (audio && audio.buffered.length > 0 && audio.readyState >= 2) {
+          setNextTrackBuffered(true);
+          clearInterval(interval);
+        }
+      }, 100);
+      
+      setTimeout(() => clearInterval(interval), 10000);
+    }
+  }, [findNextTrack, songsPlayed]);
 
   // Воспроизведение трека
   const playTrack = useCallback(async (track: MusicTrack) => {
     if (!audioRef.current) return;
     
     try {
+      // Останавливаем текущее воспроизведение безопасно
+      if (audioRef.current && !audioRef.current.paused) {
+        audioRef.current.pause();
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      
       setPlaybackState('loading');
-      setCurrentTrack(track);
-      setLastTrackIndex(track.index); // Сохраняем индекс последнего трека
+      setPendingTrack(track);
+      setLastTrackIndex(track.index);
       setCurrentStream(null);
       setIsPlayingStream(false);
       
       audioRef.current.src = track.url;
       await audioRef.current.play();
       setPlaybackState('playing');
+      setCurrentTrack(track);
+      setPendingTrack(null);
       setError(null);
     } catch (err) {
-      console.error('❌ [WebRadioPlayer] Ошибка воспроизведения трека:', err);
-      setError('Не удалось воспроизвести трек');
+      // Игнорируем AbortError - это нормально при переключении
+      if ((err as Error).name !== 'AbortError') {
+        console.error('❌ [WebRadioPlayer] Ошибка воспроизведения трека:', err);
+        setError('Не удалось воспроизвести трек');
+      }
       setPlaybackState('error');
     }
   }, []);
 
   // Воспроизведение потока
-  const playStream = useCallback(async (stream: RadioStream) => {
+  const playStream = useCallback(async (stream: RadioStream, rotationIndex?: number) => {
     if (!audioRef.current) return;
     
     // Проверяем, что поток активен и имеет файл
@@ -616,22 +766,52 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     }
 
     try {
+      // Останавливаем текущее воспроизведение безопасно
+      if (audioRef.current && !audioRef.current.paused) {
+        audioRef.current.pause();
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      
       setPlaybackState('loading');
-      setCurrentStream(stream);
+      // Сначала очищаем текущий поток, чтобы UI показывал pendingStream
+      setCurrentStream(null);
+      setPendingStream(stream);
       setIsPlayingStream(true);
       
-      const streamUrl = `${API}/radio/stream/${stream.id}/play`;
+      const qualityParam = streamQuality === 'high' ? '?quality=high' : 
+                           streamQuality === 'medium' ? '?quality=medium' : '?quality=low';
+      const bust = `&ts=${Date.now()}&rand=${Math.random().toString(36).slice(2)}`;
+      const streamUrl = `${API}/radio/stream/${stream.id}/play${qualityParam}${bust}`;
       
+      // Принудительно перезагружаем источник
+      audioRef.current.pause();
+      audioRef.current.removeAttribute('src');
+      audioRef.current.load();
       audioRef.current.src = streamUrl;
+      console.log('[WebRadio] Applying stream URL:', streamUrl);
+      await audioRef.current.load();
       await audioRef.current.play();
+      console.log('[WebRadio] Audio element src after play:', audioRef.current.currentSrc || audioRef.current.src);
       setPlaybackState('playing');
+      setCurrentStream(stream);
+      setPendingStream(null);
       setError(null);
+
+      // Фиксируем индекс ротации, только когда действительно начали играть поток
+      if (typeof rotationIndex === 'number') {
+        lastPlayedStreamIndexRef.current = rotationIndex;
+        // state index removed; ref + localStorage are authoritative
+        try { localStorage.setItem(rotationStorageKey, String(rotationIndex)); } catch {}
+      }
     } catch (err) {
-      console.error('❌ [WebRadioPlayer] Ошибка воспроизведения потока:', err);
-      setError('Не удалось воспроизвести поток');
+      // Игнорируем AbortError
+      if ((err as Error).name !== 'AbortError') {
+        console.error('❌ [WebRadioPlayer] Ошибка воспроизведения потока:', err);
+        setError('Не удалось воспроизвести поток');
+      }
       setPlaybackState('error');
     }
-  }, []);
+  }, [API, streamQuality, rotationStorageKey]);
 
   // Обработчики событий аудио
   useEffect(() => {
@@ -650,53 +830,35 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       }
     };
 
-                                                                             const handleEnded = async () => {
-       let nextSongsPlayed = songsPlayed;
-       
-       if (isPlayingStream) {
-         // Если играл поток, сбрасываем флаг и переключаемся на музыку
-         setIsPlayingStream(false);
-         setCurrentStream(null);
-         // Увеличиваем индекс потока для следующего воспроизведения
-         setCurrentStreamIndex(prev => prev + 1);
-         // После потока увеличиваем счетчик на 1, чтобы начать новый цикл из 3 треков
-         // Например: было 3 трека (songsPlayed=3) -> поток -> songsPlayed=4 (первый трек новой группы)
-         nextSongsPlayed = songsPlayed + 1;
-         setSongsPlayed(nextSongsPlayed);
-       } else {
-        // Если играл трек, проверяем, не завершился ли цикл
-        if (currentTrack && musicTracks.length > 0) {
-          const currentIndex = currentTrack.index;
-          const lastIndex = musicTracks.length - 1;
-          
-          if (currentIndex === lastIndex) {
-            // Цикл завершен, сбрасываем счетчик на 1
-            nextSongsPlayed = 1;
-            setSongsPlayed(1);
-          } else {
-            // Увеличиваем счетчик только если цикл не завершен
-            nextSongsPlayed = songsPlayed + 1;
-            setSongsPlayed(nextSongsPlayed);
-          }
-        } else {
-          nextSongsPlayed = songsPlayed + 1;
-          setSongsPlayed(nextSongsPlayed);
-        }
+  const handleEnded = async () => {
+    // Android: при любом окончании (трек/поток) увеличиваем счетчик песен на 1
+    const nextSongsPlayed = songsPlayed + 1;
+    setSongsPlayed(nextSongsPlayed);
+
+    if (isPlayingStream) {
+      // Если играл поток, сбрасываем флаг и переключаемся на музыку
+      setIsPlayingStream(false);
+      setCurrentStream(null);
+    }
+
+    // Вычисляем следующий контент с учетом обновленного счетчика
+    const nextContent = findNextTrack(nextSongsPlayed);
+    
+    if (nextContent) {
+      if (nextContent.type === 'track') {
+        await playTrack(nextContent.content as MusicTrack);
+      } else if (nextContent.type === 'stream') {
+        await playStream(nextContent.content as RadioStream, (nextContent as any).index);
       }
-      
-      // Вычисляем следующий контент с учетом обновленного счетчика
-      const nextContent = findNextTrack(nextSongsPlayed);
-      
-             if (nextContent) {
-         if (nextContent.type === 'track') {
-           await playTrack(nextContent.content as MusicTrack);
-         } else if (nextContent.type === 'stream') {
-           await playStream(nextContent.content as RadioStream);
-         }
-       } else {
-         setPlaybackState('stopped');
-       }
-     };
+    } else {
+      setPlaybackState('stopped');
+    }
+    
+    // Буферизируем следующий трек после начала воспроизведения
+    setTimeout(() => {
+      bufferNextTrack();
+    }, 500);
+  };
 
     const handleError = (event: any) => {
       console.error('❌ [WebRadioPlayer] Ошибка воспроизведения:', event);
@@ -727,6 +889,27 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       
       setError(errorMessage);
       setPlaybackState('error');
+
+      // Ретрай с экспоненциальной задержкой
+      const src = (event?.target?.src as string) || '';
+      if (src) {
+        const count = retryCountsRef.current[src] || 0;
+        if (count < 3) {
+          retryCountsRef.current[src] = count + 1;
+          const delay = Math.pow(2, count) * 1000;
+          setTimeout(async () => {
+            try {
+              if (!audioRef.current) return;
+              audioRef.current.load();
+              await audioRef.current.play();
+              setPlaybackState('playing');
+              setError(null);
+            } catch (e) {
+              // не удалось — оставим ошибку
+            }
+          }, delay);
+        }
+      }
     };
 
     const handleStalled = () => {
@@ -840,7 +1023,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
           if (nextContent.type === 'track') {
             await playTrack(nextContent.content as MusicTrack);
           } else if (nextContent.type === 'stream') {
-            await playStream(nextContent.content as RadioStream);
+            await playStream(nextContent.content as RadioStream, (nextContent as any).index);
           }
         } else {
           setError('Нет контента для воспроизведения');
@@ -853,7 +1036,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
         if (nextContent.type === 'track') {
           await playTrack(nextContent.content as MusicTrack);
         } else if (nextContent.type === 'stream') {
-          await playStream(nextContent.content as RadioStream);
+          await playStream(nextContent.content as RadioStream, (nextContent as any).index);
         }
       } else {
         setError('Нет контента для воспроизведения');
@@ -975,7 +1158,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
                      <IconPlayerPlay size={32} />
                }
                onClick={handlePlayPause}
-               disabled={!isWithinWorkingTime() || (!currentStream && !currentTrack) || playbackState === 'loading'}
+              disabled={!isWithinWorkingTime() || playbackState === 'loading' || (musicTracks.length === 0 && streams.length === 0)}
                style={{
                  width: '80px',
                  height: '80px',
@@ -1011,24 +1194,26 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
               )}
            </Group>
 
+          {/* Регулятор громкости удален по запросу */}
+
           {/* Текущий трек/поток */}
           <Box style={{ textAlign: 'center', maxWidth: '400px' }}>
-            {isPlayingStream && currentStream ? (
+            {isPlayingStream && (pendingStream || currentStream) ? (
               <Stack gap="xs" align="center">
                 <Text size="xl" fw={600} style={{ color: 'var(--theme-text-primary)' }}>
-                  📻 {currentStream.name}
+                  📻 {(pendingStream || currentStream)!.name}
                 </Text>
                 <Text size="sm" c="dimmed">
-                  {currentStream.branchTypeOfDist}
+                  {(pendingStream || currentStream)!.branchTypeOfDist}
                 </Text>
                 <Text size="xs" c="dimmed">
                   Радио поток
                 </Text>
               </Stack>
-            ) : currentTrack ? (
+            ) : (currentTrack || pendingTrack) ? (
               <Stack gap="xs" align="center">
                 <Text size="xl" fw={600} style={{ color: 'var(--theme-text-primary)' }}>
-                  🎵 {currentTrack.fileName.replace('.mp3', '')}
+                  🎵 {(currentTrack || pendingTrack)!.fileName.replace('.mp3', '')}
                 </Text>
                 <Text size="sm" c="dimmed">
                   Музыкальный трек
@@ -1073,6 +1258,15 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
               </Group>
             </Box>
           )}
+
+        {/* Индикатор буферизации следующего трека */}
+        {nextTrackBuffered && (
+          <Box style={{ width: '100%', maxWidth: '400px' }}>
+            <Text size="xs" c="dimmed" ta="center">
+              ✓ Следующий трек готов
+            </Text>
+          </Box>
+        )}
 
           {/* Прогресс загрузки */}
           {downloadState === 'downloading' && (
@@ -1142,12 +1336,12 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
             <Group gap="xs" align="center">
               <IconBug size={14} color="var(--theme-text-secondary)" />
               <Text size="xs" c="dimmed">
-                Версия: 1.1.3
+                Версия: 1.1.4
               </Text>
             </Group>
             {downloadState === 'complete' && (
               <Text size="xs" c="dimmed">
-                Готово: {downloadedCount} файлов • v1.1.3
+                Готово: {downloadedCount} файлов • v1.1.4
               </Text>
             )}
           </Box>
