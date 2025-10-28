@@ -15,7 +15,7 @@ import {
 } from "@mantine/core"
 import { useDisclosure } from "@mantine/hooks"
 import { Carousel } from '@mantine/carousel'
-import { IconMapPin, IconBuilding, IconRuler, IconPhoto } from "@tabler/icons-react"
+import { IconMapPin, IconBuilding, IconRuler, IconPhoto, IconHomeLink } from "@tabler/icons-react"
 import { BranchType } from "./Branch"
 
 function BranchCard({branch}: {branch: BranchType}) {
@@ -171,14 +171,12 @@ function BranchCard({branch}: {branch: BranchType}) {
               </Badge>
             </Group>
             
-            <Box>
-              <Text size="sm" fw={600} mb="xs" style={{ color: 'var(--theme-text-primary)' }}>
-                Адрес
-              </Text>
+            <Group wrap="nowrap" align="center" gap='xs'>
+              <IconHomeLink size={18}/>
               <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
                 {branch.address}
               </Text>
-            </Box>
+            </Group>
             
             {branch.tradingArea !== 0 && (
               <Group gap="xs" align="center">
