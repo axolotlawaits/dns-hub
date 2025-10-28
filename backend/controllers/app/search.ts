@@ -232,3 +232,25 @@ export const getAllUsers = async (req: Request, res: Response): Promise<any> => 
     res.status(400).json({error: 'ошибка при поиске должностей'})
   }
 }
+
+export const updateBranchTypeOfDist = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { id } = req.params;
+    const { typeOfDist } = req.body;
+
+    if (!typeOfDist) {
+      return res.status(400).json({ error: 'typeOfDist is required' });
+    }
+
+    const updatedBranch = await prisma.branch.update({
+      where: { uuid: id },
+      data: { typeOfDist },
+      select: { uuid: true, name: true, typeOfDist: true }
+    });
+
+    return res.status(200).json({ success: true, branch: updatedBranch });
+  } catch (error) {
+    console.error('Error updating branch typeOfDist:', error);
+    return res.status(500).json({ error: 'Error updating branch typeOfDist' });
+  }
+}

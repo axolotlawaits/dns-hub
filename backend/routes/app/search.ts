@@ -1,5 +1,5 @@
 import express from 'express'
-import { getAllGroups, getAllPositions, getAllUsers, getBranch, getBranchEmployees, getEmployee, quickSearch, searchAll, searchBranches, searchCities, searchEmployees, searchEmployeesSummary, searchPositions, searchTools } from '../../controllers/app/search.js'
+import { getAllGroups, getAllPositions, getAllUsers, getBranch, getBranchEmployees, getEmployee, quickSearch, searchAll, searchBranches, searchCities, searchEmployees, searchEmployeesSummary, searchPositions, searchTools, updateBranchTypeOfDist } from '../../controllers/app/search.js'
 
 const router = express.Router()
 
@@ -8,6 +8,7 @@ router.get('/', quickSearch)
 router.get('/all', searchAll)
 
 router.get('/branch/:id', getBranch)
+router.patch('/branch/:id/typeOfDist', updateBranchTypeOfDist)
 
 router.get('/branch', searchBranches)
 

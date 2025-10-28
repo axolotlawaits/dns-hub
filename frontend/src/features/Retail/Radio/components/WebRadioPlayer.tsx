@@ -7,7 +7,8 @@ import {
   Stack, 
   Progress,
   Box,
-  TextInput
+  TextInput,
+  Select
 } from '@mantine/core';
 import { 
   IconPlayerPlay, 
@@ -98,6 +99,24 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
   const [timeModalOpen, setTimeModalOpen] = useState(false);
   const [tempTimeStart, setTempTimeStart] = useState(workingTime.start);
   const [tempTimeEnd, setTempTimeEnd] = useState(workingTime.end);
+
+  // Состояние для модального окна выбора типа филиала
+  const [branchTypeModalOpen, setBranchTypeModalOpen] = useState(false);
+  
+  // Получаем сохраненный тип филиала из localStorage
+  const getStoredBranchType = useCallback(() => {
+    if (!user?.email) return branchType;
+    try {
+      const stored = localStorage.getItem(`web-radio-player-branch-type-${user.email}`);
+      return stored || branchType;
+    } catch {
+      return branchType;
+    }
+  }, [user?.email, branchType]);
+
+  // Локальное состояние типа филиала
+  const [localBranchType, setLocalBranchType] = useState<string>(getStoredBranchType());
+  const [tempBranchType, setTempBranchType] = useState<string>(localBranchType);
   
   // Функция для получения IP устройства в локальной сети
   const getUserIP = useCallback(async () => {
@@ -156,6 +175,46 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       setTimeModalOpen(false);
     }
   }, [onTimeChange, tempTimeStart, tempTimeEnd]);
+
+  // Функции для работы с модальным окном выбора типа филиала
+  const openBranchTypeModal = useCallback(() => {
+    setTempBranchType(localBranchType);
+    setBranchTypeModalOpen(true);
+  }, [localBranchType]);
+
+  const closeBranchTypeModal = useCallback(() => {
+    setBranchTypeModalOpen(false);
+  }, []);
+
+  const saveBranchTypeChanges = useCallback(async () => {
+    if (!user?.id || !tempBranchType) return;
+
+    try {
+      // Обновляем typeOfDist филиала пользователя в базе данных
+      const response = await fetch(`${API}/branch/${user.branch}/typeOfDist`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ typeOfDist: tempBranchType })
+      });
+
+      if (response.ok) {
+        // Сохраняем в localStorage для локального кэша
+        localStorage.setItem(`web-radio-player-branch-type-${user.email}`, tempBranchType);
+        setLocalBranchType(tempBranchType);
+        setBranchTypeModalOpen(false);
+        // Сбрасываем счетчики при смене типа филиала
+        setSongsPlayed(0);
+        setCurrentStreamIndex(0);
+        setLastTrackIndex(-1);
+      } else {
+        console.error('Ошибка обновления типа филиала в базе данных');
+      }
+    } catch (error) {
+      console.error('Ошибка сохранения типа филиала:', error);
+    }
+  }, [user?.id, user?.branch, user?.email, tempBranchType]);
   
   // Состояние воспроизведения
   const [playbackState, setPlaybackState] = useState<PlaybackState>('stopped');
@@ -244,7 +303,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       
       const deviceData = {
         userEmail: user.email,
-        branchType: branchType,
+        branchType: localBranchType,
         deviceName: `DNS Radio Web (${user.email.split('@')[0]})`,
         vendor: 'Web Browser',
         network: userIP.includes('.') ? userIP.split('.').slice(0, 3).join('.') + '.' : userIP,
@@ -271,7 +330,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     } catch (err) {
       console.log('⚠️ [WebRadioPlayer] Ошибка регистрации устройства:', err);
     }
-  }, [branchType, user?.email, getBrowserFingerprint, userIP, isActive]);
+  }, [localBranchType, user?.email, getBrowserFingerprint, userIP, isActive]);
 
   // Загрузка папок с музыкой
   const loadMusicFolders = useCallback(async () => {
@@ -488,11 +547,13 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     const shouldPlayStream = songsCount > 0 && (songsCount + 1) % 4 === 0;
     
     if (shouldPlayStream && streams.length > 0) {
-      // Получаем только активные потоки
-      const activeStreams = streams.filter(stream => stream.isActive);
+      // Получаем только активные потоки, соответствующие типу филиала
+      const activeStreams = streams.filter(stream => 
+        stream.isActive && stream.branchTypeOfDist === localBranchType
+      );
       
       if (activeStreams.length > 0) {
-        // Выбираем следующий поток по порядку
+        // Выбираем следующий поток по порядку из фильтрованных по типу филиала
         const nextStream = activeStreams[currentStreamIndex % activeStreams.length];
         return { type: 'stream', content: nextStream };
       }
@@ -511,7 +572,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     }
     
     return null;
-  }, [streams, musicTracks, currentStreamIndex, lastTrackIndex]);
+  }, [streams, musicTracks, currentStreamIndex, lastTrackIndex, localBranchType]);
 
   // Воспроизведение трека
   const playTrack = useCallback(async (track: MusicTrack) => {
@@ -1047,8 +1108,16 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
             </Text>
             <Group gap="xs" align="center" mt="xs">
               <Text size="sm" c="dimmed">
-                {branchType} ({workingTime.start} — {workingTime.end})
+                {localBranchType} ({workingTime.start} — {workingTime.end})
               </Text>
+              <Button
+                variant="subtle"
+                size="xs"
+                color="blue"
+                onClick={openBranchTypeModal}
+              >
+                Сменить формат
+              </Button>
               {onTimeChange && (
                 <Button
                   variant="subtle"
@@ -1057,7 +1126,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
                   onClick={openTimeModal}
                   leftSection={<IconClock size={12} />}
                 >
-                  Изменить
+                  Изменить время
                 </Button>
               )}
             </Group>
@@ -1113,6 +1182,48 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
         controls={false}
         style={{ display: 'none' }}
       />
+
+      {/* Модальное окно для выбора типа филиала */}
+      <CustomModal
+        opened={branchTypeModalOpen}
+        onClose={closeBranchTypeModal}
+        title="Выбор формата филиала"
+        size="sm"
+      >
+        <Stack gap="md">
+          <Text size="sm" c="dimmed">
+            Выберите формат филиала для воспроизведения подходящих радио потоков
+          </Text>
+          
+          <Select
+            label="Тип филиала"
+            placeholder="Выберите тип филиала"
+            value={tempBranchType}
+            onChange={(value) => setTempBranchType(value || 'Магазин')}
+            data={[
+              { value: 'Магазин', label: 'Магазин' },
+              { value: 'Самообслуживание', label: 'Самообслуживание' },
+              { value: 'Конвеер', label: 'Конвеер' },
+              { value: 'Технопоинт', label: 'Технопоинт' }
+            ]}
+          />
+          
+          <Group justify="flex-end" gap="sm" mt="md">
+            <Button
+              variant="subtle"
+              onClick={closeBranchTypeModal}
+            >
+              Отмена
+            </Button>
+            <Button
+              onClick={saveBranchTypeChanges}
+              disabled={!tempBranchType}
+            >
+              Сохранить
+            </Button>
+          </Group>
+        </Stack>
+      </CustomModal>
 
       {/* Модальное окно для смены времени */}
       <CustomModal
