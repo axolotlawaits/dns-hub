@@ -40,6 +40,11 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
       const response = await fetch(`${API}/search?text=${text}`)
       const json = await response.json()
       if (response.ok) {
+        if (json.branches.length === 0 && json.branchesByAddress.length > 0) {
+          setBranchType('address')
+        } else {
+          setBranchType('name')
+        }
         setBranchResult(json.branches || [])
         setBranchByAddressResult(json.branchesByAddress || [])
         setEmployeeResult(json.users || [])
@@ -154,8 +159,22 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
                   </Badge>
                 </Group>
                 <Group>
-                  <Button size="xs" variant={branchType === 'name' ? 'filled' : 'light'} onClick={() => setBranchType('name')}>По наименованию</Button>
-                  <Button size="xs" variant={branchType === 'address' ? 'filled' : 'light'} onClick={() => setBranchType('address')}>По адресу</Button>
+                  <Button 
+                    size="xs" 
+                    variant={branchType === 'name' ? 'filled' : 'light'} 
+                    onClick={() => setBranchType('name')}
+                    rightSection={<Badge variant="default" size="sm">{branchResult.length}</Badge>}
+                  >
+                    По наименованию
+                  </Button>
+                  <Button
+                    size="xs" 
+                    variant={branchType === 'address' ? 'filled' : 'light'} 
+                    onClick={() => setBranchType('address')}
+                    rightSection={<Badge variant="default" size="sm">{branchByAddressResult.length}</Badge>}
+                  >
+                    По адресу
+                  </Button>
                 </Group>
               </Group>
             </Box>
