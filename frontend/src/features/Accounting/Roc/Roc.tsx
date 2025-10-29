@@ -610,17 +610,47 @@ export default function RocList() {
                   data={data}
                   columns={[
                     { 
-                      header: 'Контрагент', 
-                      accessorKey: 'name', 
+                      header: 'Номер', 
+                      accessorKey: 'contractNumber', 
                       cell: info => (
                         <Text 
                           style={{ 
-                            fontWeight: '600',
-                            color: 'var(--theme-text-primary)',
-                            fontSize: '15px'
+                            color: 'var(--theme-text-secondary)',
+                            fontSize: '14px',
+                            fontFamily: 'monospace'
                           }}
                         >
-                          {info.row.original.name}
+                          {info.row.original.contractNumber || '-'}
+                        </Text>
+                      ) 
+                    },
+                    { 
+                      header: 'Дата', 
+                      accessorKey: 'dateContract', 
+                      cell: info => (
+                        <Text 
+                          style={{ 
+                            color: 'var(--theme-text-primary)',
+                            fontSize: '14px',
+                            fontWeight: '500'
+                          }}
+                        >
+                          {info.row.original.dateContract ? dayjs(info.row.original.dateContract).format('DD.MM.YYYY') : '-'}
+                        </Text>
+                      ) 
+                    },
+                    { 
+                      header: 'Действует до', 
+                      accessorKey: 'agreedTo', 
+                      cell: info => (
+                        <Text 
+                          style={{ 
+                            color: 'var(--theme-text-primary)',
+                            fontSize: '14px',
+                            fontWeight: '500'
+                          }}
+                        >
+                          {info.row.original.agreedTo ? dayjs(info.row.original.agreedTo).format('DD.MM.YYYY') : '-'}
                         </Text>
                       ) 
                     },
@@ -663,47 +693,17 @@ export default function RocList() {
                       ) 
                     },
                     { 
-                      header: 'Номер', 
-                      accessorKey: 'contractNumber', 
+                      header: 'Контрагент', 
+                      accessorKey: 'name', 
                       cell: info => (
                         <Text 
                           style={{ 
-                            color: 'var(--theme-text-secondary)',
-                            fontSize: '14px',
-                            fontFamily: 'monospace'
-                          }}
-                        >
-                          {info.row.original.contractNumber || '-'}
-                        </Text>
-                      ) 
-                    },
-                    { 
-                      header: 'Дата', 
-                      accessorKey: 'dateContract', 
-                      cell: info => (
-                        <Text 
-                          style={{ 
+                            fontWeight: '600',
                             color: 'var(--theme-text-primary)',
-                            fontSize: '14px',
-                            fontWeight: '500'
+                            fontSize: '15px'
                           }}
                         >
-                          {info.row.original.dateContract ? dayjs(info.row.original.dateContract).format('DD.MM.YYYY') : '-'}
-                        </Text>
-                      ) 
-                    },
-                    { 
-                      header: 'Действует до', 
-                      accessorKey: 'agreedTo', 
-                      cell: info => (
-                        <Text 
-                          style={{ 
-                            color: 'var(--theme-text-primary)',
-                            fontSize: '14px',
-                            fontWeight: '500'
-                          }}
-                        >
-                          {info.row.original.agreedTo ? dayjs(info.row.original.agreedTo).format('DD.MM.YYYY') : '-'}
+                          {info.row.original.name}
                         </Text>
                       ) 
                     },
