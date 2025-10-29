@@ -75,6 +75,7 @@ interface RocData {
   createdAt: string;
   updatedAt?: string;
   name: string;
+  folderNo: string;
   typeTerm?: string;
   contractNumber?: string;
   dateContract?: string;
@@ -610,6 +611,21 @@ export default function RocList() {
                   data={data}
                   columns={[
                     { 
+                      header: 'Контрагент', 
+                      accessorKey: 'name', 
+                      cell: info => (
+                        <Text 
+                          style={{ 
+                            fontWeight: '600',
+                            color: 'var(--theme-text-primary)',
+                            fontSize: '15px'
+                          }}
+                        >
+                          {info.row.original.name}
+                        </Text>
+                      ) 
+                    },
+                    { 
                       header: 'Номер', 
                       accessorKey: 'contractNumber', 
                       cell: info => (
@@ -693,17 +709,17 @@ export default function RocList() {
                       ) 
                     },
                     { 
-                      header: 'Контрагент', 
-                      accessorKey: 'name', 
+                      header: 'Папка', 
+                      accessorKey: 'folderNo', 
                       cell: info => (
                         <Text 
                           style={{ 
-                            fontWeight: '600',
                             color: 'var(--theme-text-primary)',
-                            fontSize: '15px'
+                            fontSize: '14px',
+                            fontWeight: '500'
                           }}
                         >
-                          {info.row.original.name}
+                          {info.row.original.folderNo || '-'}
                         </Text>
                       ) 
                     },
@@ -1455,13 +1471,13 @@ export default function RocList() {
           );
         }}
         viewFieldsConfig={[
-          { label: 'Контрагент', value: (it) => it?.name || '-' },
-          { label: 'Тип договора', value: (it) => it?.typeContract?.name || '-' },
-          { label: 'Статус', value: (it) => it?.statusContract?.name || '-' },
+          { label: 'Контрагент (Doc)', value: (it) => it?.doc?.fullName || it?.doc?.name || '-' },
           { label: 'Номер договора', value: (it) => it?.contractNumber || '-' },
           { label: 'Дата договора', value: (it) => it?.dateContract ? dayjs(it.dateContract).format('DD.MM.YYYY') : '-' },
           { label: 'Действует до', value: (it) => it?.agreedTo ? dayjs(it.agreedTo).format('DD.MM.YYYY') : '-' },
-          { label: 'Контрагент (Doc)', value: (it) => it?.doc?.fullName || it?.doc?.name || '-' },
+          { label: 'Тип договора', value: (it) => it?.typeContract?.name || '-' },
+          { label: 'Статус', value: (it) => it?.statusContract?.name || '-' },
+          { label: '№ папки', value: (it) => it?.folderNo || '-' },
           { label: 'ИНН/КПП', value: (it) => it?.doc ? `${it.doc.inn}${it.doc.kpp ? ` / ${it.doc.kpp}` : ''}` : '-' },
           { label: 'ОГРН', value: (it) => it?.doc?.ogrn || '-' },
           { label: 'Адрес', value: (it) => it?.doc?.address || '-' },
