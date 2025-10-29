@@ -533,8 +533,7 @@ export default function RocList() {
     <Box 
       style={{
         background: 'var(--theme-bg-primary)',
-        minHeight: '100vh',
-        padding: '20px'
+        minHeight: '100vh'
       }}
     >
       {loading && <LoadingOverlay visible />}
@@ -542,13 +541,14 @@ export default function RocList() {
       <Tabs 
         value={activeTab} 
         onChange={(v) => setActiveTab((v as any) || 'list')}
-        style={{ marginBottom: '24px' }}
+        variant='pills'
       >
         <Tabs.List
           style={{
             background: 'var(--theme-bg-elevated)',
             borderRadius: '12px',
-            padding: '4px',
+            padding: '3px',
+            marginBottom: '8px',
             border: '1px solid var(--theme-border-primary)',
             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)'
           }}
@@ -559,7 +559,6 @@ export default function RocList() {
               borderRadius: '8px',
               fontWeight: '600',
               fontSize: '16px',
-              padding: '12px 24px',
               transition: 'all 0.2s ease',
               background: activeTab === 'list' 
                 ? 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))' 
@@ -576,7 +575,6 @@ export default function RocList() {
               borderRadius: '8px',
               fontWeight: '600',
               fontSize: '16px',
-              padding: '12px 24px',
               transition: 'all 0.2s ease',
               background: activeTab === 'byDoc' 
                 ? 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))' 
@@ -589,8 +587,8 @@ export default function RocList() {
           </Tabs.Tab>
         </Tabs.List>
 
-        <Tabs.Panel value="list" pt="md">
-          <Grid>
+        <Tabs.Panel value="list">
+          <Grid gutter={0}>
             <Grid.Col span={12}>
                 <FilterGroup
                   filters={filtersConfig}
@@ -607,15 +605,7 @@ export default function RocList() {
                 />
             </Grid.Col>
             <Grid.Col span={12}>
-              <Box
-                style={{
-                  background: 'var(--theme-bg-elevated)',
-                  borderRadius: '16px',
-                  border: '1px solid var(--theme-border-primary)',
-                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
-                  overflow: 'hidden'
-                }}
-              >
+              <Box>
                 <TableComponent<RocData>
                   data={data}
                   columns={[

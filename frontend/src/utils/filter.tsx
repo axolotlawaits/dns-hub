@@ -324,7 +324,7 @@ export const FilterGroup = ({
 
   return (
     <Box className="filter-group">
-      <Group justify="space-between" mb="md">
+      <Group justify="space-between" mb="xs">
         <Text size="lg" fw={700} className="filter-group-title">
           {title}
         </Text>
