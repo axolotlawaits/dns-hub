@@ -1034,7 +1034,6 @@ export default function SafetyJournal() {
                         onChange={handleBranchFilterChange}
                         searchable
                         clearable
-                        disabled={!branchFilters.rrs}
                         style={{ minWidth: 200 }}
                       />
                       <Button
