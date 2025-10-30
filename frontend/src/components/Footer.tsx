@@ -1,5 +1,5 @@
 import { AppShell, Loader, Group, Popover, Stack, Text, Divider, Box } from "@mantine/core";
-import { IconAppWindow, IconBasket, IconBrandRumble, IconBrandUnity, IconBriefcase, IconNews } from "@tabler/icons-react";
+import { IconAlien, IconAppWindow, IconBasket, IconBrandRumble, IconBrandUnity, IconBriefcase, IconDashboard, IconNews } from "@tabler/icons-react";
 import { useWeather, WeatherCondition } from "../app/Weather";
 import { useState, useEffect, useCallback, useContext, useMemo } from "react";
 import DatePicker from "react-datepicker";
@@ -32,16 +32,16 @@ const navLinks = [
     description: "Магазин"
   },
   {
+    href: "http://sale.partner.ru/login",
+    icon: IconAppWindow,
+    name: "Web - База",
+    description: "Портал продаж"
+  },
+  {
     href: "https://docs.dns-shop.ru/",
     icon: IconBriefcase,
     name: "Docs",
     description: "Документация"
-  },
-  {
-    href: "https://ecosystem.dns-shop.ru/stream",
-    icon: IconNews,
-    name: "EcoSystem",
-    description: "Новости компании"
   },
   {
     href: "https://media2.dns-shop.ru/",
@@ -50,17 +50,29 @@ const navLinks = [
     description: "Медиа портал"
   },
   {
-    href: "http://sale.partner.ru/login",
-    icon: IconAppWindow,
-    name: "Web - База",
-    description: "Портал продаж"
+    href: "https://ecosystem.dns-shop.ru/stream",
+    icon: IconNews,
+    name: "EcoSystem",
+    description: "Новости компании"
   },
   {
     href: window.location.host.includes('localhost') ? `https://dns-zs.partner.ru/uweb` : `https://${window.location.host}/uweb`,
     icon: IconBrandUnity,
     name: "Uweb",
     description: "Планограммы"
-  }
+  },
+  {
+    href: "https://dns-go.dns-shop.ru",
+    icon: IconAlien,
+    name: "DNS-GO",
+    description: "Заявочная система"
+  },
+  {
+    href: "https://dashboards.dns-shop.ru",
+    icon: IconDashboard,
+    name: "Dashboards",
+    description: "Портал дашбордов"
+  },
 ];
 console.log(window.location.host.includes('localhost'))
 const getWeatherIcon = (condition: WeatherCondition) => {
