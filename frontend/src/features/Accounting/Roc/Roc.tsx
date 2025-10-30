@@ -313,6 +313,7 @@ export default function RocList() {
           placeholder: 'Начните вводить название…',
         },
         {
+          disabled: true,
           name: 'roc.selectedByInn',
           label: 'ИНН',
           type: 'select',
@@ -340,7 +341,7 @@ export default function RocList() {
           name: 'contractNumber', 
           label: 'Номер договора', 
           type: 'text',
-          groupWith: ['typeContractId', 'statusContractId'],
+          groupWith: ['dateContract', 'agreedTo'],
           groupSize: 3
         },
         { 
@@ -349,7 +350,7 @@ export default function RocList() {
           type: 'select', 
           options: types, 
           placeholder: 'Выберите тип',
-          groupWith: ['contractNumber', 'statusContractId'],
+          groupWith: ['statusContractId', 'shelfLife'],
           groupSize: 3
         },
         { 
@@ -358,28 +359,28 @@ export default function RocList() {
           type: 'select', 
           options: statuses, 
           placeholder: 'Выберите статус',
-          groupWith: ['contractNumber', 'typeContractId'],
+          groupWith: ['typeContractId', 'shelfLife'],
           groupSize: 3
         },
         { 
           name: 'dateContract', 
           label: 'Дата договора', 
           type: 'date',
-          groupWith: ['agreedTo', 'shelfLife'],
+          groupWith: ['contractNumber', 'agreedTo'],
           groupSize: 3
         },
         { 
           name: 'agreedTo', 
           label: 'Срок действия до', 
           type: 'date',
-          groupWith: ['dateContract', 'shelfLife'],
+          groupWith: ['contractNumber', 'dateContract'],
           groupSize: 3
         },
         { 
           name: 'shelfLife', 
           label: 'Срок (мес.)', 
           type: 'number',
-          groupWith: ['dateContract', 'agreedTo'],
+          groupWith: ['typeContractId', 'statusContractId'],
           groupSize: 3
         },
         { name: 'terminationLetter', label: 'Есть письмо о расторжении', type: 'boolean' },
