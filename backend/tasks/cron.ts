@@ -2,7 +2,7 @@ import schedule from 'node-schedule'
 import { scheduleRouteDay } from '../controllers/supply/routeDay.js'
 import { dailyRKJob } from '../controllers/add/rk.js';
 import { weeklyRocDocSync } from '../controllers/accounting/roc.js';
-import { cleanupOldMusicFolders } from '../controllers/app/radio.js';
+import { cleanupOldMusicFolders, preloadNextMonthMusic } from '../controllers/app/radio.js';
 
 export const initToolsCron = () => {
   schedule.scheduleJob('0 0 * * *', async () => {
@@ -30,6 +30,23 @@ export const initToolsCron = () => {
       await cleanupOldMusicFolders();
     } catch (e) {
       console.error('Music cleanup error', e);
+    }
+  });
+
+  // Предзагрузка папки музыки следующего месяца: ежедневно в 02:15
+  // Условие: осталось 5 дней или меньше до 1-го числа следующего месяца
+  schedule.scheduleJob('15 2 * * *', async () => {
+    try {
+      const now = new Date();
+      const firstNext = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const msPerDay = 24 * 60 * 60 * 1000;
+      const daysLeft = Math.ceil((firstNext.getTime() - now.getTime()) / msPerDay);
+      if (daysLeft <= 5) {
+        console.log(`[Radio] Running monthly preload (daysLeft=${daysLeft})...`);
+        await preloadNextMonthMusic();
+      }
+    } catch (e) {
+      console.error('Monthly music preload error', e);
     }
   });
 }

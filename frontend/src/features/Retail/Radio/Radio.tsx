@@ -1257,6 +1257,9 @@ const RadioAdmin: React.FC = () => {
 
     console.log('Uploading files:', validFiles);
     console.log('API_BASE:', API_BASE);
+    const uploadEndpoint = musicStatus?.shouldWarn 
+      ? `${API_BASE}/upload/next` 
+      : `${API_BASE}/upload`;
 
     setIsUploading(true);
       setUploadProgress(0);
@@ -1286,9 +1289,9 @@ const RadioAdmin: React.FC = () => {
         const formData = new FormData();
         formData.append('music', file);
 
-            console.log(`Sending file ${globalIndex + 1}/${validFiles.length}:`, file.name, 'to:', `${API_BASE}/upload`);
+            console.log(`Sending file ${globalIndex + 1}/${validFiles.length}:`, file.name, 'to:', uploadEndpoint);
 
-        const response = await axios.post(`${API_BASE}/upload`, formData, {
+        const response = await axios.post(uploadEndpoint, formData, {
               headers: { 'Content-Type': 'multipart/form-data' },
               timeout: 30000, // 30 секунд таймаут
               maxContentLength: 100 * 1024 * 1024, // 100MB максимум
@@ -1710,7 +1713,9 @@ const RadioAdmin: React.FC = () => {
                         }}
                       >
                         Загружайте MP3 файлы для воспроизведения в филиалах. 
-                        Файлы автоматически сохраняются в папку retail/music/{musicStatus?.currentMonthFolder || 'текущий месяц'}.
+                        Файлы автоматически сохраняются в папку retail/music/{
+                          musicStatus?.shouldWarn ? musicStatus?.nextMonthFolder : (musicStatus?.currentMonthFolder || 'текущий месяц')
+                        }.
                       </Text>
                     </div>
                   <Button 

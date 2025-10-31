@@ -31,30 +31,40 @@ export const cleanupOldMusicFolders = async () => {
     }
 
     const folders = fs.readdirSync(musicPath);
-    const currentDate = new Date();
-    const currentMonth = String(currentDate.getMonth() + 1).padStart(2, '0');
-    const currentYear = currentDate.getFullYear();
-    const currentFolder = `${currentMonth}-${currentYear}`;
+    const now = new Date();
+    const curMonth = now.getMonth() + 1;
+    const curYear = now.getFullYear();
+    const currentFolder = `${String(curMonth).padStart(2, '0')}-${curYear}`;
+    const next = new Date(curYear, curMonth, 1); // first day of next month
+    const nextFolder = `${String(next.getMonth() + 1).padStart(2, '0')}-${next.getFullYear()}`;
     
     let deletedCount = 0;
     
     for (const folder of folders) {
-      // Пропускаем текущую папку
-      if (folder === currentFolder) {
-        continue;
-      }
-      
       // Проверяем формат папки (MM-YYYY)
       const folderRegex = /^\d{2}-\d{4}$/;
       if (!folderRegex.test(folder)) {
         continue;
       }
-      
+      // Оставляем текущий и следующий месяц без изменений
+      if (folder === currentFolder || folder === nextFolder) {
+        continue;
+      }
+
+      // Удаляем только прошедшие месяцы (меньше текущего), будущие — не трогаем
+      const [mmStr, yyyyStr] = folder.split('-');
+      const fMonth = parseInt(mmStr, 10);
+      const fYear = parseInt(yyyyStr, 10);
+      const isPast = fYear < curYear || (fYear === curYear && fMonth < curMonth);
+      if (!isPast) {
+        continue; // это будущая папка (включая за месяц и более вперёд)
+      }
+
       const folderPath = path.join(musicPath, folder);
       const stats = fs.statSync(folderPath);
       
       if (stats.isDirectory()) {
-        // Удаляем ВСЕ папки, которые не соответствуют текущему месяцу
+        // Удаляем только прошедшие месяцы
         fs.rmSync(folderPath, { recursive: true, force: true });
         deletedCount++;
       }
@@ -107,6 +117,21 @@ export const createMusicFolder = async (req: Request, res: Response): Promise<an
   }
 };
 
+// Создание папки для следующего месяца (используется планировщиком)
+export const preloadNextMonthMusic = async (): Promise<void> => {
+  try {
+    const now = new Date();
+    const nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const month = String(nextMonthDate.getMonth() + 1).padStart(2, '0');
+    const year = nextMonthDate.getFullYear();
+    const nextFolder = `${month}-${year}`;
+    const pathCreated = ensureMusicFolder(nextFolder);
+    console.log(`[Radio] Preload check: ensured next month folder ${nextFolder} at ${pathCreated}`);
+  } catch (e) {
+    console.error('[Radio] Preload next month music error:', e);
+  }
+};
+
 export const uploadMusic = async (req: Request, res: Response): Promise<any> => {
   try {
     if (!req.file) {
@@ -132,6 +157,83 @@ export const uploadMusic = async (req: Request, res: Response): Promise<any> => 
   } catch (error) {
     console.error('[Radio] Error uploading music:', error);
     return res.status(500).json({ error: 'Ошибка при загрузке музыки' });
+  }
+};
+
+// Загрузка музыки в конкретную папку MM-YYYY
+export const uploadMusicToFolder = async (req: Request, res: Response): Promise<any> => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Файл не загружен' });
+    }
+    const { folderName } = req.params as { folderName: string };
+    const folderRegex = /^\d{2}-\d{4}$/;
+    if (!folderName || !folderRegex.test(folderName)) {
+      return res.status(400).json({ error: 'Неверное название папки. Ожидается MM-YYYY' });
+    }
+    const basePath = `./public/retail/radio/music/${folderName}`;
+    if (!fs.existsSync(basePath)) {
+      fs.mkdirSync(basePath, { recursive: true });
+    }
+    // Файл уже сохранён muler в нужную папку благодаря storage.destination
+    const fileName = req.file.filename;
+    const filePath = req.file.path;
+    if (!fs.existsSync(filePath)) {
+      return res.status(500).json({ error: 'Файл не найден' });
+    }
+    return res.status(200).json({
+      success: true,
+      message: 'Музыка загружена успешно',
+      fileName,
+      folderName,
+      path: filePath
+    });
+  } catch (error) {
+    console.error('[Radio] Error uploading music to folder:', error);
+    return res.status(500).json({ error: 'Ошибка при загрузке музыки' });
+  }
+};
+
+// Загрузка музыки в папку следующего месяца
+export const uploadMusicNextMonth = async (req: Request, res: Response): Promise<any> => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Файл не загружен' });
+    }
+    const now = new Date();
+    const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const month = String(next.getMonth() + 1).padStart(2, '0');
+    const year = next.getFullYear();
+    const folderName = `${month}-${year}`;
+    const basePath = `./public/retail/radio/music/${folderName}`;
+    if (!fs.existsSync(basePath)) fs.mkdirSync(basePath, { recursive: true });
+    const fileName = req.file.filename;
+    const filePath = req.file.path;
+    if (!fs.existsSync(filePath)) {
+      return res.status(500).json({ error: 'Файл не найден' });
+    }
+    return res.status(200).json({ success: true, message: 'Музыка загружена (следующий месяц)', fileName, folderName, path: filePath });
+  } catch (error) {
+    console.error('[Radio] Error uploading music to next month:', error);
+    return res.status(500).json({ error: 'Ошибка при загрузке музыки' });
+  }
+};
+
+// Подсказка: текущая и следующая папки
+export const getMonthFoldersInfo = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const now = new Date();
+    const curMonth = String(now.getMonth() + 1).padStart(2, '0');
+    const curYear = now.getFullYear();
+    const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const nextMonth = String(next.getMonth() + 1).padStart(2, '0');
+    const nextYear = next.getFullYear();
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const firstNext = new Date(nextYear, next.getMonth(), 1);
+    const daysLeft = Math.ceil((firstNext.getTime() - now.getTime()) / msPerDay);
+    return res.json({ success: true, current: `${curMonth}-${curYear}`, next: `${nextMonth}-${nextYear}`, daysLeft });
+  } catch (e) {
+    return res.status(500).json({ success: false });
   }
 };
 

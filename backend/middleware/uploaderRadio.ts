@@ -17,8 +17,26 @@ const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     let targetDir: string;
     
-    // Для загрузки музыки - сразу в папку текущего месяца
-    if (req.path === '/upload' || req.path.includes('/upload')) {
+    // Для загрузки музыки в следующий месяц: /upload/next
+    if (req.path.includes('/upload/next')) {
+      const now = new Date();
+      const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const month = String(next.getMonth() + 1).padStart(2, '0');
+      const year = next.getFullYear();
+      const folderName = `${month}-${year}`;
+      targetDir = `./public/retail/radio/music/${folderName}`;
+    }
+    // Для загрузки музыки в указанную папку: /folder/:folderName/upload
+    else if (req.path.includes('/folder/') && req.path.includes('/upload')) {
+      const folderParam = (req as any).params?.folderName;
+      const folderRegex = /^\d{2}-\d{4}$/; // MM-YYYY
+      if (!folderParam || !folderRegex.test(folderParam)) {
+        return cb(new Error('Неверное название папки. Ожидается формат MM-YYYY'), '');
+      }
+      targetDir = `./public/retail/radio/music/${folderParam}`;
+    }
+    // Для загрузки музыки без явной папки — текущий месяц
+    else if (req.path === '/upload' || req.path.includes('/upload')) {
       const currentDate = new Date();
       const month = String(currentDate.getMonth() + 1).padStart(2, '0');
       const year = currentDate.getFullYear();
