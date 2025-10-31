@@ -241,18 +241,18 @@ function Handbook() {
         {tools.length > 0 && (
           <Paper
             radius="lg"
-            p="xl"
+            p={20}
             style={{
               background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, rgba(255, 255, 255, 0.05) 100%)',
               border: '1px solid var(--theme-border-primary)',
               boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)'
             }}
           >
-            <Group gap="md" align="center" mb="xl">
-              <ThemeIcon size="xl" color="blue" variant="light">
-                <IconTool size={28} />
+            <Group gap="md" align="center" mb="lg">
+              <ThemeIcon size="lg" color="blue" variant="light">
+                <IconTool size={22} />
               </ThemeIcon>
-              <Title order={2} style={{ color: 'var(--theme-text-primary)' }}>
+              <Title order={2} size={22} style={{ color: 'var(--theme-text-primary)' }}>
                 Инструменты
               </Title>
             </Group>
@@ -270,11 +270,11 @@ function Handbook() {
               boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)'
             }}
           >
-            <Group gap="md" align="center" mb="xl">
-              <ThemeIcon size="xl" color="green" variant="light">
-                <IconBuilding size={28} />
+            <Group gap="md" align="center" mb="lg">
+              <ThemeIcon size="lg" color="green" variant="light">
+                <IconBuilding size={22} />
               </ThemeIcon>
-              <Title order={2} style={{ color: 'var(--theme-text-primary)' }}>
+              <Title order={2} size={22} style={{ color: 'var(--theme-text-primary)' }}>
                 Филиалы
               </Title>
             </Group>
@@ -292,18 +292,18 @@ function Handbook() {
         {employees.length > 0 && (
           <Paper
             radius="lg"
-            p="xl"
+            p={20}
             style={{
               background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, rgba(255, 255, 255, 0.05) 100%)',
               border: '1px solid var(--theme-border-primary)',
               boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)'
             }}
           >
-            <Group gap="md" align="center" mb="xl">
-              <ThemeIcon size="xl" color="orange" variant="light">
-                <IconUsers size={28} />
+            <Group gap="md" align="center" mb="lg">
+              <ThemeIcon size="lg" color="orange" variant="light">
+                <IconUsers size={22} />
               </ThemeIcon>
-              <Title order={2} style={{ color: 'var(--theme-text-primary)' }}>
+              <Title order={2} size={22} style={{ color: 'var(--theme-text-primary)' }}>
                 Сотрудники
               </Title>
             </Group>

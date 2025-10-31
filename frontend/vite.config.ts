@@ -22,5 +22,8 @@ export default defineConfig({
     alias: {
       '@tabler/icons-react': '@tabler/icons-react/dist/esm/icons/index.mjs',
     },
+  },
+  define: {
+    APP_VERSION: JSON.stringify(process.env.npm_package_version),
   }
 })

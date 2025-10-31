@@ -243,7 +243,7 @@ const Navigation: React.FC<NavigationProps> = ({ navOpened, toggleNav }) => {
           <Divider className="navbar-divider" />
           <div className="navbar-footer-content">
             <Text size="xs" c="var(--theme-text-tertiary)" ta="center">
-              {navOpened ? 'DNS Hub v1.0' : 'v1.0'}
+              {navOpened ? `DNS Hub ${APP_VERSION}` : `v${APP_VERSION}`}
             </Text>
           </div>
         </div>

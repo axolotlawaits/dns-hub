@@ -1,5 +1,5 @@
 import { Link } from "react-router"
-import { Map, Marker } from "pigeon-maps"
+import { Map, Marker, ZoomControl } from "pigeon-maps"
 import { 
   Button, 
   Modal, 
@@ -15,7 +15,7 @@ import {
 } from "@mantine/core"
 import { useDisclosure } from "@mantine/hooks"
 import { Carousel } from '@mantine/carousel'
-import { IconMapPin, IconBuilding, IconRuler, IconPhoto } from "@tabler/icons-react"
+import { IconMapPin, IconBuilding, IconRuler, IconPhoto, IconHomeLink } from "@tabler/icons-react"
 import { BranchType } from "./Branch"
 
 function BranchCard({branch}: {branch: BranchType}) {
@@ -102,7 +102,7 @@ function BranchCard({branch}: {branch: BranchType}) {
           border: '1px solid var(--theme-border-primary)',
           boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
           transition: 'var(--transition-all)',
-          height: '100%',
+          height: '500px',
           display: 'flex',
           flexDirection: 'column'
         }}
@@ -117,10 +117,11 @@ function BranchCard({branch}: {branch: BranchType}) {
           e.currentTarget.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.08)';
         }}
       >
-        <Stack gap="md" style={{ flex: 1 }}>
+        <Stack gap="md" style={{ flex: 1 }} justify="space-between">
+          <Stack gap='md'>
           {/* Заголовок */}
           <Link to={`/branch/${branch.uuid}`} style={{ textDecoration: 'none' }}>
-            <Group gap="md" align="center" mb="md">
+            <Group gap="md" align="center" wrap="nowrap">
               <ThemeIcon size="lg" color="blue" variant="light">
                 <IconBuilding size={20} />
               </ThemeIcon>
@@ -146,39 +147,36 @@ function BranchCard({branch}: {branch: BranchType}) {
           <Stack gap="sm">
             <Group gap="sm">
               <Badge
-                size="md"
+                size="xs"
+                variant="light"
+                color="orange"
+              >
+                РРС: {branch.rrs}
+              </Badge>
+              <Badge
+                size="xs"
                 variant="light"
                 color="blue"
-                leftSection={<IconBuilding size={14} />}
+                leftSection={<IconBuilding size={12} />}
               >
                 {branch.type}
               </Badge>
               <Badge
-                size="md"
+                size="xs"
                 variant="light"
                 color="green"
-                leftSection={<IconMapPin size={14} />}
+                leftSection={<IconMapPin size={12} />}
               >
                 {branch.city}
               </Badge>
             </Group>
             
-            <Badge
-              size="md"
-              variant="light"
-              color="orange"
-            >
-              РРС: {branch.rrs}
-            </Badge>
-            
-            <Box>
-              <Text size="sm" fw={600} mb="xs" style={{ color: 'var(--theme-text-primary)' }}>
-                Адрес
-              </Text>
+            <Group wrap="nowrap" align="center" gap='xs'>
+              <IconHomeLink size={18}/>
               <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
                 {branch.address}
               </Text>
-            </Box>
+            </Group>
             
             {branch.tradingArea !== 0 && (
               <Group gap="xs" align="center">
@@ -215,23 +213,24 @@ function BranchCard({branch}: {branch: BranchType}) {
               Галерея ({branch.images.length})
             </Button>
           )}
-
+          </Stack>
           {/* Карта */}
+  
           <Box
             style={{
               flex: 1,
-              minHeight: '200px',
+              maxHeight: '300px',
               borderRadius: 'var(--radius-md)',
               overflow: 'hidden',
               border: '1px solid var(--theme-border-primary)'
             }}
           >
             <Map 
-              height={200} 
               center={[branch.latitude, branch.longitude]} 
               zoom={14} 
               mouseEvents={false}
             >
+              <ZoomControl/>
               <Marker width={50} anchor={[branch.latitude, branch.longitude]} />
             </Map>
           </Box>
