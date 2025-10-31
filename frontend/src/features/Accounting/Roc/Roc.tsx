@@ -10,7 +10,7 @@ import { FilePreviewModal } from '../../../utils/FilePreviewModal';
 import { useUserContext } from '../../../hooks/useUserContext';
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { TableComponent } from '../../../utils/table';
-import { IconPlus, IconPencil, IconTrash, IconDownload } from '@tabler/icons-react';
+import { IconPlus, IconPencil, IconTrash, IconDownload, IconRefresh } from '@tabler/icons-react';
 import { DndProviderWrapper } from '../../../utils/dnd';
 import FloatingActionButton from '../../../components/FloatingActionButton';
 
@@ -21,7 +21,7 @@ interface DocDirectory {
   fullName: string;
   name: string;
   address: string;
-  inn: number;
+  inn: string;
   ogrn: string;
   kpp: string;
   taxationSystem: string;
@@ -33,6 +33,7 @@ interface DocDirectory {
   liquidationDate: string;
   successorName: string;
   successorINN: string;
+  updatedAt: string;
 }
 
 interface DaDataInfo {
@@ -107,6 +108,14 @@ const DEFAULT_FORM: any = {
   attachments: [],
   additionalAttachments: [],
 };
+
+const docStatusMap = [
+  {value: 'ACTIVE', text: 'действующая', color: 'green'},
+  {value: 'LIQUIDATING', text: 'ликвидируется', color: 'orange'},
+  {value: 'LIQUIDATED', text: 'ликвидирована', color: 'red'},
+  {value: 'BANKRUPT', text: 'банкротство', color: 'red'},
+  {value: 'REORGANIZING', text: 'реорганизация', color: 'orange'}
+]
 
 export default function RocList() {
   const { user } = useUserContext();
@@ -241,6 +250,7 @@ export default function RocList() {
       if (response.ok) {
         const data = await response.json();
         setDadataInfo(data);
+        console.log(data)
       }
     } catch (error) {
       console.error('Ошибка получения данных DaData:', error);
@@ -249,6 +259,18 @@ export default function RocList() {
     }
   }, []);
 
+  const updateDocInfo = async (inn: string, docId: string) => {
+    try {
+      const updatedDoc = await fetchJson<DocDirectory>(`${API}/accounting/roc/doc`, { method: 'PATCH', body: JSON.stringify({ inn }) })
+      console.log(updatedDoc, `by ${inn}`)
+
+      setData(data.map(roc => roc.doc?.id === docId ? {...roc, doc: updatedDoc} : roc))
+      setSelectedView({...selectedView, doc: updatedDoc})
+    } catch (error) {
+      console.error('Ошибка обновления данных DaData:', error);
+    }
+  }
+  console.log(data)
   const fetchSuggestions = useCallback(async (q: string) => {
     if (!q || q.length < 3) { return; }
     try {
@@ -420,6 +442,7 @@ export default function RocList() {
 
   const [selectedView, setSelectedView] = useState<RocData | null>(null);
   const [previewId, setPreviewId] = useState<string | null>(null);
+  
   const addAdditionalFiles = useCallback(async (rocId: string) => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -1006,6 +1029,7 @@ export default function RocList() {
             userUpdatedId: payloadBase.userUpdatedId || user?.id || '',
             name: payloadBase.name || (doc?.name ?? ''),
           };
+          console.log(payload)
           const saved = selected ? await handleUpdate(payload) : await handleCreate(payload);
           const targetId = selected?.id || saved?.id;
           if (targetId) {
@@ -1468,6 +1492,26 @@ export default function RocList() {
                   ))}</Stack>
                 )}
               </Box>
+              <Stack 
+                w='auto'
+                gap={5}
+                align='center' 
+                style={{
+                  position: 'absolute',
+                  top: '85px',
+                  right: '25px',
+                }}
+                >
+                <Button
+                  variant='light'
+                  color={docStatusMap.find(i => i.value === selectedView?.doc?.siEgrul)?.color}
+                  onClick={() => selectedView?.doc && updateDocInfo(selectedView.doc.inn, selectedView.doc.id)}             
+                  leftSection={<IconRefresh size={18} />}
+                >
+                  {docStatusMap.find(i => i.value === selectedView?.doc?.siEgrul)?.text || selectedView?.doc?.siEgrul}
+                </Button>
+                <Text size='xs' c="dimmed">проверено: {dayjs(selectedView?.doc?.updatedAt).format('DD.MM.YYYY HH:mm')}</Text>
+              </Stack>
             </Stack>
           );
         }}
