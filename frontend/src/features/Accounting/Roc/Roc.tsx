@@ -250,7 +250,6 @@ export default function RocList() {
       if (response.ok) {
         const data = await response.json();
         setDadataInfo(data);
-        console.log(data)
       }
     } catch (error) {
       console.error('Ошибка получения данных DaData:', error);
@@ -262,15 +261,14 @@ export default function RocList() {
   const updateDocInfo = async (inn: string, docId: string) => {
     try {
       const updatedDoc = await fetchJson<DocDirectory>(`${API}/accounting/roc/doc`, { method: 'PATCH', body: JSON.stringify({ inn }) })
-      console.log(updatedDoc, `by ${inn}`)
 
       setData(data.map(roc => roc.doc?.id === docId ? {...roc, doc: updatedDoc} : roc))
-      setSelectedView({...selectedView, doc: updatedDoc})
+      setSelectedView({...selectedView, doc: updatedDoc} as RocData)
     } catch (error) {
       console.error('Ошибка обновления данных DaData:', error);
     }
   }
-  console.log(data)
+
   const fetchSuggestions = useCallback(async (q: string) => {
     if (!q || q.length < 3) { return; }
     try {
@@ -1032,7 +1030,6 @@ export default function RocList() {
             userUpdatedId: payloadBase.userUpdatedId || user?.id || '',
             name: payloadBase.name || (doc?.name ?? ''),
           };
-          console.log(payload)
           const saved = selected ? await handleUpdate(payload) : await handleCreate(payload);
           const targetId = selected?.id || saved?.id;
           if (targetId) {

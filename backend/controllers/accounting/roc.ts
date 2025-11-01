@@ -150,7 +150,6 @@ async function findOrCreateDoc(data: any) {
     setIf(data.successorINN, 'successorINN', data.successorINN);
     if (Object.keys(updateData).length > 0) {
       const updated = await (prisma as any).doc.update({ where: { id: existing.id }, data: updateData });
-      console.log(updated)
       return updated
     }
     return existing;
