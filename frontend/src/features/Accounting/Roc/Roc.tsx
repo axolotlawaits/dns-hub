@@ -638,15 +638,18 @@ export default function RocList() {
                       header: 'Контрагент', 
                       accessorKey: 'name', 
                       cell: info => (
-                        <Text 
-                          style={{ 
-                            fontWeight: '600',
-                            color: 'var(--theme-text-primary)',
-                            fontSize: '15px'
-                          }}
-                        >
-                          {info.row.original.name}
-                        </Text>
+                        <Tooltip w={300} label={info.row.original.name} multiline>
+                          <Text
+                            truncate="end" 
+                            style={{ 
+                              fontWeight: '600',
+                              color: 'var(--theme-text-primary)',
+                              fontSize: '14px'
+                            }}
+                          >
+                            {info.row.original.name}
+                          </Text>
+                        </Tooltip>
                       ) 
                     },
                     { 

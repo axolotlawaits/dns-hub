@@ -12,6 +12,7 @@
 
 .modern-table {
   width: 100%;
+  margin-bottom: 10px;
   border-collapse: collapse;
   background-color: transparent;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -55,17 +56,10 @@
 
 .table-row:hover {
   background: linear-gradient(135deg, var(--theme-bg-primary) 0%, var(--theme-bg-secondary) 100%);
-  transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
-.table-row--even {
-  background-color: var(--theme-bg-elevated);
-}
 
-.table-row--odd {
-  background-color: var(--theme-bg-primary);
-}
 
 .table-cell {
   padding: 16px 20px;
@@ -243,15 +237,7 @@
 }
 
 [data-mantine-color-scheme="dark"] .table-row:hover {
-  background: linear-gradient(135deg, #334155 0%, #475569 100%);
-}
-
-[data-mantine-color-scheme="dark"] .table-row--even {
-  background-color: #1e293b;
-}
-
-[data-mantine-color-scheme="dark"] .table-row--odd {
-  background-color: #0f172a;
+  border-bottom-color: #475569;
 }
 
 [data-mantine-color-scheme="dark"] .table-cell {

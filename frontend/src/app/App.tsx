@@ -98,7 +98,7 @@ function App() {
                 bottom: '65px',
               },
               main: {
-                padding: '20px 0 20px 20px',
+                padding: '15px',
                 margin: 0,
                 marginTop: '64px',
                 marginLeft: navOpened ? '225px' : '80px',

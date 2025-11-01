@@ -65,7 +65,7 @@ export function TableComponent<TData>({
       key={forceUpdate ? `table-${forceUpdate}` : undefined}
       shadow="sm" 
       radius="lg" 
-      padding="md" 
+      padding={0} 
       className="table-container"
     >
       <Box style={{ overflowX: 'auto', position: 'relative' }}>
@@ -164,6 +164,7 @@ export function TableComponent<TData>({
           onChange={(page) => table.setPageIndex(page - 1)}
           total={table.getPageCount()}
           size="sm"
+          variant='light'
         />
       </Flex>
     </Card>
