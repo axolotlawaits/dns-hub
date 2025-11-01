@@ -210,11 +210,11 @@ export const FilePreviewModal = ({
           ? decodeURIComponent(source.split('\\').pop() || source.split('/').pop() || 'Файл')
           : source.name),
       fileUrl: typeof source === 'string'
-        ? source.startsWith('http') || source.startsWith('blob:') ? source : `${API}/public/add/media/${source}`
+        ? source.startsWith('http') || source.startsWith('blob:') ? source : `${API}/${source}`
         : URL.createObjectURL(source),
       fileExt: ext,
       downloadUrl: typeof source === 'string'
-        ? (source.startsWith('http') || source.startsWith('blob:') ? source : `${API}/public/add/media/${source}`)
+        ? (source.startsWith('http') || source.startsWith('blob:') ? source : `${API}/${source}`)
         : ''
     };
   }, [currentAttachment, API, fileMimeType]);

@@ -1449,7 +1449,7 @@ export default function RocList() {
                       <Group justify="space-between" align="center">
                         <Group gap="sm" align="center" onClick={() => setPreviewId(att.id)} style={{ cursor: 'pointer' }}>
                           <img 
-                            src={`${API}/public/accounting/roc/${att.source}`} 
+                            src={`${API}/${att.source}`} 
                             alt={String(att.source || '').split('/').pop() || 'Файл'} 
                             style={{ height: 60, width: 100, objectFit: 'contain', borderRadius: 6 }} 
                           />
@@ -1457,7 +1457,7 @@ export default function RocList() {
                         </Group>
                         <Group gap="sm">
                           <Text size="sm">{String(att.source || '').split('/').pop()}</Text>
-                            <ActionIcon component="a" href={`${API}/public/accounting/roc/${att.source}`} target="_blank" rel="noreferrer">
+                            <ActionIcon component="a" href={`${API}/${att.source}`} target="_blank" rel="noreferrer">
                             <IconDownload size={16} />
                           </ActionIcon>
                         </Group>
@@ -1481,7 +1481,7 @@ export default function RocList() {
                       <Group justify="space-between" align="center">
                         <Group gap="sm" align="center" onClick={() => setPreviewId(att.id)} style={{ cursor: 'pointer' }}>
                           <img 
-                            src={`${API}/public/accounting/roc/${att.source}`} 
+                            src={`${API}/${att.source}`} 
                             alt={String(att.source || '').split('/').pop() || 'Файл'} 
                             style={{ height: 60, width: 100, objectFit: 'contain', borderRadius: 6 }} 
                           />
@@ -1489,7 +1489,7 @@ export default function RocList() {
                         </Group>
                         <Group gap="sm">
                           <Text size="sm">{String(att.source || '').split('/').pop()}</Text>
-                            <ActionIcon component="a" href={`${API}/public/accounting/roc/${att.source}`} target="_blank" rel="noreferrer">
+                            <ActionIcon component="a" href={`${API}/${att.source}`} target="_blank" rel="noreferrer">
                             <IconDownload size={16} />
                           </ActionIcon>
                         </Group>
@@ -1544,7 +1544,7 @@ export default function RocList() {
           return all.map((att: any) => ({
             id: String(att.id || `temp-${Math.random().toString(36).slice(2, 11)}`),
             name: String(att.source || '').split('/').pop() || 'Файл',
-            url: `${API}/public/accounting/roc/${att.source}`,
+            url: `${API}/${att.source}`,
             source: String(att.source || ''),
           }));
         })()}
