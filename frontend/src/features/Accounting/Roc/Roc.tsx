@@ -331,6 +331,7 @@ export default function RocList() {
             }
           },
           placeholder: 'Начните вводить название…',
+          required: true
         },
         {
           disabled: true,
@@ -362,7 +363,8 @@ export default function RocList() {
           label: 'Номер договора', 
           type: 'text',
           groupWith: ['dateContract', 'agreedTo'],
-          groupSize: 3
+          groupSize: 3,
+          required: true
         },
         { 
           name: 'typeContractId', 
@@ -371,7 +373,8 @@ export default function RocList() {
           options: types, 
           placeholder: 'Выберите тип',
           groupWith: ['statusContractId', 'shelfLife'],
-          groupSize: 3
+          groupSize: 3,
+          required: true
         },
         { 
           name: 'statusContractId', 
@@ -380,21 +383,24 @@ export default function RocList() {
           options: statuses, 
           placeholder: 'Выберите статус',
           groupWith: ['typeContractId', 'shelfLife'],
-          groupSize: 3
+          groupSize: 3,
+          required: true
         },
         { 
           name: 'dateContract', 
           label: 'Дата договора', 
           type: 'date',
           groupWith: ['contractNumber', 'agreedTo'],
-          groupSize: 3
+          groupSize: 3,
+          required: true
         },
         { 
           name: 'agreedTo', 
           label: 'Срок действия до', 
           type: 'date',
           groupWith: ['contractNumber', 'dateContract'],
-          groupSize: 3
+          groupSize: 3,
+          required: true
         },
         { 
           name: 'shelfLife', 
@@ -404,9 +410,9 @@ export default function RocList() {
           groupSize: 3
         },
         { name: 'terminationLetter', label: 'Есть письмо о расторжении', type: 'boolean' },
+        { name: 'folderNo', label: '№ папки', type: 'text', required: true },
         { name: 'terminationСonditions', label: 'Условия расторжения', type: 'textarea' },
         { name: 'peculiarities', label: 'Особенности', type: 'textarea' },
-        { name: 'folderNo', label: '№ папки', type: 'text' },
         { name: 'attachments', label: 'Вложения (основные)', type: 'file', withDnd: true },
         { name: 'additionalAttachments', label: 'Доп. соглашения', type: 'file', withDnd: true },
       ],
