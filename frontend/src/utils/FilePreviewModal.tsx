@@ -2,7 +2,7 @@ import { Modal, Image, Loader, Stack, Text, Group, Paper, Box, ActionIcon, Toolt
 import { Carousel } from '@mantine/carousel';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { API } from '../config/constants';
-import { IconFile, IconFileText, IconFileTypePdf, IconPhoto, IconMusic, IconVideo, IconDownload, IconChevronLeft, IconChevronRight, IconX, IconTrash, IconExternalLink } from '@tabler/icons-react';
+import { IconFile, IconFileText, IconFileTypePdf, IconPhoto, IconMusic, IconVideo, IconDownload, IconChevronLeft, IconChevronRight, IconX, IconTrash, IconExternalLink, IconRotate2, IconRotateClockwise2 } from '@tabler/icons-react';
 import './styles/FilePreviewModal.css';
 
 // Компонент для загрузки файлов с заголовками авторизации
@@ -140,7 +140,7 @@ export const FilePreviewModal = ({
   const [error, setError] = useState(false);
   const [fileContent, setFileContent] = useState<string>('');
   const currentAttachment = attachments[currentIndex];
-
+  const [rotation, setRotation] = useState(0)
   const [fileMimeType, setFileMimeType] = useState<string>('');
 
   const {
@@ -650,7 +650,14 @@ export const FilePreviewModal = ({
                 {currentIndex + 1} из {attachments.length}
               </Text>
             </Box>
-
+            <Group>
+              <ActionIcon variant="default" aria-label="Settings" onClick={() => setRotation((prev) => (prev - 90) % 360)}> 
+                <IconRotate2 stroke={1.5} />
+              </ActionIcon>
+              <ActionIcon variant="default" aria-label="Settings" onClick={() => setRotation((prev) => (prev - 90) % 360)}> 
+                <IconRotateClockwise2 stroke={1.5} />
+              </ActionIcon>
+            </Group>
             {/* Кнопка "Открыть в новой вкладке" справа */}
             <Button
               variant="outline"
@@ -666,23 +673,25 @@ export const FilePreviewModal = ({
               Открыть в новой вкладке
             </Button>
           </Group>
-          
-          <AuthImage
-            src={fileUrl}
-            alt={fileName}
-            fit="contain"
-            onMimeTypeDetected={setFileMimeType}
-            style={{
-              width: '100%',
-              height: '100%',
-              borderRadius: '8px',
-              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)',
-              objectFit: 'contain',
-              objectPosition: 'center'
-            }}
-            onLoad={() => setLoading(false)}
-            onError={() => setError(true)}
-          />
+          <Box>
+            <AuthImage
+              src={fileUrl}
+              alt={fileName}
+              fit="contain"
+              onMimeTypeDetected={setFileMimeType}
+              style={{
+                width: '100%',
+                height: '100%',
+                borderRadius: '8px',
+                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)',
+                objectFit: 'contain',
+                objectPosition: 'center',
+                transform: `rotate(${rotation}deg)`
+              }}
+              onLoad={() => setLoading(false)}
+              onError={() => setError(true)}
+            />
+          </Box>
         </Box>
       );
     }
