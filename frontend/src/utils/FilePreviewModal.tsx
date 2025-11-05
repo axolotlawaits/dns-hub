@@ -219,6 +219,10 @@ export const FilePreviewModal = ({
     };
   }, [currentAttachment, API, fileMimeType]);
 
+  useEffect(() => {
+    setRotation(0)
+  }, [currentIndex])
+
   const handleNext = useCallback(() => {
     setCurrentIndex(prev => {
       const nextIndex = prev < attachments.length - 1 ? prev + 1 : prev;
@@ -654,7 +658,7 @@ export const FilePreviewModal = ({
               <ActionIcon variant="default" aria-label="Settings" onClick={() => setRotation((prev) => (prev - 90) % 360)}> 
                 <IconRotate2 stroke={1.5} />
               </ActionIcon>
-              <ActionIcon variant="default" aria-label="Settings" onClick={() => setRotation((prev) => (prev - 90) % 360)}> 
+              <ActionIcon variant="default" aria-label="Settings" onClick={() => setRotation((prev) => (prev + 90) % 360)}> 
                 <IconRotateClockwise2 stroke={1.5} />
               </ActionIcon>
             </Group>
@@ -722,7 +726,14 @@ export const FilePreviewModal = ({
                 {currentIndex + 1} из {attachments.length}
               </Text>
             </Box>
-
+            <Group>
+              <ActionIcon variant="default" aria-label="Settings" onClick={() => setRotation((prev) => (prev - 90) % 360)}> 
+                <IconRotate2 stroke={1.5} />
+              </ActionIcon>
+              <ActionIcon variant="default" aria-label="Settings" onClick={() => setRotation((prev) => (prev + 90) % 360)}> 
+                <IconRotateClockwise2 stroke={1.5} />
+              </ActionIcon>
+            </Group>
             {/* Кнопка "Открыть в новой вкладке" справа */}
             <Button
               variant="outline"
@@ -738,27 +749,29 @@ export const FilePreviewModal = ({
               Открыть в новой вкладке
             </Button>
           </Group>
-          
-          <AuthFileLoader 
-            src={fileUrl} 
-            onMimeTypeDetected={setFileMimeType}
-            onLoad={() => setLoading(false)}
-            onError={() => setError(true)}
-          >
-            {(blobUrl: string) => (
-              <iframe
-                title="PDF Viewer"
-                src={`${blobUrl}#toolbar=0&navpanes=0`}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  borderRadius: '8px',
-                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)',
-                  border: 'none'
-                }}
-              />
-            )}
-          </AuthFileLoader>
+          <Box>
+            <AuthFileLoader 
+              src={fileUrl} 
+              onMimeTypeDetected={setFileMimeType}
+              onLoad={() => setLoading(false)}
+              onError={() => setError(true)}
+            >            
+              {(blobUrl: string) => (
+                <iframe
+                  title="PDF Viewer"
+                  src={`${blobUrl}#toolbar=0&navpanes=0`}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    borderRadius: '8px',
+                    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)',
+                    border: 'none',
+                    transform: `rotate(${rotation}deg)`
+                  }}
+                />
+              )}
+            </AuthFileLoader>
+          </Box>
         </Box>
       );
     }
@@ -1016,7 +1029,14 @@ export const FilePreviewModal = ({
                 {currentIndex + 1} из {attachments.length}
               </Text>
             </Box>
-
+            <Group>
+              <ActionIcon variant="default" aria-label="Settings" onClick={() => setRotation((prev) => (prev - 90) % 360)}> 
+                <IconRotate2 stroke={1.5} />
+              </ActionIcon>
+              <ActionIcon variant="default" aria-label="Settings" onClick={() => setRotation((prev) => (prev - 90) % 360)}> 
+                <IconRotateClockwise2 stroke={1.5} />
+              </ActionIcon>
+            </Group>
             {/* Кнопка "Открыть в новой вкладке" справа */}
             <Button
               variant="outline"
@@ -1049,7 +1069,8 @@ export const FilePreviewModal = ({
                   border: 'none',
                   minHeight: 400,
                   borderRadius: '8px',
-                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)'
+                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)',
+                  transform: `rotate(${rotation}deg)`
                 }}
               />
             )}
