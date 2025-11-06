@@ -879,8 +879,17 @@ export const getApkChecksum = async (req: Request, res: Response): Promise<void>
           'apksigner', // Если в PATH
           path.join(home, 'Android', 'Sdk', 'build-tools', '33.0.0', 'apksigner'),
           path.join(home, 'Android', 'Sdk', 'build-tools', '34.0.0', 'apksigner'),
+          path.join(home, 'Android', 'Sdk', 'build-tools', '35.0.0', 'apksigner'),
           path.join('/opt', 'android-sdk', 'build-tools', '33.0.0', 'apksigner'),
           path.join('/opt', 'android-sdk', 'build-tools', '34.0.0', 'apksigner'),
+          path.join('/opt', 'android-sdk', 'build-tools', '35.0.0', 'apksigner'),
+          // Стандартные пути для Ubuntu/Debian при установке через apt-get
+          '/usr/lib/android-sdk/build-tools/33.0.0/apksigner',
+          '/usr/lib/android-sdk/build-tools/34.0.0/apksigner',
+          '/usr/lib/android-sdk/build-tools/35.0.0/apksigner',
+          '/usr/local/android-sdk/build-tools/33.0.0/apksigner',
+          '/usr/local/android-sdk/build-tools/34.0.0/apksigner',
+          '/usr/local/android-sdk/build-tools/35.0.0/apksigner',
         );
       }
       
@@ -909,6 +918,9 @@ export const getApkChecksum = async (req: Request, res: Response): Promise<void>
         searchDirs.push(
           path.join(home, 'Android', 'Sdk', 'build-tools'),
           '/opt/android-sdk/build-tools',
+          // Стандартные пути для Ubuntu/Debian при установке через apt-get
+          '/usr/lib/android-sdk/build-tools',
+          '/usr/local/android-sdk/build-tools',
         );
       }
       
