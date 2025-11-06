@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import {Container,Title,Paper,Text,Button,Group,Stack,Modal,LoadingOverlay, Tabs, Box, Progress, Badge} from '@mantine/core';
 import { TimeInput } from '@mantine/dates';
-import {  IconUpload,  IconMusic,  IconClock,  IconDeviceMobile,  IconBuilding, IconEdit, IconCheck, IconRefresh, IconPower, IconBattery, IconWifi, IconCalendar, IconPlayerPlay, IconPlayerPause, IconWifiOff, IconX, IconRadio, IconDownload, IconAlertCircle, IconChevronDown, IconChevronRight, IconChevronsDown, IconChevronsUp, IconSearch, IconTrash } from '@tabler/icons-react';
+import {  IconUpload,  IconMusic,  IconClock,  IconDeviceMobile,  IconBuilding, IconEdit, IconCheck, IconRefresh, IconPower, IconBattery, IconWifi, IconCalendar, IconPlayerPlay, IconPlayerPause, IconWifiOff, IconX, IconRadio, IconDownload, IconAlertCircle, IconChevronDown, IconChevronRight, IconChevronsDown, IconChevronsUp, IconSearch, IconTrash, IconQrcode } from '@tabler/icons-react';
 import { notificationSystem } from '../../../utils/Push';
 import { API } from '../../../config/constants';
 import { DynamicFormModal, FormField } from '../../../utils/formModal';
@@ -13,6 +13,7 @@ import { useUserContext } from '../../../hooks/useUserContext';
 import { useAccessContext } from '../../../hooks/useAccessContext';
 import { FilterGroup } from '../../../utils/filter';
 import WebRadioPlayer from './components/WebRadioPlayer';
+import QrProvisionModal from './components/QrProvisionModal';
 import './Radio.css';
 import '../../../app/styles/DesignSystem.css';
 
@@ -146,6 +147,10 @@ const RadioAdmin: React.FC = () => {
 
   const [loadingDeviceAction, setLoadingDeviceAction] = useState<string | null>(null);
   const [editingPlaybackTime, setEditingPlaybackTime] = useState({ timeFrom: '', timeUntil: '' });
+
+  // QR Provision Modal
+  const [qrProvisionModalOpen, setQrProvisionModalOpen] = useState(false);
+  const [radioAppId, setRadioAppId] = useState<string | null>(null); // ID приложения Radio из AppStore
 
   
   // Состояния для обновления устройства
@@ -2088,23 +2093,65 @@ const RadioAdmin: React.FC = () => {
 
                 {/* Фильтры устройств для полного доступа */}
                 {hasFullAccess && (
-                <Group>
-                    <FilterGroup
-                      title=""
-                      filters={deviceFiltersConfig}
-                      columnFilters={deviceColumnFilters}
-                      onColumnFiltersChange={(columnId: string, value: any) => {
-                        setDeviceColumnFilters(prev => {
-                          const existing = prev.find(f => f.id === columnId);
-                          if (existing) {
-                            return prev.map(f => f.id === columnId ? { id: columnId, value } : f);
+                <Group justify="space-between" align="flex-start" wrap="wrap">
+                    <div style={{ flex: 1, minWidth: 300 }}>
+                      <FilterGroup
+                        title=""
+                        filters={deviceFiltersConfig}
+                        columnFilters={deviceColumnFilters}
+                        onColumnFiltersChange={(columnId: string, value: any) => {
+                          setDeviceColumnFilters(prev => {
+                            const existing = prev.find(f => f.id === columnId);
+                            if (existing) {
+                              return prev.map(f => f.id === columnId ? { id: columnId, value } : f);
+                            } else {
+                              return [...prev, { id: columnId, value }];
+                            }
+                          });
+                        }}
+                        showClearAll={true}
+                      />
+                    </div>
+                    <Button
+                      variant="light"
+                      color="orange"
+                      size="md"
+                      onClick={async () => {
+                        // Получаем ID приложения Radio из AppStore
+                        try {
+                          const appsResponse = await axios.get(`${API}/retail/app-store`);
+                          if (appsResponse.data.success && appsResponse.data.apps) {
+                            const radioApp = appsResponse.data.apps.find((app: App) => 
+                              app.name.toLowerCase().includes('radio') || 
+                              app.name.toLowerCase().includes('радио')
+                            );
+                            if (radioApp) {
+                              setRadioAppId(radioApp.id);
+                              setQrProvisionModalOpen(true);
+                            } else {
+                              notificationSystem.addNotification('Ошибка', 'Приложение Radio не найдено в AppStore', 'error');
+                            }
                           } else {
-                            return [...prev, { id: columnId, value }];
+                            notificationSystem.addNotification('Ошибка', 'Не удалось загрузить список приложений', 'error');
                           }
-                        });
+                        } catch (error: any) {
+                          notificationSystem.addNotification('Ошибка', `Ошибка загрузки приложений: ${error?.message || error}`, 'error');
+                        }
                       }}
-                      showClearAll={true}
-                    />
+                      leftSection={<IconQrcode size={18} />}
+                      style={{
+                        background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        fontWeight: '600',
+                        boxShadow: '0 4px 12px rgba(245, 158, 11, 0.4)',
+                        transition: 'all 0.2s ease',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      QR Provision
+                    </Button>
                   </Group>
                 )}
 
@@ -2918,6 +2965,68 @@ const RadioAdmin: React.FC = () => {
             </Paper>
             )}
 
+            {/* QR Provision - только для обычных устройств */}
+            {selectedDevice.vendor !== 'Web Browser' && (
+            <Paper p="lg" withBorder style={{
+              background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(217, 119, 6, 0.1) 100%)',
+              border: '2px solid rgba(245, 158, 11, 0.3)',
+              borderRadius: '12px',
+              boxShadow: '0 4px 12px rgba(245, 158, 11, 0.2)'
+            }}>
+              <Group justify="space-between" align="center" mb="md">
+                <div>
+                  <Text fw={600} size="lg" style={{ color: 'var(--theme-text-primary)' }}>
+                    📱 QR Provision для Device Owner
+                  </Text>
+                  <Text size="sm" c="dimmed" mt={4}>
+                    Настройка устройства через QR-код после сброса к заводским настройкам
+                  </Text>
+                </div>
+                <IconQrcode size={24} style={{ color: '#f59e0b' }} />
+              </Group>
+              <Button 
+                fullWidth
+                variant="light" 
+                color="orange"
+                size="lg"
+                onClick={async () => {
+                  // Получаем ID приложения Radio из AppStore
+                  try {
+                    const appsResponse = await axios.get(`${API}/retail/app-store`);
+                    if (appsResponse.data.success && appsResponse.data.apps) {
+                      const radioApp = appsResponse.data.apps.find((app: App) => 
+                        app.name.toLowerCase().includes('radio') || 
+                        app.name.toLowerCase().includes('радио')
+                      );
+                      if (radioApp) {
+                        setRadioAppId(radioApp.id);
+                        setQrProvisionModalOpen(true);
+                      } else {
+                        notificationSystem.addNotification('Ошибка', 'Приложение Radio не найдено в AppStore', 'error');
+                      }
+                    } else {
+                      notificationSystem.addNotification('Ошибка', 'Не удалось загрузить список приложений', 'error');
+                    }
+                  } catch (error: any) {
+                    notificationSystem.addNotification('Ошибка', `Ошибка загрузки приложений: ${error?.message || error}`, 'error');
+                  }
+                }}
+                leftSection={<IconQrcode size={20} />}
+                style={{
+                  background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontWeight: '600',
+                  boxShadow: '0 4px 12px rgba(245, 158, 11, 0.4)',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                Открыть QR Provision
+              </Button>
+            </Paper>
+            )}
+
             {/* Web Player Actions - только для веб-плеера */}
             {selectedDevice.vendor === 'Web Browser' && (
             <Paper p="lg" withBorder style={{
@@ -2967,6 +3076,66 @@ const RadioAdmin: React.FC = () => {
               </Group>
             </Paper>
             )}
+            
+            {/* Device Actions - кнопки управления устройством */}
+            <Paper p="lg" withBorder style={{
+              background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
+              border: '1px solid var(--theme-border)',
+              borderRadius: '12px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+            }}>
+              <Text fw={600} mb="md" size="lg" style={{ color: 'var(--theme-text-primary)' }}>
+                ⚙️ Действия с устройством
+              </Text>
+              <Group grow>
+                {/* Кнопка обновления статуса - для всех устройств */}
+                <Button 
+                  variant="light" 
+                  color="blue"
+                  onClick={async () => {
+                    if (selectedDevice) {
+                      await refreshDeviceStatus(selectedDevice.id);
+                      // Также обновляем статус в модалке если устройство не веб-плеер
+                      if (selectedDevice.vendor !== 'Web Browser') {
+                        await loadDeviceStatus(selectedDevice.id);
+                      }
+                    }
+                  }}
+                  leftSection={<IconRefresh size={16} />}
+                  style={{
+                    background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+                    border: 'none',
+                    color: 'white',
+                    fontWeight: '500'
+                  }}
+                >
+                  Обновить статус
+                </Button>
+                
+                {/* Кнопка удаления - только для оффлайн устройств */}
+                {selectedDevice && !statusMap[selectedDevice.id] && (
+                  <Button 
+                    variant="light" 
+                    color="red"
+                    onClick={async () => {
+                      if (selectedDevice && confirm('Вы уверены, что хотите удалить это устройство?')) {
+                        await deleteDevice(selectedDevice.id);
+                        setDeviceModalOpen(false);
+                      }
+                    }}
+                    leftSection={<IconTrash size={16} />}
+                    style={{
+                      background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                      border: 'none',
+                      color: 'white',
+                      fontWeight: '500'
+                    }}
+                  >
+                    Удалить устройство
+                  </Button>
+                )}
+              </Group>
+            </Paper>
           </Stack>
         )}
       </Modal>
@@ -3006,6 +3175,15 @@ const RadioAdmin: React.FC = () => {
         }
         cancelButtonText="Отмена"
         size="lg"
+      />
+
+      {/* QR Provision Modal */}
+      <QrProvisionModal
+        isOpen={qrProvisionModalOpen}
+        onClose={() => setQrProvisionModalOpen(false)}
+        deviceId={selectedDevice?.id || null}
+        deviceName={selectedDevice?.name}
+        appId={radioAppId || undefined}
       />
 
     </Box>

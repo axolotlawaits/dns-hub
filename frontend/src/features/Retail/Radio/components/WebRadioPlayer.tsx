@@ -660,7 +660,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
           `nextIndex=${nextStreamIndex}`,
           `selected=${nextStream?.name}`
         );
-
+        
         return { type: 'stream', content: nextStream, index: nextStreamIndex } as const;
       }
     }
@@ -834,13 +834,13 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     // Android: при любом окончании (трек/поток) увеличиваем счетчик песен на 1
     const nextSongsPlayed = songsPlayed + 1;
     setSongsPlayed(nextSongsPlayed);
-
+    
     if (isPlayingStream) {
       // Если играл поток, сбрасываем флаг и переключаемся на музыку
       setIsPlayingStream(false);
       setCurrentStream(null);
     }
-
+    
     // Вычисляем следующий контент с учетом обновленного счетчика
     const nextContent = findNextTrack(nextSongsPlayed);
     

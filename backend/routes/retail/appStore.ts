@@ -10,7 +10,8 @@ import {
   getAppFiles,
   updateApp, 
   deleteApp,
-  downloadDiagnostics
+  downloadDiagnostics,
+  getApkChecksum
 } from '../../controllers/retail/appStore.js';
 
 const router = express.Router();
@@ -32,6 +33,9 @@ router.get('/:id/download', downloadLatestVersion);
 
 // Диагностика скачивания
 router.get('/:id/download-diagnostics', downloadDiagnostics);
+
+// Получение SHA-256 checksum сертификата APK для QR provisioning
+router.get('/:id/checksum', getApkChecksum);
 
 // Получение истории версий
 router.get('/:id/versions', getAppVersions);
