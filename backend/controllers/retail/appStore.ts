@@ -816,11 +816,177 @@ export const getApkChecksum = async (req: Request, res: Response): Promise<void>
     let error: string | null = null;
 
     // Пытаемся использовать apksigner (Android SDK)
+    // Ищем apksigner в стандартных местах установки Android SDK
+    const isWindows = process.platform === 'win32';
+    let apksignerCommand = 'apksigner verify --print-certs';
+    
+    // Функция для поиска apksigner
+    const findApksigner = (): string | null => {
+      // Сначала проверяем переменные окружения
+      const androidHome = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT;
+      if (androidHome) {
+        console.log(`[Checksum] Найден ANDROID_HOME/ANDROID_SDK_ROOT: ${androidHome}`);
+        const buildToolsDirs = fs.existsSync(path.join(androidHome, 'build-tools')) 
+          ? fs.readdirSync(path.join(androidHome, 'build-tools')).filter((dir: string) => {
+              const dirPath = path.join(androidHome, 'build-tools', dir);
+              return fs.statSync(dirPath).isDirectory() && /^\d+\.\d+\.\d+/.test(dir);
+            }).sort((a: string, b: string) => {
+              // Сортируем по версии (новые версии первыми)
+              const aParts = a.split('.').map(Number);
+              const bParts = b.split('.').map(Number);
+              for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+                const aVal = aParts[i] || 0;
+                const bVal = bParts[i] || 0;
+                if (bVal !== aVal) return bVal - aVal;
+              }
+              return 0;
+            })
+          : [];
+        
+        for (const buildToolsDir of buildToolsDirs) {
+          const apksignerPath = isWindows 
+            ? path.join(androidHome, 'build-tools', buildToolsDir, 'apksigner.bat')
+            : path.join(androidHome, 'build-tools', buildToolsDir, 'apksigner');
+          
+          if (fs.existsSync(apksignerPath)) {
+            console.log(`[Checksum] ✅ Найден apksigner через ANDROID_HOME: ${apksignerPath}`);
+            return apksignerPath;
+          }
+        }
+      }
+      
+      // Если не нашли через переменные окружения, пробуем стандартные пути
+      const possiblePaths: string[] = [];
+      
+      if (isWindows) {
+        const localAppData = process.env.LOCALAPPDATA || '';
+        const userProfile = process.env.USERPROFILE || '';
+        
+        possiblePaths.push(
+          'apksigner.bat', // Если в PATH
+          path.join(localAppData, 'Android', 'Sdk', 'build-tools', '33.0.0', 'apksigner.bat'),
+          path.join(localAppData, 'Android', 'Sdk', 'build-tools', '34.0.0', 'apksigner.bat'),
+          path.join(localAppData, 'Android', 'Sdk', 'build-tools', '35.0.0', 'apksigner.bat'),
+          path.join(userProfile, 'AppData', 'Local', 'Android', 'Sdk', 'build-tools', '33.0.0', 'apksigner.bat'),
+          path.join(userProfile, 'AppData', 'Local', 'Android', 'Sdk', 'build-tools', '34.0.0', 'apksigner.bat'),
+          path.join('C:', 'Android', 'Sdk', 'build-tools', '33.0.0', 'apksigner.bat'),
+          path.join('C:', 'Android', 'Sdk', 'build-tools', '34.0.0', 'apksigner.bat'),
+        );
+      } else {
+        // Linux/Mac пути
+        const home = process.env.HOME || '';
+        possiblePaths.push(
+          'apksigner', // Если в PATH
+          path.join(home, 'Android', 'Sdk', 'build-tools', '33.0.0', 'apksigner'),
+          path.join(home, 'Android', 'Sdk', 'build-tools', '34.0.0', 'apksigner'),
+          path.join('/opt', 'android-sdk', 'build-tools', '33.0.0', 'apksigner'),
+          path.join('/opt', 'android-sdk', 'build-tools', '34.0.0', 'apksigner'),
+        );
+      }
+      
+      // Проверяем каждый путь
+      for (const possiblePath of possiblePaths) {
+        try {
+          if (fs.existsSync(possiblePath)) {
+            console.log(`[Checksum] ✅ Найден apksigner: ${possiblePath}`);
+            return possiblePath;
+          }
+        } catch {}
+      }
+      
+      // Если не нашли конкретный файл, пробуем найти build-tools директории и искать там
+      const searchDirs: string[] = [];
+      if (isWindows) {
+        const localAppData = process.env.LOCALAPPDATA || '';
+        const userProfile = process.env.USERPROFILE || '';
+        searchDirs.push(
+          path.join(localAppData, 'Android', 'Sdk', 'build-tools'),
+          path.join(userProfile, 'AppData', 'Local', 'Android', 'Sdk', 'build-tools'),
+          path.join('C:', 'Android', 'Sdk', 'build-tools'),
+        );
+      } else {
+        const home = process.env.HOME || '';
+        searchDirs.push(
+          path.join(home, 'Android', 'Sdk', 'build-tools'),
+          '/opt/android-sdk/build-tools',
+        );
+      }
+      
+      for (const searchDir of searchDirs) {
+        try {
+          if (fs.existsSync(searchDir)) {
+            const versions = fs.readdirSync(searchDir)
+              .filter((dir: string) => {
+                const dirPath = path.join(searchDir, dir);
+                return fs.statSync(dirPath).isDirectory() && /^\d+\.\d+\.\d+/.test(dir);
+              })
+              .sort((a: string, b: string) => {
+                const aParts = a.split('.').map(Number);
+                const bParts = b.split('.').map(Number);
+                for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+                  const aVal = aParts[i] || 0;
+                  const bVal = bParts[i] || 0;
+                  if (bVal !== aVal) return bVal - aVal;
+                }
+                return 0;
+              });
+            
+            for (const version of versions) {
+              const apksignerPath = isWindows
+                ? path.join(searchDir, version, 'apksigner.bat')
+                : path.join(searchDir, version, 'apksigner');
+              
+              if (fs.existsSync(apksignerPath)) {
+                console.log(`[Checksum] ✅ Найден apksigner в build-tools: ${apksignerPath}`);
+                return apksignerPath;
+              }
+            }
+          }
+        } catch {}
+      }
+      
+      return null;
+    };
+    
+    const apksignerPath = findApksigner();
+    if (apksignerPath) {
+      apksignerCommand = `"${apksignerPath}" verify --print-certs`;
+      console.log(`[Checksum] Используем apksigner: ${apksignerPath}`);
+      
+      // Добавляем путь к build-tools в PATH для текущего процесса
+      // Это нужно, чтобы apksigner мог найти свои зависимости (например, d8.jar)
+      const buildToolsDir = path.dirname(apksignerPath);
+      const currentPath = process.env.PATH || '';
+      const pathSeparator = isWindows ? ';' : ':';
+      
+      if (!currentPath.includes(buildToolsDir)) {
+        process.env.PATH = `${buildToolsDir}${pathSeparator}${currentPath}`;
+        console.log(`[Checksum] ✅ Добавлен путь в PATH: ${buildToolsDir}`);
+      }
+      
+      // Также добавляем путь к lib директории build-tools, если она существует
+      const libDir = path.join(buildToolsDir, 'lib');
+      if (fs.existsSync(libDir) && !currentPath.includes(libDir)) {
+        process.env.PATH = `${libDir}${pathSeparator}${process.env.PATH}`;
+        console.log(`[Checksum] ✅ Добавлен путь к lib в PATH: ${libDir}`);
+      }
+    } else {
+      console.log(`[Checksum] ⚠️ apksigner не найден, пробуем использовать из PATH`);
+    }
+    
     try {
       console.log(`[Checksum] Попытка использовать apksigner для файла: ${filePath}`);
       const { stdout, stderr } = await execAsync(
-        `apksigner verify --print-certs "${filePath}"`,
-        { timeout: 30000, maxBuffer: 1024 * 1024 }
+        `${apksignerCommand} "${filePath}"`,
+        { 
+          timeout: 30000, 
+          maxBuffer: 1024 * 1024,
+          env: {
+            ...process.env,
+            // Убеждаемся, что PATH содержит нужные пути
+            PATH: process.env.PATH
+          }
+        }
       );
       
       console.log(`[Checksum] apksigner stdout: ${stdout.substring(0, 500)}`);
@@ -829,24 +995,50 @@ export const getApkChecksum = async (req: Request, res: Response): Promise<void>
       // Парсим вывод apksigner - ищем SHA-256 сертификата
       // Формат вывода: "Signer #1 certificate SHA-256 digest: <hex>"
       // Также может быть формат: "SHA-256 digest: <hex>" или просто хеш
-      const sha256Match = stdout.match(/SHA-256\s+digest[:\s]+([a-fA-F0-9:\s]+)/i);
-      if (sha256Match && sha256Match[1]) {
-        const hexHash = sha256Match[1].replace(/[:\\s]/g, '').toLowerCase();
-        if (hexHash.length === 64) { // SHA-256 hex должен быть 64 символа
-          // Конвертируем hex в base64 (URL-safe)
-          const hashBuffer = Buffer.from(hexHash, 'hex');
-          checksum = hashBuffer.toString('base64')
-            .replace(/\+/g, '-')
-            .replace(/\//g, '_')
-            .replace(/=/g, '');
-          method = 'apksigner';
-          console.log(`[Checksum] ✅ Checksum получен через apksigner: ${checksum.substring(0, 32)}...`);
-        } else {
-          console.log(`[Checksum] ⚠️ Неправильная длина hex hash: ${hexHash.length}, ожидается 64`);
+      // Важно: хеш может быть на той же строке или на следующей, может содержать пробелы/переносы
+      const sha256Patterns = [
+        // Формат: "Signer #1 certificate SHA-256 digest: <hex>"
+        /Signer\s+#\d+\s+certificate\s+SHA-256\s+digest[:\s]+([a-fA-F0-9\s]+)/i,
+        // Формат: "SHA-256 digest: <hex>"
+        /SHA-256\s+digest[:\s]+([a-fA-F0-9\s]+)/i,
+        // Просто SHA-256 с хешем
+        /SHA-256[:\s]+([a-fA-F0-9\s]+)/i,
+      ];
+      
+      let hexHash: string | null = null;
+      for (const pattern of sha256Patterns) {
+        const match = stdout.match(pattern);
+        if (match && match[1]) {
+          // Удаляем все пробелы, переносы строк и другие не-hex символы
+          hexHash = match[1].replace(/[\s\n\r\t:]/g, '').toLowerCase();
+          console.log(`[Checksum] Извлеченный hex hash (длина ${hexHash.length}): ${hexHash.substring(0, 32)}...`);
+          
+          // Проверяем, что это валидный hex и правильной длины
+          if (/^[a-f0-9]{64}$/.test(hexHash)) {
+            break; // Нашли правильный хеш
+          } else {
+            console.log(`[Checksum] ⚠️ Извлеченный хеш не соответствует формату (длина: ${hexHash.length})`);
+            hexHash = null; // Сбрасываем, пробуем следующий паттерн
+          }
         }
+      }
+      
+      if (hexHash && hexHash.length === 64) {
+        // Конвертируем hex в base64 (URL-safe)
+        const hashBuffer = Buffer.from(hexHash, 'hex');
+        checksum = hashBuffer.toString('base64')
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=/g, '');
+        method = 'apksigner';
+        console.log(`[Checksum] ✅ Checksum получен через apksigner: ${checksum.substring(0, 32)}...`);
+        console.log(`[Checksum] Hex hash: ${hexHash}`);
       } else {
-        console.log(`[Checksum] ⚠️ SHA-256 digest не найден в выводе apksigner`);
-        console.log(`[Checksum] Полный вывод (первые 1000 символов): ${stdout.substring(0, 1000)}`);
+        console.log(`[Checksum] ⚠️ SHA-256 digest не найден или неправильного формата в выводе apksigner`);
+        console.log(`[Checksum] Полный вывод (первые 2000 символов): ${stdout.substring(0, 2000)}`);
+        if (hexHash) {
+          console.log(`[Checksum] ⚠️ Извлеченный хеш (длина ${hexHash.length}): ${hexHash}`);
+        }
       }
     } catch (e: any) {
       console.log(`[Checksum] apksigner недоступен или ошибка: ${e.message}`);
@@ -1154,8 +1346,19 @@ export const getApkChecksum = async (req: Request, res: Response): Promise<void>
             console.log(`[Checksum] ⚠️ Файлы сертификатов не найдены в META-INF`);
             
             // Если файлы не найдены, возможно APK подписан только v2/v3 схемой
-            const isUbuntu = process.platform === 'linux';
-            if (isUbuntu) {
+            const isWindows = process.platform === 'win32';
+            const isLinux = process.platform === 'linux';
+            
+            if (isWindows) {
+              console.log(`[Checksum] 💡 Для Windows: Установите Android SDK Build Tools для работы с v2/v3 signing:`);
+              console.log(`[Checksum] 💡 1. Скачайте Android SDK Command Line Tools:`);
+              console.log(`[Checksum] 💡    https://developer.android.com/studio#command-tools`);
+              console.log(`[Checksum] 💡 2. Установите через sdkmanager:`);
+              console.log(`[Checksum] 💡    sdkmanager "build-tools;33.0.0"`);
+              console.log(`[Checksum] 💡 3. Добавьте путь к apksigner в PATH:`);
+              console.log(`[Checksum] 💡    %LOCALAPPDATA%\\Android\\Sdk\\build-tools\\33.0.0`);
+              console.log(`[Checksum] 💡 Или используйте полный путь к apksigner.bat`);
+            } else if (isLinux) {
               console.log(`[Checksum] 💡 Для Ubuntu: Установите apksigner для работы с v2/v3 signing:`);
               console.log(`[Checksum] 💡 sudo apt-get install android-sdk-build-tools`);
               console.log(`[Checksum] 💡 или добавьте путь к apksigner в PATH`);
