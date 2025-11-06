@@ -1512,19 +1512,21 @@ export default function RocList() {
                 align='center' 
                 style={{
                   position: 'absolute',
-                  top: '85px',
-                  right: '25px',
+                  top: '10px',
+                  right: '75px',
+                  zIndex: 1000
                 }}
                 >
                 <Button
                   variant='light'
+                  size='xs'
                   color={docStatusMap.find(i => i.value === selectedView?.doc?.siEgrul)?.color}
                   onClick={() => selectedView?.doc && updateDocInfo(selectedView.doc.inn, selectedView.doc.id)}             
                   leftSection={<IconRefresh size={18} />}
                 >
                   {docStatusMap.find(i => i.value === selectedView?.doc?.siEgrul)?.text || selectedView?.doc?.siEgrul}
                 </Button>
-                <Text size='xs' c="dimmed">проверено: {dayjs(selectedView?.doc?.updatedAt).format('DD.MM.YYYY HH:mm')}</Text>
+                <Text size='xs' c="dimmed">статус контрагента от: {dayjs(selectedView?.doc?.updatedAt).format('DD.MM.YYYY HH:mm')}</Text>
               </Stack>
             </Stack>
           );
