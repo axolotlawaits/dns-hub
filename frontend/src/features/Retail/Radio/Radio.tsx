@@ -2121,15 +2121,19 @@ const RadioAdmin: React.FC = () => {
                         try {
                           const appsResponse = await axios.get(`${API}/retail/app-store`);
                           if (appsResponse.data.success && appsResponse.data.apps) {
-                            const radioApp = appsResponse.data.apps.find((app: App) => 
-                              app.name.toLowerCase().includes('radio') || 
-                              app.name.toLowerCase().includes('радио')
-                            );
+                            // Ищем Radio APK приложение (не Tuner, только ANDROID_APK)
+                            const radioApp = appsResponse.data.apps.find((app: App) => {
+                              const nameLower = app.name.toLowerCase();
+                              const isRadio = (nameLower.includes('radio') || nameLower.includes('радио')) && 
+                                             !nameLower.includes('tuner') && 
+                                             !nameLower.includes('тюнер');
+                              return isRadio && app.appType === 'ANDROID_APK';
+                            });
                             if (radioApp) {
                               setRadioAppId(radioApp.id);
                               setQrProvisionModalOpen(true);
                             } else {
-                              notificationSystem.addNotification('Ошибка', 'Приложение Radio не найдено в AppStore', 'error');
+                              notificationSystem.addNotification('Ошибка', 'Приложение Radio (APK) не найдено в AppStore', 'error');
                             }
                           } else {
                             notificationSystem.addNotification('Ошибка', 'Не удалось загрузить список приложений', 'error');
@@ -2994,15 +2998,19 @@ const RadioAdmin: React.FC = () => {
                   try {
                     const appsResponse = await axios.get(`${API}/retail/app-store`);
                     if (appsResponse.data.success && appsResponse.data.apps) {
-                      const radioApp = appsResponse.data.apps.find((app: App) => 
-                        app.name.toLowerCase().includes('radio') || 
-                        app.name.toLowerCase().includes('радио')
-                      );
+                      // Ищем Radio APK приложение (не Tuner, только ANDROID_APK)
+                      const radioApp = appsResponse.data.apps.find((app: App) => {
+                        const nameLower = app.name.toLowerCase();
+                        const isRadio = (nameLower.includes('radio') || nameLower.includes('радио')) && 
+                                       !nameLower.includes('tuner') && 
+                                       !nameLower.includes('тюнер');
+                        return isRadio && app.appType === 'ANDROID_APK';
+                      });
                       if (radioApp) {
                         setRadioAppId(radioApp.id);
                         setQrProvisionModalOpen(true);
                       } else {
-                        notificationSystem.addNotification('Ошибка', 'Приложение Radio не найдено в AppStore', 'error');
+                        notificationSystem.addNotification('Ошибка', 'Приложение Radio (APK) не найдено в AppStore', 'error');
                       }
                     } else {
                       notificationSystem.addNotification('Ошибка', 'Не удалось загрузить список приложений', 'error');

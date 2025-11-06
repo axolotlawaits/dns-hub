@@ -820,42 +820,71 @@ export const getApkChecksum = async (req: Request, res: Response): Promise<void>
     const isWindows = process.platform === 'win32';
     let apksignerCommand = 'apksigner verify --print-certs';
     
+    // Логируем информацию о системе и переменных окружения
+    console.log(`[Checksum] 🔍 Поиск Android SDK...`);
+    console.log(`[Checksum] Платформа: ${process.platform}`);
+    console.log(`[Checksum] ANDROID_HOME: ${process.env.ANDROID_HOME || 'не установлена'}`);
+    console.log(`[Checksum] ANDROID_SDK_ROOT: ${process.env.ANDROID_SDK_ROOT || 'не установлена'}`);
+    console.log(`[Checksum] HOME: ${process.env.HOME || process.env.USERPROFILE || 'не установлена'}`);
+    
     // Функция для поиска apksigner
     const findApksigner = (): string | null => {
       // Сначала проверяем переменные окружения
       const androidHome = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT;
       if (androidHome) {
-        console.log(`[Checksum] Найден ANDROID_HOME/ANDROID_SDK_ROOT: ${androidHome}`);
-        const buildToolsDirs = fs.existsSync(path.join(androidHome, 'build-tools')) 
-          ? fs.readdirSync(path.join(androidHome, 'build-tools')).filter((dir: string) => {
-              const dirPath = path.join(androidHome, 'build-tools', dir);
-              return fs.statSync(dirPath).isDirectory() && /^\d+\.\d+\.\d+/.test(dir);
-            }).sort((a: string, b: string) => {
-              // Сортируем по версии (новые версии первыми)
-              const aParts = a.split('.').map(Number);
-              const bParts = b.split('.').map(Number);
-              for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
-                const aVal = aParts[i] || 0;
-                const bVal = bParts[i] || 0;
-                if (bVal !== aVal) return bVal - aVal;
-              }
-              return 0;
-            })
-          : [];
+        console.log(`[Checksum] ✅ Найден ANDROID_HOME/ANDROID_SDK_ROOT: ${androidHome}`);
+        const buildToolsPath = path.join(androidHome, 'build-tools');
+        console.log(`[Checksum] Проверяем директорию build-tools: ${buildToolsPath}`);
+        
+        if (!fs.existsSync(buildToolsPath)) {
+          console.log(`[Checksum] ⚠️ Директория build-tools не найдена: ${buildToolsPath}`);
+          return null;
+        }
+        
+        console.log(`[Checksum] ✅ Директория build-tools существует`);
+        const buildToolsDirs = fs.readdirSync(buildToolsPath).filter((dir: string) => {
+          const dirPath = path.join(buildToolsPath, dir);
+          try {
+            return fs.statSync(dirPath).isDirectory() && /^\d+\.\d+\.\d+/.test(dir);
+          } catch {
+            return false;
+          }
+        }).sort((a: string, b: string) => {
+          // Сортируем по версии (новые версии первыми)
+          const aParts = a.split('.').map(Number);
+          const bParts = b.split('.').map(Number);
+          for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+            const aVal = aParts[i] || 0;
+            const bVal = bParts[i] || 0;
+            if (bVal !== aVal) return bVal - aVal;
+          }
+          return 0;
+        });
+        
+        console.log(`[Checksum] Найдено версий build-tools: ${buildToolsDirs.length}`);
+        if (buildToolsDirs.length > 0) {
+          console.log(`[Checksum] Версии build-tools: ${buildToolsDirs.join(', ')}`);
+        }
         
         for (const buildToolsDir of buildToolsDirs) {
           const apksignerPath = isWindows 
-            ? path.join(androidHome, 'build-tools', buildToolsDir, 'apksigner.bat')
-            : path.join(androidHome, 'build-tools', buildToolsDir, 'apksigner');
+            ? path.join(buildToolsPath, buildToolsDir, 'apksigner.bat')
+            : path.join(buildToolsPath, buildToolsDir, 'apksigner');
           
+          console.log(`[Checksum] Проверяем: ${apksignerPath}`);
           if (fs.existsSync(apksignerPath)) {
             console.log(`[Checksum] ✅ Найден apksigner через ANDROID_HOME: ${apksignerPath}`);
             return apksignerPath;
+          } else {
+            console.log(`[Checksum] ⚠️ Файл не найден: ${apksignerPath}`);
           }
         }
+        
+        console.log(`[Checksum] ⚠️ apksigner не найден в build-tools через ANDROID_HOME`);
       }
       
       // Если не нашли через переменные окружения, пробуем стандартные пути
+      console.log(`[Checksum] 🔍 Поиск в стандартных путях...`);
       const possiblePaths: string[] = [];
       
       if (isWindows) {
@@ -894,16 +923,21 @@ export const getApkChecksum = async (req: Request, res: Response): Promise<void>
       }
       
       // Проверяем каждый путь
+      console.log(`[Checksum] Проверяем ${possiblePaths.length} стандартных путей...`);
       for (const possiblePath of possiblePaths) {
         try {
+          console.log(`[Checksum] Проверяем: ${possiblePath}`);
           if (fs.existsSync(possiblePath)) {
             console.log(`[Checksum] ✅ Найден apksigner: ${possiblePath}`);
             return possiblePath;
           }
-        } catch {}
+        } catch (e: any) {
+          console.log(`[Checksum] Ошибка при проверке ${possiblePath}: ${e.message}`);
+        }
       }
       
       // Если не нашли конкретный файл, пробуем найти build-tools директории и искать там
+      console.log(`[Checksum] 🔍 Рекурсивный поиск в директориях build-tools...`);
       const searchDirs: string[] = [];
       if (isWindows) {
         const localAppData = process.env.LOCALAPPDATA || '';
@@ -924,13 +958,20 @@ export const getApkChecksum = async (req: Request, res: Response): Promise<void>
         );
       }
       
+      console.log(`[Checksum] Проверяем ${searchDirs.length} директорий для поиска build-tools...`);
       for (const searchDir of searchDirs) {
         try {
+          console.log(`[Checksum] Проверяем директорию: ${searchDir}`);
           if (fs.existsSync(searchDir)) {
+            console.log(`[Checksum] ✅ Директория существует: ${searchDir}`);
             const versions = fs.readdirSync(searchDir)
               .filter((dir: string) => {
                 const dirPath = path.join(searchDir, dir);
-                return fs.statSync(dirPath).isDirectory() && /^\d+\.\d+\.\d+/.test(dir);
+                try {
+                  return fs.statSync(dirPath).isDirectory() && /^\d+\.\d+\.\d+/.test(dir);
+                } catch {
+                  return false;
+                }
               })
               .sort((a: string, b: string) => {
                 const aParts = a.split('.').map(Number);
@@ -943,20 +984,31 @@ export const getApkChecksum = async (req: Request, res: Response): Promise<void>
                 return 0;
               });
             
+            console.log(`[Checksum] Найдено версий в ${searchDir}: ${versions.length}`);
+            if (versions.length > 0) {
+              console.log(`[Checksum] Версии: ${versions.join(', ')}`);
+            }
+            
             for (const version of versions) {
               const apksignerPath = isWindows
                 ? path.join(searchDir, version, 'apksigner.bat')
                 : path.join(searchDir, version, 'apksigner');
               
+              console.log(`[Checksum] Проверяем: ${apksignerPath}`);
               if (fs.existsSync(apksignerPath)) {
                 console.log(`[Checksum] ✅ Найден apksigner в build-tools: ${apksignerPath}`);
                 return apksignerPath;
               }
             }
+          } else {
+            console.log(`[Checksum] ⚠️ Директория не существует: ${searchDir}`);
           }
-        } catch {}
+        } catch (e: any) {
+          console.log(`[Checksum] Ошибка при проверке ${searchDir}: ${e.message}`);
+        }
       }
       
+      console.log(`[Checksum] ❌ apksigner не найден ни в одном из проверенных мест`);
       return null;
     };
     
