@@ -912,6 +912,9 @@ export const getApkChecksum = async (req: Request, res: Response): Promise<void>
           path.join('/opt', 'android-sdk', 'build-tools', '33.0.0', 'apksigner'),
           path.join('/opt', 'android-sdk', 'build-tools', '34.0.0', 'apksigner'),
           path.join('/opt', 'android-sdk', 'build-tools', '35.0.0', 'apksigner'),
+          path.join('/opt', 'android', 'build-tools', '33.0.0', 'apksigner'),
+          path.join('/opt', 'android', 'build-tools', '34.0.0', 'apksigner'),
+          path.join('/opt', 'android', 'build-tools', '35.0.0', 'apksigner'),
           // Стандартные пути для Ubuntu/Debian при установке через apt-get
           '/usr/lib/android-sdk/build-tools/33.0.0/apksigner',
           '/usr/lib/android-sdk/build-tools/34.0.0/apksigner',
@@ -951,10 +954,13 @@ export const getApkChecksum = async (req: Request, res: Response): Promise<void>
         const home = process.env.HOME || '';
         searchDirs.push(
           path.join(home, 'Android', 'Sdk', 'build-tools'),
+          // Стандартные пути для Ubuntu/Debian
           '/opt/android-sdk/build-tools',
-          // Стандартные пути для Ubuntu/Debian при установке через apt-get
+          '/opt/android/build-tools',
+          '/opt/android-sdk/platform-tools/build-tools', // Иногда может быть здесь
           '/usr/lib/android-sdk/build-tools',
           '/usr/local/android-sdk/build-tools',
+          '/usr/local/android/build-tools',
         );
       }
       
@@ -1014,6 +1020,19 @@ export const getApkChecksum = async (req: Request, res: Response): Promise<void>
     
     const apksignerPath = findApksigner();
     if (apksignerPath) {
+      // Проверяем, что файл действительно существует и доступен
+      if (!fs.existsSync(apksignerPath)) {
+        console.log(`[Checksum] ⚠️ apksigner найден, но файл не существует: ${apksignerPath}`);
+      } else {
+        // Проверяем права доступа
+        try {
+          fs.accessSync(apksignerPath, fs.constants.F_OK | fs.constants.R_OK);
+          console.log(`[Checksum] ✅ apksigner доступен для чтения: ${apksignerPath}`);
+        } catch (e: any) {
+          console.log(`[Checksum] ⚠️ apksigner найден, но нет прав доступа: ${e.message}`);
+        }
+      }
+      
       apksignerCommand = `"${apksignerPath}" verify --print-certs`;
       console.log(`[Checksum] Используем apksigner: ${apksignerPath}`);
       
@@ -1036,6 +1055,8 @@ export const getApkChecksum = async (req: Request, res: Response): Promise<void>
       }
     } else {
       console.log(`[Checksum] ⚠️ apksigner не найден, пробуем использовать из PATH`);
+      console.log(`[Checksum] 💡 Проверьте, что Android SDK установлен в /opt/android-sdk/build-tools/35.0.0/`);
+      console.log(`[Checksum] 💡 Или установите переменную окружения: export ANDROID_HOME=/opt/android-sdk`);
     }
     
     try {
