@@ -10,7 +10,7 @@ import { FilePreviewModal } from '../../../utils/FilePreviewModal';
 import { useUserContext } from '../../../hooks/useUserContext';
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { TableComponent } from '../../../utils/table';
-import { IconPlus, IconPencil, IconTrash, IconDownload } from '@tabler/icons-react';
+import { IconPlus, IconPencil, IconTrash, IconDownload, IconRefresh } from '@tabler/icons-react';
 import { DndProviderWrapper } from '../../../utils/dnd';
 import FloatingActionButton from '../../../components/FloatingActionButton';
 
@@ -21,7 +21,7 @@ interface DocDirectory {
   fullName: string;
   name: string;
   address: string;
-  inn: number;
+  inn: string;
   ogrn: string;
   kpp: string;
   taxationSystem: string;
@@ -33,6 +33,7 @@ interface DocDirectory {
   liquidationDate: string;
   successorName: string;
   successorINN: string;
+  updatedAt: string;
 }
 
 interface DaDataInfo {
@@ -75,6 +76,7 @@ interface RocData {
   createdAt: string;
   updatedAt?: string;
   name: string;
+  folderNo: string;
   typeTerm?: string;
   contractNumber?: string;
   dateContract?: string;
@@ -106,6 +108,14 @@ const DEFAULT_FORM: any = {
   attachments: [],
   additionalAttachments: [],
 };
+
+const docStatusMap = [
+  {value: 'ACTIVE', text: 'действующая', color: 'green'},
+  {value: 'LIQUIDATING', text: 'ликвидируется', color: 'orange'},
+  {value: 'LIQUIDATED', text: 'ликвидирована', color: 'red'},
+  {value: 'BANKRUPT', text: 'банкротство', color: 'red'},
+  {value: 'REORGANIZING', text: 'реорганизация', color: 'orange'}
+]
 
 export default function RocList() {
   const { user } = useUserContext();
@@ -248,6 +258,17 @@ export default function RocList() {
     }
   }, []);
 
+  const updateDocInfo = async (inn: string, docId: string) => {
+    try {
+      const updatedDoc = await fetchJson<DocDirectory>(`${API}/accounting/roc/doc`, { method: 'PATCH', body: JSON.stringify({ inn }) })
+
+      setData(data.map(roc => roc.doc?.id === docId ? {...roc, doc: updatedDoc} : roc))
+      setSelectedView({...selectedView, doc: updatedDoc} as RocData)
+    } catch (error) {
+      console.error('Ошибка обновления данных DaData:', error);
+    }
+  }
+
   const fetchSuggestions = useCallback(async (q: string) => {
     if (!q || q.length < 3) { return; }
     try {
@@ -310,8 +331,10 @@ export default function RocList() {
             }
           },
           placeholder: 'Начните вводить название…',
+          required: true
         },
         {
+          disabled: true,
           name: 'roc.selectedByInn',
           label: 'ИНН',
           type: 'select',
@@ -339,8 +362,9 @@ export default function RocList() {
           name: 'contractNumber', 
           label: 'Номер договора', 
           type: 'text',
-          groupWith: ['typeContractId', 'statusContractId'],
-          groupSize: 3
+          groupWith: ['dateContract', 'agreedTo'],
+          groupSize: 3,
+          required: true
         },
         { 
           name: 'typeContractId', 
@@ -348,8 +372,9 @@ export default function RocList() {
           type: 'select', 
           options: types, 
           placeholder: 'Выберите тип',
-          groupWith: ['contractNumber', 'statusContractId'],
-          groupSize: 3
+          groupWith: ['statusContractId', 'shelfLife'],
+          groupSize: 3,
+          required: true
         },
         { 
           name: 'statusContractId', 
@@ -357,34 +382,37 @@ export default function RocList() {
           type: 'select', 
           options: statuses, 
           placeholder: 'Выберите статус',
-          groupWith: ['contractNumber', 'typeContractId'],
-          groupSize: 3
+          groupWith: ['typeContractId', 'shelfLife'],
+          groupSize: 3,
+          required: true
         },
         { 
           name: 'dateContract', 
           label: 'Дата договора', 
           type: 'date',
-          groupWith: ['agreedTo', 'shelfLife'],
-          groupSize: 3
+          groupWith: ['contractNumber', 'agreedTo'],
+          groupSize: 3,
+          required: true
         },
         { 
           name: 'agreedTo', 
           label: 'Срок действия до', 
           type: 'date',
-          groupWith: ['dateContract', 'shelfLife'],
-          groupSize: 3
+          groupWith: ['contractNumber', 'dateContract'],
+          groupSize: 3,
+          required: true
         },
         { 
           name: 'shelfLife', 
           label: 'Срок (мес.)', 
           type: 'number',
-          groupWith: ['dateContract', 'agreedTo'],
+          groupWith: ['typeContractId', 'statusContractId'],
           groupSize: 3
         },
         { name: 'terminationLetter', label: 'Есть письмо о расторжении', type: 'boolean' },
+        { name: 'folderNo', label: '№ папки', type: 'text', required: true },
         { name: 'terminationСonditions', label: 'Условия расторжения', type: 'textarea' },
         { name: 'peculiarities', label: 'Особенности', type: 'textarea' },
-        { name: 'folderNo', label: '№ папки', type: 'text' },
         { name: 'attachments', label: 'Вложения (основные)', type: 'file', withDnd: true },
         { name: 'additionalAttachments', label: 'Доп. соглашения', type: 'file', withDnd: true },
       ],
@@ -418,6 +446,7 @@ export default function RocList() {
 
   const [selectedView, setSelectedView] = useState<RocData | null>(null);
   const [previewId, setPreviewId] = useState<string | null>(null);
+  
   const addAdditionalFiles = useCallback(async (rocId: string) => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -533,8 +562,7 @@ export default function RocList() {
     <Box 
       style={{
         background: 'var(--theme-bg-primary)',
-        minHeight: '100vh',
-        padding: '20px'
+        minHeight: '100vh'
       }}
     >
       {loading && <LoadingOverlay visible />}
@@ -542,13 +570,14 @@ export default function RocList() {
       <Tabs 
         value={activeTab} 
         onChange={(v) => setActiveTab((v as any) || 'list')}
-        style={{ marginBottom: '24px' }}
+        variant='pills'
       >
         <Tabs.List
           style={{
             background: 'var(--theme-bg-elevated)',
             borderRadius: '12px',
-            padding: '4px',
+            padding: '3px',
+            marginBottom: '8px',
             border: '1px solid var(--theme-border-primary)',
             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)'
           }}
@@ -559,7 +588,6 @@ export default function RocList() {
               borderRadius: '8px',
               fontWeight: '600',
               fontSize: '16px',
-              padding: '12px 24px',
               transition: 'all 0.2s ease',
               background: activeTab === 'list' 
                 ? 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))' 
@@ -576,7 +604,6 @@ export default function RocList() {
               borderRadius: '8px',
               fontWeight: '600',
               fontSize: '16px',
-              padding: '12px 24px',
               transition: 'all 0.2s ease',
               background: activeTab === 'byDoc' 
                 ? 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))' 
@@ -589,8 +616,8 @@ export default function RocList() {
           </Tabs.Tab>
         </Tabs.List>
 
-        <Tabs.Panel value="list" pt="md">
-          <Grid>
+        <Tabs.Panel value="list">
+          <Grid gutter={0}>
             <Grid.Col span={12}>
                 <FilterGroup
                   filters={filtersConfig}
@@ -607,15 +634,7 @@ export default function RocList() {
                 />
             </Grid.Col>
             <Grid.Col span={12}>
-              <Box
-                style={{
-                  background: 'var(--theme-bg-elevated)',
-                  borderRadius: '16px',
-                  border: '1px solid var(--theme-border-primary)',
-                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
-                  overflow: 'hidden'
-                }}
-              >
+              <Box>
                 <TableComponent<RocData>
                   data={data}
                   columns={[
@@ -623,53 +642,18 @@ export default function RocList() {
                       header: 'Контрагент', 
                       accessorKey: 'name', 
                       cell: info => (
-                        <Text 
-                          style={{ 
-                            fontWeight: '600',
-                            color: 'var(--theme-text-primary)',
-                            fontSize: '15px'
-                          }}
-                        >
-                          {info.row.original.name}
-                        </Text>
-                      ) 
-                    },
-                    { 
-                      header: 'Тип договора', 
-                      accessorKey: 'typeContract.name', 
-                      cell: info => (
-                        <Badge
-                          variant="light"
-                          style={{
-                            background: 'var(--color-primary-100)',
-                            color: 'var(--color-primary-700)',
-                            fontWeight: '500',
-                            fontSize: '13px',
-                            padding: '6px 12px',
-                            borderRadius: '8px'
-                          }}
-                        >
-                          {info.row.original.typeContract?.name || '-'}
-                        </Badge>
-                      ) 
-                    },
-                    { 
-                      header: 'Статус', 
-                      accessorKey: 'statusContract.name', 
-                      cell: info => (
-                        <Badge
-                          variant="light"
-                          style={{
-                            background: 'var(--color-green-100)',
-                            color: 'var(--color-green-700)',
-                            fontWeight: '500',
-                            fontSize: '13px',
-                            padding: '6px 12px',
-                            borderRadius: '8px'
-                          }}
-                        >
-                          {info.row.original.statusContract?.name || '-'}
-                        </Badge>
+                        <Tooltip w={300} label={info.row.original.name} multiline>
+                          <Text
+                            truncate="end" 
+                            style={{ 
+                              fontWeight: '600',
+                              color: 'var(--theme-text-primary)',
+                              fontSize: '14px'
+                            }}
+                          >
+                            {info.row.original.name}
+                          </Text>
+                        </Tooltip>
                       ) 
                     },
                     { 
@@ -714,6 +698,59 @@ export default function RocList() {
                           }}
                         >
                           {info.row.original.agreedTo ? dayjs(info.row.original.agreedTo).format('DD.MM.YYYY') : '-'}
+                        </Text>
+                      ) 
+                    },
+                    { 
+                      header: 'Тип договора', 
+                      accessorKey: 'typeContract.name', 
+                      cell: info => (
+                        <Badge
+                          variant="light"
+                          style={{
+                            background: 'var(--color-primary-100)',
+                            color: 'var(--color-primary-700)',
+                            fontWeight: '500',
+                            fontSize: '13px',
+                            padding: '6px 12px',
+                            borderRadius: '8px'
+                          }}
+                        >
+                          {info.row.original.typeContract?.name || '-'}
+                        </Badge>
+                      ) 
+                    },
+                    { 
+                      header: 'Статус', 
+                      accessorKey: 'statusContract.name', 
+                      cell: info => (
+                        <Badge
+                          variant="light"
+                          style={{
+                            background: 'var(--color-green-100)',
+                            color: 'var(--color-green-700)',
+                            fontWeight: '500',
+                            fontSize: '13px',
+                            padding: '6px 12px',
+                            borderRadius: '8px'
+                          }}
+                        >
+                          {info.row.original.statusContract?.name || '-'}
+                        </Badge>
+                      ) 
+                    },
+                    { 
+                      header: 'Папка', 
+                      accessorKey: 'folderNo', 
+                      cell: info => (
+                        <Text 
+                          style={{ 
+                            color: 'var(--theme-text-primary)',
+                            fontSize: '14px',
+                            fontWeight: '500'
+                          }}
+                        >
+                          {info.row.original.folderNo || '-'}
                         </Text>
                       ) 
                     },
@@ -1412,7 +1449,7 @@ export default function RocList() {
                       <Group justify="space-between" align="center">
                         <Group gap="sm" align="center" onClick={() => setPreviewId(att.id)} style={{ cursor: 'pointer' }}>
                           <img 
-                            src={`${API}/public/accounting/roc/${att.source}`} 
+                            src={`${API}/${att.source}`} 
                             alt={String(att.source || '').split('/').pop() || 'Файл'} 
                             style={{ height: 60, width: 100, objectFit: 'contain', borderRadius: 6 }} 
                           />
@@ -1420,7 +1457,7 @@ export default function RocList() {
                         </Group>
                         <Group gap="sm">
                           <Text size="sm">{String(att.source || '').split('/').pop()}</Text>
-                            <ActionIcon component="a" href={`${API}/public/accounting/roc/${att.source}`} target="_blank" rel="noreferrer">
+                            <ActionIcon component="a" href={`${API}/${att.source}`} target="_blank" rel="noreferrer">
                             <IconDownload size={16} />
                           </ActionIcon>
                         </Group>
@@ -1444,7 +1481,7 @@ export default function RocList() {
                       <Group justify="space-between" align="center">
                         <Group gap="sm" align="center" onClick={() => setPreviewId(att.id)} style={{ cursor: 'pointer' }}>
                           <img 
-                            src={`${API}/public/accounting/roc/${att.source}`} 
+                            src={`${API}/${att.source}`} 
                             alt={String(att.source || '').split('/').pop() || 'Файл'} 
                             style={{ height: 60, width: 100, objectFit: 'contain', borderRadius: 6 }} 
                           />
@@ -1452,7 +1489,7 @@ export default function RocList() {
                         </Group>
                         <Group gap="sm">
                           <Text size="sm">{String(att.source || '').split('/').pop()}</Text>
-                            <ActionIcon component="a" href={`${API}/public/accounting/roc/${att.source}`} target="_blank" rel="noreferrer">
+                            <ActionIcon component="a" href={`${API}/${att.source}`} target="_blank" rel="noreferrer">
                             <IconDownload size={16} />
                           </ActionIcon>
                         </Group>
@@ -1461,17 +1498,37 @@ export default function RocList() {
                   ))}</Stack>
                 )}
               </Box>
+              <Stack 
+                w='auto'
+                gap={5}
+                align='center' 
+                style={{
+                  position: 'absolute',
+                  top: '85px',
+                  right: '25px',
+                }}
+                >
+                <Button
+                  variant='light'
+                  color={docStatusMap.find(i => i.value === selectedView?.doc?.siEgrul)?.color}
+                  onClick={() => selectedView?.doc && updateDocInfo(selectedView.doc.inn, selectedView.doc.id)}             
+                  leftSection={<IconRefresh size={18} />}
+                >
+                  {docStatusMap.find(i => i.value === selectedView?.doc?.siEgrul)?.text || selectedView?.doc?.siEgrul}
+                </Button>
+                <Text size='xs' c="dimmed">проверено: {dayjs(selectedView?.doc?.updatedAt).format('DD.MM.YYYY HH:mm')}</Text>
+              </Stack>
             </Stack>
           );
         }}
         viewFieldsConfig={[
-          { label: 'Контрагент', value: (it) => it?.name || '-' },
-          { label: 'Тип договора', value: (it) => it?.typeContract?.name || '-' },
-          { label: 'Статус', value: (it) => it?.statusContract?.name || '-' },
+          { label: 'Контрагент (Doc)', value: (it) => it?.doc?.fullName || it?.doc?.name || '-' },
           { label: 'Номер договора', value: (it) => it?.contractNumber || '-' },
           { label: 'Дата договора', value: (it) => it?.dateContract ? dayjs(it.dateContract).format('DD.MM.YYYY') : '-' },
           { label: 'Действует до', value: (it) => it?.agreedTo ? dayjs(it.agreedTo).format('DD.MM.YYYY') : '-' },
-          { label: 'Контрагент (Doc)', value: (it) => it?.doc?.fullName || it?.doc?.name || '-' },
+          { label: 'Тип договора', value: (it) => it?.typeContract?.name || '-' },
+          { label: 'Статус', value: (it) => it?.statusContract?.name || '-' },
+          { label: '№ папки', value: (it) => it?.folderNo || '-' },
           { label: 'ИНН/КПП', value: (it) => it?.doc ? `${it.doc.inn}${it.doc.kpp ? ` / ${it.doc.kpp}` : ''}` : '-' },
           { label: 'ОГРН', value: (it) => it?.doc?.ogrn || '-' },
           { label: 'Адрес', value: (it) => it?.doc?.address || '-' },
@@ -1487,7 +1544,7 @@ export default function RocList() {
           return all.map((att: any) => ({
             id: String(att.id || `temp-${Math.random().toString(36).slice(2, 11)}`),
             name: String(att.source || '').split('/').pop() || 'Файл',
-            url: `${API}/public/accounting/roc/${att.source}`,
+            url: `${API}/${att.source}`,
             source: String(att.source || ''),
           }));
         })()}

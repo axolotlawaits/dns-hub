@@ -274,27 +274,6 @@
   color: #e2e8f0;
 }
 
-[data-mantine-color-scheme="dark"] .form-modal .mantine-Button-root {
-  background: #3b82f6;
-  color: white;
-  border: none;
-}
-
-[data-mantine-color-scheme="dark"] .form-modal .mantine-Button-root:hover {
-  background: #2563eb;
-}
-
-[data-mantine-color-scheme="dark"] .form-modal .mantine-Button-root[data-variant="outline"] {
-  background: transparent;
-  color: #e2e8f0;
-  border-color: #475569;
-}
-
-[data-mantine-color-scheme="dark"] .form-modal .mantine-Button-root[data-variant="outline"]:hover {
-  background: #475569;
-  border-color: #64748b;
-}
-
 [data-mantine-color-scheme="dark"] .form-modal .view-field-value {
   background: #1e293b;
   color: #e2e8f0;

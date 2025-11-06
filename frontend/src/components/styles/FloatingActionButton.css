@@ -1,6 +1,6 @@
 .floating-action-button {
   position: fixed;
-  bottom: 160px; /* Выше футера (footer height: 65px + margin) */
+  bottom: 85px; /* Выше футера (footer height: 65px + margin) */
   right: 40px;
   z-index: 1000;
   pointer-events: auto;

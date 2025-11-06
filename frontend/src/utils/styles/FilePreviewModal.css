@@ -131,6 +131,7 @@
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  gap: 8px;
 }
 
 /* Простые стили для изображений */
@@ -145,8 +146,6 @@
   object-position: center;
   display: block;
   margin: 0 auto;
-  padding-bottom: 50px;
-  padding-top: 20px;
 }
 
 /* Стили для контента внутри image-container */

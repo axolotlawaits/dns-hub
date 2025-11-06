@@ -149,7 +149,8 @@ async function findOrCreateDoc(data: any) {
     setIf(data.successorName, 'successorName', data.successorName);
     setIf(data.successorINN, 'successorINN', data.successorINN);
     if (Object.keys(updateData).length > 0) {
-      await (prisma as any).doc.update({ where: { id: existing.id }, data: updateData });
+      const updated = await (prisma as any).doc.update({ where: { id: existing.id }, data: updateData });
+      return updated
     }
     return existing;
   }
@@ -375,5 +376,23 @@ export const weeklyRocDocSync = async () => {
     }).catch(() => {});
   }
 };
+
+export const updateDoc = async (req: Request, res: Response) => {
+  const inn = req.body.inn
+
+  const dadataInfo = await findPartyByInn(inn);
+  if (!dadataInfo) {
+    res.status(404).json({ error: 'Organization not found' });
+    return;
+  }
+
+  const doc = await findOrCreateDoc(dadataInfo)
+  
+  if (doc) {
+    res.status(200).json(doc)
+  } else {
+    res.status(400).json({error: 'Не удалось обновить данные из Dadata'})
+  }
+}
 
 

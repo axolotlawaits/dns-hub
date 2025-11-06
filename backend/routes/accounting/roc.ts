@@ -12,6 +12,7 @@ import {
   getDaDataInfo,
   addRocAttachments,
   deleteRocAttachment,
+  updateDoc,
 } from '../../controllers/accounting/roc.js';
 
 const router = Router();
@@ -21,6 +22,9 @@ router.get('/:id', getRocById);
 router.post('/', createRoc);
 router.put('/:id', updateRoc);
 router.delete('/:id', deleteRoc);
+
+/* doc endpoints */
+router.patch('/doc', updateDoc)
 
 router.get('/dict/types', getRocTypes);
 router.get('/dict/statuses', getRocStatuses);
