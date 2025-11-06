@@ -10,7 +10,7 @@ import { FilePreviewModal } from '../../../utils/FilePreviewModal';
 import { useUserContext } from '../../../hooks/useUserContext';
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { TableComponent } from '../../../utils/table';
-import { IconPlus, IconPencil, IconTrash, IconDownload, IconRefresh } from '@tabler/icons-react';
+import { IconPlus, IconPencil, IconTrash, IconDownload, IconRefresh, IconFile } from '@tabler/icons-react';
 import { DndProviderWrapper } from '../../../utils/dnd';
 import FloatingActionButton from '../../../components/FloatingActionButton';
 
@@ -1448,15 +1448,19 @@ export default function RocList() {
                     <Paper key={att.id} p="sm" withBorder>
                       <Group justify="space-between" align="center">
                         <Group gap="sm" align="center" onClick={() => setPreviewId(att.id)} style={{ cursor: 'pointer' }}>
-                          <img 
-                            src={`${API}/${att.source}`} 
-                            alt={String(att.source || '').split('/').pop() || 'Файл'} 
-                            style={{ height: 60, width: 100, objectFit: 'contain', borderRadius: 6 }} 
-                          />
+                          {att.type.startsWith('image/') ?
+                            <img 
+                              src={`${API}/${att.source}`}
+                              alt={String(att.source || '').split('/').pop() || 'Файл'} 
+                              style={{ height: 60, width: 100, objectFit: 'contain', borderRadius: 6 }} 
+                            />
+                          :
+                            <IconFile width={100} height={60} stroke={1}/>
+                          }
                           <Text size="sm" c="dimmed">Предпросмотр</Text>
                         </Group>
-                        <Group gap="sm">
-                          <Text size="sm">{String(att.source || '').split('/').pop()}</Text>
+                        <Group gap="sm" justify='end' w={300}>
+                          <Text size="sm" truncate='end'>{String(att.source || '').split('/').pop()}</Text>
                             <ActionIcon component="a" href={`${API}/${att.source}`} target="_blank" rel="noreferrer">
                             <IconDownload size={16} />
                           </ActionIcon>
@@ -1470,7 +1474,7 @@ export default function RocList() {
                 <Group justify="space-between" mb={6}>
                   <Text fw={600}>Доп. соглашения</Text>
                   {selectedView && (
-                    <Button size="xs" onClick={() => addAdditionalFiles(selectedView.id)}>Добавить</Button>
+                    <Button size="sm" variant='light' onClick={() => addAdditionalFiles(selectedView.id)}>Добавить</Button>
                   )}
                 </Group>
                 {additional.length === 0 ? (
@@ -1480,15 +1484,19 @@ export default function RocList() {
                     <Paper key={att.id} p="sm" withBorder>
                       <Group justify="space-between" align="center">
                         <Group gap="sm" align="center" onClick={() => setPreviewId(att.id)} style={{ cursor: 'pointer' }}>
-                          <img 
-                            src={`${API}/${att.source}`} 
-                            alt={String(att.source || '').split('/').pop() || 'Файл'} 
-                            style={{ height: 60, width: 100, objectFit: 'contain', borderRadius: 6 }} 
-                          />
+                          {att.type.startsWith('image/') ?
+                            <img 
+                              src={`${API}/${att.source}`} 
+                              alt={String(att.source || '').split('/').pop() || 'Файл'} 
+                              style={{ height: 60, width: 100, objectFit: 'contain', borderRadius: 6 }} 
+                            />
+                          :
+                            <IconFile width={100} height={60} stroke={1}/>
+                          }
                           <Text size="sm" c="dimmed">Предпросмотр</Text>
                         </Group>
-                        <Group gap="sm">
-                          <Text size="sm">{String(att.source || '').split('/').pop()}</Text>
+                        <Group gap="sm" justify='end' w={300}>
+                          <Text size="sm" truncate='end'>{String(att.source || '').split('/').pop()}</Text>
                             <ActionIcon component="a" href={`${API}/${att.source}`} target="_blank" rel="noreferrer">
                             <IconDownload size={16} />
                           </ActionIcon>
