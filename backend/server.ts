@@ -306,37 +306,55 @@ server.listen(port, async function() {
     
     // Запуск ботов асинхронно в фоне (не блокируем старт сервера)
     setImmediate(async () => {
-      // Запуск Telegram бота
-      try {
-        console.log('🤖 [Server] Запускаем Telegram бота...');
-        const botStarted = await telegramService.launch();
-        if (botStarted) {
-          console.log('✅ [Server] Telegram bot started successfully');
-        } else {
-          console.log('❌ [Server] Telegram bot failed to start - check .env file');
+      console.log('🔄 [Server] setImmediate выполняется...');
+      
+      // Запуск Telegram бота (не блокируем Merch бота)
+      (async () => {
+        try {
+          console.log('🤖 [Server] Запускаем Telegram бота...');
+          console.log('⏳ [Server] Вызываем telegramService.launch()...');
+          const botStarted = await telegramService.launch();
+          console.log('✅ [Server] telegramService.launch() завершен, результат:', botStarted);
+          if (botStarted) {
+            console.log('✅ [Server] Telegram bot started successfully');
+          } else {
+            console.log('❌ [Server] Telegram bot failed to start - check .env file');
+          }
+        } catch (error) {
+          console.error('❌ [Server] Ошибка в блоке try для Telegram бота:', error);
+          if (error instanceof Error && error.message.includes('Conflict: terminated by other getUpdates request')) {
+            console.log('⚠️ [Server] Telegram bot conflict detected - another instance may be running');
+          } else {
+            console.error('❌ [Server] Failed to start Telegram bot:', error);
+          }
         }
-      } catch (error) {
-        if (error instanceof Error && error.message.includes('Conflict: terminated by other getUpdates request')) {
-          console.log('⚠️ [Server] Telegram bot conflict detected - another instance may be running');
-        } else {
-          console.error('❌ [Server] Failed to start Telegram bot:', error);
-        }
-      }
+      })();
 
-      // Ленивая загрузка и запуск Merch бота
+      console.log('✅ [Server] Telegram bot запущен в фоне, переходим к Merch боту...');
+
+      // Ленивая загрузка и запуск Merch бота (независимо от Telegram бота)
+      console.log('⏳ [Server] Планируем запуск Merch бота через 5 секунд...');
       setTimeout(async () => {
         try {
           console.log('🤖 [Server] Загружаем и запускаем Merch бота...');
-          const { merchBotService } = await import('./controllers/app/merchBot.js');
+          console.log('📦 [Server] Импортируем модуль merchBot...');
+          const { merchBotService } = await import('./controllers/app/merchBot');
+          console.log('✅ [Server] Модуль merchBot загружен, статус:', merchBotService.status);
+          console.log('🚀 [Server] Запускаем Merch бота...');
           const merchBotStarted = await merchBotService.launch();
           
           if (merchBotStarted) {
             console.log('✅ [Server] Merch bot started successfully');
           } else {
             console.log('❌ [Server] Merch bot failed to start - check .env file');
+            console.log('📊 [Server] Merch bot status:', merchBotService.status);
           }
         } catch (error) {
           console.error('❌ [Server] Failed to load/start Merch bot:', error);
+          if (error instanceof Error) {
+            console.error('❌ [Server] Error message:', error.message);
+            console.error('❌ [Server] Error stack:', error.stack);
+          }
         }
       }, 5000); // Увеличиваем задержку до 5 секунд для ленивой загрузки
     });

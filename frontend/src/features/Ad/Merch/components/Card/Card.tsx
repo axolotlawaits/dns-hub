@@ -25,6 +25,7 @@ import { toggleCardActive } from '../../data/CardData';
 import { FilePreviewModal } from '../../../../../utils/FilePreviewModal';
 import { API } from '../../../../../config/constants';
 import { truncateText } from '../../../../../utils/format';
+// Теперь description уже в формате HTML
 
 //----------------------------Карточка
 interface CardProps {
@@ -33,17 +34,6 @@ interface CardProps {
   onDelete?: (cardId: string) => void;
   onToggleActive?: (cardId: string, isActive: boolean) => void;
 }
-
-// Функция для преобразования Markdown в HTML (как в TelegramTextarea)
-const formatTelegramText = (text: string) => {
-  return text
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/_(.*?)_/g, '<em>$1</em>')
-    .replace(/`(.*?)`/g, '<code style="background-color: #f1f3f5; padding: 2px 6px; border-radius: 4px; font-family: monospace;">$1</code>')
-    .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" style="color: #1971c2; text-decoration: none;">$1</a>')
-    .replace(/\n/g, '<br>');
-};
 
 function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -94,10 +84,8 @@ function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
     });
   };
 
-  // Форматируем описание для Telegram
-  const formattedDescription = cardData.description 
-    ? formatTelegramText(cardData.description)
-    : '';
+  // Description уже в формате HTML
+  const formattedDescription = cardData.description || '';
 
   return (
     <Paper 

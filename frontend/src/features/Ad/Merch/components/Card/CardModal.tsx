@@ -11,12 +11,16 @@ import {
   SimpleGrid,
   ActionIcon,
   Box,
-  Checkbox
+  Checkbox,
+  Drawer,
+  Stack
 } from '@mantine/core';
-import { IconUpload, IconX } from '@tabler/icons-react';
+import { useDisclosure } from '@mantine/hooks';
+import { IconUpload, IconX, IconEye } from '@tabler/icons-react';
 import { createCard, updateCard, addCardImages, type CardItem } from '../../data/CardData';
 import { API } from '../../../../../config/constants';
 import TiptapEditor from '../../../../../utils/editor';
+import { TelegramPreview } from './TelegramPreview';
 
 // Props для добавления
 interface AddCardModalProps {
@@ -48,6 +52,7 @@ export function AddCardModal({ categoryId, onSuccess, onClose }: AddCardModalPro
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewDrawerOpened, previewDrawerHandlers] = useDisclosure(false);
 
   useEffect(() => {
     setName('');
@@ -121,6 +126,7 @@ export function AddCardModal({ categoryId, onSuccess, onClose }: AddCardModalPro
       setPreviewUrls([]);
 
       onSuccess?.();
+      previewDrawerHandlers.close();
       onClose();
 
       console.log('✅ Карточка успешно создана');
@@ -133,99 +139,161 @@ export function AddCardModal({ categoryId, onSuccess, onClose }: AddCardModalPro
   };
 
   return (
-    <Container style={{ padding: 0 }}> 
-      <h2>Добавить карточку</h2>
-      
-      <form onSubmit={handleSubmit}>
-        {error && (
-          <Alert color="red" style={{ marginBottom: 15 }}>
-            {error}
-          </Alert>
-        )}
+    <>
+      <Container style={{ padding: 0 }}> 
+        <h2>Добавить карточку</h2>
+        
+        <form onSubmit={handleSubmit}>
+          {error && (
+            <Alert color="red" style={{ marginBottom: 15 }}>
+              {error}
+            </Alert>
+          )}
 
-        <TextInput
-          label="Название карточки"
-          placeholder="Введите название..."
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-          style={{ marginBottom: 15 }}
-        />
+          <Group justify="space-between" mb="md">
+            <TextInput
+              label="Название карточки"
+              placeholder="Введите название..."
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              style={{ flex: 1 }}
+            />
+            <Button
+              variant="light"
+              leftSection={<IconEye size={16} />}
+              onClick={previewDrawerHandlers.open}
+              style={{ marginTop: '24px' }}
+            >
+              Превью Telegram
+            </Button>
+          </Group>
 
-        <Box style={{ marginBottom: 15 }}>
-          <Text size="sm" fw={500} mb="xs">Описание</Text>
-          <TiptapEditor
-            content={description}
-            onChange={setDescription}
-            telegramMode={true}
-          />
-        </Box>
-
-        <Checkbox
-          label="Активная карточка"
-          description="Активные карточки отображаются в боте"
-          checked={isActive}
-          onChange={(e) => setIsActive(e.currentTarget.checked)}
-          style={{ marginBottom: 15 }}
-        />
-
-        <FileInput
-          label="Изображения"
-          placeholder="Выберите изображения"
-          accept="image/*"
-          multiple
-          value={imageFiles}
-          onChange={handleImageChange}
-          leftSection={<IconUpload size={16} />}
-          style={{ marginBottom: 15 }}
-        />
-
-        {previewUrls.length > 0 && (
           <Box style={{ marginBottom: 15 }}>
-            <Text size="sm" style={{ marginBottom: 10 }}>Предварительный просмотр:</Text>
-            <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="md">
-              {previewUrls.map((url, index) => (
-                <Box key={index} style={{ position: 'relative' }}>
-                  <Image
-                    src={url}
-                    alt={`Preview ${index + 1}`}
-                    style={{ 
-                      width: '100%', 
-                      height: 120, 
-                      objectFit: 'cover',
-                      borderRadius: 8,
-                      border: '1px solid #e0e0e0'
-                    }}
-                  />
-                  <ActionIcon
-                    size="sm"
-                    color="red"
-                    variant="filled"
-                    style={{
-                      position: 'absolute',
-                      top: 4,
-                      right: 4
-                    }}
-                    onClick={() => removeImage(index)}
-                  >
-                    <IconX size={12} />
-                  </ActionIcon>
-                </Box>
-              ))}
-            </SimpleGrid>
+            <Text size="sm" fw={500} mb="xs">Описание</Text>
+            <TiptapEditor
+              content={description}
+              onChange={setDescription}
+              telegramMode={true}
+            />
           </Box>
-        )}
 
-        <Group justify="flex-end" mt="md">
-          <Button variant="outline" onClick={onClose} disabled={loading}>
-            Отмена
-          </Button>
-          <Button type="submit" loading={loading}>
-            Создать карточку
-          </Button>
-        </Group>
-      </form>
-    </Container>
+          <Checkbox
+            label="Активная карточка"
+            description="Активные карточки отображаются в боте"
+            checked={isActive}
+            onChange={(e) => setIsActive(e.currentTarget.checked)}
+            style={{ marginBottom: 15 }}
+          />
+
+          <FileInput
+            label="Изображения"
+            placeholder="Выберите изображения"
+            accept="image/*"
+            multiple
+            value={imageFiles}
+            onChange={handleImageChange}
+            leftSection={<IconUpload size={16} />}
+            style={{ marginBottom: 15 }}
+          />
+
+          {previewUrls.length > 0 && (
+            <Box style={{ marginBottom: 15 }}>
+              <Text size="sm" style={{ marginBottom: 10 }}>Предварительный просмотр:</Text>
+              <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="md">
+                {previewUrls.map((url, index) => (
+                  <Box key={index} style={{ position: 'relative' }}>
+                    <Image
+                      src={url}
+                      alt={`Preview ${index + 1}`}
+                      style={{ 
+                        width: '100%', 
+                        height: 120, 
+                        objectFit: 'cover',
+                        borderRadius: 8,
+                        border: '1px solid #e0e0e0'
+                      }}
+                    />
+                    <ActionIcon
+                      size="sm"
+                      color="red"
+                      variant="filled"
+                      style={{
+                        position: 'absolute',
+                        top: 4,
+                        right: 4
+                      }}
+                      onClick={() => removeImage(index)}
+                    >
+                      <IconX size={12} />
+                    </ActionIcon>
+                  </Box>
+                ))}
+              </SimpleGrid>
+            </Box>
+          )}
+
+          <Group justify="flex-end" mt="md">
+            <Button variant="outline" onClick={onClose} disabled={loading}>
+              Отмена
+            </Button>
+            <Button type="submit" loading={loading}>
+              Создать карточку
+            </Button>
+          </Group>
+        </form>
+      </Container>
+
+      <Drawer
+        opened={previewDrawerOpened}
+        onClose={previewDrawerHandlers.close}
+        position="right"
+        withOverlay={false}
+        lockScroll={false}
+        title="Превью в Telegram"
+        size={460}
+        zIndex={1000}
+        styles={{
+          content: {
+            background: 'var(--theme-bg-elevated)',
+            border: '1px solid var(--theme-border-primary)',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(0, 0, 0, 0.1)',
+            borderRadius: '12px 0 0 12px',
+          },
+          header: {
+            background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-600) 100%)',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+            color: 'white',
+            padding: '20px 24px',
+            borderRadius: '12px 0 0 0',
+          },
+          title: {
+            color: 'white',
+            fontWeight: 700,
+            fontSize: '18px',
+          },
+          close: {
+            color: 'rgba(255, 255, 255, 0.8)',
+            background: 'rgba(255, 255, 255, 0.1)',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            borderRadius: '8px',
+            transition: 'all 0.3s ease',
+          },
+          body: {
+            padding: '24px',
+            background: 'var(--theme-bg-elevated)',
+          }
+        }}
+      >
+        <Stack gap="md">
+          <TelegramPreview
+            name={name}
+            description={description}
+            images={imageFiles.length > 0 ? imageFiles : previewUrls}
+          />
+        </Stack>
+      </Drawer>
+    </>
   );
 }
 
@@ -239,6 +307,7 @@ export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) 
   const [currentImages, setCurrentImages] = useState<string[]>(card.imageUrls || []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewDrawerOpened, previewDrawerHandlers] = useDisclosure(false);
 
   useEffect(() => {
     setName(card.name);
@@ -314,6 +383,7 @@ export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) 
       setPreviewUrls([]);
 
       onSuccess?.();
+      previewDrawerHandlers.close();
       onClose();
 
       console.log('✅ Карточка успешно обновлена');
@@ -326,136 +396,201 @@ export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) 
   };
 
   return (
-    <Container style={{ padding: 0 }}> 
-      <h2>Редактировать карточку</h2>
-      
-      <form onSubmit={handleSubmit}>
-        {error && (
-          <Alert color="red" style={{ marginBottom: 15 }}>
-            {error}
-          </Alert>
-        )}
+    <>
+      <Container style={{ padding: 0 }}> 
+        <h2>Редактировать карточку</h2>
+        
+        <form onSubmit={handleSubmit}>
+          {error && (
+            <Alert color="red" style={{ marginBottom: 15 }}>
+              {error}
+            </Alert>
+          )}
 
-        <TextInput
-          label="Название карточки"
-          placeholder="Введите название..."
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-          style={{ marginBottom: 15 }}
-        />
+          <Group justify="space-between" mb="md">
+            <TextInput
+              label="Название карточки"
+              placeholder="Введите название..."
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              style={{ flex: 1 }}
+            />
+            <Button
+              variant="light"
+              leftSection={<IconEye size={16} />}
+              onClick={previewDrawerHandlers.open}
+              style={{ marginTop: '24px' }}
+            >
+              Превью Telegram
+            </Button>
+          </Group>
 
-        <Box style={{ marginBottom: 15 }}>
-          <Text size="sm" fw={500} mb="xs">Описание</Text>
-          <TiptapEditor
-            content={description}
-            onChange={setDescription}
-            telegramMode={true}
+          <Box style={{ marginBottom: 15 }}>
+            <Text size="sm" fw={500} mb="xs">Описание</Text>
+            <TiptapEditor
+              content={description}
+              onChange={setDescription}
+              telegramMode={true}
+            />
+          </Box>
+
+          <Checkbox
+            label="Активная карточка"
+            description="Активные карточки отображаются в боте"
+            checked={isActive}
+            onChange={(e) => setIsActive(e.currentTarget.checked)}
+            style={{ marginBottom: 15 }}
           />
-        </Box>
 
-        <Checkbox
-          label="Активная карточка"
-          description="Активные карточки отображаются в боте"
-          checked={isActive}
-          onChange={(e) => setIsActive(e.currentTarget.checked)}
-          style={{ marginBottom: 15 }}
-        />
+          {/* Текущие изображения */}
+          {currentImages.length > 0 && (
+            <Box style={{ marginBottom: 15 }}>
+              <Text size="sm" style={{ marginBottom: 10 }}>Текущие изображения:</Text>
+              <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="md">
+                {currentImages.map((url, index) => (
+                  <Box key={index} style={{ position: 'relative' }}>
+                    <Image
+                      src={url.startsWith('http') ? url : `${API}/public/add/merch/${url}`}
+                      alt={`Current ${index + 1}`}
+                      style={{ 
+                        width: '100%', 
+                        height: 120, 
+                        objectFit: 'cover',
+                        borderRadius: 8,
+                        border: '1px solid #e0e0e0'
+                      }}
+                    />
+                    <ActionIcon
+                      size="sm"
+                      color="red"
+                      variant="filled"
+                      style={{
+                        position: 'absolute',
+                        top: 4,
+                        right: 4
+                      }}
+                      onClick={() => removeCurrentImage(index)}
+                    >
+                      <IconX size={12} />
+                    </ActionIcon>
+                  </Box>
+                ))}
+              </SimpleGrid>
+            </Box>
+          )}
 
-        {/* Текущие изображения */}
-        {currentImages.length > 0 && (
-          <Box style={{ marginBottom: 15 }}>
-            <Text size="sm" style={{ marginBottom: 10 }}>Текущие изображения:</Text>
-            <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="md">
-              {currentImages.map((url, index) => (
-                <Box key={index} style={{ position: 'relative' }}>
-                  <Image
-                    src={url.startsWith('http') ? url : `${API}/public/add/merch/${url}`}
-                    alt={`Current ${index + 1}`}
-                    style={{ 
-                      width: '100%', 
-                      height: 120, 
-                      objectFit: 'cover',
-                      borderRadius: 8,
-                      border: '1px solid #e0e0e0'
-                    }}
-                  />
-                  <ActionIcon
-                    size="sm"
-                    color="red"
-                    variant="filled"
-                    style={{
-                      position: 'absolute',
-                      top: 4,
-                      right: 4
-                    }}
-                    onClick={() => removeCurrentImage(index)}
-                  >
-                    <IconX size={12} />
-                  </ActionIcon>
-                </Box>
-              ))}
-            </SimpleGrid>
-          </Box>
-        )}
+          <FileInput
+            label="Добавить новые изображения"
+            placeholder="Выберите изображения"
+            accept="image/*"
+            multiple
+            value={imageFiles}
+            onChange={handleImageChange}
+            leftSection={<IconUpload size={16} />}
+            style={{ marginBottom: 15 }}
+          />
 
-        <FileInput
-          label="Добавить новые изображения"
-          placeholder="Выберите изображения"
-          accept="image/*"
-          multiple
-          value={imageFiles}
-          onChange={handleImageChange}
-          leftSection={<IconUpload size={16} />}
-          style={{ marginBottom: 15 }}
-        />
+          {previewUrls.length > 0 && (
+            <Box style={{ marginBottom: 15 }}>
+              <Text size="sm" style={{ marginBottom: 10 }}>Предварительный просмотр новых изображений:</Text>
+              <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="md">
+                {previewUrls.map((url, index) => (
+                  <Box key={index} style={{ position: 'relative' }}>
+                    <Image
+                      src={url}
+                      alt={`Preview ${index + 1}`}
+                      style={{ 
+                        width: '100%', 
+                        height: 120, 
+                        objectFit: 'cover',
+                        borderRadius: 8,
+                        border: '1px solid #e0e0e0'
+                      }}
+                    />
+                    <ActionIcon
+                      size="sm"
+                      color="red"
+                      variant="filled"
+                      style={{
+                        position: 'absolute',
+                        top: 4,
+                        right: 4
+                      }}
+                      onClick={() => removeImage(index)}
+                    >
+                      <IconX size={12} />
+                    </ActionIcon>
+                  </Box>
+                ))}
+              </SimpleGrid>
+            </Box>
+          )}
 
-        {previewUrls.length > 0 && (
-          <Box style={{ marginBottom: 15 }}>
-            <Text size="sm" style={{ marginBottom: 10 }}>Предварительный просмотр новых изображений:</Text>
-            <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="md">
-              {previewUrls.map((url, index) => (
-                <Box key={index} style={{ position: 'relative' }}>
-                  <Image
-                    src={url}
-                    alt={`Preview ${index + 1}`}
-                    style={{ 
-                      width: '100%', 
-                      height: 120, 
-                      objectFit: 'cover',
-                      borderRadius: 8,
-                      border: '1px solid #e0e0e0'
-                    }}
-                  />
-                  <ActionIcon
-                    size="sm"
-                    color="red"
-                    variant="filled"
-                    style={{
-                      position: 'absolute',
-                      top: 4,
-                      right: 4
-                    }}
-                    onClick={() => removeImage(index)}
-                  >
-                    <IconX size={12} />
-                  </ActionIcon>
-                </Box>
-              ))}
-            </SimpleGrid>
-          </Box>
-        )}
+          <Group justify="flex-end" mt="md">
+            <Button variant="outline" onClick={onClose} disabled={loading}>
+              Отмена
+            </Button>
+            <Button type="submit" loading={loading}>
+              Сохранить изменения
+            </Button>
+          </Group>
+        </form>
+      </Container>
 
-        <Group justify="flex-end" mt="md">
-          <Button variant="outline" onClick={onClose} disabled={loading}>
-            Отмена
-          </Button>
-          <Button type="submit" loading={loading}>
-            Сохранить изменения
-          </Button>
-        </Group>
-      </form>
-    </Container>
+      <Drawer
+        opened={previewDrawerOpened}
+        onClose={previewDrawerHandlers.close}
+        position="right"
+        withOverlay={false}
+        lockScroll={false}
+        title="Превью в Telegram"
+        size={460}
+        zIndex={1000}
+        styles={{
+          content: {
+            background: 'var(--theme-bg-elevated)',
+            border: '1px solid var(--theme-border-primary)',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(0, 0, 0, 0.1)',
+            borderRadius: '12px 0 0 12px',
+          },
+          header: {
+            background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-600) 100%)',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+            color: 'white',
+            padding: '20px 24px',
+            borderRadius: '12px 0 0 0',
+          },
+          title: {
+            color: 'white',
+            fontWeight: 700,
+            fontSize: '18px',
+          },
+          close: {
+            color: 'rgba(255, 255, 255, 0.8)',
+            background: 'rgba(255, 255, 255, 0.1)',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            borderRadius: '8px',
+            transition: 'all 0.3s ease',
+          },
+          body: {
+            padding: '24px',
+            background: 'var(--theme-bg-elevated)',
+          }
+        }}
+      >
+        <Stack gap="md">
+          <TelegramPreview
+            name={name}
+            description={description}
+            images={[
+              ...currentImages.map(url => url.startsWith('http') ? url : `${API}/public/add/merch/${url}`),
+              ...previewUrls
+            ]}
+          />
+        </Stack>
+      </Drawer>
+    </>
   );
 }
 
