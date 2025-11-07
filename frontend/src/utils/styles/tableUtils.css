@@ -33,7 +33,7 @@
   border-right: 1px solid var(--theme-border-secondary);
   min-width: 120px;
   max-width: 300px;
-  resize: horizontal;
+  /* resize: horizontal; temporary remove (z-index issue)*/
   overflow: hidden;
   letter-spacing: 0.025em;
   text-transform: uppercase;
