@@ -16,6 +16,24 @@ export interface DataItem {
 // Базовый URL API
 const API_BASE = `${API}/add/merch`;
 
+// Вспомогательная функция для получения токена
+const getAuthToken = (): string | null => {
+  return localStorage.getItem('token');
+};
+
+// Вспомогательная функция для создания заголовков с токеном
+const getAuthHeaders = (includeContentType: boolean = false): HeadersInit => {
+  const headers: HeadersInit = {};
+  const token = getAuthToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  if (includeContentType) {
+    headers['Content-Type'] = 'application/json';
+  }
+  return headers;
+};
+
 //----------------------------------------------Глобальный список и его функции -------------------------------
 //Получаем данные из базы
 export const getHierarchyData = async (parentId?: string, layer?: number): Promise<DataItem[]> => {
@@ -88,6 +106,7 @@ export const addCategory = async (categoryData: {
 
     const response = await fetch(`${API_BASE}/categories`, {
       method: 'POST',
+      headers: getAuthHeaders(),
       body: formData, // Не устанавливаем Content-Type, FormData сделает это автоматически
     });
 
@@ -137,6 +156,7 @@ export const updateCategory = async (id: string, categoryData: {
 
     const response = await fetch(`${API_BASE}/categories/${id}`, {
       method: 'PUT',
+      headers: getAuthHeaders(),
       body: formData,
     });
 
@@ -167,6 +187,7 @@ export const deleteCategory = async (id: string): Promise<void> => {
     
     const response = await fetch(`${API_BASE}/categories/${id}`, {
       method: 'DELETE',
+      headers: getAuthHeaders(),
     });
 
     if (!response.ok) {
@@ -201,6 +222,7 @@ export const deleteCategoryImage = async (id: string): Promise<DataItem> => {
     
     const response = await fetch(`${API_BASE}/categories/${id}/image`, {
       method: 'DELETE',
+      headers: getAuthHeaders(),
     });
 
     if (!response.ok) {

@@ -21,6 +21,24 @@ export interface CardItem {
 // Базовый URL API
 const API_BASE = `${API}/add/merch`;
 
+// Вспомогательная функция для получения токена
+const getAuthToken = (): string | null => {
+  return localStorage.getItem('token');
+};
+
+// Вспомогательная функция для создания заголовков с токеном
+const getAuthHeaders = (includeContentType: boolean = false): HeadersInit => {
+  const headers: HeadersInit = {};
+  const token = getAuthToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  if (includeContentType) {
+    headers['Content-Type'] = 'application/json';
+  }
+  return headers;
+};
+
 // Утилита для обработки ответов
 const handleResponse = async (response: Response, url: string) => {
   console.log(`📊 Ответ от ${url}:`, {
@@ -188,6 +206,7 @@ export const createCard = async (cardData: {
 
     const response = await fetch(url, {
       method: 'POST',
+      headers: getAuthHeaders(),
       body: formData,
     });
 
@@ -242,6 +261,7 @@ export const updateCard = async (id: string, cardData: Partial<{
     
     const response = await fetch(url, {
       method: 'PUT',
+      headers: getAuthHeaders(),
       body: formData,
     });
     
@@ -284,6 +304,7 @@ export const updateCardImages = async (id: string, imageUrls: string[]): Promise
     const response = await fetch(url, {
       method: 'PUT',
       headers: {
+        ...getAuthHeaders(),
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ imageUrls }),
@@ -316,6 +337,7 @@ export const addCardImages = async (id: string, images: File[]): Promise<CardIte
 
     const response = await fetch(url, {
       method: 'POST',
+      headers: getAuthHeaders(),
       body: formData,
     });
 
@@ -341,6 +363,7 @@ export const deleteCardImage = async (id: string, imageUrl: string): Promise<Car
     const response = await fetch(url, {
       method: 'DELETE',
       headers: {
+        ...getAuthHeaders(),
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ imageUrl }),
@@ -371,6 +394,7 @@ export const toggleCardActive = async (id: string, isActive: boolean): Promise<C
     
     const response = await fetch(url, {
       method: 'PUT',
+      headers: getAuthHeaders(),
       body: formData,
     });
     
@@ -412,6 +436,7 @@ export const deleteCard = async (id: string): Promise<void> => {
     
     const response = await fetch(url, {
       method: 'DELETE',
+      headers: getAuthHeaders(),
     });
     
     if (!response.ok) {

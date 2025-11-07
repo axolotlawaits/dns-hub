@@ -131,6 +131,12 @@ export const createMerchCategory = [
         }
       });
 
+      // Получаем userId из токена (должен быть после authenticateToken middleware)
+      const userId = (req as any).token?.userId;
+      if (!userId) {
+        return res.status(401).json({ error: 'User ID не найден в токене' });
+      }
+
       // Добавляем все изображения как attachments
       if (req.files && Array.isArray(req.files) && req.files.length > 0) {
         const files = req.files as Express.Multer.File[];
@@ -141,7 +147,7 @@ export const createMerchCategory = [
               source: file.filename, // Сохраняем название файла как оно сохранено на диске
               type: 'image',
               recordId: newCategory.id,
-              userAddId: (req as any).token?.userId || 'system',
+              userAddId: userId,
               sortOrder: i
             }
           });
@@ -352,6 +358,12 @@ export const createMerchCard = [
         }
       });
 
+      // Получаем userId из токена (должен быть после authenticateToken middleware)
+      const userId = (req as any).token?.userId;
+      if (!userId) {
+        return res.status(401).json({ error: 'User ID не найден в токене' });
+      }
+
       // Добавляем все изображения как attachments
       if (req.files && Array.isArray(req.files) && req.files.length > 0) {
         const files = req.files as Express.Multer.File[];
@@ -362,7 +374,7 @@ export const createMerchCard = [
               source: file.filename, // Сохраняем название файла как оно сохранено на диске
               type: 'image',
               recordId: newCard.id,
-              userAddId: (req as any).token?.userId || 'system',
+              userAddId: userId,
               sortOrder: i
             }
           });
@@ -482,7 +494,11 @@ export const addCardImages = [
 
       console.log(`✅ [addCardImages] Карточка найдена: ${existingCard.name} (layer: ${existingCard.layer})`);
       
-      const userId = (req as any).token?.userId || 'system';
+      // Получаем userId из токена (должен быть после authenticateToken middleware)
+      const userId = (req as any).token?.userId;
+      if (!userId) {
+        return res.status(401).json({ error: 'User ID не найден в токене' });
+      }
       console.log(`👤 [addCardImages] Используем userAddId: ${userId}`);
 
       // Получаем текущий максимальный sortOrder для attachments этой карточки
@@ -565,12 +581,18 @@ export const addMerchAttachment = [
         return res.status(400).json({ error: 'Файл не загружен' });
       }
 
+      // Получаем userId из токена (должен быть после authenticateToken middleware)
+      const userId = (req as any).token?.userId;
+      if (!userId) {
+        return res.status(401).json({ error: 'User ID не найден в токене' });
+      }
+
       const attachment = await prisma.merchAttachment.create({
         data: {
           recordId,
           source: req.file.originalname, // Сохраняем только название файла
           type: type || 'image',
-          userAddId: (req as any).token?.userId || 'system',
+          userAddId: userId,
           sortOrder: sortOrder || 0
         }
       });

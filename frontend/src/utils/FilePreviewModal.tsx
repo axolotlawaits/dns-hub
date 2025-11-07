@@ -1,6 +1,6 @@
 import { Modal, Image, Loader, Stack, Text, Group, Paper, Box, ActionIcon, Tooltip, Button } from '@mantine/core';
 import { Carousel } from '@mantine/carousel';
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { API } from '../config/constants';
 import { IconFile, IconFileText, IconFileTypePdf, IconPhoto, IconMusic, IconVideo, IconDownload, IconChevronLeft, IconChevronRight, IconX, IconTrash, IconExternalLink, IconRotate2, IconRotateClockwise2 } from '@tabler/icons-react';
 import './styles/FilePreviewModal.css';
@@ -141,7 +141,20 @@ export const FilePreviewModal = ({
   const [fileContent, setFileContent] = useState<string>('');
   const currentAttachment = attachments[currentIndex];
   const [rotation, setRotation] = useState(0)
+
+  // Нормализация угла поворота в диапазон 0-360
+  const normalizeRotation = (angle: number): number => {
+    return ((angle % 360) + 360) % 360;
+  };
+
+  // Получение нормализованного угла поворота
+  const normalizedRotation = normalizeRotation(rotation);
+
+  // Проверка, нужно ли применять специальную логику размеров (для 90 и 270 градусов)
+  const isRotated90or270 = normalizedRotation === 90 || normalizedRotation === 270;
   const [fileMimeType, setFileMimeType] = useState<string>('');
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   const {
     isImage,
@@ -320,6 +333,20 @@ export const FilePreviewModal = ({
       setError(false);
     }
   }, [opened, initialIndex]);
+
+  // Измеряем размеры контейнера для правильного расчета размеров при повороте
+  useEffect(() => {
+    const updateSize = () => {
+      if (containerRef.current) {
+        const { clientWidth, clientHeight } = containerRef.current;
+        setContainerSize({ width: clientWidth, height: clientHeight });
+      }
+    };
+
+    updateSize();
+    window.addEventListener('resize', updateSize);
+    return () => window.removeEventListener('resize', updateSize);
+  }, [opened, currentIndex, normalizedRotation]);
 
   useEffect(() => {
     if (!currentAttachment) return;
@@ -636,65 +663,64 @@ export const FilePreviewModal = ({
           {/* Кнопка для открытия в новой вкладке */}
           <Group justify="space-between" align="center">
             {/* Подсчет "4 из 5" слева */}
-            <Box
-              style={{
-                background: 'var(--theme-bg-elevated)',
-                borderRadius: '20px',
-                padding: '8px 20px',
-                border: '1px solid var(--theme-border-primary)'
-              }}
-            >
-              <Text 
-                style={{
-                  fontWeight: '600',
-                  color: 'var(--theme-text-primary)',
-                  fontSize: '14px'
-                }}
-              >
+            <Box className="file-counter">
+              <Text className="file-counter-text">
                 {currentIndex + 1} из {attachments.length}
               </Text>
             </Box>
             <Group>
-              <ActionIcon variant="default" aria-label="Settings" onClick={() => setRotation((prev) => (prev - 90) % 360)}> 
+              <ActionIcon 
+                className="rotate-button"
+                variant="default" 
+                aria-label="Settings" 
+                onClick={() => setRotation((prev) => normalizeRotation(prev - 90))}
+              > 
                 <IconRotate2 stroke={1.5} />
               </ActionIcon>
-              <ActionIcon variant="default" aria-label="Settings" onClick={() => setRotation((prev) => (prev + 90) % 360)}> 
+              <ActionIcon 
+                className="rotate-button"
+                variant="default" 
+                aria-label="Settings" 
+                onClick={() => setRotation((prev) => normalizeRotation(prev + 90))}
+              > 
                 <IconRotateClockwise2 stroke={1.5} />
               </ActionIcon>
             </Group>
-            {/* Кнопка "Открыть в новой вкладке" справа */}
             <Button
+              className="open-new-tab-button"
               variant="outline"
               size="sm"
               leftSection={<IconExternalLink size={16} />}
               onClick={openInNewTab}
-              style={{
-                background: 'var(--theme-bg-secondary)',
-                border: '1px solid var(--theme-border-primary)',
-                color: 'var(--theme-text-primary)'
-              }}
             >
               Открыть в новой вкладке
             </Button>
           </Group>
-          <Box>
-            <AuthImage
-              src={fileUrl}
-              alt={fileName}
-              fit="contain"
-              onMimeTypeDetected={setFileMimeType}
+          <Box
+            ref={containerRef}
+            className="rotation-container"
+          >
+            <Box
+              className="rotation-wrapper"
               style={{
-                width: '100%',
-                height: '100%',
-                borderRadius: '8px',
-                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)',
-                objectFit: 'contain',
-                objectPosition: 'center',
-                transform: `rotate(${rotation}deg)`
+                transform: `rotate(${normalizedRotation}deg)`,
+                width: isRotated90or270
+                  ? `${Math.min(containerSize.height, containerSize.width)}px`
+                  : '100%',
+                height: isRotated90or270
+                  ? `${Math.min(containerSize.height, containerSize.width)}px`
+                  : '100%'
               }}
-              onLoad={() => setLoading(false)}
-              onError={() => setError(true)}
-            />
+            >
+              <AuthImage
+                src={fileUrl}
+                alt={fileName}
+                fit="contain"
+                onMimeTypeDetected={setFileMimeType}
+                onLoad={() => setLoading(false)}
+                onError={() => setError(true)}
+              />
+            </Box>
           </Box>
         </Box>
       );
@@ -708,69 +734,69 @@ export const FilePreviewModal = ({
           {/* Кнопка для открытия в новой вкладке */}
           <Group justify="space-between" align="center">
             {/* Подсчет "4 из 5" слева */}
-            <Box
-              style={{
-                background: 'var(--theme-bg-elevated)',
-                borderRadius: '20px',
-                padding: '8px 20px',
-                border: '1px solid var(--theme-border-primary)'
-              }}
-            >
-              <Text 
-                style={{
-                  fontWeight: '600',
-                  color: 'var(--theme-text-primary)',
-                  fontSize: '14px'
-                }}
-              >
+            <Box className="file-counter">
+              <Text className="file-counter-text">
                 {currentIndex + 1} из {attachments.length}
               </Text>
             </Box>
             <Group>
-              <ActionIcon variant="default" aria-label="Settings" onClick={() => setRotation((prev) => (prev - 90) % 360)}> 
+              <ActionIcon 
+                className="rotate-button"
+                variant="default" 
+                aria-label="Settings" 
+                onClick={() => setRotation((prev) => normalizeRotation(prev - 90))}
+              > 
                 <IconRotate2 stroke={1.5} />
               </ActionIcon>
-              <ActionIcon variant="default" aria-label="Settings" onClick={() => setRotation((prev) => (prev + 90) % 360)}> 
+              <ActionIcon 
+                className="rotate-button"
+                variant="default" 
+                aria-label="Settings" 
+                onClick={() => setRotation((prev) => normalizeRotation(prev + 90))}
+              > 
                 <IconRotateClockwise2 stroke={1.5} />
               </ActionIcon>
             </Group>
-            {/* Кнопка "Открыть в новой вкладке" справа */}
             <Button
+              className="open-new-tab-button"
               variant="outline"
               size="sm"
               leftSection={<IconExternalLink size={16} />}
               onClick={openInNewTab}
-              style={{
-                background: 'var(--theme-bg-secondary)',
-                border: '1px solid var(--theme-border-primary)',
-                color: 'var(--theme-text-primary)'
-              }}
             >
               Открыть в новой вкладке
             </Button>
           </Group>
-          <Box>
-            <AuthFileLoader 
-              src={fileUrl} 
-              onMimeTypeDetected={setFileMimeType}
-              onLoad={() => setLoading(false)}
-              onError={() => setError(true)}
-            >            
-              {(blobUrl: string) => (
-                <iframe
-                  title="PDF Viewer"
-                  src={`${blobUrl}#toolbar=0&navpanes=0`}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    borderRadius: '8px',
-                    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)',
-                    border: 'none',
-                    transform: `rotate(${rotation}deg)`
-                  }}
-                />
-              )}
-            </AuthFileLoader>
+          <Box
+            ref={containerRef}
+            className="rotation-container"
+          >
+            <Box
+              className="rotation-wrapper"
+              style={{
+                transform: `rotate(${normalizedRotation}deg)`,
+                width: isRotated90or270
+                  ? `${Math.min(containerSize.height, containerSize.width)}px`
+                  : '100%',
+                height: isRotated90or270
+                  ? `${Math.min(containerSize.height, containerSize.width)}px`
+                  : '100%'
+              }}
+            >
+              <AuthFileLoader 
+                src={fileUrl} 
+                onMimeTypeDetected={setFileMimeType}
+                onLoad={() => setLoading(false)}
+                onError={() => setError(true)}
+              >            
+                {(blobUrl: string) => (
+                  <iframe
+                    title="PDF Viewer"
+                    src={`${blobUrl}#toolbar=0&navpanes=0`}
+                  />
+                )}
+              </AuthFileLoader>
+            </Box>
           </Box>
         </Box>
       );
@@ -1011,70 +1037,71 @@ export const FilePreviewModal = ({
         >
           <Group justify="space-between" align="center">
             {/* Подсчет "4 из 5" слева */}
-            <Box
-              style={{
-                background: 'var(--theme-bg-elevated)',
-                borderRadius: '20px',
-                padding: '8px 20px',
-                border: '1px solid var(--theme-border-primary)'
-              }}
-            >
-              <Text 
-                style={{
-                  fontWeight: '600',
-                  color: 'var(--theme-text-primary)',
-                  fontSize: '14px'
-                }}
-              >
+            <Box className="file-counter">
+              <Text className="file-counter-text">
                 {currentIndex + 1} из {attachments.length}
               </Text>
             </Box>
             <Group>
-              <ActionIcon variant="default" aria-label="Settings" onClick={() => setRotation((prev) => (prev - 90) % 360)}> 
+              <ActionIcon 
+                className="rotate-button"
+                variant="default" 
+                aria-label="Settings" 
+                onClick={() => setRotation((prev) => normalizeRotation(prev - 90))}
+              > 
                 <IconRotate2 stroke={1.5} />
               </ActionIcon>
-              <ActionIcon variant="default" aria-label="Settings" onClick={() => setRotation((prev) => (prev - 90) % 360)}> 
+              <ActionIcon 
+                className="rotate-button"
+                variant="default" 
+                aria-label="Settings" 
+                onClick={() => setRotation((prev) => normalizeRotation(prev + 90))}
+              > 
                 <IconRotateClockwise2 stroke={1.5} />
               </ActionIcon>
             </Group>
-            {/* Кнопка "Открыть в новой вкладке" справа */}
             <Button
+              className="open-new-tab-button"
               variant="outline"
               size="sm"
               leftSection={<IconExternalLink size={16} />}
               onClick={openInNewTab}
-              style={{
-                background: 'var(--theme-bg-secondary)',
-                border: '1px solid var(--theme-border-primary)',
-                color: 'var(--theme-text-primary)'
-              }}
             >
               Открыть в новой вкладке
             </Button>
           </Group>
           
-          <AuthFileLoader 
-            src={fileUrl} 
-            onMimeTypeDetected={setFileMimeType}
-            onLoad={() => setLoading(false)}
-            onError={() => setError(true)}
+          <Box
+            ref={containerRef}
+            className="rotation-container"
           >
-            {(blobUrl: string) => (
-              <iframe
-                title="File Viewer"
-                src={blobUrl}
-                style={{
-                  width: '100%',
-                  height: 'calc(100vh - 350px)',
-                  border: 'none',
-                  minHeight: 400,
-                  borderRadius: '8px',
-                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)',
-                  transform: `rotate(${rotation}deg)`
-                }}
-              />
-            )}
-          </AuthFileLoader>
+            <Box
+              className="rotation-wrapper"
+              style={{
+                transform: `rotate(${normalizedRotation}deg)`,
+                width: isRotated90or270
+                  ? `${Math.min(containerSize.height, containerSize.width)}px`
+                  : '100%',
+                height: isRotated90or270
+                  ? `${Math.min(containerSize.height, containerSize.width)}px`
+                  : '100%'
+              }}
+            >
+              <AuthFileLoader 
+                src={fileUrl} 
+                onMimeTypeDetected={setFileMimeType}
+                onLoad={() => setLoading(false)}
+                onError={() => setError(true)}
+              >
+                {(blobUrl: string) => (
+                  <iframe
+                    title="File Viewer"
+                    src={blobUrl}
+                  />
+                )}
+              </AuthFileLoader>
+            </Box>
+          </Box>
         </Box>
       );
     }

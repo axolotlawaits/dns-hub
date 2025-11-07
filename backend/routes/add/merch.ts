@@ -11,11 +11,17 @@ import {
   addMerchAttachment,
   deleteMerchAttachment
 } from '../../controllers/add/merch.js';
+import { authenticateToken } from '../../middleware/auth.js';
 
 const router = Router();
 
-// Роуты для категорий (layer = 1)
+// GET запросы публичные (для чтения данных)
 router.get('/categories', getMerchHierarchy as any);
+
+// Все остальные операции требуют аутентификации
+router.use(authenticateToken);
+
+// Роуты для категорий (layer = 1)
 router.post('/categories', ...(createMerchCategory as any));
 router.put('/categories/:id', ...(updateMerchCategory as any));
 router.delete('/categories/:id', deleteMerchCategory as any);
