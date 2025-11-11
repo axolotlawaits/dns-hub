@@ -200,11 +200,15 @@ export default function RocList() {
       const { uniqueNames, uniqueInns } = n_i
       
       setFilterNameData(uniqueNames.map((n: any) => n.name ))
-      setFilterInnData(uniqueInns.map((i: any) => ({ value: i.id, label: i.inn })))
+      setFilterInnData(uniqueInns.map((i: any) => i.inn ))
       setTypes(t.map((o: any) => o.name));
-      setStatuses(s.map((o: any) => ({ value: o.id, label: o.name, colorHex: o.colorHex })));
+      setStatuses(s.map((o: any) => o.name));
     }
   }, [fetchJson]);
+
+  const clearAllFilters = () => {
+    setFilters({ column: [] as any[], sorting: [{ id: 'createdAt', desc: true }] })
+  }
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -645,6 +649,7 @@ export default function RocList() {
                       ],
                     }))
                   }
+                  onClearAll={clearAllFilters}
                 />
             </Grid.Col>
             <Grid.Col span={12}>

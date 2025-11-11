@@ -210,26 +210,6 @@
   font-weight: 600;
 }
 
-/* Стили для кнопки очистки */
-.filter-clear {
-  background: var(--color-gray-100);
-  border: 1px solid var(--theme-border-primary);
-  border-radius: 6px;
-  padding: 4px 8px;
-  font-size: 12px;
-  color: var(--theme-text-secondary);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.filter-clear:hover {
-  background: var(--color-gray-200);
-  color: var(--theme-text-primary);
-}
-
 /* Стили для даты */
 .filter-date-group {
   display: flex !important;

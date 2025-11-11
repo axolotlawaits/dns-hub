@@ -2,7 +2,7 @@ import { FilterFn, ColumnFiltersState } from '@tanstack/react-table';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ru';
 import isBetween from 'dayjs/plugin/isBetween';
-import { TextInput, MultiSelect, Group, Text, ActionIcon, Box } from '@mantine/core';
+import { TextInput, MultiSelect, Group, Text, ActionIcon, Box, Tooltip } from '@mantine/core';
 import { IconX, IconFilter, IconCalendar, IconList, IconClock } from '@tabler/icons-react';
 import './styles/filter.css';
 
@@ -329,15 +329,16 @@ export const FilterGroup = ({
           {title}
         </Text>
         {showClearAll && hasActiveFilters && (
-          <ActionIcon
-            variant="subtle"
-            color="gray"
-            size="sm"
-            onClick={handleClearAll}
-            className="filter-clear"
-          >
-            <IconX size={14} />
-          </ActionIcon>
+          <Tooltip label="Очистить все фильтры" position='top-end'>
+            <ActionIcon
+              variant="light"
+              color="red"
+              size="md"
+              onClick={handleClearAll}
+            >
+              <IconX size={20} />
+            </ActionIcon>
+          </Tooltip>
         )}
       </Group>
       
