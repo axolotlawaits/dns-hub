@@ -207,14 +207,20 @@ export default function RocList() {
     loadRefs();
     loadList();
   }, [loadRefs, loadList]);
-
+  const temp = [
+    'АКЦИОНЕРНОЕ ОБЩЕСТВО "СТРАХОВОЕ ОБЩЕСТВО ГАЗОВОЙ ПРОМЫШЛЕННОСТИ"'
+  ]
+  const innTemp = [
+    '3023009439'
+  ]
   const filtersConfig = useMemo(() => ([
-    { columnId: 'name', label: 'Контрагент', type: 'text' as const },
-    { columnId: 'typeContractId', label: 'Тип договора', type: 'select' as const, options: types },
+    { columnId: 'name', label: 'Контрагент', type: 'select' as const, options: temp },
+    { columnId: 'doc_inn', label: 'ИНН', type: 'select' as const, options: innTemp },
+    { columnId: 'typeContract', label: 'Тип договора', type: 'select' as const, options: types },
     { columnId: 'statusContractId', label: 'Статус', type: 'select' as const, options: statuses },
     { columnId: 'dateContract', label: 'Дата договора', type: 'date' as const },
   ]), [types, statuses]);
-
+  console.log(statuses)
   const [formConfig, setFormConfig] = useState<FormConfig>({ initialValues: DEFAULT_FORM, fields: [] });
   // const [attachments, setAttachments] = useState<File[]>([]);
 
@@ -637,6 +643,11 @@ export default function RocList() {
               <Box>
                 <TableComponent<RocData>
                   data={data}
+                  initialState={{
+                    columnVisibility: {
+                      doc_inn: false
+                    }
+                  }}
                   columns={[
                     { 
                       header: 'Контрагент', 
@@ -655,6 +666,11 @@ export default function RocList() {
                           </Text>
                         </Tooltip>
                       ) 
+                    },
+                    {  
+                      header: 'ИНН',
+                      accessorKey: 'doc.inn', 
+                      enableHiding: true,
                     },
                     { 
                       header: 'Номер', 

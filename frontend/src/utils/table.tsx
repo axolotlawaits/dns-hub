@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { useReactTable, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, flexRender, type ColumnDef, type ColumnFiltersState, type SortingState, type PaginationState, type FilterFn, type OnChangeFn } from '@tanstack/react-table';
+import { useReactTable, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, flexRender, type ColumnDef, type ColumnFiltersState, type SortingState, type PaginationState, type FilterFn, type OnChangeFn, InitialTableState } from '@tanstack/react-table';
 import { Pagination, Select, Flex, Group, Box, Text, Card, ThemeIcon } from '@mantine/core';
 import { IconArrowUp, IconArrowDown, IconCalendar } from '@tabler/icons-react';
 import './styles/tableUtils.css';
 
 export interface TableComponentProps<TData> {
   data: TData[];
+  initialState: InitialTableState;
   columns: ColumnDef<TData>[];
   columnFilters: ColumnFiltersState;
   sorting: SortingState;
@@ -19,6 +20,7 @@ export interface TableComponentProps<TData> {
 
 export function TableComponent<TData>({
   data,
+  initialState,
   columns,
   columnFilters,
   sorting,
@@ -39,9 +41,10 @@ export function TableComponent<TData>({
     pageIndex: 0,
     pageSize: Number(paginationOptions[0]?.value) || 10,
   });
-
+ 
   const table = useReactTable({
     data,
+    initialState,
     columns,
     state: {
       columnFilters,
