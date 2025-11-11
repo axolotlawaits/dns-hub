@@ -16,6 +16,8 @@ import FloatingActionButton from '../../../components/FloatingActionButton';
 
 interface TypeOption { value: string; label: string; colorHex?: string | null }
 
+interface FilterData { uniqueNames: TypeOption[], uniqueInns: TypeOption[] }
+
 interface DocDirectory {
   id: string;
   fullName: string;
@@ -124,8 +126,12 @@ export default function RocList() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<RocData | null>(null);
   const [formValues, setFormValues] = useState(DEFAULT_FORM);
+
+  const [filterNameData, setFilterNameData] = useState<TypeOption[]>([])
+  const [filterInnData, setFilterInnData] = useState<TypeOption[]>([])
   const [types, setTypes] = useState<TypeOption[]>([]);
   const [statuses, setStatuses] = useState<TypeOption[]>([]);
+
   const [filters, setFilters] = useState({ column: [] as any[], sorting: [{ id: 'createdAt', desc: true }] });
   const [activeTab, setActiveTab] = useState<'list' | 'byDoc'>('list');
 
@@ -185,12 +191,19 @@ export default function RocList() {
   }, []);
 
   const loadRefs = useCallback(async () => {
-    const [t, s] = await Promise.all([
+    const [t, s, n_i] = await Promise.all([
       fetchJson<TypeOption[]>(`${API}/accounting/roc/dict/types`),
       fetchJson<TypeOption[]>(`${API}/accounting/roc/dict/statuses`),
+      fetchJson<FilterData>(`${API}/accounting/roc/dict/name-inn`)
     ]);
-    setTypes((t || []).map((o: any) => ({ value: o.id, label: o.name, colorHex: o.colorHex })));
-    setStatuses((s || []).map((o: any) => ({ value: o.id, label: o.name, colorHex: o.colorHex })));
+    if (t && s && n_i) {
+      const { uniqueNames, uniqueInns } = n_i
+      
+      setFilterNameData(uniqueNames.map((n: any) => n.name ))
+      setFilterInnData(uniqueInns.map((i: any) => ({ value: i.id, label: i.inn })))
+      setTypes(t.map((o: any) => o.name));
+      setStatuses(s.map((o: any) => ({ value: o.id, label: o.name, colorHex: o.colorHex })));
+    }
   }, [fetchJson]);
 
   const loadList = useCallback(async () => {
@@ -207,20 +220,15 @@ export default function RocList() {
     loadRefs();
     loadList();
   }, [loadRefs, loadList]);
-  const temp = [
-    'АКЦИОНЕРНОЕ ОБЩЕСТВО "СТРАХОВОЕ ОБЩЕСТВО ГАЗОВОЙ ПРОМЫШЛЕННОСТИ"'
-  ]
-  const innTemp = [
-    '3023009439'
-  ]
+
   const filtersConfig = useMemo(() => ([
-    { columnId: 'name', label: 'Контрагент', type: 'select' as const, options: temp },
-    { columnId: 'doc_inn', label: 'ИНН', type: 'select' as const, options: innTemp },
-    { columnId: 'typeContract', label: 'Тип договора', type: 'select' as const, options: types },
-    { columnId: 'statusContractId', label: 'Статус', type: 'select' as const, options: statuses },
+    { columnId: 'name', label: 'Контрагент', type: 'select' as const, options: filterNameData },
+    { columnId: 'doc_inn', label: 'ИНН', type: 'select' as const, options: filterInnData },
+    { columnId: 'typeContract_name', label: 'Тип договора', type: 'select' as const, options: types },
+    { columnId: 'statusContract_name', label: 'Статус', type: 'select' as const, options: statuses },
     { columnId: 'dateContract', label: 'Дата договора', type: 'date' as const },
   ]), [types, statuses]);
-  console.log(statuses)
+
   const [formConfig, setFormConfig] = useState<FormConfig>({ initialValues: DEFAULT_FORM, fields: [] });
   // const [attachments, setAttachments] = useState<File[]>([]);
 

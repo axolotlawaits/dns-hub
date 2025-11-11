@@ -41,7 +41,7 @@ export function TableComponent<TData>({
     pageIndex: 0,
     pageSize: Number(paginationOptions[0]?.value) || 10,
   });
- 
+  console.log(columnFilters)
   const table = useReactTable({
     data,
     initialState,
