@@ -1,18 +1,38 @@
-import { Modal, Image, Loader, Stack, Text, Group, Paper, Box, ActionIcon, Tooltip, Button } from '@mantine/core';
-import { Carousel } from '@mantine/carousel';
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Modal, Image, Loader, Stack, Text, Group, Paper, Box, ActionIcon, Tooltip, Button, Slider } from '@mantine/core';
+import { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
 import { API } from '../config/constants';
-import { IconFile, IconFileText, IconFileTypePdf, IconPhoto, IconMusic, IconVideo, IconDownload, IconChevronLeft, IconChevronRight, IconX, IconTrash, IconExternalLink, IconRotate2, IconRotateClockwise2 } from '@tabler/icons-react';
+import { IconFile, IconFileText, IconFileTypePdf, IconPhoto, IconMusic, IconVideo, IconDownload, IconChevronLeft, IconChevronRight, IconX, IconTrash, IconExternalLink, IconRotate2, IconRotateClockwise2, IconZoomIn, IconZoomOut } from '@tabler/icons-react';
 import './styles/FilePreviewModal.css';
 
+// Интерфейсы для типизации
+interface AuthFileLoaderProps {
+  src: string;
+  onMimeTypeDetected?: (mimeType: string) => void;
+  onLoad?: () => void;
+  onError?: () => void;
+  children: (url: string) => React.ReactNode;
+}
+
+interface AuthImageProps {
+  src: string;
+  alt?: string;
+  onMimeTypeDetected?: (mimeType: string) => void;
+  onLoad?: (event: React.SyntheticEvent<HTMLImageElement>) => void;
+  onError?: () => void;
+  fit?: 'contain' | 'cover' | 'fill' | 'none' | 'scale-down';
+  className?: string;
+}
+
 // Компонент для загрузки файлов с заголовками авторизации
-  const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: any) => {
-    const [fileBlob, setFileBlob] = useState<Blob | null>(null);
+const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: AuthFileLoaderProps) => {
+    const [blobUrl, setBlobUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
 
     useEffect(() => {
       if (!src) return;
+
+      let currentBlobUrl: string | null = null;
 
       if (src.startsWith('http') && !src.startsWith('blob:')) {
         // Для внешних URL добавляем заголовки авторизации
@@ -21,13 +41,10 @@ import './styles/FilePreviewModal.css';
         
         if (token) {
           headers['Authorization'] = `Bearer ${token}`;
-        } else {
-
         }
 
         fetch(src, { headers })
           .then(response => {
-            
             if (!response.ok) {
               throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
             }
@@ -40,8 +57,9 @@ import './styles/FilePreviewModal.css';
             return response.blob();
           })
           .then(blob => {
-
-            setFileBlob(blob);
+            const newBlobUrl = URL.createObjectURL(blob);
+            currentBlobUrl = newBlobUrl;
+            setBlobUrl(newBlobUrl);
             setLoading(false);
             if (onLoad) onLoad();
           })
@@ -53,17 +71,35 @@ import './styles/FilePreviewModal.css';
           });
       } else {
         // Для локальных URL и blob URL используем как есть
-        setFileBlob(null);
+        setBlobUrl(null);
         setLoading(false);
         if (onLoad) onLoad();
       }
 
       return () => {
-        if (fileBlob) {
-          URL.revokeObjectURL(URL.createObjectURL(fileBlob));
+        // Очистка при размонтировании или изменении src
+        if (currentBlobUrl && currentBlobUrl.startsWith('blob:')) {
+          try {
+            URL.revokeObjectURL(currentBlobUrl);
+          } catch (error) {
+            console.warn('Failed to revoke blob URL:', error);
+          }
         }
       };
     }, [src, onMimeTypeDetected, onLoad, onError]);
+
+    // Очистка при размонтировании компонента
+    useEffect(() => {
+      return () => {
+        if (blobUrl && blobUrl.startsWith('blob:')) {
+          try {
+            URL.revokeObjectURL(blobUrl);
+          } catch (error) {
+            console.warn('Failed to revoke blob URL on unmount:', error);
+          }
+        }
+      };
+    }, [blobUrl]);
 
   if (loading) {
     return <Loader size="md" />;
@@ -73,15 +109,31 @@ import './styles/FilePreviewModal.css';
     return <Text c="red">Ошибка загрузки файла</Text>;
   }
 
-  return children(fileBlob ? URL.createObjectURL(fileBlob) : src);
+  return children(blobUrl || src);
 };
 
 // Компонент для загрузки изображений с заголовками авторизации
-const AuthImage = ({ src, alt, onMimeTypeDetected, ...props }: any) => {
+const AuthImage = ({ src, alt, onMimeTypeDetected, onLoad, onError, ...props }: AuthImageProps) => {
+  const handleLoad = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
+    if (onLoad) {
+      onLoad(event);
+    }
+  }, [onLoad]);
+
   return (
-    <AuthFileLoader src={src} onMimeTypeDetected={onMimeTypeDetected}>
+    <AuthFileLoader 
+      src={src} 
+      onMimeTypeDetected={onMimeTypeDetected}
+      onError={onError}
+    >
       {(blobUrl: string) => (
-        <Image src={blobUrl} alt={alt} {...props} />
+        <Image 
+          src={blobUrl} 
+          alt={alt || ''} 
+          onLoad={handleLoad}
+          onError={onError}
+          {...props} 
+        />
       )}
     </AuthFileLoader>
   );
@@ -108,6 +160,8 @@ const SUPPORTED_AUDIO_EXTS = ['mp3', 'ogg', 'wav'];
 const SUPPORTED_VIDEO_EXTS = ['mp4', 'webm', 'ogg'];
 const SUPPORTED_PDF_EXTS = ['pdf'];
 const SUPPORTED_TEXT_EXTS = ['txt', 'csv', 'json', 'xml'];
+const MIN_IMAGE_ZOOM = 25;
+const MAX_IMAGE_ZOOM = 400;
 
 const getFileIcon = (ext: string) => {
   if (SUPPORTED_IMAGE_EXTS.includes(ext)) return IconPhoto;
@@ -140,7 +194,81 @@ export const FilePreviewModal = ({
   const [error, setError] = useState(false);
   const [fileContent, setFileContent] = useState<string>('');
   const currentAttachment = attachments[currentIndex];
-  const [rotation, setRotation] = useState(0)
+  const [rotation, setRotation] = useState(0);
+  const [imageZoom, setImageZoom] = useState(100);
+  const [imageOffset, setImageOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [imageNaturalSize, setImageNaturalSize] = useState({ width: 0, height: 0 });
+  const [overlayHeights, setOverlayHeights] = useState({ top: 0, bottom: 0 });
+
+  const topOverlayRef = useRef<HTMLDivElement>(null);
+  const bottomControlsRef = useRef<HTMLDivElement>(null);
+
+  const attachmentMeta = useMemo(() => {
+    return attachments.map((attachment, index) => {
+      const source = attachment.source;
+      const providedName = attachment.name;
+      const providedMime = attachment.mimeType;
+
+      let ext = typeof source === 'string'
+        ? source.split('.').pop()?.toLowerCase() || ''
+        : source.name.split('.').pop()?.toLowerCase() || '';
+
+      if (!ext && providedMime) {
+        if (providedMime.startsWith('image/')) ext = 'jpg';
+        else if (providedMime === 'application/pdf') ext = 'pdf';
+        else if (providedMime.startsWith('video/')) ext = 'mp4';
+      }
+
+      const isImage = SUPPORTED_IMAGE_EXTS.includes(ext) || (providedMime || '').startsWith('image/');
+      const isVideo = SUPPORTED_VIDEO_EXTS.includes(ext) || (providedMime || '').startsWith('video/');
+      const isPdf = SUPPORTED_PDF_EXTS.includes(ext) || providedMime === 'application/pdf';
+
+      const resolvedUrl = typeof source === 'string'
+        ? (source.startsWith('http') || source.startsWith('blob:') ? source : `${API}/${source}`)
+        : URL.createObjectURL(source);
+
+      let inferredName = providedName;
+      if (!inferredName) {
+        if (typeof source === 'string') {
+          const cleanPath = source.split('?')[0];
+          const pathParts = cleanPath.split(/[\\\/]/);
+          let fileName = pathParts[pathParts.length - 1];
+          if (!fileName || fileName.length < 3 || /^[a-f0-9-]+$/i.test(fileName)) {
+            fileName = pathParts[pathParts.length - 2] || 'Файл';
+          }
+          inferredName = decodeURIComponent(fileName);
+        } else {
+          inferredName = source.name;
+        }
+      }
+
+      return {
+        id: attachment.id || `attachment-${index}`,
+        name: inferredName,
+        ext,
+        previewUrl: resolvedUrl,
+        shouldRevoke: typeof source !== 'string',
+        isImage,
+        isVideo,
+        isPdf,
+      };
+    });
+  }, [attachments, API]);
+
+  useEffect(() => {
+    return () => {
+      attachmentMeta.forEach((meta) => {
+        if (meta.shouldRevoke && meta.previewUrl.startsWith('blob:')) {
+          try {
+            URL.revokeObjectURL(meta.previewUrl);
+          } catch (error) {
+            console.warn('Failed to revoke blob URL:', error);
+          }
+        }
+      });
+    };
+  }, [attachmentMeta]);
 
   // Нормализация угла поворота в диапазон 0-360
   const normalizeRotation = (angle: number): number => {
@@ -153,8 +281,45 @@ export const FilePreviewModal = ({
   // Проверка, нужно ли применять специальную логику размеров (для 90 и 270 градусов)
   const isRotated90or270 = normalizedRotation === 90 || normalizedRotation === 270;
   const [fileMimeType, setFileMimeType] = useState<string>('');
-  const containerRef = useRef<HTMLDivElement>(null);
+  const imageContainerRef = useRef<HTMLDivElement>(null);
+  const rotationContainerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const dragStartRef = useRef({ x: 0, y: 0 });
+
+  const naturalWidth = imageNaturalSize.width || containerSize.width || 1;
+  const naturalHeight = imageNaturalSize.height || containerSize.height || 1;
+  const displayedWidth = isRotated90or270 ? naturalHeight : naturalWidth;
+  const displayedHeight = isRotated90or270 ? naturalWidth : naturalHeight;
+
+  const baseScale = useMemo(() => {
+    if (!displayedWidth || !displayedHeight || !containerSize.width || !containerSize.height) {
+      return 1;
+    }
+
+    const availableWidth = containerSize.width;
+    const availableHeight = Math.max(
+      containerSize.height - overlayHeights.top - overlayHeights.bottom,
+      1
+    );
+
+    const widthScale = availableWidth / displayedWidth;
+    const heightScale = availableHeight / displayedHeight;
+    const scale = Math.min(widthScale, heightScale);
+
+    return Number.isFinite(scale) && scale > 0 ? scale : 1;
+  }, [
+    displayedWidth,
+    displayedHeight,
+    containerSize.width,
+    containerSize.height,
+    overlayHeights.top,
+    overlayHeights.bottom
+  ]);
+
+  const effectiveScale = useMemo(
+    () => baseScale * (imageZoom / 100),
+    [baseScale, imageZoom]
+  );
 
   const {
     isImage,
@@ -182,8 +347,8 @@ export const FilePreviewModal = ({
     }
 
     const source = currentAttachment.source;
-    const providedName = (currentAttachment as any).name as string | undefined;
-    const providedMime = (currentAttachment as any).mimeType as string | undefined;
+    const providedName = currentAttachment.name;
+    const providedMime = currentAttachment.mimeType;
     let ext = typeof source === 'string'
       ? source.split('.').pop()?.toLowerCase() || ''
       : source.name.split('.').pop()?.toLowerCase() || '';
@@ -203,13 +368,6 @@ export const FilePreviewModal = ({
     const isText = SUPPORTED_TEXT_EXTS.includes(ext) || (effectiveMime || '').startsWith('text/');
     const isAudio = SUPPORTED_AUDIO_EXTS.includes(ext) || (effectiveMime || '').startsWith('audio/');
     const isVideo = SUPPORTED_VIDEO_EXTS.includes(ext) || (effectiveMime || '').startsWith('video/');
-
-    // Вычисляем URL для скачивания: меняем /view на /download, если это наш прокси
-    const computeDownloadUrl = (url: string) => {
-      if (!url) return url;
-      // Заменяем /view на /download, сохраняя query/anchor
-      return url.replace(/\/view(?=(\?|#|$))/i, '/download');
-    };
 
     return {
       ext,
@@ -233,8 +391,178 @@ export const FilePreviewModal = ({
   }, [currentAttachment, API, fileMimeType]);
 
   useEffect(() => {
-    setRotation(0)
-  }, [currentIndex])
+    setRotation(0);
+    setImageZoom(100);
+    setImageOffset({ x: 0, y: 0 });
+    setImageNaturalSize({ width: 0, height: 0 });
+  }, [currentIndex]);
+
+  useEffect(() => {
+    if (!isImage) {
+      setImageZoom(100);
+      setImageOffset({ x: 0, y: 0 });
+    }
+  }, [isImage]);
+
+  useEffect(() => {
+    setImageOffset({ x: 0, y: 0 });
+  }, [normalizedRotation]);
+
+  // Измеряем высоту оверлеев для правильного расчета масштаба
+  useLayoutEffect(() => {
+    const measureOverlays = () => {
+      const topOverlay = topOverlayRef.current;
+      const bottomControls = bottomControlsRef.current;
+
+      const topHeight = topOverlay ? topOverlay.getBoundingClientRect().height : 0;
+      const bottomHeight = bottomControls ? bottomControls.getBoundingClientRect().height : 0;
+
+      setOverlayHeights({ top: topHeight, bottom: bottomHeight });
+    };
+
+    measureOverlays();
+    // Переизмеряем при изменении размеров окна или содержимого
+    const resizeObserver = new ResizeObserver(measureOverlays);
+    
+    if (topOverlayRef.current) {
+      resizeObserver.observe(topOverlayRef.current);
+    }
+    if (bottomControlsRef.current) {
+      resizeObserver.observe(bottomControlsRef.current);
+    }
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [isImage, currentIndex, imageZoom]);
+
+  const handleImageLoad = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
+    const target = event.currentTarget;
+    setLoading(false);
+    if (target?.naturalWidth && target?.naturalHeight) {
+      setImageNaturalSize({
+        width: target.naturalWidth,
+        height: target.naturalHeight
+      });
+    }
+  }, []);
+
+  const handleImageError = useCallback(() => {
+    setError(true);
+    setLoading(false);
+    setImageNaturalSize({ width: 0, height: 0 });
+  }, []);
+
+  const clampOffset = useCallback(
+    (x: number, y: number, scale: number) => {
+      const padding = 8;
+      const availableWidth = containerSize.width;
+      const availableHeight = Math.max(
+        containerSize.height - overlayHeights.top - overlayHeights.bottom,
+        1
+      );
+
+      const excessWidth = Math.max(0, displayedWidth * scale - availableWidth);
+      const excessHeight = Math.max(0, displayedHeight * scale - availableHeight);
+
+      const halfWidth = (excessWidth + padding) / 2;
+      const halfHeight = (excessHeight + padding) / 2;
+
+      return {
+        x: Math.min(Math.max(x, -halfWidth), halfWidth),
+        y: Math.min(Math.max(y, -halfHeight), halfHeight)
+      };
+    },
+    [
+      displayedWidth,
+      displayedHeight,
+      containerSize.width,
+      containerSize.height,
+      overlayHeights.top,
+      overlayHeights.bottom
+    ]
+  );
+
+  const handleZoomChange = useCallback(
+    (value: number) => {
+      const limitedValue = Math.min(Math.max(value, MIN_IMAGE_ZOOM), MAX_IMAGE_ZOOM);
+      setImageZoom(limitedValue);
+      if (limitedValue <= 100) {
+        setImageOffset({ x: 0, y: 0 });
+      } else {
+        const nextScale = baseScale * (limitedValue / 100);
+        setImageOffset(current => clampOffset(current.x, current.y, nextScale));
+      }
+    },
+    [baseScale, clampOffset]
+  );
+
+  const handleWheelZoom = useCallback(
+    (event: React.WheelEvent<HTMLDivElement>) => {
+      if (!isImage) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const delta = event.deltaY > 0 ? -10 : 10;
+      setImageZoom(prev => {
+        const next = Math.min(Math.max(prev + delta, MIN_IMAGE_ZOOM), MAX_IMAGE_ZOOM);
+        if (next <= 100) {
+          setImageOffset({ x: 0, y: 0 });
+        } else {
+          const nextScale = baseScale * (next / 100);
+          setImageOffset(current => clampOffset(current.x, current.y, nextScale));
+        }
+        return next;
+      });
+    },
+    [isImage, baseScale, clampOffset]
+  );
+
+  const handlePointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (imageZoom <= 100) return;
+      event.preventDefault();
+      event.stopPropagation();
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      } catch (e) {
+        // Pointer capture may not be supported
+      }
+      setIsDragging(true);
+      dragStartRef.current = {
+        x: event.clientX - imageOffset.x,
+        y: event.clientY - imageOffset.y
+      };
+    },
+    [imageZoom, imageOffset.x, imageOffset.y]
+  );
+
+  const handlePointerMove = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (!isDragging) return;
+      event.preventDefault();
+      setImageOffset(() => {
+        const nextX = event.clientX - dragStartRef.current.x;
+        const nextY = event.clientY - dragStartRef.current.y;
+        return clampOffset(nextX, nextY, effectiveScale);
+      });
+    },
+    [isDragging, clampOffset, effectiveScale]
+  );
+
+  const handlePointerUp = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (!isDragging) return;
+      event.preventDefault();
+      event.stopPropagation();
+      try {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      } catch (e) {
+        // Ignore if releasePointerCapture is unsupported
+      }
+      setIsDragging(false);
+    },
+    [isDragging]
+  );
 
   const handleNext = useCallback(() => {
     setCurrentIndex(prev => {
@@ -245,8 +573,9 @@ export const FilePreviewModal = ({
         setTimeout(() => {
           setCurrentIndex(nextIndex);
         }, 50);
+        return prev; // Возвращаем текущий индекс, так как обновление происходит в setTimeout
       }
-      return prev; // Возвращаем текущий индекс, так как обновление происходит в setTimeout
+      return prev;
     });
   }, [attachments.length]);
 
@@ -259,20 +588,21 @@ export const FilePreviewModal = ({
         setTimeout(() => {
           setCurrentIndex(prevIndex);
         }, 50);
+        return prev; // Возвращаем текущий индекс, так как обновление происходит в setTimeout
       }
-      return prev; // Возвращаем текущий индекс, так как обновление происходит в setTimeout
+      return prev;
     });
   }, []);
 
-  const handleFileSelect = (index: number) => {
+  const handleFileSelect = useCallback((index: number) => {
     if (index === currentIndex) return; // Не переключаем если уже выбран этот файл
-    
+
     setLoading(true);
     // Небольшая задержка для плавного перехода
     setTimeout(() => {
       setCurrentIndex(index);
     }, 50);
-  };
+  }, [currentIndex]);
 
   // Функция для открытия файла в новой вкладке с токеном авторизации
   const openInNewTab = useCallback(async () => {
@@ -337,10 +667,20 @@ export const FilePreviewModal = ({
   // Измеряем размеры контейнера для правильного расчета размеров при повороте
   useEffect(() => {
     const updateSize = () => {
-      if (containerRef.current) {
-        const { clientWidth, clientHeight } = containerRef.current;
-        setContainerSize({ width: clientWidth, height: clientHeight });
-      }
+      const target = rotationContainerRef.current || imageContainerRef.current;
+      if (!target) return;
+
+      const rect = target.getBoundingClientRect();
+      const styles = getComputedStyle(target);
+      const paddingX =
+        parseFloat(styles.paddingLeft || '0') + parseFloat(styles.paddingRight || '0');
+      const paddingY =
+        parseFloat(styles.paddingTop || '0') + parseFloat(styles.paddingBottom || '0');
+
+      setContainerSize({
+        width: Math.max(rect.width - paddingX, 0),
+        height: Math.max(rect.height - paddingY, 0)
+      });
     };
 
     updateSize();
@@ -353,14 +693,21 @@ export const FilePreviewModal = ({
 
     setLoading(true);
     // Если MIME пришел извне — используем его сразу
-    if ((currentAttachment as any).mimeType) {
-      setFileMimeType((currentAttachment as any).mimeType);
+    if (currentAttachment.mimeType) {
+      setFileMimeType(currentAttachment.mimeType);
     } else {
       setFileMimeType('');
     }
 
+    // Вычисляем fileUrl для использования в эффекте
+    const computedFileUrl = typeof currentAttachment.source === 'string'
+      ? (currentAttachment.source.startsWith('http') || currentAttachment.source.startsWith('blob:') 
+          ? currentAttachment.source 
+          : `${API}/${currentAttachment.source}`)
+      : URL.createObjectURL(currentAttachment.source);
+
     // Получаем MIME-тип файла для правильного определения типа, только если он не был предоставлен
-    if (!(currentAttachment as any).mimeType && typeof currentAttachment.source === 'string' && fileUrl.startsWith('http') && !fileUrl.startsWith('blob:')) {
+    if (!currentAttachment.mimeType && typeof currentAttachment.source === 'string' && computedFileUrl.startsWith('http') && !computedFileUrl.startsWith('blob:')) {
       const headers: HeadersInit = {};
       const token = localStorage.getItem('token');
       if (token) {
@@ -368,7 +715,7 @@ export const FilePreviewModal = ({
       }
 
       // Делаем HEAD запрос для получения заголовков
-      fetch(fileUrl, { method: 'HEAD', headers })
+      fetch(computedFileUrl, { method: 'HEAD', headers })
         .then(response => {
           if (!response.ok) {
             throw new Error('Failed to fetch headers');
@@ -378,8 +725,9 @@ export const FilePreviewModal = ({
             setFileMimeType(contentType);
           }
         })
-        .catch(() => {
+        .catch((error) => {
           // Если не удалось получить заголовки, продолжаем без MIME-типа
+          console.warn('Failed to fetch MIME type:', error);
         });
     }
 
@@ -387,14 +735,14 @@ export const FilePreviewModal = ({
       const headers: HeadersInit = {};
       
       // Добавляем токен авторизации для внешних URL
-      if (fileUrl.startsWith('http') && !fileUrl.startsWith('blob:')) {
+      if (computedFileUrl.startsWith('http') && !computedFileUrl.startsWith('blob:')) {
         const token = localStorage.getItem('token');
         if (token) {
           headers['Authorization'] = `Bearer ${token}`;
         }
       }
       
-      fetch(fileUrl, { headers })
+      fetch(computedFileUrl, { headers })
         .then(response => {
           if (!response.ok) {
             throw new Error('Failed to fetch');
@@ -405,7 +753,8 @@ export const FilePreviewModal = ({
           setFileContent(text);
           setLoading(false);
         })
-        .catch(() => {
+        .catch((error) => {
+          console.error('Failed to fetch text file:', error);
           setError(true);
           setLoading(false);
         });
@@ -422,180 +771,106 @@ export const FilePreviewModal = ({
     }
 
     return () => {
-      if (typeof currentAttachment.source !== 'string') {
-        URL.revokeObjectURL(fileUrl);
+      // Очистка blob URL только если это локальный файл
+      if (currentAttachment && typeof currentAttachment.source !== 'string' && computedFileUrl.startsWith('blob:')) {
+        try {
+          URL.revokeObjectURL(computedFileUrl);
+        } catch (error) {
+          console.warn('Failed to revoke blob URL:', error);
+        }
       }
     };
-  }, [currentAttachment, fileUrl, isText]);
+  }, [currentAttachment, isText, API]);
 
+  const fileSelectorContent = useMemo(() => (
+    <Stack gap="10px" className="file-selector">
+      {attachmentMeta.map((meta, index) => {
+        const isActive = currentIndex === index;
+        const FileIcon = getFileIcon(meta.ext);
 
-
-  const FileSelector = () => (
-    <Box className="file-selector">
-      <Carousel
-        withIndicators={false}
-        withControls={attachments.length > 3}
-        slideSize="200px"
-        slideGap="12px"
-        styles={{
-          control: {
-            background: 'var(--theme-bg-elevated)',
-            border: '1px solid var(--theme-border-primary)',
-            color: 'var(--theme-text-primary)',
-            '&:hover': {
-              background: 'var(--theme-bg-secondary)',
-            }
-          },
-          indicator: {
-            background: 'var(--theme-border-primary)',
-            '&[data-active]': {
-              background: 'var(--color-primary-500)',
-            }
-          }
-        }}
-      >
-      {attachments.map((attachment, index) => {
-        const src = attachment.name || 
-          (typeof attachment.source === 'string'
-            ? (() => {
-                // Извлекаем имя файла из пути или URL
-                const path = attachment.source;
-                
-                // Если это URL с параметрами, убираем их
-                const cleanPath = path.split('?')[0];
-                
-                // Разбиваем по слешам и берем последнюю часть
-                const pathParts = cleanPath.split(/[\\\/]/);
-                let fileName = pathParts[pathParts.length - 1];
-                
-                // Если последняя часть пустая или это ID (только цифры/буквы), берем предпоследнюю
-                if (!fileName || fileName.length < 3 || /^[a-f0-9-]+$/i.test(fileName)) {
-                  fileName = pathParts[pathParts.length - 2] || 'Файл';
-                }
-                
-                // Декодируем URL
-                return decodeURIComponent(fileName);
-              })()
-            : attachment.source.name);
-          
-          const ext = typeof attachment.source === 'string'
-            ? src.split('.').pop()?.toLowerCase() || ''
-            : attachment.source.name.split('.').pop()?.toLowerCase() || '';
-          
-          const FileIcon = getFileIcon(ext);
-          const isActive = currentIndex === index;
-          
         return (
-          <Carousel.Slide key={attachment.id || `attachment-${index}`}>
-            <Box
+          <Box
+            key={meta.id}
             onClick={() => handleFileSelect(index)}
-              style={{
-                background: isActive 
-                  ? 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))'
-                  : 'var(--theme-bg-elevated)',
-                border: isActive 
-                  ? '1px solid var(--color-primary-500)'
-                  : '1px solid var(--theme-border-primary)',
-                borderRadius: '12px',
-                padding: '12px 16px',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                minWidth: '200px',
-                position: 'relative',
-                overflow: 'hidden'
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive) {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.1)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = 'none';
-                }
-              }}
-            >
-              <Group gap="12px" align="center" w={200}>
+            className={`file-preview-modal__thumbnail${isActive ? ' file-preview-modal__thumbnail--active' : ''}`}
+          >
+            <Box className="file-preview-modal__thumbnail-preview">
+              {meta.isImage && (
+                <AuthFileLoader src={meta.previewUrl}>
+                  {(blobUrl: string) => (
+                    <img
+                      src={blobUrl}
+                      alt={meta.name}
+                      className="file-preview-modal__thumbnail-media"
+                    />
+                  )}
+                </AuthFileLoader>
+              )}
+
+              {meta.isVideo && (
+                <AuthFileLoader src={meta.previewUrl}>
+                  {(blobUrl: string) => (
+                    <video
+                      src={blobUrl}
+                      className="file-preview-modal__thumbnail-media"
+                      muted
+                      loop
+                      playsInline
+                      autoPlay
+                    />
+                  )}
+                </AuthFileLoader>
+              )}
+
+              {meta.isPdf && (
+                <AuthFileLoader src={meta.previewUrl}>
+                  {(blobUrl: string) => (
+                    <iframe
+                      title={`${meta.name}-preview`}
+                      src={`${blobUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+                      className="file-preview-modal__thumbnail-media"
+                    />
+                  )}
+                </AuthFileLoader>
+              )}
+
+              {!meta.isImage && !meta.isVideo && !meta.isPdf && (
                 <Box
+                  className="file-preview-modal__thumbnail-icon"
                   style={{
-                    width: '32px',
-                    height: '32px',
-                    background: isActive 
-                      ? 'rgba(255, 255, 255, 0.2)'
-                      : getFileColor(ext) + '20',
-                    borderRadius: '8px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
+                    background: isActive ? 'rgba(255, 255, 255, 0.2)' : `${getFileColor(meta.ext)}33`
                   }}
                 >
-                  <FileIcon 
-                    size={18} 
-                    color={isActive ? 'white' : getFileColor(ext)} 
-                  />
+                  <FileIcon size={28} color={isActive ? 'white' : getFileColor(meta.ext)} />
                 </Box>
-                <Box style={{ flex: 1, minWidth: 0 }}>
-                  <Text
-                    truncate="end"
-                    style={{
-                      color: isActive ? 'white' : 'var(--theme-text-primary)',
-                      fontWeight: '600',
-                      fontSize: '14px',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis'
-                    }}
-                  >
-                    {src}
-                  </Text>
-                  <Text
-                    truncate="end"
-                    style={{
-                      color: isActive ? 'rgba(255, 255, 255, 0.8)' : 'var(--theme-text-secondary)',
-                      fontSize: '12px',
-                      marginTop: '2px'
-                    }}
-                  >
-                    {ext.toUpperCase()}
-                  </Text>
-                </Box>
-              </Group>
+              )}
             </Box>
-          </Carousel.Slide>
+
+            <Box className="file-preview-modal__thumbnail-info">
+              <Text
+                className={`file-preview-modal__thumbnail-name${isActive ? ' is-active' : ''}`}
+                lineClamp={2}
+              >
+                {meta.name}
+              </Text>
+              <Text className="file-preview-modal__thumbnail-ext">
+                {meta.ext ? meta.ext.toUpperCase() : 'ФАЙЛ'}
+              </Text>
+            </Box>
+          </Box>
         );
       })}
-      </Carousel>
-    </Box>
-  );
+    </Stack>
+  ), [attachmentMeta, currentIndex, handleFileSelect]);
+
 
 
   const renderContent = () => {
     if (loading) {
       return (
-        <Box
-          style={{
-            background: 'var(--theme-bg-elevated)',
-            borderRadius: '16px',
-            border: '1px solid var(--theme-border-primary)',
-            padding: '40px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: '400px'
-          }}
-        >
+        <Box className="file-preview-modal__status file-preview-modal__status--loading">
           <Loader size="lg" color="var(--color-primary-500)" />
-          <Text 
-            style={{ 
-              marginTop: '16px',
-              color: 'var(--theme-text-primary)',
-              fontSize: '16px',
-              fontWeight: '500'
-            }}
-          >
+          <Text className="file-preview-modal__status-title">
             Загружается файл...
           </Text>
         </Box>
@@ -604,51 +879,14 @@ export const FilePreviewModal = ({
 
     if (error) {
       return (
-        <Box
-          style={{
-            background: 'var(--theme-bg-elevated)',
-            borderRadius: '16px',
-            border: '1px solid var(--color-red-200)',
-            padding: '40px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: '400px'
-          }}
-        >
-          <Box
-            style={{
-              width: '64px',
-              height: '64px',
-              background: 'var(--color-red-100)',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: '16px'
-            }}
-          >
+        <Box className="file-preview-modal__status file-preview-modal__status--error">
+          <Box className="file-preview-modal__status-icon">
             <IconX size={32} color="var(--color-red-500)" />
           </Box>
-          <Text 
-            style={{ 
-              color: 'var(--color-red-500)',
-              fontSize: '16px',
-              fontWeight: '600',
-              textAlign: 'center'
-            }}
-          >
+          <Text className="file-preview-modal__status-title">
             Файл не найден или недоступен
           </Text>
-          <Text 
-            style={{ 
-              color: 'var(--theme-text-secondary)',
-              fontSize: '14px',
-              marginTop: '8px',
-              textAlign: 'center'
-            }}
-          >
+          <Text className="file-preview-modal__status-subtitle">
             Возможно, файл был удален или у вас нет прав на его просмотр
           </Text>
         </Box>
@@ -656,49 +894,54 @@ export const FilePreviewModal = ({
     }
 
     if (isImage) {
+      const cursor = imageZoom > 100 ? (isDragging ? 'grabbing' : 'grab') : 'default';
+
       return (
-        <Box
-          className="image-container"
-        >
-          {/* Кнопка для открытия в новой вкладке */}
-          <Group justify="space-between" align="center">
-            {/* Подсчет "4 из 5" слева */}
-            <Box className="file-counter">
+        <Box className="image-container" ref={imageContainerRef}>
+          <Box className="image-controls-overlay" ref={topOverlayRef}>
+            <Group
+              justify="space-between"
+              align="center"
+              className="file-preview-modal__overlay-controls"
+            >
+              <Box className="file-counter file-preview-modal__overlay-counter">
               <Text className="file-counter-text">
                 {currentIndex + 1} из {attachments.length}
               </Text>
             </Box>
-            <Group>
+              <Group gap="xs">
               <ActionIcon 
-                className="rotate-button"
-                variant="default" 
-                aria-label="Settings" 
-                onClick={() => setRotation((prev) => normalizeRotation(prev - 90))}
+                  className="rotate-button file-preview-modal__overlay-button"
+                  variant="subtle"
+                  aria-label="Повернуть влево"
+                  onClick={() => setRotation(prev => normalizeRotation(prev - 90))}
               > 
                 <IconRotate2 stroke={1.5} />
               </ActionIcon>
               <ActionIcon 
-                className="rotate-button"
-                variant="default" 
-                aria-label="Settings" 
-                onClick={() => setRotation((prev) => normalizeRotation(prev + 90))}
+                  className="rotate-button file-preview-modal__overlay-button"
+                  variant="subtle"
+                  aria-label="Повернуть вправо"
+                  onClick={() => setRotation(prev => normalizeRotation(prev + 90))}
               > 
                 <IconRotateClockwise2 stroke={1.5} />
               </ActionIcon>
             </Group>
             <Button
-              className="open-new-tab-button"
+                className="open-new-tab-button file-preview-modal__overlay-open"
               variant="outline"
-              size="sm"
+                size="xs"
               leftSection={<IconExternalLink size={16} />}
               onClick={openInNewTab}
             >
-              Открыть в новой вкладке
+                Открыть
             </Button>
           </Group>
+          </Box>
           <Box
-            ref={containerRef}
+            ref={rotationContainerRef}
             className="rotation-container"
+            onWheel={handleWheelZoom}
           >
             <Box
               className="rotation-wrapper"
@@ -712,25 +955,58 @@ export const FilePreviewModal = ({
                   : '100%'
               }}
             >
-              <AuthImage
-                src={fileUrl}
-                alt={fileName}
-                fit="contain"
-                onMimeTypeDetected={setFileMimeType}
-                onLoad={() => setLoading(false)}
-                onError={() => setError(true)}
-              />
-            </Box>
+              <Box
+                className="zoom-wrapper"
+                style={{
+                  transform: `translate3d(${imageOffset.x}px, ${imageOffset.y}px, 0) scale(${effectiveScale})`,
+                  transition: isDragging ? 'none' : 'transform 0.2s ease',
+                  cursor,
+                  touchAction: imageZoom > 100 ? 'none' : 'auto',
+                  userSelect: 'none'
+                }}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerLeave={handlePointerUp}
+                onPointerCancel={handlePointerUp}
+              >
+                <AuthImage
+                  src={fileUrl}
+                  alt={fileName}
+                  fit="contain"
+                  className="file-preview-modal__image"
+                  onMimeTypeDetected={setFileMimeType}
+                  onLoad={handleImageLoad}
+                  onError={handleImageError}
+                />
+              </Box>
           </Box>
+          </Box>
+          <Group gap="sm" align="center" justify="center" className="image-zoom-bar" ref={bottomControlsRef}>
+            <IconZoomOut size={16} className="file-preview-modal__zoom-icon" />
+            <Slider
+              value={imageZoom}
+              min={MIN_IMAGE_ZOOM}
+              max={MAX_IMAGE_ZOOM}
+              step={5}
+              onChange={handleZoomChange}
+              className="file-preview-modal__zoom-slider"
+              marks={[
+                { value: 100, label: '100%' }
+              ]}
+            />
+            <IconZoomIn size={16} className="file-preview-modal__zoom-icon" />
+            <Text size="sm" className="file-preview-modal__zoom-value">
+              {imageZoom}%
+            </Text>
+          </Group>
         </Box>
       );
     }
 
     if (isPdf) {
       return (
-        <Box
-          className="image-container"
-        >
+        <Box className="image-container" ref={imageContainerRef}>
           {/* Кнопка для открытия в новой вкладке */}
           <Group justify="space-between" align="center">
             {/* Подсчет "4 из 5" слева */}
@@ -768,7 +1044,7 @@ export const FilePreviewModal = ({
             </Button>
           </Group>
           <Box
-            ref={containerRef}
+            ref={rotationContainerRef}
             className="rotation-container"
           >
             <Box
@@ -804,42 +1080,21 @@ export const FilePreviewModal = ({
 
     if (isText) {
       return (
-        <Box
-          className="image-container"
-        >
+        <Box className="image-container" ref={imageContainerRef}>
           {/* Кнопка для открытия в новой вкладке */}
-          <Group justify="space-between" align="center">
+          <Group justify="space-between" align="center" className="file-preview-modal__info-bar">
             {/* Подсчет "4 из 5" слева */}
-            <Box
-              style={{
-                background: 'var(--theme-bg-elevated)',
-                borderRadius: '20px',
-                padding: '8px 20px',
-                border: '1px solid var(--theme-border-primary)'
-              }}
-            >
-              <Text 
-                style={{
-                  fontWeight: '600',
-                  color: 'var(--theme-text-primary)',
-                  fontSize: '14px'
-                }}
-              >
-                {currentIndex + 1} из {attachments.length}
-              </Text>
+            <Box className="file-preview-modal__info-counter">
+              {currentIndex + 1} из {attachments.length}
             </Box>
 
             {/* Кнопка "Открыть в новой вкладке" справа */}
             <Button
+              className="file-preview-modal__info-open"
               variant="outline"
               size="sm"
               leftSection={<IconExternalLink size={16} />}
               onClick={openInNewTab}
-              style={{
-                background: 'var(--theme-bg-secondary)',
-                border: '1px solid var(--theme-border-primary)',
-                color: 'var(--theme-text-primary)'
-              }}
             >
               Открыть в новой вкладке
             </Button>
@@ -848,24 +1103,9 @@ export const FilePreviewModal = ({
           <Paper 
             withBorder 
             p="md" 
-            style={{
-              width: '100%',
-              height: '100%',
-              overflow: 'auto',
-              whiteSpace: 'pre-wrap',
-              fontFamily: 'monospace',
-              backgroundColor: 'var(--theme-bg-primary)',
-              borderRadius: '8px',
-              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)',
-              border: '1px solid var(--theme-border-secondary)'
-            }}
+            className="file-preview-modal__text-viewer"
           >
-            <pre style={{ 
-              margin: 0,
-              color: 'var(--theme-text-primary)',
-              fontSize: '14px',
-              lineHeight: '1.5'
-            }}>
+            <pre className="file-preview-modal__text-pre">
               {fileContent}
             </pre>
           </Paper>
@@ -875,61 +1115,27 @@ export const FilePreviewModal = ({
 
     if (isAudio) {
       return (
-        <Box
-          className="image-container"
-        >
+        <Box className="image-container" ref={imageContainerRef}>
           {/* Кнопка для открытия в новой вкладке */}
-          <Group justify="space-between" align="center">
+          <Group justify="space-between" align="center" className="file-preview-modal__info-bar">
             {/* Подсчет "4 из 5" слева */}
-            <Box
-              style={{
-                background: 'var(--theme-bg-elevated)',
-                borderRadius: '20px',
-                padding: '8px 20px',
-                border: '1px solid var(--theme-border-primary)'
-              }}
-            >
-              <Text 
-                style={{
-                  fontWeight: '600',
-                  color: 'var(--theme-text-primary)',
-                  fontSize: '14px'
-                }}
-              >
-                {currentIndex + 1} из {attachments.length}
-              </Text>
+            <Box className="file-preview-modal__info-counter">
+              {currentIndex + 1} из {attachments.length}
             </Box>
 
             {/* Кнопка "Открыть в новой вкладке" справа */}
             <Button
+              className="file-preview-modal__info-open"
               variant="outline"
               size="sm"
               leftSection={<IconExternalLink size={16} />}
               onClick={openInNewTab}
-              style={{
-                background: 'var(--theme-bg-secondary)',
-                border: '1px solid var(--theme-border-primary)',
-                color: 'var(--theme-text-primary)'
-              }}
             >
               Открыть в новой вкладке
             </Button>
           </Group>
           
-          <Box
-            style={{
-              width: '100%',
-              height: '100%',
-              background: 'var(--theme-bg-primary)',
-              borderRadius: '8px',
-              padding: '20px',
-              border: '1px solid var(--theme-border-secondary)',
-              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-          >
+          <Box className="file-preview-modal__audio-wrapper">
             <AuthFileLoader 
               src={fileUrl} 
               onMimeTypeDetected={setFileMimeType}
@@ -940,10 +1146,7 @@ export const FilePreviewModal = ({
                 <audio
                   controls
                   src={blobUrl}
-                  style={{ 
-                    width: '100%',
-                    height: '40px'
-                  }}
+                  className="file-preview-modal__audio-player"
                 >
                   Ваш браузер не поддерживает элемент audio.
                 </audio>
@@ -960,38 +1163,19 @@ export const FilePreviewModal = ({
           className="image-container"
         >
           {/* Кнопка для открытия в новой вкладке */}
-          <Group justify="space-between" align="center">
+          <Group justify="space-between" align="center" className="file-preview-modal__info-bar">
             {/* Подсчет "4 из 5" слева */}
-            <Box
-              style={{
-                background: 'var(--theme-bg-elevated)',
-                borderRadius: '20px',
-                padding: '8px 20px',
-                border: '1px solid var(--theme-border-primary)'
-              }}
-            >
-              <Text 
-                style={{
-                  fontWeight: '600',
-                  color: 'var(--theme-text-primary)',
-                  fontSize: '14px'
-                }}
-              >
-                {currentIndex + 1} из {attachments.length}
-              </Text>
+            <Box className="file-preview-modal__info-counter">
+              {currentIndex + 1} из {attachments.length}
             </Box>
 
             {/* Кнопка "Открыть в новой вкладке" справа */}
             <Button
+              className="file-preview-modal__info-open"
               variant="outline"
               size="sm"
               leftSection={<IconExternalLink size={16} />}
               onClick={openInNewTab}
-              style={{
-                background: 'var(--theme-bg-secondary)',
-                border: '1px solid var(--theme-border-primary)',
-                color: 'var(--theme-text-primary)'
-              }}
             >
               Открыть в новой вкладке
             </Button>
@@ -1004,18 +1188,15 @@ export const FilePreviewModal = ({
             onError={() => setError(true)}
           >
             {(blobUrl: string) => (
-              <video
-                controls
-                style={{ 
-                  width: '100%',
-                  height: '100%',
-                  borderRadius: '8px',
-                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)'
-                }}
-                src={blobUrl}
-              >
-                Ваш браузер не поддерживает видео.
-              </video>
+              <Box className="file-preview-modal__video-container">
+                <video
+                  controls
+                  className="file-preview-modal__video-player"
+                  src={blobUrl}
+                >
+                  Ваш браузер не поддерживает видео.
+                </video>
+              </Box>
             )}
           </AuthFileLoader>
         </Box>
@@ -1025,16 +1206,7 @@ export const FilePreviewModal = ({
     // Если файл не определен, попробуем отобразить его как iframe
     if (currentAttachment && typeof currentAttachment.source === 'string' && fileUrl.startsWith('http')) {
       return (
-        <Box
-          style={{
-            background: 'var(--theme-bg-elevated)',
-            borderRadius: '16px',
-            border: '1px solid var(--theme-border-primary)',
-            padding: '20px',
-            minHeight: '400px',
-            overflow: 'hidden'
-          }}
-        >
+        <Box className="file-preview-modal__iframe-wrapper">
           <Group justify="space-between" align="center">
             {/* Подсчет "4 из 5" слева */}
             <Box className="file-counter">
@@ -1072,7 +1244,7 @@ export const FilePreviewModal = ({
           </Group>
           
           <Box
-            ref={containerRef}
+            ref={rotationContainerRef}
             className="rotation-container"
           >
             <Box
@@ -1107,51 +1279,14 @@ export const FilePreviewModal = ({
     }
 
     return (
-      <Box
-        style={{
-          background: 'var(--theme-bg-elevated)',
-          borderRadius: '16px',
-          border: '1px solid var(--theme-border-primary)',
-          padding: '40px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '400px'
-        }}
-      >
-        <Box
-          style={{
-            width: '64px',
-            height: '64px',
-            background: 'var(--color-gray-100)',
-            borderRadius: '50%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: '16px'
-          }}
-        >
+      <Box className="file-preview-modal__fallback">
+        <Box className="file-preview-modal__fallback-icon">
           <IconFile size={32} color="var(--color-gray-500)" />
         </Box>
-        <Text 
-          style={{ 
-            color: 'var(--theme-text-primary)',
-            fontSize: '16px',
-            fontWeight: '600',
-            textAlign: 'center'
-          }}
-        >
+        <Text className="file-preview-modal__fallback-title">
           Формат файла {fileExt.toUpperCase() || 'неизвестный'} не поддерживает встроенный просмотр
         </Text>
-        <Text 
-          style={{ 
-            color: 'var(--theme-text-secondary)',
-            fontSize: '14px',
-            marginTop: '8px',
-            textAlign: 'center'
-          }}
-        >
+        <Text className="file-preview-modal__fallback-subtitle">
           Используйте кнопку "Скачать файл" для просмотра
         </Text>
       </Box>
@@ -1166,91 +1301,31 @@ export const FilePreviewModal = ({
       zIndex={1000}
       className="file-preview-modal"
       withCloseButton={false}
-      styles={{
-        body: { 
-          padding: '0',
-          background: 'var(--theme-bg-primary)',
-          minHeight: '100vh'
-        },
-        header: { 
-          padding: '0',
-          background: 'transparent',
-          border: 'none'
-        },
-        content: {
-          background: 'var(--theme-bg-primary)'
-        }
-      }}
     >
-      <Box
-        style={{
-          background: 'var(--theme-bg-primary)',
-          height: '100vh',
-          display: 'flex',
-          flexDirection: 'column'
-        }}
-      >
+      <Box className="file-preview-modal__container">
         {/* Современный заголовок */}
-        <Box
-          style={{
-            background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
-            padding: '20px 24px',
-            borderBottom: '1px solid var(--theme-border-primary)',
-            position: 'relative',
-            overflow: 'hidden'
-          }}
-        >
-          {/* Декоративные элементы */}
-          <Box
-            style={{
-              position: 'absolute',
-              top: '-20px',
-              right: '-20px',
-              width: '100px',
-              height: '100px',
-              background: 'rgba(255, 255, 255, 0.1)',
-              borderRadius: '50%',
-              zIndex: 1
-            }}
-          />
+        <Box className="file-preview-modal__header">
+          <Box className="file-preview-modal__header-decor" />
           
-          <Group justify="space-between" align="center" style={{ position: 'relative', zIndex: 2 }}>
-            <Group gap="16px" align="center">
-              <Box
-                style={{
-                  width: '48px',
-                  height: '48px',
-                  background: 'rgba(255, 255, 255, 0.2)',
-                  borderRadius: '12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '24px'
-                }}
-              >
+          <Group justify="space-between" align="center" className="file-preview-modal__header-content">
+            <Group gap="12px" align="center">
+              <Box className="file-preview-modal__file-icon">
                 {(() => {
                   const FileIcon = getFileIcon(fileExt);
-                  return <FileIcon size={24} color="white" />;
+                  return <FileIcon size={20} color="white" />;
                 })()}
               </Box>
               <Box>
-                <Text 
-                  style={{ 
-                    color: 'white', 
-                    fontSize: '24px',
-                    fontWeight: '700',
-                    margin: 0
-                  }}
-                >
+                <Text className="file-preview-modal__file-title">
                   {fileName}
                 </Text>
               </Box>
             </Group>
             
-            <Group gap="12px">
+            <Group gap="8px" className="file-preview-modal__actions">
               <Tooltip label="Скачать файл">
                 <ActionIcon
-                  size="lg"
+                  size="md"
                   radius="xl"
                   onClick={async () => {
                     try {
@@ -1284,12 +1359,7 @@ export const FilePreviewModal = ({
                       window.open(fallbackUrl, '_blank');
                     }
                   }}
-                  style={{
-                    background: 'rgba(255, 255, 255, 0.2)',
-                    color: 'white',
-                    border: '1px solid rgba(255, 255, 255, 0.3)',
-                    backdropFilter: 'blur(10px)'
-                  }}
+                  className="file-preview-modal__action-btn"
                 >
                   <IconDownload size={20} />
                 </ActionIcon>
@@ -1298,21 +1368,14 @@ export const FilePreviewModal = ({
               {onDeleteFile && currentAttachment?.id && (
                 <Tooltip label="Удалить файл">
                   <ActionIcon
-                    size="lg"
+                    size="md"
                     radius="xl"
                     onClick={async () => {
                       if (confirm('Вы уверены, что хотите удалить этот файл?')) {
                         await onDeleteFile(currentAttachment.id);
                       }
                     }}
-                    style={{
-                      background: 'rgba(239, 68, 68, 0.8)',
-                      color: 'white',
-                      border: '2px solid rgba(239, 68, 68, 0.9)',
-                      backdropFilter: 'blur(10px)',
-                      boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)',
-                      transform: 'scale(1.05)'
-                    }}
+                    className="file-preview-modal__action-btn file-preview-modal__action-btn--danger"
                   >
                     <IconTrash size={20} />
                   </ActionIcon>
@@ -1322,17 +1385,10 @@ export const FilePreviewModal = ({
               
               <Tooltip label="Закрыть">
                 <ActionIcon
-                  size="lg"
+                size="md"
                   radius="xl"
                   onClick={onClose}
-                  style={{
-                    background: 'rgba(239, 68, 68, 0.8)',
-                    color: 'white',
-                    border: '2px solid rgba(239, 68, 68, 0.9)',
-                    backdropFilter: 'blur(10px)',
-                    boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)',
-                    transform: 'scale(1.05)'
-                  }}
+                  className="file-preview-modal__action-btn file-preview-modal__action-btn--danger"
                 >
                   <IconX size={20} />
                 </ActionIcon>
@@ -1342,37 +1398,27 @@ export const FilePreviewModal = ({
         </Box>
 
         {/* Основной контент с кнопками навигации */}
-        <Box 
-          style={{ 
-            flex: 1,
-            padding: '24px', 
-            position: 'relative',
-            display: 'flex',
-            flexDirection: 'column',
-            minHeight: 0 // Важно для правильной работы flex
-          }}
-        >
+        <Box className="file-preview-modal__content">
+          {/* Левая колонка с файлами */}
+          <Box className="file-preview-modal__sidebar">
+            <Text className="file-preview-modal__sidebar-title">
+              Файлы
+            </Text>
+            <Box className="file-preview-modal__sidebar-scroll">
+              {fileSelectorContent}
+            </Box>
+          </Box>
+
+          {/* Просмотр файла */}
+          <Box className="file-preview-modal__viewer">
           {/* Кнопка "Назад" слева */}
           <ActionIcon
             size="xl"
             radius="xl"
             disabled={currentIndex <= 0}
             onClick={handlePrev}
-            style={{
-              position: 'absolute',
-              left: '40px',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              zIndex: 10,
-              background: currentIndex <= 0 
-                ? 'var(--theme-bg-secondary)' 
-                : 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
-              color: currentIndex <= 0 ? 'var(--theme-text-disabled)' : 'white',
-              border: 'none',
-              opacity: currentIndex <= 0 ? 0.5 : 1,
-              cursor: currentIndex <= 0 ? 'not-allowed' : 'pointer',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
-            }}
+              data-disabled={currentIndex <= 0}
+              className="file-preview-modal__nav-button file-preview-modal__nav-button--prev"
           >
             <IconChevronLeft size={20} />
           </ActionIcon>
@@ -1383,49 +1429,18 @@ export const FilePreviewModal = ({
             radius="xl"
             disabled={currentIndex >= attachments.length - 1}
             onClick={handleNext}
-            style={{
-              position: 'absolute',
-              right: '40px',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              zIndex: 10,
-              background: currentIndex >= attachments.length - 1 
-                ? 'var(--theme-bg-secondary)' 
-                : 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
-              color: currentIndex >= attachments.length - 1 ? 'var(--theme-text-disabled)' : 'white',
-              border: 'none',
-              opacity: currentIndex >= attachments.length - 1 ? 0.5 : 1,
-              cursor: currentIndex >= attachments.length - 1 ? 'not-allowed' : 'pointer',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
-            }}
+              data-disabled={currentIndex >= attachments.length - 1}
+              className="file-preview-modal__nav-button file-preview-modal__nav-button--next"
           >
             <IconChevronRight size={20} />
           </ActionIcon>
 
-          <Stack gap="md" style={{ flex: 1, minHeight: 0 }}>
-            <Box className="content-wrapper" style={{ 
-              flex: 1, 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              minHeight: 0,
-              maxHeight: '100%',
-              overflow: 'hidden'
-            }}>
+            <Stack gap="md" className="file-preview-modal__viewer-stack">
+              <Box className="content-wrapper">
               {renderContent()}
             </Box>
           </Stack>
         </Box>
-
-        {/* Нижняя панель с файлами */}
-        <Box
-          style={{
-            background: 'var(--theme-bg-elevated)',
-            borderTop: '1px solid var(--theme-border-primary)',
-            padding: '20px 24px'
-          }}
-        >
-          <FileSelector />
         </Box>
       </Box>
 

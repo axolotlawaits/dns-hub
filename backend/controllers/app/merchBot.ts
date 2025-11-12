@@ -169,8 +169,10 @@ class MerchBotService {
 
     // Обработка выбора категории/карточки
     this.bot.callbackQuery(/^item_/, async (ctx) => {
+      console.log(`🔘 [callbackQuery] Обрабатываем нажатие кнопки: "${ctx.callbackQuery.data}"`);
       await ctx.answerCallbackQuery();
       const itemId = ctx.callbackQuery.data.replace('item_', '');
+      console.log(`🔘 [callbackQuery] Извлечен itemId: ${itemId}`);
       await this.handleItemClick(ctx, itemId);
     });
 
@@ -359,8 +361,42 @@ class MerchBotService {
         }
       }
 
-      // Отправляем описание
-      if (foundButton.text) {
+      // Отправляем описание (получаем полный элемент из базы для получения description)
+      const item = await this.findItemById(foundButton.id);
+      if (item && item.description) {
+        const formattedText = this.formatDescription(item.description);
+        console.log(`📝 [MerchBot] Отправляем описание (raw из БД):`, item.description);
+        console.log(`📝 [MerchBot] Отправляем описание (formatted):`, formattedText);
+        console.log(`📝 [MerchBot] Содержит <b>:`, formattedText.includes('<b>'));
+        console.log(`📝 [MerchBot] Содержит **:`, formattedText.includes('**'));
+        
+        try {
+          if (!ctx.chat) {
+            console.error(`❌ [MerchBot] ctx.chat не определен`);
+            return;
+          }
+          
+          await ctx.api.sendMessage(ctx.chat.id, formattedText, {
+            parse_mode: 'HTML'
+          } as any);
+          
+          console.log(`✅ [MerchBot] Сообщение отправлено успешно`);
+        } catch (error: any) {
+          console.error(`❌ [MerchBot] Ошибка отправки сообщения с форматированием:`, error.message);
+          console.error(`❌ [MerchBot] Текст который вызвал ошибку:`, formattedText);
+          // Если ошибка с форматированием, отправляем без форматирования
+          const plainText = formattedText
+            .replace(/<[^>]+>/g, '') // Убираем все HTML теги
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&amp;/g, '&')
+            .replace(/&quot;/g, '"')
+            .replace(/\*\*/g, '') // Убираем Markdown
+            .replace(/\*/g, '');
+          await ctx.reply(plainText);
+        }
+      } else if (foundButton.text) {
+        // Fallback на старый способ, если description нет
         await ctx.reply(foundButton.text);
       }
 
@@ -438,10 +474,20 @@ class MerchBotService {
   // Обработка клика по элементу
   private async handleItemClick(ctx: MerchContext, itemId: string): Promise<void> {
     try {
+      console.log(`🔘 [handleItemClick] Начало обработки клика для itemId: ${itemId}`);
       const buttonsHierarchy = await this.getButtonsHierarchy();
       const item = await this.findItemById(itemId);
       
+      console.log('[DEBUG merch item]', {
+        id: item?.id,
+        name: item?.name,
+        hasDescription: !!item?.description,
+        descriptionLength: item?.description?.length || 0,
+        descriptionPreview: item?.description?.substring(0, 100) || 'нет'
+      });
+      
       if (!item) {
+        console.log(`❌ [handleItemClick] Элемент ${itemId} не найден`);
         await ctx.reply('❌ Элемент не найден.');
         return;
       }
@@ -489,8 +535,36 @@ class MerchBotService {
       // Отправляем описание
       if (item.description) {
         const formattedText = this.formatDescription(item.description);
-        console.log(`📝 [MerchBot] Отправляем описание:`, formattedText);
-        await ctx.reply(formattedText, { parse_mode: 'HTML' });
+        console.log(`📝 [MerchBot] Отправляем описание (raw из БД):`, item.description);
+        console.log(`📝 [MerchBot] Отправляем описание (formatted):`, formattedText);
+        console.log(`📝 [MerchBot] Содержит <b>:`, formattedText.includes('<b>'));
+        console.log(`📝 [MerchBot] Содержит **:`, formattedText.includes('**'));
+        
+        try {
+          if (!ctx.chat) {
+            console.error(`❌ [MerchBot] ctx.chat не определен`);
+            return;
+          }
+          
+          await ctx.api.sendMessage(ctx.chat.id, formattedText, {
+            parse_mode: 'HTML'
+          } as any);
+          
+          console.log(`✅ [MerchBot] Сообщение отправлено успешно`);
+        } catch (error: any) {
+          console.error(`❌ [MerchBot] Ошибка отправки сообщения с форматированием:`, error.message);
+          console.error(`❌ [MerchBot] Текст который вызвал ошибку:`, formattedText);
+          // Если ошибка с форматированием, отправляем без форматирования
+          const plainText = formattedText
+            .replace(/<[^>]+>/g, '') // Убираем все HTML теги
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&amp;/g, '&')
+            .replace(/&quot;/g, '"')
+            .replace(/\*\*/g, '') // Убираем Markdown
+            .replace(/\*/g, '');
+          await ctx.reply(plainText);
+        }
       }
 
       // Проверяем, есть ли дочерние элементы
@@ -905,11 +979,29 @@ class MerchBotService {
   // Поиск элемента по ID
   private async findItemById(itemId: string): Promise<{id: string, name: string, description: string} | null> {
     try {
+      console.log(`🔍 [findItemById] Ищем элемент с ID: ${itemId}`);
       const item = await prisma.merch.findUnique({
-        where: { id: itemId }
+        where: { id: itemId },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          layer: true
+        }
       });
       
-      if (!item) return null;
+      if (!item) {
+        console.log(`❌ [findItemById] Элемент ${itemId} не найден в БД`);
+        return null;
+      }
+      
+      console.log(`✅ [findItemById] Найден элемент:`, {
+        id: item.id,
+        name: item.name,
+        layer: item.layer,
+        hasDescription: !!item.description,
+        descriptionLength: item.description?.length || 0
+      });
       
       return {
         id: item.id,
@@ -917,7 +1009,7 @@ class MerchBotService {
         description: item.description || ''
       };
     } catch (error) {
-      console.error('Error finding item:', error);
+      console.error('❌ [findItemById] Error finding item:', error);
       return null;
     }
   }
@@ -977,14 +1069,113 @@ class MerchBotService {
   }
 
   private formatDescription(description: string): string {
-    // Конвертируем HTML в простой текст с переносами
-    return description
-      .replace(/<p>/g, '') // Убираем открывающие <p>
-      .replace(/<\/p>/g, '\n\n') // Заменяем закрывающие </p> на двойные переносы
-      .replace(/<br\s*\/?>/g, '\n') // Заменяем <br> на переносы строк
-      .replace(/<[^>]+>/g, '') // Убираем все остальные HTML-теги
-      .replace(/\n\s*\n/g, '\n\n') // Убираем лишние пустые строки
-      .trim(); // Убираем лишние пробелы
+    if (!description) return '';
+    
+    // Description хранится в формате Markdown
+    // Конвертируем Markdown в HTML для Telegram
+    // Telegram HTML поддерживает: <b>bold</b>, <i>italic</i>, <u>underline</u>, 
+    // <s>strike</s>, <code>code</code>, <a href="url">link</a>
+    
+    let markdown = description.trim();
+    
+    console.log(`🔍 [formatDescription] Входной Markdown (первые 200 символов):`, markdown.substring(0, 200));
+    console.log(`🔍 [formatDescription] Содержит **:`, markdown.includes('**'));
+    
+    // Если это уже HTML (для обратной совместимости), возвращаем как есть
+    if (markdown.includes('<b>') || markdown.includes('<strong>') || markdown.includes('<i>')) {
+      console.log(`⚠️ [formatDescription] Обнаружен HTML, возвращаем как есть (обратная совместимость)`);
+      return markdown;
+    }
+    
+    // Конвертируем Markdown в HTML для Telegram
+    let html = markdown;
+    
+    // Порядок важен! Обрабатываем от более специфичных к менее специфичным
+    
+    // 1. Сначала обрабатываем код (чтобы не обрабатывать markdown внутри кода)
+    const codeBlocks: string[] = [];
+    html = html.replace(/`([^`]+)`/g, (_match, content) => {
+      const index = codeBlocks.length;
+      // Экранируем HTML-символы в коде
+      const escapedContent = content
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      codeBlocks.push(`<code>${escapedContent}</code>`);
+      return `__CODE_BLOCK_${index}__`;
+    });
+    
+    // 2. Обрабатываем ссылки (чтобы не обрабатывать markdown внутри ссылок)
+    const links: string[] = [];
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, text, url) => {
+      const index = links.length;
+      // Экранируем URL и текст для HTML
+      const escapedUrl = url
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+      const escapedText = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      links.push(`<a href="${escapedUrl}">${escapedText}</a>`);
+      return `__LINK_${index}__`;
+    });
+    
+    // 3. Жирный текст: **текст** или __текст__
+    // Важно: используем нежадное совпадение и обрабатываем до курсива
+    html = html.replace(/\*\*([^*\n]+?)\*\*/g, '<b>$1</b>');
+    html = html.replace(/__(?!CODE_BLOCK_|LINK_|\d+__)([^_\n]+?)__(?!\d+__)/g, '<b>$1</b>');
+    
+    // 4. Зачеркнутый текст: ~~текст~~
+    html = html.replace(/~~([^~\n]+?)~~/g, '<s>$1</s>');
+    
+    // 5. Курсив: *текст* (но не **текст**)
+    html = html.replace(/(?<!\*)\*([^*\n]+?)\*(?!\*)/g, '<i>$1</i>');
+    // Курсив: _текст_ (но не __текст__)
+    html = html.replace(/(?<!_)_([^_\n]+?)_(?!_)/g, '<i>$1</i>');
+    
+    // 6. Переносы строк
+    html = html.replace(/\n/g, '<br>');
+    
+    // Восстанавливаем код и ссылки
+    codeBlocks.forEach((code, index) => {
+      html = html.replace(`__CODE_BLOCK_${index}__`, code);
+    });
+    links.forEach((link, index) => {
+      html = html.replace(`__LINK_${index}__`, link);
+    });
+    
+    console.log(`🔄 [formatDescription] После конвертации (первые 200 символов):`, html.substring(0, 200));
+    console.log(`🔄 [formatDescription] Содержит <b>:`, html.includes('<b>'));
+    console.log(`🔄 [formatDescription] Содержит **:`, html.includes('**'));
+    
+    // Экранируем оставшиеся HTML-символы в тексте (но не в тегах)
+    const allowedTags = /<\/?(?:b|i|u|s|code|pre|a)(?:\s[^>]*)?>/gi;
+    const tagMarkers: string[] = [];
+    let markerIndex = 0;
+    html = html.replace(allowedTags, (match) => {
+      tagMarkers.push(match);
+      return `__TAG_${markerIndex++}__`;
+    });
+    
+    // Экранируем специальные символы в тексте
+    html = html
+      .replace(/&(?!amp;|lt;|gt;|quot;|#\d+;)/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    
+    // Восстанавливаем теги
+    tagMarkers.forEach((tag, index) => {
+      html = html.replace(`__TAG_${index}__`, tag);
+    });
+    
+    console.log(`📤 [formatDescription] Итоговый HTML (первые 200 символов):`, html.substring(0, 200));
+    console.log(`📤 [formatDescription] Итоговый HTML содержит <b>:`, html.includes('<b>'));
+    console.log(`📤 [formatDescription] Итоговый HTML содержит **:`, html.includes('**'));
+    
+    return html.trim();
   }
 
   private getImageUrl(imagePath: string): string {

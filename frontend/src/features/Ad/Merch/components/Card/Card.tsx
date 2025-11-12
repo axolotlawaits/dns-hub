@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { 
   Title, 
   Group, 
@@ -36,7 +36,7 @@ interface CardProps {
 }
 
 function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [zoomModalOpened, setZoomModalOpened] = useState(false);
   const [isActiveLoading, setIsActiveLoading] = useState(false);
 
@@ -71,8 +71,47 @@ function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
     }
   };
 
-  const openImageZoom = (imageUrl: string) => {
-    setSelectedImage(imageUrl);
+  const imageMeta = useMemo(() => {
+    return (cardData.imageUrls || []).map((imageUrl, index) => {
+      const resolvedUrl = imageUrl.startsWith('http')
+        ? imageUrl
+        : `${API}/public/add/merch/${imageUrl}`;
+
+      const cleanPath = imageUrl.split('?')[0];
+      const segments = cleanPath.split(/[\\\/]/);
+      const fullFileName = decodeURIComponent(
+        segments[segments.length - 1] || `file-${index + 1}`
+      );
+
+      const lastDotIndex = fullFileName.lastIndexOf('.');
+      const baseName =
+        lastDotIndex > 0 ? fullFileName.slice(0, lastDotIndex) : fullFileName;
+      const extension =
+        lastDotIndex > 0 ? fullFileName.slice(lastDotIndex + 1).toLowerCase() : '';
+
+      const mimeType = extension
+        ? extension === 'jpg'
+          ? 'image/jpeg'
+          : `image/${extension}`
+        : 'image/*';
+
+      return {
+        id: `${cardData.id}-image-${index}`,
+        baseName,
+        extension,
+        resolvedUrl,
+        attachment: {
+          id: `${cardData.id}-image-${index}`,
+          name: baseName,
+          source: resolvedUrl,
+          mimeType
+        }
+      };
+    });
+  }, [cardData.id, cardData.imageUrls]);
+
+  const openImageZoom = (index: number) => {
+    setSelectedImageIndex(index);
     setZoomModalOpened(true);
   };
 
@@ -164,23 +203,38 @@ function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
       )}
 
       {/* Изображения */}
-      {cardData.imageUrls && cardData.imageUrls.length > 0 && (
+      {imageMeta.length > 0 && (
         <Box mb="md">
           <Text size="sm" c="dimmed" mb="xs">
-            Изображения ({cardData.imageUrls.length}):
+            Изображения ({imageMeta.length}):
           </Text>
           <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md">
-            {cardData.imageUrls.map((imageUrl, index) => (
-              <Box key={index} style={{ position: 'relative' }}>
+            {imageMeta.map((meta, index) => (
+              <Box
+                key={meta.id}
+                style={{
+                  position: 'relative',
+                  background: 'var(--theme-bg-primary)',
+                  borderRadius: 12,
+                  border: '1px solid var(--theme-border-primary)',
+                  padding: '12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px',
+                  height: '100%'
+                }}
+              >
                 <Image
-                  src={imageUrl.startsWith('http') ? imageUrl : `${API}/public/add/merch/${imageUrl}`}
+                  src={meta.resolvedUrl}
                   alt={`${cardData.name} - изображение ${index + 1}`}
                   style={{ 
                     cursor: 'pointer',
                     borderRadius: 8,
-                    border: '1px solid #e0e0e0'
+                    border: '1px solid var(--theme-border-primary)',
+                    flexGrow: 1,
+                    objectFit: 'cover'
                   }}
-                  onClick={() => openImageZoom(imageUrl)}
+                  onClick={() => openImageZoom(index)}
                   loading="lazy"
                 />
                 <ActionIcon
@@ -189,14 +243,34 @@ function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
                   color="blue"
                   style={{
                     position: 'absolute',
-                    top: 8,
-                    right: 8,
+                    top: 16,
+                     right: 16,
                     opacity: 0.8
                   }}
-                  onClick={() => openImageZoom(imageUrl)}
+                  onClick={() => openImageZoom(index)}
                 >
                   <IconZoomIn size={12} />
                 </ActionIcon>
+                <Box style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <Text
+                    size="sm"
+                    style={{
+                      fontWeight: 600,
+                      color: 'var(--theme-text-primary)'
+                    }}
+                    lineClamp={2}
+                    title={meta.baseName}
+                  >
+                    {meta.baseName}
+                  </Text>
+                  <Text
+                    size="xs"
+                    c="dimmed"
+                    style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}
+                  >
+                    {meta.extension ? meta.extension : 'Формат не указан'}
+                  </Text>
+                </Box>
               </Box>
             ))}
           </SimpleGrid>
@@ -222,13 +296,8 @@ function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
       <FilePreviewModal
         opened={zoomModalOpened}
         onClose={() => setZoomModalOpened(false)}
-        attachments={selectedImage ? [{
-          id: '1',
-          name: 'Изображение',
-          source: selectedImage.startsWith('http') ? selectedImage : `${API}/public/add/merch/${selectedImage}`,
-          mimeType: 'image/jpeg'
-        }] : []}
-        initialIndex={0}
+        attachments={imageMeta.map((meta) => meta.attachment)}
+        initialIndex={selectedImageIndex ?? 0}
       />
     </Paper>
   );
