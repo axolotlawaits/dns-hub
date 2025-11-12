@@ -702,8 +702,12 @@ export default function RocList() {
                       ) 
                     },
                     { 
+                      id: 'dateContract', // ID должен совпадать с columnId в filtersConfig
                       header: 'Дата', 
-                      accessorKey: 'dateContract',
+                      accessorFn: (row) => {
+                        // Форматируем дату в формат DD.MM.YYYY HH:mm для фильтрации (как в Correspondence)
+                        return row.dateContract ? dayjs(row.dateContract).format('DD.MM.YYYY HH:mm') : '';
+                      },
                       filterFn: dateRange,
                       cell: info => (
                         <Text 
