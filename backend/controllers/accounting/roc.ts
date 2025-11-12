@@ -96,6 +96,7 @@ export const getRocList = async (req: Request, res: Response, next: NextFunction
       },
       orderBy: { createdAt: 'desc' },
     });
+
     res.status(200).json(list);
     return;
   } catch (e) {
@@ -262,6 +263,25 @@ export const deleteRoc = async (req: Request<{ id: string }>, res: Response, nex
     // Удаляем только запись ROC и её вложения/связи, Doc остаётся нетронутым
     await (prisma as any).roc.delete({ where: { id } });
     res.status(204).end();
+    return;
+  } catch (e) {
+    next(e);
+  }
+};
+
+/* filter data */
+
+export const getNamesAndInn = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const uniqueNames = await prisma.roc.findMany({
+      distinct: ['name'],
+      select: { id: true, name: true }
+    })
+    const uniqueInns = await prisma.doc.findMany({
+      distinct: ['inn'],
+      select: { id: true, inn: true }
+    })
+    res.status(200).json({uniqueNames, uniqueInns});
     return;
   } catch (e) {
     next(e);
