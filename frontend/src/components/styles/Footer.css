@@ -8,8 +8,9 @@
   bottom: 0;
   left: 0;
   right: 0;
-  height: 60px;
   transform: translateY(calc(100% - 12px));
+  width: 100%;
+  height: 60px;
   transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   background: linear-gradient(
     to top,
@@ -27,22 +28,20 @@
   transform: translateY(0) !important;
   border-radius: 12px 12px 0 0;
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
-  margin: 0 8px;
 }
 
 /* Показываем футер при наведении или когда видим */
-.auto-hide-footer:hover,
-.auto-hide-footer.visible {
+.auto-hide-footer:hover {
   transform: translateY(0);
 }
 
-/* Градиентная полоска сверху */
-.auto-hide-footer::before {
+/* Градиентная полоска сверху - позиционируется внутри #footer */
+.auto-hide-footer #footer::before {
   content: '';
   position: absolute;
   top: 0;
-  left: 30px; /* Same as visible state */
-  right: 30px; /* Same as visible state */
+  left: 35px;
+  right: calc(35px + 17px);
   height: 3px;
   background: linear-gradient(90deg, 
     #3b82f6, #8b5cf6, #06b6d4, #10b981, #f59e0b, #ef4444
@@ -51,7 +50,26 @@
   animation: gradientShift 3s ease-in-out infinite;
   z-index: 1001;
   transition: border-radius 0.4s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  border-radius: 0; /* Straight when hidden */
+  border-radius: 0;
+  margin: 0;
+}
+
+/* Для совместимости оставляем старый селектор */
+.auto-hide-footer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 35px;
+  right: calc(35px + 17px);
+  height: 3px;
+  background: linear-gradient(90deg, 
+    #3b82f6, #8b5cf6, #06b6d4, #10b981, #f59e0b, #ef4444
+  );
+  background-size: 200% 100%;
+  animation: gradientShift 3s ease-in-out infinite;
+  z-index: 1001;
+  transition: border-radius 0.4s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 0;
   margin: 0;
 }
 
@@ -98,15 +116,14 @@
   transform: translateY(0) !important;
   border-radius: 0;
   box-shadow: none;
-  margin: 0;
 }
 
 .auto-hide-footer.auto-hide-disabled::before {
   border-radius: 12px 12px 0 0;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   margin: 0;
-  left: 30px; /* Same as other states */
-  right: 30px; /* Same as other states */
+  left: 35px;
+  right: calc(35px + 17px);
 }
 
 /* Адаптивность для мобильных устройств */
@@ -121,29 +138,27 @@
   }
   
   .auto-hide-footer.visible {
-    margin: 0 4px;
+    transform: translateY(0) !important;
   }
   
   .auto-hide-footer.auto-hide-disabled {
-    margin: 0;
+    transform: translateY(0) !important;
   }
   
   .auto-hide-footer::before {
     height: 2px;
-    left: 4px; /* Mobile margin */
-    right: 4px; /* Mobile margin */
+    left: 4px;
+    right: 4px;
   }
   
   .auto-hide-footer.visible::before {
-    margin: 0 4px;
-    left: 4px; /* Mobile margin */
-    right: 4px; /* Mobile margin */
+    left: 4px;
+    right: 4px;
   }
   
   .auto-hide-footer.auto-hide-disabled::before {
-    margin: 0;
-    left: 4px; /* Same as visible state on mobile */
-    right: 4px; /* Same as visible state on mobile */
+    left: 4px;
+    right: 4px;
   }
   
   .scroll-progress-bar {
@@ -160,21 +175,31 @@
   .auto-hide-footer.hidden {
     transform: translateY(calc(100% - 6px));
   }
+  
+  .auto-hide-footer.visible {
+    transform: translateY(0) !important;
+  }
+  
+  .auto-hide-footer.auto-hide-disabled {
+    transform: translateY(0) !important;
+  }
 }
 
 /* Правый блок с разделителем */
 .footer-right-section {
   display: flex;
   align-items: center;
-  margin-left: auto;
   height: 100%;
   gap: 12px;
-  padding: 0 8px;
+  padding: 0;
+  margin-left: auto;
+  flex-shrink: 0;
+  min-width: fit-content;
 }
 
 .footer-divider {
   height: 60%;
-  margin: 0 8px;
+  margin: 0;
   align-self: center;
   border-color: rgba(0, 0, 0, 0.1);
   opacity: 0.5;

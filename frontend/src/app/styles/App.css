@@ -158,9 +158,9 @@ a:active {
 
 #footer-wrapper {
   display: flex;
-  width: 100vw;
+  width: 100%;
   height: 65px;
-  padding: 0px 20px 5px 20px;
+  padding: 0px calc(20px + 17px) 5px 20px;
   position: fixed;
   bottom: 0;
   left: 0;
@@ -169,6 +169,7 @@ a:active {
   border: 0px;
   box-sizing: border-box;
   z-index: 1040;
+  justify-content: center;
 }
 
 #footer {
@@ -178,7 +179,7 @@ a:active {
   width: 100%;
   height: 100%;
   border-radius: 16px;
-  padding: 8px 16px;
+  padding: 8px calc(20px + 17px) 8px 20px;
   box-shadow: 
     0 8px 32px rgba(0, 0, 0, 0.1),
     0 2px 8px rgba(0, 0, 0, 0.05),
@@ -188,15 +189,9 @@ a:active {
   overflow: hidden;
 }
 
+/* Убираем старую полоску, так как теперь используется в Footer.css */
 #footer::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
-  border-radius: 16px 16px 0 0;
+  display: none;
 }
 
 /* Темная тема для футера */
@@ -338,9 +333,28 @@ div[style*="padding: var(--mantine-spacing-xl)"] {
 #footer-nav {
   display: flex;
   height: 100%;
-  gap: 10px;
-  justify-content: space-evenly;
+  gap: 8px;
+  justify-content: flex-start;
   align-items: center;
+  flex-wrap: nowrap;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+#footer-nav::-webkit-scrollbar {
+  display: none;
+}
+
+#footer-nav > a:first-child {
+  margin-left: 0;
+}
+
+#footer-nav > .footer-right-section {
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .footer-nav-option {
@@ -350,7 +364,7 @@ div[style*="padding: var(--mantine-spacing-xl)"] {
   min-width: 140px;
   max-width: 180px;
   width: auto;
-  flex: 1;
+  flex: 0 0 auto;
   height: 100%;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
   border-radius: 12px;
@@ -359,6 +373,7 @@ div[style*="padding: var(--mantine-spacing-xl)"] {
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.1);
   position: relative;
+  flex-shrink: 0;
 }
 
 .footer-nav-option:hover {
@@ -427,25 +442,10 @@ div[style*="padding: var(--mantine-spacing-xl)"] {
 }
 
 /* Адаптивность футера */
-@media (max-width: 1200px) {
+@media (max-width: 1600px) {
   .footer-nav-option {
     min-width: 120px;
     max-width: 150px;
-  }
-  
-  .footer-nav-name {
-    font-size: 12px;
-  }
-  
-  .footer-nav-description {
-    font-size: 10px;
-  }
-}
-
-@media (max-width: 900px) {
-  .footer-nav-option {
-    min-width: 100px;
-    max-width: 130px;
   }
   
   .footer-nav-name {
@@ -457,15 +457,11 @@ div[style*="padding: var(--mantine-spacing-xl)"] {
   }
 }
 
-@media (max-width: 768px) {
-  #footer-wrapper {
-    padding: 0px 10px 5px 10px;
-  }
-  
+@media (max-width: 1400px) {
   .footer-nav-option {
-    min-width: 80px;
-    max-width: 110px;
-    padding: 2px 3px;
+    min-width: 100px;
+    max-width: 130px;
+    padding: 5px 6px;
   }
   
   .footer-nav-name {
@@ -474,6 +470,82 @@ div[style*="padding: var(--mantine-spacing-xl)"] {
   
   .footer-nav-description {
     font-size: 8px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .footer-nav-option {
+    min-width: 90px;
+    max-width: 120px;
+    padding: 4px 5px;
+  }
+  
+  .footer-nav-name {
+    font-size: 10px;
+  }
+  
+  .footer-nav-description {
+    font-size: 8px;
+  }
+}
+
+@media (max-width: 1000px) {
+  .footer-nav-option {
+    min-width: 80px;
+    max-width: 100px;
+    padding: 4px 4px;
+  }
+  
+  .footer-nav-name {
+    font-size: 9px;
+  }
+  
+  .footer-nav-description {
+    font-size: 7px;
+  }
+}
+
+@media (max-width: 900px) {
+  .footer-nav-option {
+    min-width: 70px;
+    max-width: 90px;
+    padding: 3px 4px;
+  }
+  
+  .footer-nav-name {
+    font-size: 9px;
+  }
+  
+  .footer-nav-description {
+    font-size: 7px;
+  }
+}
+
+@media (max-width: 768px) {
+  #footer-wrapper {
+    padding: 0px 10px 5px 10px;
+  }
+  
+  #footer-nav {
+    gap: 6px;
+  }
+  
+  .footer-nav-option {
+    min-width: 60px;
+    max-width: 80px;
+    padding: 2px 3px;
+  }
+  
+  .footer-nav-name {
+    font-size: 8px;
+  }
+  
+  .footer-nav-description {
+    font-size: 6px;
+  }
+  
+  .footer-right-section {
+    gap: 8px;
   }
 }
 

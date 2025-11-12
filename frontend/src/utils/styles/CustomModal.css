@@ -14,78 +14,40 @@
 
 .custom-modal .mantine-Modal-header {
   padding: 24px 24px 16px 24px;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border-bottom: 1px solid #e2e8f0;
+  background: var(--theme-bg-elevated);
+  border-bottom: 1px solid var(--theme-border);
   border-radius: 16px 16px 0 0;
 }
 
-.custom-modal .mantine-Modal-title {
+.custom-modal .mantine-Modal-title,
+.custom-modal-title {
   font-size: 20px;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--theme-text-primary);
   margin: 0;
 }
 
 .custom-modal .mantine-Modal-close {
-  color: #64748b;
+  color: var(--theme-text-secondary);
   background: transparent;
   border-radius: 8px;
   transition: all 0.2s ease;
 }
 
 .custom-modal .mantine-Modal-close:hover {
-  color: #1e293b;
-  background-color: #e2e8f0;
+  color: var(--theme-text-primary);
+  background-color: var(--theme-bg-hover);
   transform: scale(1.05);
 }
 
 .custom-modal .mantine-Modal-body {
   padding: 24px;
-  background: #ffffff;
+  background: var(--theme-bg-primary);
   border-radius: 0 0 16px 16px;
 }
 
-/* Темная тема для модальных окон */
-[data-mantine-color-scheme="dark"] .custom-modal .mantine-Modal-header {
-  background: linear-gradient(135deg, #1e293b 0%, #334155 100%) !important;
-  border-bottom-color: #475569 !important;
-}
-
-[data-mantine-color-scheme="dark"] .custom-modal .mantine-Modal-title {
-  color: #f1f5f9;
-}
-
-[data-mantine-color-scheme="dark"] .custom-modal .mantine-Modal-close {
-  color: #94a3b8;
-}
-
-[data-mantine-color-scheme="dark"] .custom-modal .mantine-Modal-close:hover {
-  color: #f1f5f9;
-  background-color: #475569;
-}
-
-[data-mantine-color-scheme="dark"] .custom-modal .mantine-Modal-body {
-  background: #0f172a;
-}
-
-[data-mantine-color-scheme="dark"] .custom-modal .mantine-Modal-content {
-  background: #0f172a;
-  border: 1px solid #334155;
-}
-
-/* Дополнительные стили для темной темы */
-[data-mantine-color-scheme="dark"] .custom-modal .mantine-Modal-header {
-  background: linear-gradient(135deg, #1e293b 0%, #334155 100%) !important;
-  border-bottom: 1px solid #475569 !important;
-}
-
-[data-mantine-color-scheme="dark"] .custom-modal .mantine-Modal-title {
-  color: #f1f5f9 !important;
-}
-
-[data-mantine-color-scheme="dark"] .custom-modal .mantine-Modal-header .mantine-Group-root .mantine-Text-root {
-  color: #f1f5f9 !important;
-}
+/* Темная тема - CSS-переменные автоматически применяются через var(--theme-*) */
+/* Дополнительные стили для темной темы, если нужны специфичные переопределения */
 
 /* Дополнительные стили для правильного отображения */
 .custom-modal .mantine-Modal-root {

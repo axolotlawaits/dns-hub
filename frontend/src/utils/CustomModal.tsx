@@ -1,5 +1,6 @@
 import { Modal, Group, ThemeIcon, Text } from '@mantine/core';
 import { IconCalendar } from '@tabler/icons-react';
+import { memo, useMemo } from 'react';
 import './styles/CustomModal.css';
 
 interface CustomModalProps {
@@ -29,7 +30,7 @@ interface CustomModalProps {
   };
 }
 
-export const CustomModal: React.FC<CustomModalProps> = ({
+const CustomModalComponent: React.FC<CustomModalProps> = ({
   opened,
   onClose,
   title,
@@ -47,7 +48,8 @@ export const CustomModal: React.FC<CustomModalProps> = ({
   overlayProps = { backgroundOpacity: 0.5 },
   styles = {}
 }) => {
-  const defaultStyles = {
+  // Мемоизируем стили для оптимизации производительности
+  const defaultStyles = useMemo(() => ({
     content: {
       width: width,
       height: height,
@@ -66,15 +68,15 @@ export const CustomModal: React.FC<CustomModalProps> = ({
     },
     header: {
       padding: '24px 24px 16px 24px',
-      background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
-      borderBottom: '1px solid #e2e8f0',
+      background: 'var(--theme-bg-elevated)',
+      borderBottom: '1px solid var(--theme-border)',
       borderRadius: '16px 16px 0 0',
       ...styles.header
     },
     title: {
       fontSize: '20px',
       fontWeight: 700,
-      color: '#1e293b',
+      color: 'var(--theme-text-primary)',
       margin: 0,
       ...styles.title
     },
@@ -83,24 +85,27 @@ export const CustomModal: React.FC<CustomModalProps> = ({
       backdropFilter: 'blur(4px)',
       ...styles.overlay
     }
-  };
+  }), [width, height, maxWidth, maxHeight, styles]);
+
+  // Мемоизируем заголовок для оптимизации
+  const modalTitle = useMemo(() => (
+    <Group gap="sm" align="center">
+      {icon && (
+        <ThemeIcon size="md" color="blue" variant="light">
+          {icon}
+        </ThemeIcon>
+      )}
+      <Text size="lg" fw={600} className="custom-modal-title">
+        {title}
+      </Text>
+    </Group>
+  ), [icon, title]);
 
   return (
     <Modal
       opened={opened}
       onClose={onClose}
-      title={
-        <Group gap="sm" align="center">
-          {icon && (
-            <ThemeIcon size="md" color="blue" variant="light">
-              {icon}
-            </ThemeIcon>
-          )}
-          <Text size="lg" fw={600} style={defaultStyles.title}>
-            {title}
-          </Text>
-        </Group>
-      }
+      title={modalTitle}
       size={size}
       centered={centered}
       withCloseButton={withCloseButton}
@@ -115,6 +120,9 @@ export const CustomModal: React.FC<CustomModalProps> = ({
   );
 };
 
+export const CustomModal = memo(CustomModalComponent);
+CustomModal.displayName = 'CustomModal';
+
 // Предустановленные конфигурации для часто используемых случаев
 export const CalendarModal: React.FC<Omit<CustomModalProps, 'icon'>> = (props) => (
   <CustomModal
@@ -123,10 +131,31 @@ export const CalendarModal: React.FC<Omit<CustomModalProps, 'icon'>> = (props) =
   />
 );
 
+CalendarModal.displayName = 'CalendarModal';
+
+// FullWidthModal - модальное окно на всю ширину экрана
 export const FullWidthModal: React.FC<CustomModalProps> = (props) => (
-  <CustomModal {...props} />
+  <CustomModal
+    {...props}
+    width="95vw"
+    maxWidth="95vw"
+    height="90vh"
+    maxHeight="90vh"
+  />
 );
 
+FullWidthModal.displayName = 'FullWidthModal';
+
+// LargeModal - большое модальное окно
 export const LargeModal: React.FC<CustomModalProps> = (props) => (
-  <CustomModal {...props} />
+  <CustomModal
+    {...props}
+    size="xl"
+    width="90vw"
+    maxWidth="1200px"
+    height="85vh"
+    maxHeight="85vh"
+  />
 );
+
+LargeModal.displayName = 'LargeModal';

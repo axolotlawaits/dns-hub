@@ -1518,7 +1518,7 @@ return (
                                         {group.documents.slice(0, 4).map((doc: any, docIndex: number) => {
                                           const sourcePath = String(doc.source || '');
                                           const fileName = sourcePath.split('/').pop() || 'Документ';
-                                          const normalizedPath = `${apiBase}/public/add/RK/${sourcePath}`
+                                          const normalizedPath = `${API}/public/add/RK/${sourcePath}`
                                             .replace(/\/+/g, '/')
                                             .replace(/^\/+/, '');
                                           const fileUrl = normalizedPath;
@@ -1723,7 +1723,7 @@ return (
                                     {unassignedDocuments.slice(0, 4).map((att: any, index: number) => {
                                       const sourcePath = String(att.source || '');
                                       const fileName = sourcePath.split('/').pop() || 'Документ';
-                                      const normalizedPath = `${apiBase}/public/add/RK/${sourcePath}`
+                                      const normalizedPath = `${API}/public/add/RK/${sourcePath}`
                                         .replace(/\/+/g, '/')
                                         .replace(/^\/+/, '');
                                       const fileUrl = normalizedPath;

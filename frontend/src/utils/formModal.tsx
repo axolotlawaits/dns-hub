@@ -8,6 +8,31 @@ import { IconFile, IconFileTypePdf, IconFileTypeDoc, IconFileTypeXls, IconFileTy
 import { FilePreviewModal } from './FilePreviewModal';
 import './styles/formModal.css';
 
+// Хук для управления blob URL с автоматической очисткой
+const useBlobUrl = (file: File | null): string | null => {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!file) {
+      setBlobUrl(null);
+      return;
+    }
+
+    const url = URL.createObjectURL(file);
+    setBlobUrl(url);
+
+    return () => {
+      try {
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        console.warn('Failed to revoke blob URL:', error);
+      }
+    };
+  }, [file]);
+
+  return blobUrl;
+};
+
 // Constants for optimization
 const FILE_ICON_MAP = {
   // Изображения
@@ -194,6 +219,14 @@ interface FileUploadProps {
   onMetaChange: (id: string | undefined, meta: Record<string, any>) => void;
 }
 
+interface MantineForm {
+  values: Record<string, any>;
+  setFieldValue: (path: string, val: any) => void;
+  getInputProps: (path: string) => any;
+  onSubmit: (handler: (values: Record<string, any>) => void) => (e?: React.FormEvent<HTMLFormElement>) => void;
+  setValues: (values: Record<string, any>) => void;
+}
+
 interface DynamicFormModalProps {
   opened: boolean;
   onClose: () => void;
@@ -239,6 +272,140 @@ const isImageFile = (fileName: string): boolean => {
   return imageExtensions.includes(extension || '');
 };
 
+// Компонент для отображения превью файла
+const FilePreview = memo(({ 
+  attachment, 
+  onRemove 
+}: { 
+  attachment: FileAttachment; 
+  onRemove: () => void;
+}) => {
+  const originalName = typeof attachment.source === 'string'
+    ? attachment.source.split('\\').pop() || 'Файл'
+    : (attachment.source as File).name;
+  const previewUrl = typeof attachment.source === 'string' 
+    ? `${API}/public/add/media/${attachment.source}` 
+    : '';
+  const file = typeof attachment.source === 'string' ? null : attachment.source;
+  const blobUrl = useBlobUrl(file);
+
+  return (
+    <Paper 
+      key={attachment.id || originalName} 
+      p="lg" 
+      withBorder 
+      radius="lg"
+      className="file-preview-card"
+      style={{
+        background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
+        border: '1px solid var(--theme-border)',
+        position: 'relative',
+        overflow: 'hidden',
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+      }}
+    >
+      {/* Декоративный элемент */}
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        width: '60px',
+        height: '60px',
+        background: 'linear-gradient(135deg, var(--color-green-500) 0%, var(--color-green-600) 100%)',
+        borderRadius: '0 0 0 60px',
+        opacity: 0.1,
+      }} />
+      
+      <Group justify="space-between" align="center" wrap="wrap" style={{ position: 'relative' }}>
+        <Group gap="md" align="center">
+          {/* Красивая рамка для превью */}
+          <div style={{
+            position: 'relative',
+            borderRadius: '12px',
+            overflow: 'hidden',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+            border: '2px solid var(--theme-border)',
+            background: 'var(--theme-bg-elevated)',
+            padding: '8px'
+          }}>
+            {isImageFile(originalName) ? (
+              <img 
+                src={typeof attachment.source === 'string' ? previewUrl : (blobUrl || '')} 
+                alt={originalName} 
+                style={{ 
+                  height: 60, 
+                  width: 100, 
+                  objectFit: 'contain', 
+                  borderRadius: '8px',
+                  display: 'block'
+                }} 
+              />
+            ) : (
+              <div style={{
+                height: 60,
+                width: 100,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'var(--theme-bg-secondary)',
+                borderRadius: '8px',
+                border: '1px solid var(--theme-border)'
+              }}>
+                {getFileIcon(originalName)}
+              </div>
+            )}
+            {/* Индикатор успеха */}
+            <div style={{
+              position: 'absolute',
+              top: '4px',
+              right: '4px',
+              width: '16px',
+              height: '16px',
+              background: 'linear-gradient(135deg, var(--color-green-500) 0%, var(--color-green-600) 100%)',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
+            }}>
+              <div style={{
+                width: '8px',
+                height: '8px',
+                background: 'white',
+                borderRadius: '50%'
+              }} />
+            </div>
+          </div>
+          
+          <Stack gap="xs">
+            <Text size="sm" fw={600} c="var(--theme-text-primary)">
+              Предпросмотр
+            </Text>
+            <Text size="xs" c="dimmed" fw={500}>
+              {originalName}
+            </Text>
+          </Stack>
+        </Group>
+          
+          <ActionIcon
+          size="lg"
+          variant="light"
+            color="red"
+          radius="md"
+            onClick={onRemove}
+          style={{
+            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+            boxShadow: '0 2px 4px rgba(239, 68, 68, 0.3)'
+          }}
+          className="remove-button"
+          >
+          <IconX size={18} />
+          </ActionIcon>
+      </Group>
+    </Paper>
+  );
+});
+
 const FileUploadComponent = memo(({ 
   onFilesDrop, 
   attachments, 
@@ -249,7 +416,7 @@ const FileUploadComponent = memo(({
 }: FileUploadProps & { hidePreview?: boolean; accept?: string }) => {
 
   // Функция для генерации текста поддерживаемых форматов
-  const getSupportedFormatsText = (acceptString: string) => {
+  const getSupportedFormatsText = useCallback((acceptString: string) => {
     if (acceptString === "*") return "Все типы файлов";
     
     const formats = acceptString.split(',').map(f => f.trim());
@@ -259,160 +426,17 @@ const FileUploadComponent = memo(({
     
     if (extensions.length === 0) return "Все типы файлов";
     return `Поддерживаются: ${extensions.join(', ')}`;
-  };
+  }, []);
 
-  const renderAttachment = (attachment: FileAttachment) => {
-    const originalName = typeof attachment.source === 'string'
-      ? attachment.source.split('\\').pop() || 'Файл'
-      : (attachment.source as File).name;
-    const previewUrl = typeof attachment.source === 'string' ? `${API}/public/add/media/${attachment.source}` : '';
-
-
+  const renderAttachment = useCallback((attachment: FileAttachment) => {
     return (
-      <Paper 
-        key={attachment.id || originalName} 
-        p="lg" 
-        withBorder 
-        radius="lg"
-        className="file-preview-card"
-        style={{
-          background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
-          border: '1px solid var(--theme-border)',
-          position: 'relative',
-          overflow: 'hidden',
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-        }}
-      >
-        {/* Декоративный элемент */}
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          right: 0,
-          width: '60px',
-          height: '60px',
-          background: 'linear-gradient(135deg, var(--color-green-500) 0%, var(--color-green-600) 100%)',
-          borderRadius: '0 0 0 60px',
-          opacity: 0.1,
-        }} />
-        
-        <Group justify="space-between" align="center" wrap="wrap" style={{ position: 'relative' }}>
-          <Group gap="md" align="center">
-            {/* Красивая рамка для превью */}
-            <div style={{
-              position: 'relative',
-              borderRadius: '12px',
-              overflow: 'hidden',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-              border: '2px solid var(--theme-border)',
-              background: 'var(--theme-bg-elevated)',
-              padding: '8px'
-            }}>
-            {typeof attachment.source === 'string' ? (
-                isImageFile(originalName) ? (
-                  <img 
-                    src={previewUrl} 
-                    alt={originalName} 
-                    style={{ 
-                      height: 60, 
-                      width: 100, 
-                      objectFit: 'contain', 
-                      borderRadius: '8px',
-                      display: 'block'
-                    }} 
-                  />
-                ) : (
-                  <div style={{
-                    height: 60,
-                    width: 100,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: 'var(--theme-bg-secondary)',
-                    borderRadius: '8px',
-                    border: '1px solid var(--theme-border)'
-                  }}>
-                    {getFileIcon(originalName)}
-                  </div>
-                )
-              ) : (
-                isImageFile(originalName) ? (
-                  <img 
-                    src={URL.createObjectURL(attachment.source as File)} 
-                    alt={originalName} 
-                    style={{ 
-                      height: 60, 
-                      width: 100, 
-                      objectFit: 'contain', 
-                      borderRadius: '8px',
-                      display: 'block'
-                    }} 
-                  />
-                ) : (
-                  <div style={{
-                    height: 60,
-                    width: 100,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: 'var(--theme-bg-secondary)',
-                    borderRadius: '8px',
-                    border: '1px solid var(--theme-border)'
-                  }}>
-                    {getFileIcon(originalName)}
-                  </div>
-                )
-              )}
-              {/* Индикатор успеха */}
-              <div style={{
-                position: 'absolute',
-                top: '4px',
-                right: '4px',
-                width: '16px',
-                height: '16px',
-                background: 'linear-gradient(135deg, var(--color-green-500) 0%, var(--color-green-600) 100%)',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
-              }}>
-                <div style={{
-                  width: '8px',
-                  height: '8px',
-                  background: 'white',
-                  borderRadius: '50%'
-                }} />
-              </div>
-            </div>
-            
-            <Stack gap="xs">
-              <Text size="sm" fw={600} c="var(--theme-text-primary)">
-                Предпросмотр
-              </Text>
-              <Text size="xs" c="dimmed" fw={500}>
-                {originalName}
-              </Text>
-            </Stack>
-          </Group>
-            
-            <ActionIcon
-            size="lg"
-            variant="light"
-              color="red"
-            radius="md"
-              onClick={() => onRemoveAttachment(attachment.id)}
-            style={{
-              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-              boxShadow: '0 2px 4px rgba(239, 68, 68, 0.3)'
-            }}
-            className="remove-button"
-            >
-            <IconX size={18} />
-            </ActionIcon>
-        </Group>
-      </Paper>
+      <FilePreview
+        key={attachment.id || `attachment-${Math.random()}`}
+        attachment={attachment}
+        onRemove={() => onRemoveAttachment(attachment.id)}
+      />
     );
-  };
+  }, [onRemoveAttachment]);
 
   if (withDnd) {
     try {
@@ -529,20 +553,23 @@ const FileFieldsCard = memo(({
   fileCardTitle = "Файл",
   handleMetaChangeFor
 }: { 
-  file: any; 
+  file: FileAttachment & { fileName?: string; source?: File | string }; 
   index: number; 
   fileFields: FileFieldConfig[]; 
-  form: any; 
+  form: MantineForm; 
   setFieldValue: (path: string, val: any) => void;
   fileAttachments?: Record<string, File[]>;
   onFileAttachmentsChange?: (fileId: string, attachments: File[]) => void;
   attachmentLabel?: string;
   attachmentAccept?: string;
-  existingDocuments?: any[];
+  existingDocuments?: Record<string, any[]> | any[];
   onDeleteExistingDocument?: (fileId: string, documentId: string) => void;
   fileCardTitle?: string;
   handleMetaChangeFor?: (fieldName: string) => (id: string | undefined, meta: Record<string, any>) => void;
 }) => {
+  const fileSource = file.source;
+  const fileForBlob = typeof fileSource === 'string' ? null : fileSource;
+  const blobUrl = useBlobUrl(fileForBlob);
   const renderFileField = (field: FileFieldConfig) => {
     const fieldValue = form.values.attachments?.[index]?.meta?.[field.name] || '';
 
@@ -692,7 +719,7 @@ const FileFieldsCard = memo(({
             boxShadow: '0 0 8px rgba(59, 130, 246, 0.5)'
           }} />
           <Text size="lg" fw={700} c="var(--theme-text-primary)" style={{ letterSpacing: '0.5px' }}>
-            {file.fileName || file.source?.name || `${fileCardTitle} #${index + 1}`}
+            {file.fileName || (file.source instanceof File ? file.source.name : (typeof file.source === 'string' ? file.source.split('\\').pop() || file.source.split('/').pop() : '')) || `${fileCardTitle} #${index + 1}`}
           </Text>
         </Group>
         
@@ -730,11 +757,19 @@ const FileFieldsCard = memo(({
                 background: 'var(--theme-bg-elevated)',
                 padding: '8px'
               }}>
-                {typeof file.source === 'string' ? (
-                  isImageFile(String(file.source).split('\\').pop() || '') ? (
+                {(() => {
+                  const fileName = typeof fileSource === 'string' 
+                    ? String(fileSource).split('\\').pop() || String(fileSource).split('/').pop() || ''
+                    : (fileSource instanceof File ? fileSource.name : '');
+                  const isImage = isImageFile(fileName);
+                  const imageUrl = typeof fileSource === 'string'
+                    ? `${API}/public/add/media/${String(fileSource).split('\\').pop() || String(fileSource).split('/').pop()}`
+                    : (blobUrl || '');
+
+                  return isImage ? (
                     <img 
-                      src={`${API}/public/add/media/${String(file.source).split('\\').pop() || String(file.source).split('/').pop()}`} 
-                      alt={String(file.source).split('\\').pop() || 'Файл'} 
+                      src={imageUrl} 
+                      alt={fileName} 
                       style={{ 
                         height: 60, 
                         width: 100, 
@@ -754,37 +789,10 @@ const FileFieldsCard = memo(({
                       borderRadius: '8px',
                       border: '1px solid var(--theme-border)'
                     }}>
-                      {getFileIcon(String(file.source).split('\\').pop() || '')}
+                      {getFileIcon(fileName)}
                     </div>
-                  )
-                ) : (
-                  isImageFile((file.source as File).name) ? (
-                    <img 
-                      src={URL.createObjectURL(file.source as File)} 
-                      alt={(file.source as File).name} 
-                      style={{ 
-                        height: 60, 
-                        width: 100, 
-                        objectFit: 'contain', 
-                        borderRadius: '8px',
-                        display: 'block'
-                      }} 
-                    />
-                  ) : (
-                    <div style={{
-                      height: 60,
-                      width: 100,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      background: 'var(--theme-bg-secondary)',
-                      borderRadius: '8px',
-                      border: '1px solid var(--theme-border)'
-                    }}>
-                      {getFileIcon((file.source as File).name)}
-                    </div>
-                  )
-                )}
+                  );
+                })()}
                 {/* Индикатор успеха */}
                 <div style={{
                   position: 'absolute',
@@ -813,9 +821,9 @@ const FileFieldsCard = memo(({
                   Предпросмотр
                 </Text>
                 <Text size="xs" c="dimmed" fw={500}>
-                  {typeof file.source === 'string' 
-                    ? String(file.source).split('\\').pop() || 'Файл'
-                    : (file.source as File).name
+                  {typeof fileSource === 'string' 
+                    ? String(fileSource).split('\\').pop() || 'Файл'
+                    : (fileSource instanceof File ? fileSource.name : 'Файл')
                   }
                 </Text>
               </Stack>
@@ -1090,70 +1098,88 @@ export const DynamicFormModal = ({
   fileCardTitle = 'Файл'
 }: DynamicFormModalProps) => {
   const [previewId, setPreviewId] = useState<string | null>(null);
-
-  // Отладка изменений previewId
-  useEffect(() => {
-  }, [previewId]);
   const form = useForm({ initialValues });
   const [attachmentsMap, setAttachmentsMap] = useState<Record<string, FileAttachment[]>>({});
   const initializedRef = useRef(false);
 
   // Оптимизированная функция нормализации данных
-  const buildNormalizedAttachments = useCallback((arr: any): FileAttachment[] => {
+  const buildNormalizedAttachments = useCallback((arr: unknown): FileAttachment[] => {
     // Проверяем, что arr является массивом
     if (!Array.isArray(arr)) {
       console.warn('buildNormalizedAttachments received non-array:', arr);
       return [];
     }
     
-    return arr.map((att: any) => {
-        const derivedMeta: Record<string, any> = att?.meta ? { ...att.meta } : {};
-        Object.keys(att || {}).forEach((key) => {
+    return arr.map((att: unknown) => {
+      if (!att || typeof att !== 'object') {
+        console.warn('Invalid attachment object:', att);
+        return {
+          id: `invalid-${Math.random().toString(36).slice(2, 11)}`,
+          userAdd: '',
+          source: '',
+          meta: {}
+        } as FileAttachment;
+      }
+
+      const attachment = att as Record<string, unknown>;
+      const derivedMeta: Record<string, unknown> = attachment?.meta && typeof attachment.meta === 'object' 
+        ? { ...(attachment.meta as Record<string, unknown>) } 
+        : {};
+      
+      Object.keys(attachment).forEach((key) => {
         if (!KNOWN_ATTACHMENT_KEYS.has(key) && !(key in derivedMeta)) {
-            derivedMeta[key] = att[key];
-          }
-        });
-        return { ...att, meta: derivedMeta } as FileAttachment;
+          derivedMeta[key] = attachment[key];
+        }
       });
+      
+      return { 
+        ...attachment, 
+        meta: derivedMeta 
+      } as FileAttachment;
+    });
   }, []);
 
   useEffect(() => {
     if (opened && !initializedRef.current) {
-      // Initialize once per open session
-      const fileFieldNames = (fields || []).filter(f => f.type === 'file').map(f => f.name);
+      try {
+        // Initialize once per open session
+        const fileFieldNames = (fields || []).filter(f => f.type === 'file').map(f => f.name);
 
-      const nextMap: Record<string, FileAttachment[]> = {};
-      for (const fieldName of fileFieldNames) {
-        const incomingValue = (initialValues as any)[fieldName];
-        const incoming: any[] = Array.isArray(incomingValue) ? incomingValue : [];
-        nextMap[fieldName] = buildNormalizedAttachments(incoming);
-      }
-
-      // Backward-compat: if generic attachments provided but no specific field had values, map to first file field
-      if (fileFieldNames.length > 0) {
-        const attachmentsValue = (initialValues as any).attachments;
-        const rkAttachmentValue = (initialValues as any).rkAttachment;
-        const rocAttachmentValue = (initialValues as any).rocAttachment;
-        const generic: any[] = (Array.isArray(attachmentsValue) ? attachmentsValue : [])
-          || (Array.isArray(rkAttachmentValue) ? rkAttachmentValue : [])
-          || (Array.isArray(rocAttachmentValue) ? rocAttachmentValue : [])
-          || [];
-        if (generic.length && (!nextMap[fileFieldNames[0]] || nextMap[fileFieldNames[0]].length === 0)) {
-          nextMap[fileFieldNames[0]] = buildNormalizedAttachments(generic);
+        const nextMap: Record<string, FileAttachment[]> = {};
+        for (const fieldName of fileFieldNames) {
+          const incomingValue = initialValues[fieldName];
+          const incoming: unknown[] = Array.isArray(incomingValue) ? incomingValue : [];
+          nextMap[fieldName] = buildNormalizedAttachments(incoming);
         }
-      }
 
-      // Apply to form values as well
-      const preparedValues: Record<string, any> = { removedAttachments: [], ...initialValues };
-      for (const k of Object.keys(nextMap)) preparedValues[k] = nextMap[k];
-      form.setValues(preparedValues);
-      setAttachmentsMap(nextMap);
-      initializedRef.current = true;
+        // Backward-compat: if generic attachments provided but no specific field had values, map to first file field
+        if (fileFieldNames.length > 0) {
+          const attachmentsValue = initialValues.attachments;
+          const rkAttachmentValue = initialValues.rkAttachment;
+          const rocAttachmentValue = initialValues.rocAttachment;
+          const generic: unknown[] = (Array.isArray(attachmentsValue) ? attachmentsValue : [])
+            || (Array.isArray(rkAttachmentValue) ? rkAttachmentValue : [])
+            || (Array.isArray(rocAttachmentValue) ? rocAttachmentValue : [])
+            || [];
+          if (generic.length && (!nextMap[fileFieldNames[0]] || nextMap[fileFieldNames[0]].length === 0)) {
+            nextMap[fileFieldNames[0]] = buildNormalizedAttachments(generic);
+          }
+        }
+
+        // Apply to form values as well
+        const preparedValues: Record<string, unknown> = { removedAttachments: [], ...initialValues };
+        for (const k of Object.keys(nextMap)) preparedValues[k] = nextMap[k];
+        form.setValues(preparedValues);
+        setAttachmentsMap(nextMap);
+        initializedRef.current = true;
+      } catch (error) {
+        console.error('Error initializing form attachments:', error);
+      }
     }
     if (!opened) {
       initializedRef.current = false;
     }
-  }, [opened, fields, initialValues, form, buildNormalizedAttachments]);
+  }, [opened, fields, initialValues, buildNormalizedAttachments]);
 
   const handleMetaChangeFor = useCallback(
     (fieldName: string) => (id: string | undefined, meta: Record<string, any>) => {
@@ -1179,50 +1205,67 @@ export const DynamicFormModal = ({
   }, [onClose]);
 
   const handleFileDropFor = useCallback((fieldName: string) => (files: File[]) => {
-    // Получаем конфигурацию полей для данного типа файла
-    const fileField = fields.find(f => f.name === fieldName && f.type === 'file');
-    const fileFields = fileField?.fileFields || [];
-    
-    const newAttachments = files.map((file, idx) => {
-      // Инициализируем мета-данные с пустыми значениями для всех полей
-      const initialMeta: Record<string, any> = {};
-      fileFields.forEach(field => {
-        initialMeta[field.name] = '';
+    try {
+      // Получаем конфигурацию полей для данного типа файла
+      const fileField = fields.find(f => f.name === fieldName && f.type === 'file');
+      const fileFields = fileField?.fileFields || [];
+      
+      const newAttachments = files.map((file, idx) => {
+        // Инициализируем мета-данные с пустыми значениями для всех полей
+        const initialMeta: Record<string, any> = {};
+        fileFields.forEach(field => {
+          initialMeta[field.name] = '';
+        });
+        
+        const newAttachment: FileAttachment = {
+          id: `temp-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 8)}`,
+          userAdd: initialValues?.userAdd || '',
+          source: file,
+          meta: initialMeta,
+        };
+        
+        return newAttachment;
       });
       
-      const newAttachment = {
-        id: `temp-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 8)}`,
-        userAdd: initialValues?.userAdd || '',
-        source: file,
-        meta: initialMeta,
-      };
-      
-      
-      return newAttachment;
-    });
-    setAttachmentsMap(prev => {
-      const current = prev[fieldName] || [];
-      const nextList = [...current, ...newAttachments];
-      const next = { ...prev, [fieldName]: nextList };
-      
-      
-      form.setFieldValue(fieldName, nextList);
-      return next;
-    });
+      setAttachmentsMap(prev => {
+        const current = prev[fieldName] || [];
+        const nextList = [...current, ...newAttachments];
+        const next = { ...prev, [fieldName]: nextList };
+        
+        try {
+          form.setFieldValue(fieldName, nextList);
+        } catch (error) {
+          console.error('Error setting field value:', error);
+        }
+        return next;
+      });
+    } catch (error) {
+      console.error('Error handling file drop:', error);
+    }
   }, [initialValues?.userAdd, form, fields]);
 
   const handleRemoveAttachmentFor = useCallback((fieldName: string) => (id: string | undefined) => {
-    setAttachmentsMap(prev => {
-      const current = prev[fieldName] || [];
-      const newAttachments = current.filter(a => a.id?.toString() !== id?.toString());
-      const next = { ...prev, [fieldName]: newAttachments };
-      form.setFieldValue(fieldName, newAttachments);
-      if (id) {
-        const prevRemoved = (form.values as any).removedAttachments || [];
-        form.setFieldValue('removedAttachments', [...prevRemoved, id]);
-      }
-      return next;
-    });
+    try {
+      setAttachmentsMap(prev => {
+        const current = prev[fieldName] || [];
+        const newAttachments = current.filter(a => a.id?.toString() !== id?.toString());
+        const next = { ...prev, [fieldName]: newAttachments };
+        
+        try {
+          form.setFieldValue(fieldName, newAttachments);
+          if (id) {
+            const prevRemoved = (form.values as Record<string, unknown>).removedAttachments as string[] || [];
+            form.setFieldValue('removedAttachments', [...prevRemoved, id]);
+          }
+        } catch (error) {
+          console.error('Error removing attachment:', error);
+        }
+        
+        return next;
+      });
+    } catch (error) {
+      console.error('Error in handleRemoveAttachmentFor:', error);
+    }
   }, [form]);
 
   // Функция для группировки полей

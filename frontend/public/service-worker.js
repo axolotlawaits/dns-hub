@@ -44,9 +44,21 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Для остальных запросов - используем стратегию Network First
+  // Исключаем внешние API из кэширования
+  const isExternalApi = event.request.url.includes('api.weatherapi.com') || 
+                        event.request.url.includes('weatherapi.com');
+  
+  if (isExternalApi) {
+    // Для внешних API просто пропускаем через fetch без кэширования
+    event.respondWith(fetch(event.request));
+    return;
+  }
+  
   event.respondWith(
     fetch(event.request).catch(() => {
-      return caches.match(event.request);
+      return caches.match(event.request).then((cached) => {
+        return cached || new Response('Offline', { status: 503 });
+      });
     })
   );
 });
