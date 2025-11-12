@@ -6,6 +6,7 @@ import { promisify } from 'util';
 import { prisma } from '../../server.js';
 import { AppCategory, AppType } from '@prisma/client';
 import { decodeRussianFileName } from '../../utils/format.js';
+import AdmZip from 'adm-zip'
 
 const execAsync = promisify(exec);
 
@@ -1247,7 +1248,6 @@ export const getApkChecksum = async (req: Request, res: Response): Promise<void>
             // На Windows используем Node.js библиотеку adm-zip
             console.log(`[Checksum] Используем Node.js adm-zip для Windows...`);
             try {
-              const AdmZip = (await import('adm-zip')).default;
               const zip = new AdmZip(filePath);
               const entries = zip.getEntries();
               
