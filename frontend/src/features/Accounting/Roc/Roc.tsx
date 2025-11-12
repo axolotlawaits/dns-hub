@@ -4,7 +4,7 @@ import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
 import { API } from '../../../config/constants';
 // Switch Dadata calls to backend endpoints
-import { FilterGroup } from '../../../utils/filter';
+import { dateRange, FilterGroup } from '../../../utils/filter';
 import { DynamicFormModal, type FormConfig } from '../../../utils/formModal';
 import { FilePreviewModal } from '../../../utils/FilePreviewModal';
 import { useUserContext } from '../../../hooks/useUserContext';
@@ -231,7 +231,7 @@ export default function RocList() {
     { columnId: 'typeContract_name', label: 'Тип договора', type: 'select' as const, options: types },
     { columnId: 'statusContract_name', label: 'Статус', type: 'select' as const, options: statuses },
     { columnId: 'dateContract', label: 'Дата договора', type: 'date' as const },
-  ]), [types, statuses]);
+  ]), [filterInnData, filterNameData, types, statuses]);
 
   const [formConfig, setFormConfig] = useState<FormConfig>({ initialValues: DEFAULT_FORM, fields: [] });
   // const [attachments, setAttachments] = useState<File[]>([]);
@@ -661,6 +661,7 @@ export default function RocList() {
                       doc_inn: false
                     }
                   }}
+                  filterFns={{ dateRange }}
                   columns={[
                     { 
                       header: 'Контрагент', 
@@ -702,7 +703,8 @@ export default function RocList() {
                     },
                     { 
                       header: 'Дата', 
-                      accessorKey: 'dateContract', 
+                      accessorKey: 'dateContract',
+                      filterFn: dateRange,
                       cell: info => (
                         <Text 
                           style={{ 
