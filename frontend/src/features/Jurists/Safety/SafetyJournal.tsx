@@ -4,10 +4,9 @@ import { useUserContext } from '../../../hooks/useUserContext';
 import { useAccessContext } from '../../../hooks/useAccessContext';
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { notificationSystem } from '../../../utils/Push';
-import { Button, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Paper, Tabs, Alert, Select, Pagination, Accordion, Modal, TextInput } from '@mantine/core';
+import { Button, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Paper, Tabs, Alert, Select, Pagination, Accordion, Modal } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconClock, IconFileText, IconFilter, IconShield, IconFlame, IconCircleCheck, IconCircleX, IconAlertCircle, IconRefresh, IconQrcode, IconCalendar } from '@tabler/icons-react';
-import dayjs from 'dayjs';
+import { IconClock, IconFileText, IconFilter, IconShield, IconFlame, IconCircleCheck, IconCircleX, IconAlertCircle, IconRefresh, IconQrcode } from '@tabler/icons-react';
 import { FilePreviewModal } from '../../../utils/FilePreviewModal';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { DndProviderWrapper } from '../../../utils/dnd';
@@ -150,9 +149,7 @@ export default function SafetyJournal() {
   // Фильтры для филиалов
   const [branchFilters, setBranchFilters] = useState({
     rrs: '',
-    branch: '',
-    dateStart: '',
-    dateEnd: ''
+    branch: ''
   });
   
   // Пагинация для филиалов
@@ -737,22 +734,6 @@ export default function SafetyJournal() {
     setBranchPagination(prev => ({ ...prev, page: 1 })); // Сбрасываем на первую страницу
   }, []);
 
-  const handleDateStartChange = useCallback((value: string) => {
-    setBranchFilters(prev => ({
-      ...prev,
-      dateStart: value || ''
-    }));
-    setBranchPagination(prev => ({ ...prev, page: 1 })); // Сбрасываем на первую страницу
-  }, []);
-
-  const handleDateEndChange = useCallback((value: string) => {
-    setBranchFilters(prev => ({
-      ...prev,
-      dateEnd: value || ''
-    }));
-    setBranchPagination(prev => ({ ...prev, page: 1 })); // Сбрасываем на первую страницу
-  }, []);
-
   const handleBranchPageChange = useCallback((page: number) => {
     // Сохраняем текущую позицию скролла при смене страницы
     const currentScrollPosition = window.pageYOffset || document.documentElement.scrollTop;
@@ -801,39 +782,6 @@ export default function SafetyJournal() {
     }
     if (branchFilters.branch) {
       result = result.filter(branch => branch.branch_id === branchFilters.branch);
-    }
-    
-    // Применяем фильтрацию по датам периода журнала (ориентируемся только на начало периода)
-    if (branchFilters.dateStart || branchFilters.dateEnd) {
-      const filterStart = branchFilters.dateStart ? dayjs(branchFilters.dateStart).startOf('day') : null;
-      const filterEnd = branchFilters.dateEnd ? dayjs(branchFilters.dateEnd).endOf('day') : null;
-      
-      result = result.map(branch => ({
-        ...branch,
-        journals: branch.journals.filter(journal => {
-          // Пропускаем журналы без начала периода
-          if (!journal.period_start) return false;
-          
-          const periodStart = dayjs(journal.period_start).startOf('day');
-          
-          // Фильтрация по началу периода журнала (period_start)
-          if (filterStart && filterEnd) {
-            // Если указаны обе даты фильтра, проверяем попадает ли начало периода в диапазон
-            return (periodStart.isAfter(filterStart) || periodStart.isSame(filterStart)) &&
-                   (periodStart.isBefore(filterEnd) || periodStart.isSame(filterEnd));
-          } else if (filterStart) {
-            // Если указана только начальная дата фильтра
-            // Показываем журналы, начало периода которых >= даты фильтра
-            return periodStart.isAfter(filterStart) || periodStart.isSame(filterStart);
-          } else if (filterEnd) {
-            // Если указана только конечная дата фильтра
-            // Показываем журналы, начало периода которых <= даты фильтра
-            return periodStart.isBefore(filterEnd) || periodStart.isSame(filterEnd);
-          }
-          
-          return true;
-        })
-      })).filter(branch => branch.journals.length > 0); // Скрываем филиалы без журналов
     }
     
     // Применяем фильтрацию по вкладкам
@@ -1088,28 +1036,10 @@ export default function SafetyJournal() {
                         clearable
                         style={{ minWidth: 200 }}
                       />
-                      <TextInput
-                        type="date"
-                        label="Период с"
-                        placeholder="Начало периода"
-                        value={branchFilters.dateStart}
-                        onChange={(e) => handleDateStartChange(e.target.value)}
-                        leftSection={<IconCalendar size={16} />}
-                        style={{ minWidth: 180 }}
-                      />
-                      <TextInput
-                        type="date"
-                        label="Период по"
-                        placeholder="Конец периода"
-                        value={branchFilters.dateEnd}
-                        onChange={(e) => handleDateEndChange(e.target.value)}
-                        leftSection={<IconCalendar size={16} />}
-                        style={{ minWidth: 180 }}
-                      />
                       <Button
                         variant="light"
                         onClick={() => {
-                          setBranchFilters({ rrs: '', branch: '', dateStart: '', dateEnd: '' });
+                          setBranchFilters({ rrs: '', branch: '' });
                           setBranchPagination({ page: 1, pageSize: 5 });
                         }}
                       >

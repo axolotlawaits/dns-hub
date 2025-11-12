@@ -108,7 +108,7 @@ const LocalJournalTable = function LocalJournalTable({
                 <td className='table-cell'>
                   <Text size="sm" c="dimmed">
                     {journal.period_start && journal.period_end && 
-                      `${dayjs(journal.period_start).format('DD-MM-YYYY')} - ${dayjs(journal.period_end).format('DD-MM-YYYY')}`
+                      `${dayjs(journal.period_start).format('YYYY-MM-DD')} - ${dayjs(journal.period_end).format('YYYY-MM-DD')}`
                     }
                   </Text>
                 </td>
