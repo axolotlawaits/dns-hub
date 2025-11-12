@@ -4,7 +4,7 @@ import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
 import { API } from '../../../config/constants';
 // Switch Dadata calls to backend endpoints
-import { FilterGroup } from '../../../utils/filter';
+import { dateRange, FilterGroup } from '../../../utils/filter';
 import { DynamicFormModal, type FormConfig } from '../../../utils/formModal';
 import { FilePreviewModal } from '../../../utils/FilePreviewModal';
 import { useUserContext } from '../../../hooks/useUserContext';
@@ -15,6 +15,8 @@ import { DndProviderWrapper } from '../../../utils/dnd';
 import FloatingActionButton from '../../../components/FloatingActionButton';
 
 interface TypeOption { value: string; label: string; colorHex?: string | null }
+
+interface FilterData { uniqueNames: TypeOption[], uniqueInns: TypeOption[] }
 
 interface DocDirectory {
   id: string;
@@ -124,8 +126,12 @@ export default function RocList() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<RocData | null>(null);
   const [formValues, setFormValues] = useState(DEFAULT_FORM);
+
+  const [filterNameData, setFilterNameData] = useState<TypeOption[]>([])
+  const [filterInnData, setFilterInnData] = useState<TypeOption[]>([])
   const [types, setTypes] = useState<TypeOption[]>([]);
   const [statuses, setStatuses] = useState<TypeOption[]>([]);
+
   const [filters, setFilters] = useState({ column: [] as any[], sorting: [{ id: 'createdAt', desc: true }] });
   const [activeTab, setActiveTab] = useState<'list' | 'byDoc'>('list');
 
@@ -185,13 +191,24 @@ export default function RocList() {
   }, []);
 
   const loadRefs = useCallback(async () => {
-    const [t, s] = await Promise.all([
+    const [t, s, n_i] = await Promise.all([
       fetchJson<TypeOption[]>(`${API}/accounting/roc/dict/types`),
       fetchJson<TypeOption[]>(`${API}/accounting/roc/dict/statuses`),
+      fetchJson<FilterData>(`${API}/accounting/roc/dict/name-inn`)
     ]);
-    setTypes((t || []).map((o: any) => ({ value: o.id, label: o.name, colorHex: o.colorHex })));
-    setStatuses((s || []).map((o: any) => ({ value: o.id, label: o.name, colorHex: o.colorHex })));
+    if (t && s && n_i) {
+      const { uniqueNames, uniqueInns } = n_i
+      
+      setFilterNameData(uniqueNames.map((n: any) => n.name ))
+      setFilterInnData(uniqueInns.map((i: any) => i.inn ))
+      setTypes(t.map((o: any) => o.name));
+      setStatuses(s.map((o: any) => o.name));
+    }
   }, [fetchJson]);
+
+  const clearAllFilters = () => {
+    setFilters({ column: [] as any[], sorting: [{ id: 'createdAt', desc: true }] })
+  }
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -209,11 +226,12 @@ export default function RocList() {
   }, [loadRefs, loadList]);
 
   const filtersConfig = useMemo(() => ([
-    { columnId: 'name', label: 'Контрагент', type: 'text' as const },
-    { columnId: 'typeContractId', label: 'Тип договора', type: 'select' as const, options: types },
-    { columnId: 'statusContractId', label: 'Статус', type: 'select' as const, options: statuses },
+    { columnId: 'name', label: 'Контрагент', type: 'select' as const, options: filterNameData },
+    { columnId: 'doc_inn', label: 'ИНН', type: 'select' as const, options: filterInnData },
+    { columnId: 'typeContract_name', label: 'Тип договора', type: 'select' as const, options: types },
+    { columnId: 'statusContract_name', label: 'Статус', type: 'select' as const, options: statuses },
     { columnId: 'dateContract', label: 'Дата договора', type: 'date' as const },
-  ]), [types, statuses]);
+  ]), [filterInnData, filterNameData, types, statuses]);
 
   const [formConfig, setFormConfig] = useState<FormConfig>({ initialValues: DEFAULT_FORM, fields: [] });
   // const [attachments, setAttachments] = useState<File[]>([]);
@@ -631,12 +649,19 @@ export default function RocList() {
                       ],
                     }))
                   }
+                  onClearAll={clearAllFilters}
                 />
             </Grid.Col>
             <Grid.Col span={12}>
               <Box>
                 <TableComponent<RocData>
                   data={data}
+                  initialState={{
+                    columnVisibility: {
+                      doc_inn: false
+                    }
+                  }}
+                  filterFns={{ dateRange }}
                   columns={[
                     { 
                       header: 'Контрагент', 
@@ -656,6 +681,11 @@ export default function RocList() {
                         </Tooltip>
                       ) 
                     },
+                    {  
+                      header: 'ИНН',
+                      accessorKey: 'doc.inn', 
+                      enableHiding: true,
+                    },
                     { 
                       header: 'Номер', 
                       accessorKey: 'contractNumber', 
@@ -673,7 +703,8 @@ export default function RocList() {
                     },
                     { 
                       header: 'Дата', 
-                      accessorKey: 'dateContract', 
+                      accessorKey: 'dateContract',
+                      filterFn: dateRange,
                       cell: info => (
                         <Text 
                           style={{ 

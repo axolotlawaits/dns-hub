@@ -13,6 +13,7 @@ import {
   addRocAttachments,
   deleteRocAttachment,
   updateDoc,
+  getNamesAndInn,
 } from '../../controllers/accounting/roc.js';
 
 const router = Router();
@@ -26,6 +27,7 @@ router.delete('/:id', deleteRoc);
 /* doc endpoints */
 router.patch('/doc', updateDoc)
 
+router.get('/dict/name-inn', getNamesAndInn)
 router.get('/dict/types', getRocTypes);
 router.get('/dict/statuses', getRocStatuses);
 
