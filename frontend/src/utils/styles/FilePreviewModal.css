@@ -168,8 +168,8 @@
   flex-wrap: nowrap;
   pointer-events: none;
   opacity: 0.4;
-  transition: opacity 0.2s ease;
-  padding: 8px 12px;
+  transition: opacity 0.4s ease;
+  padding: 4px 12px;
   background: rgba(17, 24, 39, 0.7);
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -316,7 +316,6 @@
 .file-preview-modal__nav-button {
   position: absolute;
   top: 50%;
-  transform: translateY(-50%);
   z-index: 10;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -345,7 +344,7 @@
 }
 
 .file-preview-modal__nav-button:not([data-disabled="true"]):hover {
-  transform: translateY(-50%) scale(1.05);
+  transform: scale(1.05);
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
 }
 
@@ -866,7 +865,7 @@
   z-index: 5;
   pointer-events: none;
   opacity: 0.4;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.4s ease;
 }
 
 .file-preview-modal .image-controls-overlay > * {

@@ -985,15 +985,13 @@ export const FilePreviewModal = ({
           <Group gap="sm" align="center" justify="center" className="image-zoom-bar" ref={bottomControlsRef}>
             <IconZoomOut size={16} className="file-preview-modal__zoom-icon" />
             <Slider
+              size='sm'
               value={imageZoom}
               min={MIN_IMAGE_ZOOM}
               max={MAX_IMAGE_ZOOM}
               step={5}
               onChange={handleZoomChange}
               className="file-preview-modal__zoom-slider"
-              marks={[
-                { value: 100, label: '100%' }
-              ]}
             />
             <IconZoomIn size={16} className="file-preview-modal__zoom-icon" />
             <Text size="sm" className="file-preview-modal__zoom-value">
