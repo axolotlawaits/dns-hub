@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Box, Text, Image, Stack } from '@mantine/core';
 import { API } from '../../../../../config/constants';
 // Теперь description уже в формате HTML
@@ -9,16 +10,34 @@ interface TelegramPreviewProps {
 }
 
 export function TelegramPreview({ name, description, images }: TelegramPreviewProps) {
+  const blobUrlsRef = useRef<string[]>([]);
+
   // Получаем URL изображений
   const imageUrls = images.map((img) => {
     if (img instanceof File) {
-      return URL.createObjectURL(img);
+      const blobUrl = URL.createObjectURL(img);
+      blobUrlsRef.current.push(blobUrl);
+      return blobUrl;
     }
     if (typeof img === 'string') {
       return img.startsWith('http') ? img : `${API}/public/add/merch/${img}`;
     }
     return '';
   }).filter(Boolean);
+
+  // Cleanup: освобождаем blob URLs при размонтировании
+  useEffect(() => {
+    return () => {
+      blobUrlsRef.current.forEach(url => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch (error) {
+          // Игнорируем ошибки при очистке
+        }
+      });
+      blobUrlsRef.current = [];
+    };
+  }, []);
 
   // Формируем полный HTML с названием, если оно есть
   const htmlDescription = name && description 

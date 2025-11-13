@@ -1,0 +1,29 @@
+.card-group-loading-container {
+  position: relative;
+  min-height: 200px;
+}
+
+.card-group-empty-message {
+  font-size: 18px;
+  color: gray;
+  margin-bottom: 20px;
+}
+
+.card-group-empty-message-large {
+  font-size: 18px;
+  color: gray;
+  margin-bottom: 30px;
+}
+
+.card-group-empty-button {
+  border-radius: 50px;
+  padding: 15px 40px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.card-group-pagination-container {
+  display: flex;
+  justify-content: center;
+}
+

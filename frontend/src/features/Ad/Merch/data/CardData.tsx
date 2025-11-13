@@ -40,13 +40,7 @@ const getAuthHeaders = (includeContentType: boolean = false): HeadersInit => {
 };
 
 // Утилита для обработки ответов
-const handleResponse = async (response: Response, url: string) => {
-  console.log(`📊 Ответ от ${url}:`, {
-    status: response.status,
-    statusText: response.statusText,
-    ok: response.ok
-  });
-
+const handleResponse = async (response: Response) => {
   const contentType = response.headers.get('content-type');
   
   if (contentType && contentType.includes('application/json')) {
@@ -85,7 +79,7 @@ export const fetchCardsByCategory = async (
       throw new Error(`HTTP Error: ${response.status} ${response.statusText}`);
     }
     
-    const data = await handleResponse(response, url);
+    const data = await handleResponse(response);
     
     if (data && Array.isArray(data)) {
       // Преобразуем данные в формат CardItem
@@ -136,7 +130,7 @@ export const fetchAllCards = async (): Promise<CardItem[]> => {
       throw new Error(`HTTP Error: ${response.status} ${response.statusText}`);
     }
     
-    const data = await handleResponse(response, url);
+    const data = await handleResponse(response);
     
     if (Array.isArray(data)) {
       console.log(`✅ Получено ${data.length} карточек всего`);
@@ -163,7 +157,7 @@ export const fetchActiveCards = async (): Promise<CardItem[]> => {
       throw new Error(`HTTP Error: ${response.status} ${response.statusText}`);
     }
     
-    const data = await handleResponse(response, url);
+    const data = await handleResponse(response);
     
     if (Array.isArray(data)) {
       console.log(`✅ Получено ${data.length} активных карточек для бота`);
@@ -214,7 +208,7 @@ export const createCard = async (cardData: {
       throw new Error(`HTTP Error: ${response.status}`);
     }
 
-    const data = await handleResponse(response, url);
+    const data = await handleResponse(response);
     console.log('✅ Карточка создана:', data);
     
     // Преобразуем ответ в формат CardItem
@@ -269,7 +263,7 @@ export const updateCard = async (id: string, cardData: Partial<{
       throw new Error(`HTTP Error: ${response.status}`);
     }
     
-    const data = await handleResponse(response, url);
+    const data = await handleResponse(response);
     console.log('✅ Карточка обновлена:', data);
     
     // Преобразуем ответ в формат CardItem
@@ -314,7 +308,7 @@ export const updateCardImages = async (id: string, imageUrls: string[]): Promise
       throw new Error(`HTTP Error: ${response.status}`);
     }
     
-    const data = await handleResponse(response, url);
+    const data = await handleResponse(response);
     console.log('✅ Порядок изображений обновлен:', data);
 
     return data;
@@ -345,7 +339,7 @@ export const addCardImages = async (id: string, images: File[]): Promise<CardIte
       throw new Error(`HTTP Error: ${response.status}`);
     }
 
-    const data = await handleResponse(response, url);
+    const data = await handleResponse(response);
     console.log('✅ Изображения добавлены:', data);
     return data;
   } catch (error) {
@@ -373,7 +367,7 @@ export const deleteCardImage = async (id: string, imageUrl: string): Promise<Car
       throw new Error(`HTTP Error: ${response.status}`);
     }
     
-    const data = await handleResponse(response, url);
+    const data = await handleResponse(response);
     console.log('✅ Изображение удалено:', data);
 
     return data;
@@ -386,8 +380,7 @@ export const deleteCardImage = async (id: string, imageUrl: string): Promise<Car
 // Функция для переключения активности карточки
 export const toggleCardActive = async (id: string, isActive: boolean): Promise<CardItem> => {
   try {
-    const url = `${API_BASE}/categories/${id}`;
-    console.log(`🔄 Переключаем активность карточки ${id} на:`, isActive);
+    const url = `${API_BASE}/cards/${id}`;
     
     const formData = new FormData();
     formData.append('isActive', isActive.toString());
@@ -402,7 +395,7 @@ export const toggleCardActive = async (id: string, isActive: boolean): Promise<C
       throw new Error(`HTTP Error: ${response.status}`);
     }
     
-    const data = await handleResponse(response, url);
+    const data = await handleResponse(response);
     console.log('✅ Активность карточки обновлена:', data);
     
     // Преобразуем ответ в формат CardItem
@@ -443,7 +436,7 @@ export const deleteCard = async (id: string): Promise<void> => {
       throw new Error(`HTTP Error: ${response.status}`);
     }
     
-    await handleResponse(response, url);
+    await handleResponse(response);
     console.log('✅ Карточка удалена');
   } catch (error) {
     console.error('❌ Ошибка при удалении карточки:', error);

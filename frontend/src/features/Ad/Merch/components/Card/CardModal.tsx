@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   Button, 
   TextInput, 
@@ -17,10 +17,11 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconUpload, IconX, IconEye } from '@tabler/icons-react';
-import { createCard, updateCard, addCardImages, type CardItem } from '../../data/CardData';
+import { createCard, updateCard, addCardImages, deleteCard, type CardItem } from '../../data/CardData';
 import { API } from '../../../../../config/constants';
 import TiptapEditor from '../../../../../utils/editor';
 import { TelegramPreview } from './TelegramPreview';
+import './CardModal.css';
 
 // Props для добавления
 interface AddCardModalProps {
@@ -53,6 +54,12 @@ export function AddCardModal({ categoryId, onSuccess, onClose }: AddCardModalPro
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewDrawerOpened, previewDrawerHandlers] = useDisclosure(false);
+  const previewUrlsRef = useRef<string[]>([]);
+
+  // Обновляем ref при изменении previewUrls
+  useEffect(() => {
+    previewUrlsRef.current = previewUrls;
+  }, [previewUrls]);
 
   useEffect(() => {
     setName('');
@@ -61,6 +68,17 @@ export function AddCardModal({ categoryId, onSuccess, onClose }: AddCardModalPro
     setImageFiles([]);
     setPreviewUrls([]);
     setError(null);
+
+    // Cleanup: освобождаем blob URLs при размонтировании
+    return () => {
+      previewUrlsRef.current.forEach(url => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch (error) {
+          // Игнорируем ошибки при очистке
+        }
+      });
+    };
   }, []);
 
   const handleImageChange = (files: File[] | null) => {
@@ -128,8 +146,6 @@ export function AddCardModal({ categoryId, onSuccess, onClose }: AddCardModalPro
       onSuccess?.();
       previewDrawerHandlers.close();
       onClose();
-
-      console.log('✅ Карточка успешно создана');
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка при создании карточки');
@@ -145,7 +161,7 @@ export function AddCardModal({ categoryId, onSuccess, onClose }: AddCardModalPro
         
         <form onSubmit={handleSubmit}>
           {error && (
-            <Alert color="red" style={{ marginBottom: 15 }}>
+            <Alert color="red" className="card-modal-form-section">
               {error}
             </Alert>
           )}
@@ -157,19 +173,19 @@ export function AddCardModal({ categoryId, onSuccess, onClose }: AddCardModalPro
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
-              style={{ flex: 1 }}
+              className="card-modal-text-input"
             />
             <Button
               variant="light"
               leftSection={<IconEye size={16} />}
               onClick={previewDrawerHandlers.open}
-              style={{ marginTop: '24px' }}
+              className="card-modal-preview-button"
             >
               Превью Telegram
             </Button>
           </Group>
 
-          <Box style={{ marginBottom: 15 }}>
+          <Box className="card-modal-form-section">
             <Text size="sm" fw={500} mb="xs">Описание</Text>
             <TiptapEditor
               content={description}
@@ -183,7 +199,7 @@ export function AddCardModal({ categoryId, onSuccess, onClose }: AddCardModalPro
             description="Активные карточки отображаются в боте"
             checked={isActive}
             onChange={(e) => setIsActive(e.currentTarget.checked)}
-            style={{ marginBottom: 15 }}
+            className="card-modal-form-section"
           />
 
           <FileInput
@@ -194,35 +210,25 @@ export function AddCardModal({ categoryId, onSuccess, onClose }: AddCardModalPro
             value={imageFiles}
             onChange={handleImageChange}
             leftSection={<IconUpload size={16} />}
-            style={{ marginBottom: 15 }}
+            className="card-modal-form-section"
           />
 
           {previewUrls.length > 0 && (
-            <Box style={{ marginBottom: 15 }}>
-              <Text size="sm" style={{ marginBottom: 10 }}>Предварительный просмотр:</Text>
+            <Box className="card-modal-form-section">
+              <Text size="sm" className="card-modal-preview-label">Предварительный просмотр:</Text>
               <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="md">
                 {previewUrls.map((url, index) => (
-                  <Box key={index} style={{ position: 'relative' }}>
+                  <Box key={index} className="card-modal-preview-container">
                     <Image
                       src={url}
                       alt={`Preview ${index + 1}`}
-                      style={{ 
-                        width: '100%', 
-                        height: 120, 
-                        objectFit: 'cover',
-                        borderRadius: 8,
-                        border: '1px solid #e0e0e0'
-                      }}
+                      className="card-modal-preview-grid"
                     />
                     <ActionIcon
                       size="sm"
                       color="red"
                       variant="filled"
-                      style={{
-                        position: 'absolute',
-                        top: 4,
-                        right: 4
-                      }}
+                      className="card-modal-preview-remove-button"
                       onClick={() => removeImage(index)}
                     >
                       <IconX size={12} />
@@ -253,36 +259,12 @@ export function AddCardModal({ categoryId, onSuccess, onClose }: AddCardModalPro
         title="Превью в Telegram"
         size={460}
         zIndex={1000}
-        styles={{
-          content: {
-            background: 'var(--theme-bg-elevated)',
-            border: '1px solid var(--theme-border-primary)',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(0, 0, 0, 0.1)',
-            borderRadius: '12px 0 0 12px',
-          },
-          header: {
-            background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-600) 100%)',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-            color: 'white',
-            padding: '20px 24px',
-            borderRadius: '12px 0 0 0',
-          },
-          title: {
-            color: 'white',
-            fontWeight: 700,
-            fontSize: '18px',
-          },
-          close: {
-            color: 'rgba(255, 255, 255, 0.8)',
-            background: 'rgba(255, 255, 255, 0.1)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            borderRadius: '8px',
-            transition: 'all 0.3s ease',
-          },
-          body: {
-            padding: '24px',
-            background: 'var(--theme-bg-elevated)',
-          }
+        classNames={{
+          content: 'card-modal-drawer-content',
+          header: 'card-modal-drawer-header',
+          title: 'card-modal-drawer-title',
+          close: 'card-modal-drawer-close',
+          body: 'card-modal-drawer-body'
         }}
       >
         <Stack gap="md">
@@ -308,8 +290,23 @@ export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewDrawerOpened, previewDrawerHandlers] = useDisclosure(false);
+  const previewUrlsRef = useRef<string[]>([]);
+
+  // Обновляем ref при изменении previewUrls
+  useEffect(() => {
+    previewUrlsRef.current = previewUrls;
+  }, [previewUrls]);
 
   useEffect(() => {
+    // Освобождаем старые blob URLs перед обновлением
+    previewUrlsRef.current.forEach(url => {
+      try {
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        // Игнорируем ошибки при очистке
+      }
+    });
+
     setName(card.name);
     setDescription(card.description);
     setIsActive(card.isActive);
@@ -317,6 +314,17 @@ export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) 
     setPreviewUrls([]);
     setCurrentImages(card.imageUrls || []);
     setError(null);
+
+    // Cleanup: освобождаем blob URLs при размонтировании или изменении карточки
+    return () => {
+      previewUrlsRef.current.forEach(url => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch (error) {
+          // Игнорируем ошибки при очистке
+        }
+      });
+    };
   }, [card]);
 
   const handleImageChange = (files: File[] | null) => {
@@ -385,8 +393,6 @@ export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) 
       onSuccess?.();
       previewDrawerHandlers.close();
       onClose();
-
-      console.log('✅ Карточка успешно обновлена');
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка при обновлении карточки');
@@ -547,36 +553,12 @@ export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) 
         title="Превью в Telegram"
         size={460}
         zIndex={1000}
-        styles={{
-          content: {
-            background: 'var(--theme-bg-elevated)',
-            border: '1px solid var(--theme-border-primary)',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(0, 0, 0, 0.1)',
-            borderRadius: '12px 0 0 12px',
-          },
-          header: {
-            background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-600) 100%)',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-            color: 'white',
-            padding: '20px 24px',
-            borderRadius: '12px 0 0 0',
-          },
-          title: {
-            color: 'white',
-            fontWeight: 700,
-            fontSize: '18px',
-          },
-          close: {
-            color: 'rgba(255, 255, 255, 0.8)',
-            background: 'rgba(255, 255, 255, 0.1)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            borderRadius: '8px',
-            transition: 'all 0.3s ease',
-          },
-          body: {
-            padding: '24px',
-            background: 'var(--theme-bg-elevated)',
-          }
+        classNames={{
+          content: 'card-modal-drawer-content',
+          header: 'card-modal-drawer-header',
+          title: 'card-modal-drawer-title',
+          close: 'card-modal-drawer-close',
+          body: 'card-modal-drawer-body'
         }}
       >
         <Stack gap="md">
@@ -604,13 +586,10 @@ export function DeleteCardModal({ card, onSuccess, onClose }: DeleteCardModalPro
       setLoading(true);
       setError(null);
 
-      // Здесь должна быть логика удаления карточки
-      // await deleteCard(card.id);
+      await deleteCard(card.id);
 
       onSuccess?.();
       onClose();
-
-      console.log('✅ Карточка успешно удалена');
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка при удалении карточки');

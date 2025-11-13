@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   TextInput, 
   Button, 
@@ -40,6 +40,12 @@ export function HierarchyAddModal({ onClose, onSuccess, parentItem }: AddModalPr
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const previewUrlsRef = useRef<string[]>([]);
+
+  // Обновляем ref при изменении previewUrls
+  useEffect(() => {
+    previewUrlsRef.current = previewUrls;
+  }, [previewUrls]);
 
   useEffect(() => {
     setName('');
@@ -47,11 +53,28 @@ export function HierarchyAddModal({ onClose, onSuccess, parentItem }: AddModalPr
     setImageFiles([]);
     setPreviewUrls([]);
     setError(null);
+
+    // Cleanup: освобождаем blob URLs при размонтировании
+    return () => {
+      previewUrlsRef.current.forEach(url => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch (error) {
+          // Игнорируем ошибки при очистке
+        }
+      });
+    };
   }, []);
 
   const handleImageChange = (files: File[] | null) => {
     // Очищаем предыдущие preview
-    previewUrls.forEach(url => URL.revokeObjectURL(url));
+    previewUrlsRef.current.forEach(url => {
+      try {
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        // Игнорируем ошибки при очистке
+      }
+    });
     
     if (files && files.length > 0) {
       setImageFiles(files);
@@ -68,7 +91,11 @@ export function HierarchyAddModal({ onClose, onSuccess, parentItem }: AddModalPr
     const newUrls = previewUrls.filter((_, i) => i !== index);
     
     // Освобождаем память
-    URL.revokeObjectURL(previewUrls[index]);
+    try {
+      URL.revokeObjectURL(previewUrls[index]);
+    } catch (error) {
+      // Игнорируем ошибки при очистке
+    }
     
     setImageFiles(newFiles);
     setPreviewUrls(newUrls);
@@ -186,18 +213,50 @@ export function HierarchyEditModal({ item, onClose, onSuccess }: ItemModalProps)
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const previewUrlsRef = useRef<string[]>([]);
+
+  // Обновляем ref при изменении previewUrls
+  useEffect(() => {
+    previewUrlsRef.current = previewUrls;
+  }, [previewUrls]);
 
   useEffect(() => {
+    // Освобождаем старые blob URLs перед обновлением
+    previewUrlsRef.current.forEach(url => {
+      try {
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        // Игнорируем ошибки при очистке
+      }
+    });
+
     setName(item.name);
     setDescription(item.description || '');
     setImageFiles([]);
     setPreviewUrls([]);
     setError(null);
+
+    // Cleanup: освобождаем blob URLs при размонтировании или изменении item
+    return () => {
+      previewUrlsRef.current.forEach(url => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch (error) {
+          // Игнорируем ошибки при очистке
+        }
+      });
+    };
   }, [item]);
 
   const handleImageChange = (files: File[] | null) => {
     // Очищаем предыдущие preview
-    previewUrls.forEach(url => URL.revokeObjectURL(url));
+    previewUrlsRef.current.forEach(url => {
+      try {
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        // Игнорируем ошибки при очистке
+      }
+    });
     
     if (files && files.length > 0) {
       setImageFiles(files);
@@ -214,7 +273,11 @@ export function HierarchyEditModal({ item, onClose, onSuccess }: ItemModalProps)
     const newUrls = previewUrls.filter((_, i) => i !== index);
     
     // Освобождаем память
-    URL.revokeObjectURL(previewUrls[index]);
+    try {
+      URL.revokeObjectURL(previewUrls[index]);
+    } catch (error) {
+      // Игнорируем ошибки при очистке
+    }
     
     setImageFiles(newFiles);
     setPreviewUrls(newUrls);

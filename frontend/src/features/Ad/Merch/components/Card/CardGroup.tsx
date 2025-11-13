@@ -8,6 +8,7 @@ import { useApp } from '../../context/SelectedCategoryContext';
 import { useCardStore, type CardItem } from '../../data/CardData';
 import { CustomModal } from '../../../../../utils/CustomModal';
 import { notificationSystem } from '../../../../../utils/Push';
+import './CardGroup.css';
 
 //---------------------------------------------Группа карточек
 function CardGroup() {
@@ -23,16 +24,12 @@ function CardGroup() {
 
   useEffect(() => {
     if (selectedId) {
-      console.log(`🔄 Загружаем карточки для категории ${selectedId} (страница ${currentPage})`);
       const activeFilterValue = activeFilter === 'all' ? undefined : activeFilter === 'active';
       loadCardsByCategory(selectedId, currentPage, pageSize, activeFilterValue);
-    } else {
-      console.log('📭 Категория не выбрана, карточки не загружаются');
     }
   }, [selectedId, currentPage, pageSize, activeFilter, loadCardsByCategory]);
 
   const handleEditCard = (card: CardItem) => {
-    console.log('Редактирование карточки:', card);
     setSelectedCard(card);
     openEditModal();
   };
@@ -41,7 +38,6 @@ function CardGroup() {
     // Находим карточку по ID для отображения в модалке удаления
     const cardToDelete = cards.find(card => card.id === cardId);
     if (cardToDelete) {
-      console.log('Удаление карточки:', cardToDelete);
       setSelectedCard(cardToDelete);
       openDeleteModal();
     }
@@ -106,7 +102,7 @@ function CardGroup() {
 
   if (loading) {
     return (
-      <Box style={{ position: 'relative', minHeight: 200 }}>
+      <Box className="card-group-loading-container">
         <LoadingOverlay visible={loading} />
         <Container style={{ textAlign: 'center', padding: '40px' }}>
           <Text size="sm" c="dimmed">Загрузка карточек...</Text>
@@ -188,7 +184,7 @@ function CardGroup() {
       {!selectedId ? (
         <Center style={{ height: '300px' }}>
           <Box style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '18px', color: 'gray', marginBottom: '20px' }}>
+            <div className="card-group-empty-message">
               Выберите категорию в иерархии для отображения карточек
             </div>
           </Box>
@@ -262,7 +258,7 @@ function CardGroup() {
           
           {/* Пагинация */}
           {pagination.totalPages > 1 && (
-            <Box mt="md" style={{ display: 'flex', justifyContent: 'center' }}>
+            <Box mt="md" className="card-group-pagination-container">
               <Pagination
                 value={currentPage}
                 onChange={setCurrentPage}
@@ -275,11 +271,7 @@ function CardGroup() {
       ) : (
         <Center style={{ height: '400px' }}>
           <Box style={{ textAlign: 'center' }}>
-            <div style={{ 
-              fontSize: '18px', 
-              color: 'gray', 
-              marginBottom: '30px' 
-            }}>
+            <div className="card-group-empty-message-large">
               В этой категории пока нет карточек
             </div>
             <Button 
@@ -288,12 +280,7 @@ function CardGroup() {
               leftSection={<IconPlus size={24} />}
               variant="gradient"
               gradient={{ from: 'blue', to: 'cyan' }}
-              style={{
-                borderRadius: '50px',
-                padding: '15px 40px',
-                fontSize: '18px',
-                fontWeight: 600
-              }}
+              className="card-group-empty-button"
             >
               Создать первую карточку
             </Button>

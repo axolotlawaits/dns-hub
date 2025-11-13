@@ -25,6 +25,7 @@ import { toggleCardActive } from '../../data/CardData';
 import { FilePreviewModal } from '../../../../../utils/FilePreviewModal';
 import { API } from '../../../../../config/constants';
 import { truncateText } from '../../../../../utils/format';
+import './Card.css';
 // Теперь description уже в формате HTML
 
 //----------------------------Карточка
@@ -43,16 +44,12 @@ function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
   const CardEdit = () => {
     if (onEdit) {
       onEdit(cardData);
-    } else {
-      alert(`Редактирование карточки: ${cardData.name}`);
     }
   };
   
   const CardDelete = () => {
     if (onDelete) {
       onDelete(cardData.id);
-    } else {
-      alert(`Удаление карточки: ${cardData.name}`);
     }
   };
 
@@ -132,11 +129,7 @@ function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
       radius="md" 
       p="lg" 
       mb="md"
-      style={{ 
-        background: 'var(--theme-bg-elevated)',
-        border: '1px solid var(--theme-border-primary)',
-        boxShadow: 'var(--theme-shadow-sm)'
-      }}
+      className="card-container"
     >
       {/* Заголовок с кнопками */}
       <Group justify="space-between" mb="md">
@@ -187,17 +180,14 @@ function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
 
       {/* Описание */}
       {cardData.description && (
-        <Box mb="md" style={{ color: 'var(--theme-text-secondary)' }}>
+        <Box mb="md" className="card-description">
           <Text size="sm" c="dimmed" mb="xs">
             <IconInfoCircle size={14} style={{ marginRight: 4 }} />
             Описание:
           </Text>
           <div 
             dangerouslySetInnerHTML={{ __html: formattedDescription }}
-            style={{ 
-              lineHeight: 1.5,
-              fontSize: '14px'
-            }}
+            className="card-description-content"
           />
         </Box>
       )}
@@ -212,28 +202,12 @@ function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
             {imageMeta.map((meta, index) => (
               <Box
                 key={meta.id}
-                style={{
-                  position: 'relative',
-                  background: 'var(--theme-bg-primary)',
-                  borderRadius: 12,
-                  border: '1px solid var(--theme-border-primary)',
-                  padding: '12px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '12px',
-                  height: '100%'
-                }}
+                className="card-image-container"
               >
                 <Image
                   src={meta.resolvedUrl}
                   alt={`${cardData.name} - изображение ${index + 1}`}
-                  style={{ 
-                    cursor: 'pointer',
-                    borderRadius: 8,
-                    border: '1px solid var(--theme-border-primary)',
-                    flexGrow: 1,
-                    objectFit: 'cover'
-                  }}
+                  className="card-image"
                   onClick={() => openImageZoom(index)}
                   loading="lazy"
                 />
@@ -241,12 +215,7 @@ function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
                   size="sm"
                   variant="filled"
                   color="blue"
-                  style={{
-                    position: 'absolute',
-                    top: 16,
-                     right: 16,
-                    opacity: 0.8
-                  }}
+                  className="card-image-zoom-button"
                   onClick={() => openImageZoom(index)}
                 >
                   <IconZoomIn size={12} />
@@ -254,10 +223,7 @@ function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
                 <Box style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <Text
                     size="sm"
-                    style={{
-                      fontWeight: 600,
-                      color: 'var(--theme-text-primary)'
-                    }}
+                    className="card-image-name"
                     lineClamp={2}
                     title={meta.baseName}
                   >
@@ -266,7 +232,7 @@ function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
                   <Text
                     size="xs"
                     c="dimmed"
-                    style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}
+                    className="card-image-extension"
                   >
                     {meta.extension ? meta.extension : 'Формат не указан'}
                   </Text>
@@ -278,7 +244,7 @@ function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
       )}
 
       {/* Метаинформация */}
-      <Group justify="space-between" mt="md" pt="md" style={{ borderTop: '1px solid var(--theme-border-primary)' }}>
+      <Group justify="space-between" mt="md" pt="md" className="card-meta-divider">
         <Group gap="md">
           <Text size="xs" c="dimmed">
             Категория: {cardData.category.name}

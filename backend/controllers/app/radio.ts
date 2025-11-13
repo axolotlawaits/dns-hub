@@ -1335,17 +1335,57 @@ export const playRadioStream = async (req: Request, res: Response): Promise<any>
           case '.m4a': contentType = 'audio/mp4'; break;
         }
         
-        res.setHeader('Content-Type', contentType);
-        res.setHeader('Accept-Ranges', 'bytes');
-        res.setHeader('Cache-Control', 'no-cache');
+        // Получаем размер файла
+        const stats = fs.statSync(correctedFilePath);
+        const fileSize = stats.size;
+
+        // Поддержка Range requests для буферизации и seek
+        const range = req.headers.range;
         
-        res.sendFile(correctedFilePath, (err) => {
-          if (err) {
+        if (range) {
+          // Парсим Range заголовок
+          const parts = range.replace(/bytes=/, "").split("-");
+          const start = parseInt(parts[0], 10);
+          const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+          const chunksize = (end - start) + 1;
+          
+          // Устанавливаем заголовки для частичного контента
+          res.writeHead(206, {
+            'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+            'Accept-Ranges': 'bytes',
+            'Content-Length': chunksize,
+            'Content-Type': contentType,
+            'Cache-Control': 'public, max-age=3600',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, Content-Length'
+          });
+
+          // Создаем поток для чтения части файла
+          const fileStream = fs.createReadStream(correctedFilePath, { start, end });
+          fileStream.pipe(res);
+          
+          fileStream.on('error', (err) => {
+            console.error('❌ [playRadioStream] Ошибка чтения файла:', err);
             if (!res.headersSent) {
               res.status(500).json({ error: 'Ошибка при проигрывании потока' });
             }
-          }
-        });
+          });
+        } else {
+          res.setHeader('Content-Type', contentType);
+          res.setHeader('Accept-Ranges', 'bytes');
+          res.setHeader('Content-Length', fileSize);
+          res.setHeader('Cache-Control', 'public, max-age=3600');
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length');
+          
+          res.sendFile(correctedFilePath, (err) => {
+            if (err) {
+              if (!res.headersSent) {
+                res.status(500).json({ error: 'Ошибка при проигрывании потока' });
+              }
+            }
+          });
+        }
         return;
       }
       
@@ -1380,22 +1420,62 @@ export const playRadioStream = async (req: Request, res: Response): Promise<any>
 
     console.log(`🎵 [playRadioStream] MIME тип: ${contentType} для файла ${stream.attachment}`);
 
-    // Устанавливаем правильные заголовки для потокового воспроизведения
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Accept-Ranges', 'bytes');
-    res.setHeader('Cache-Control', 'no-cache');
+    // Получаем размер файла
+    const stats = fs.statSync(filePath);
+    const fileSize = stats.size;
+
+    // Поддержка Range requests для буферизации и seek
+    const range = req.headers.range;
     
-    // Отправляем файл для потокового воспроизведения
-    res.sendFile(filePath, (err) => {
-      if (err) {
-        console.error('❌ [playRadioStream] Ошибка отправки файла:', err);
+    if (range) {
+      // Парсим Range заголовок
+      const parts = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      const chunksize = (end - start) + 1;
+      
+      // Устанавливаем заголовки для частичного контента
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunksize,
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=3600', // Кешируем на 1 час для стабильности
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, Content-Length'
+      });
+
+      // Создаем поток для чтения части файла
+      const fileStream = fs.createReadStream(filePath, { start, end });
+      fileStream.pipe(res);
+      
+      fileStream.on('error', (err) => {
+        console.error('❌ [playRadioStream] Ошибка чтения файла:', err);
         if (!res.headersSent) {
           res.status(500).json({ error: 'Ошибка при проигрывании потока' });
         }
-      } else {
-        console.log('✅ [playRadioStream] Файл успешно отправлен для проигрывания');
-      }
-    });
+      });
+    } else {
+      // Полный файл - устанавливаем правильные заголовки для потокового воспроизведения
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Accept-Ranges', 'bytes');
+      res.setHeader('Content-Length', fileSize);
+      res.setHeader('Cache-Control', 'public, max-age=3600'); // Кешируем на 1 час
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length');
+      
+      // Отправляем файл для потокового воспроизведения
+      res.sendFile(filePath, (err) => {
+        if (err) {
+          console.error('❌ [playRadioStream] Ошибка отправки файла:', err);
+          if (!res.headersSent) {
+            res.status(500).json({ error: 'Ошибка при проигрывании потока' });
+          }
+        } else {
+          console.log('✅ [playRadioStream] Файл успешно отправлен для проигрывания');
+        }
+      });
+    }
 
   } catch (error) {
     console.error('❌ [playRadioStream] Ошибка при проигрывании потока:', error);
