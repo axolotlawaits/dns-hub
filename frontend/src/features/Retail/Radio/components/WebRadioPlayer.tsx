@@ -298,8 +298,13 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   // const [isSeeking, setIsSeeking] = useState(false);
-  
+
   const audioRef = useRef<HTMLAudioElement>(null);
+  
+  // Ref для отслеживания последнего времени воспроизведения (для fallback механизма)
+  const lastPlaybackTimeRef = useRef<number>(0);
+  const lastPlaybackUpdateTimeRef = useRef<number>(0);
+  const playbackCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Функция форматирования времени
   const formatTime = useCallback((seconds: number): string => {
@@ -602,7 +607,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       
       const heartbeatData = {
         deviceName: `DNS Radio Web (${user.email.split('@')[0]})`,
-        appVersion: '1.1.4',
+        appVersion: '1.2.1',
         macAddress: browserId,
         currentIP: userIP,
         userEmail: user.email
@@ -713,9 +718,32 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     }
   }, [findNextTrack, songsPlayed]);
 
+  // Проверка доступности файла перед воспроизведением
+  const checkFileAvailability = useCallback(async (url: string): Promise<boolean> => {
+    try {
+      const response = await fetch(url, { method: 'HEAD', cache: 'no-cache' });
+      return response.ok && response.status === 200;
+    } catch (err) {
+      console.warn('⚠️ [WebRadioPlayer] Не удалось проверить доступность файла:', url, err);
+      // Если HEAD не работает, пробуем GET с range
+      try {
+        const response = await fetch(url, { 
+          method: 'GET', 
+          headers: { 'Range': 'bytes=0-1' },
+          cache: 'no-cache' 
+        });
+        return response.ok && (response.status === 200 || response.status === 206);
+      } catch {
+        return false;
+      }
+    }
+  }, []);
+
   // Воспроизведение трека
   const playTrack = useCallback(async (track: MusicTrack) => {
     if (!audioRef.current) return;
+    
+    // Убрали проверку isActive - музыка может играть в фоне
     
     try {
       // Останавливаем текущее воспроизведение безопасно
@@ -730,25 +758,108 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       setCurrentStream(null);
       setIsPlayingStream(false);
       
-      audioRef.current.src = track.url;
+      // Проверяем доступность файла перед воспроизведением
+      const isAvailable = await checkFileAvailability(track.url);
+      if (!isAvailable) {
+        console.error('❌ [WebRadioPlayer] Файл недоступен:', track.url);
+        setError('Файл не найден или недоступен');
+        setPlaybackState('error');
+        // Переключаемся на следующий трек при ошибке
+        setTimeout(() => {
+          if (audioRef.current) {
+            audioRef.current.dispatchEvent(new Event('ended'));
+          }
+        }, 2000);
+        return;
+      }
+      
+      // Очищаем предыдущий источник для избежания проблем с кешированием
+      audioRef.current.pause();
+      audioRef.current.removeAttribute('src');
+      audioRef.current.load();
+      
+      // Добавляем cache busting для избежания проблем с кешированием
+      const urlWithCacheBust = `${track.url}${track.url.includes('?') ? '&' : '?'}t=${Date.now()}`;
+      audioRef.current.src = urlWithCacheBust;
+      
+      // Сбрасываем счетчик retry для нового трека
+      retryCountsRef.current[urlWithCacheBust] = 0;
+      
+      // Ждем загрузки метаданных перед воспроизведением
+      await new Promise<void>((resolve, reject) => {
+        const audio = audioRef.current;
+        if (!audio) {
+          reject(new Error('Audio element not found'));
+          return;
+        }
+
+        const handleLoadedMetadata = () => {
+          audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+          audio.removeEventListener('error', handleError);
+          resolve();
+        };
+
+        const handleError = () => {
+          audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+          audio.removeEventListener('error', handleError);
+          reject(new Error('Failed to load audio metadata'));
+        };
+
+        audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+        audio.addEventListener('error', handleError);
+        
+        audio.load();
+        
+        // Таймаут на загрузку метаданных (10 секунд)
+        setTimeout(() => {
+          audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+          audio.removeEventListener('error', handleError);
+          if (audio.readyState < 1) {
+            reject(new Error('Timeout loading audio metadata'));
+          } else {
+            resolve();
+          }
+        }, 10000);
+      });
+
+      // Проверяем, что файл действительно готов к воспроизведению
+      if (audioRef.current.readyState < 2) {
+        console.warn('⚠️ [WebRadioPlayer] Файл не готов к воспроизведению, readyState:', audioRef.current.readyState);
+        // Ждем еще немного
+        await new Promise((r) => setTimeout(r, 500));
+      }
+
       await audioRef.current.play();
+      
       setPlaybackState('playing');
       setCurrentTrack(track);
       setPendingTrack(null);
       setError(null);
     } catch (err) {
       // Игнорируем AbortError - это нормально при переключении
-      if ((err as Error).name !== 'AbortError') {
+      if ((err as Error).name !== 'AbortError' && (err as Error).name !== 'NotAllowedError') {
         console.error('❌ [WebRadioPlayer] Ошибка воспроизведения трека:', err);
         setError('Не удалось воспроизвести трек');
+        setPlaybackState('error');
+        // Переключаемся на следующий трек при ошибке
+        setTimeout(() => {
+          if (audioRef.current) {
+            audioRef.current.dispatchEvent(new Event('ended'));
+          }
+        }, 2000);
+      } else if ((err as Error).name === 'NotAllowedError') {
+        console.warn('⚠️ [WebRadioPlayer] Воспроизведение заблокировано браузером (требуется взаимодействие пользователя)');
+        setError('Для воспроизведения требуется взаимодействие с пользователем');
+        setPlaybackState('error');
       }
-      setPlaybackState('error');
     }
-  }, []);
+  }, [checkFileAvailability]);
 
   // Воспроизведение потока
   const playStream = useCallback(async (stream: RadioStream, rotationIndex?: number) => {
     if (!audioRef.current) return;
+    
+    // Убрали проверку isActive - музыка может играть в фоне
     
     // Проверяем, что поток активен и имеет файл
     if (!stream.isActive) {
@@ -788,10 +899,15 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       audioRef.current.removeAttribute('src');
       audioRef.current.load();
       audioRef.current.src = streamUrl;
+      
+      // Сбрасываем счетчик retry для нового потока
+      retryCountsRef.current[streamUrl] = 0;
+      
       console.log('[WebRadio] Applying stream URL:', streamUrl);
       await audioRef.current.load();
       await audioRef.current.play();
       console.log('[WebRadio] Audio element src after play:', audioRef.current.currentSrc || audioRef.current.src);
+      
       setPlaybackState('playing');
       setCurrentStream(stream);
       setPendingStream(null);
@@ -805,60 +921,171 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       }
     } catch (err) {
       // Игнорируем AbortError
-      if ((err as Error).name !== 'AbortError') {
+      if ((err as Error).name !== 'AbortError' && (err as Error).name !== 'NotAllowedError') {
         console.error('❌ [WebRadioPlayer] Ошибка воспроизведения потока:', err);
         setError('Не удалось воспроизвести поток');
+        setPlaybackState('error');
+      } else if ((err as Error).name === 'NotAllowedError') {
+        console.warn('⚠️ [WebRadioPlayer] Воспроизведение заблокировано браузером (требуется взаимодействие пользователя)');
+        setError('Для воспроизведения требуется взаимодействие с пользователем');
+        setPlaybackState('error');
       }
-      setPlaybackState('error');
     }
   }, [API, streamQuality, rotationStorageKey]);
 
   // Обработчики событий аудио
+  // Используем refs для стабильных ссылок на функции, чтобы избежать перерендеров
+  const findNextTrackRef = useRef(findNextTrack);
+  const playTrackRef = useRef(playTrack);
+  const playStreamRef = useRef(playStream);
+  const bufferNextTrackRef = useRef(bufferNextTrack);
+  const songsPlayedRef = useRef(songsPlayed);
+  const isPlayingStreamRef = useRef(isPlayingStream);
+
+  // Обновляем refs при изменении функций
+  useEffect(() => {
+    findNextTrackRef.current = findNextTrack;
+    playTrackRef.current = playTrack;
+    playStreamRef.current = playStream;
+    bufferNextTrackRef.current = bufferNextTrack;
+  }, [findNextTrack, playTrack, playStream, bufferNextTrack]);
+
+  // Обновляем refs для состояния
+  useEffect(() => {
+    songsPlayedRef.current = songsPlayed;
+    isPlayingStreamRef.current = isPlayingStream;
+  }, [songsPlayed, isPlayingStream]);
+
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
     const handleTimeUpdate = () => {
       if (audio) {
-        setCurrentTime(audio.currentTime);
+        const currentTimeValue = audio.currentTime;
+        setCurrentTime(currentTimeValue);
+        lastPlaybackTimeRef.current = currentTimeValue;
+        lastPlaybackUpdateTimeRef.current = Date.now();
       }
     };
 
     const handleLoadedMetadata = () => {
       if (audio) {
-        setDuration(audio.duration || 0);
+        const durationValue = audio.duration || 0;
+        setDuration(durationValue);
+        
+        // Запускаем fallback механизм для проверки окончания трека
+        // Очищаем предыдущий интервал, если он есть
+        if (playbackCheckIntervalRef.current) {
+          clearInterval(playbackCheckIntervalRef.current);
+        }
+        
+        // Проверяем каждые 2 секунды, не закончился ли трек
+        playbackCheckIntervalRef.current = setInterval(() => {
+          if (!audio) {
+            return;
+          }
+          // Убрали проверку isActive - проверка работает даже в фоне
+          
+          // Если трек играет, но время не меняется более 3 секунд - возможно застрял
+          const currentTime = audio.currentTime;
+          const duration = audio.duration;
+          const isPlaying = !audio.paused && !audio.ended;
+          
+          // Проверяем, закончился ли трек (с небольшой погрешностью)
+          if (isPlaying && duration > 0 && currentTime >= duration - 0.5) {
+            console.log('🔄 [WebRadioPlayer] Fallback: трек закончился по времени, вызываем ended');
+            clearInterval(playbackCheckIntervalRef.current!);
+            playbackCheckIntervalRef.current = null;
+            audio.dispatchEvent(new Event('ended'));
+            return;
+          }
+          
+          // Проверяем, не застрял ли трек (время не меняется, но должно играть)
+          if (isPlaying && Math.abs(currentTime - lastPlaybackTimeRef.current) < 0.1 && currentTime > 0) {
+            // Если время не меняется более 5 секунд - возможно проблема
+            const timeSinceLastUpdate = Date.now() - lastPlaybackUpdateTimeRef.current;
+            if (timeSinceLastUpdate > 5000) {
+              console.warn('⚠️ [WebRadioPlayer] Трек застрял, переключаемся на следующий');
+              clearInterval(playbackCheckIntervalRef.current!);
+              playbackCheckIntervalRef.current = null;
+              audio.dispatchEvent(new Event('ended'));
+            }
+          }
+        }, 2000);
       }
     };
 
-  const handleEnded = async () => {
-    // Android: при любом окончании (трек/поток) увеличиваем счетчик песен на 1
-    const nextSongsPlayed = songsPlayed + 1;
-    setSongsPlayed(nextSongsPlayed);
-    
-    if (isPlayingStream) {
-      // Если играл поток, сбрасываем флаг и переключаемся на музыку
-      setIsPlayingStream(false);
-      setCurrentStream(null);
-    }
-    
-    // Вычисляем следующий контент с учетом обновленного счетчика
-    const nextContent = findNextTrack(nextSongsPlayed);
-    
-    if (nextContent) {
-      if (nextContent.type === 'track') {
-        await playTrack(nextContent.content as MusicTrack);
-      } else if (nextContent.type === 'stream') {
-        await playStream(nextContent.content as RadioStream, (nextContent as any).index);
+    // Флаг для предотвращения множественных вызовов handleEnded
+    let isHandlingEnded = false;
+
+    const handleEnded = async () => {
+      // Очищаем fallback интервал при окончании трека
+      if (playbackCheckIntervalRef.current) {
+        clearInterval(playbackCheckIntervalRef.current);
+        playbackCheckIntervalRef.current = null;
       }
-    } else {
-      setPlaybackState('stopped');
-    }
-    
-    // Буферизируем следующий трек после начала воспроизведения
-    setTimeout(() => {
-      bufferNextTrack();
-    }, 500);
-  };
+
+      // Предотвращаем множественные вызовы
+      if (isHandlingEnded) {
+        console.log('⚠️ [WebRadioPlayer] handleEnded уже обрабатывается, пропускаем');
+        return;
+      }
+      isHandlingEnded = true;
+
+      // Убрали проверку isActive - переключение работает даже в фоне
+      console.log('🎵 [WebRadioPlayer] Трек закончился, переключаемся на следующий');
+
+      // Используем ref для получения актуального значения
+      const currentSongsPlayed = songsPlayedRef.current;
+      const nextSongsPlayed = currentSongsPlayed + 1;
+      setSongsPlayed(nextSongsPlayed);
+      
+      const currentIsPlayingStream = isPlayingStreamRef.current;
+      if (currentIsPlayingStream) {
+        // Если играл поток, сбрасываем флаг и переключаемся на музыку
+        setIsPlayingStream(false);
+        setCurrentStream(null);
+      }
+      
+      // Используем ref для вызова функции
+      const nextContent = findNextTrackRef.current(nextSongsPlayed);
+      
+      if (nextContent) {
+        try {
+          // Небольшая задержка перед переключением для стабильности
+          await new Promise((r) => setTimeout(r, 100));
+          
+          if (nextContent.type === 'track') {
+            await playTrackRef.current(nextContent.content as MusicTrack);
+          } else if (nextContent.type === 'stream') {
+            await playStreamRef.current(nextContent.content as RadioStream, (nextContent as any).index);
+          }
+        } catch (err) {
+          console.error('❌ [WebRadioPlayer] Ошибка при переключении на следующий трек:', err);
+          setError('Не удалось переключить трек');
+          setPlaybackState('error');
+          // Пробуем еще раз через 2 секунды
+          setTimeout(() => {
+            isHandlingEnded = false;
+            audioRef.current?.dispatchEvent(new Event('ended'));
+          }, 2000);
+          return;
+        }
+      } else {
+        setPlaybackState('stopped');
+      }
+      
+      // Сбрасываем флаг после успешного переключения
+      setTimeout(() => {
+        isHandlingEnded = false;
+      }, 1000);
+      
+      // Буферизируем следующий трек после начала воспроизведения
+      setTimeout(() => {
+        bufferNextTrackRef.current();
+      }, 500);
+    };
 
     const handleError = (event: any) => {
       console.error('❌ [WebRadioPlayer] Ошибка воспроизведения:', event);
@@ -874,7 +1101,10 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
         switch (error.code) {
           case error.MEDIA_ERR_ABORTED:
             errorMessage = 'Воспроизведение было прервано';
-            break;
+            // AbortError обычно не требует retry
+            setError(errorMessage);
+            setPlaybackState('paused');
+            return;
           case error.MEDIA_ERR_NETWORK:
             errorMessage = 'Ошибка сети при загрузке аудио';
             break;
@@ -890,46 +1120,77 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       setError(errorMessage);
       setPlaybackState('error');
 
-      // Ретрай с экспоненциальной задержкой
+      // Улучшенный retry с проверкой активности вкладки
       const src = (event?.target?.src as string) || '';
-      if (src) {
+      if (src && isActive) {
         const count = retryCountsRef.current[src] || 0;
         if (count < 3) {
           retryCountsRef.current[src] = count + 1;
           const delay = Math.pow(2, count) * 1000;
+          console.log(`🔄 [WebRadioPlayer] Retry ${count + 1}/3 через ${delay}ms для ${src}`);
+          
           setTimeout(async () => {
+            // Убрали проверку isActive - retry работает даже в фоне
             try {
               if (!audioRef.current) return;
+              
+              // Очищаем источник и перезагружаем
+              audioRef.current.pause();
+              audioRef.current.removeAttribute('src');
               audioRef.current.load();
+              audioRef.current.src = src;
+              await audioRef.current.load();
               await audioRef.current.play();
+              
               setPlaybackState('playing');
               setError(null);
+              // Сбрасываем счетчик retry при успехе
+              retryCountsRef.current[src] = 0;
+              console.log('✅ [WebRadioPlayer] Retry успешен');
             } catch (e) {
-              // не удалось — оставим ошибку
+              console.error('❌ [WebRadioPlayer] Retry не удался:', e);
+              // Если это последняя попытка, переключаемся на следующий трек
+              if (count >= 2) {
+                console.log('⚠️ [WebRadioPlayer] Превышен лимит retry, переключаемся на следующий трек');
+                // Вызываем handleEnded для переключения
+                audioRef.current?.dispatchEvent(new Event('ended'));
+              }
             }
           }, delay);
+        } else {
+          // Превышен лимит retry - переключаемся на следующий трек
+          console.log('⚠️ [WebRadioPlayer] Превышен лимит retry, переключаемся на следующий трек');
+          retryCountsRef.current[src] = 0; // Сбрасываем счетчик
+          setTimeout(() => {
+            audioRef.current?.dispatchEvent(new Event('ended'));
+          }, 1000);
         }
       }
     };
 
     const handleStalled = () => {
-      // Не меняем состояние, просто логируем - браузер попытается восстановить
+      // Логируем, но не меняем состояние - браузер попытается восстановить
+      console.log('⚠️ [WebRadioPlayer] Аудио застопорилось, ожидание буферизации...');
     };
 
     const handleWaiting = () => {
-      // Не меняем состояние, просто логируем - браузер попытается восстановить
+      // Логируем, но не меняем состояние - браузер попытается восстановить
+      console.log('⚠️ [WebRadioPlayer] Ожидание данных для воспроизведения...');
     };
 
     const handleCanPlay = () => {
       // Аудио готово к воспроизведению
+      console.log('✅ [WebRadioPlayer] Аудио готово к воспроизведению');
     };
 
     const handleCanPlayThrough = () => {
       // Аудио готово к воспроизведению без прерываний
+      console.log('✅ [WebRadioPlayer] Аудио готово к воспроизведению без прерываний');
     };
 
     const handleLoadStart = () => {
       // Начало загрузки аудио
+      console.log('🔄 [WebRadioPlayer] Начало загрузки аудио');
     };
 
     audio.addEventListener('timeupdate', handleTimeUpdate);
@@ -943,6 +1204,12 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     audio.addEventListener('loadstart', handleLoadStart);
 
     return () => {
+      // Очищаем fallback интервал при размонтировании
+      if (playbackCheckIntervalRef.current) {
+        clearInterval(playbackCheckIntervalRef.current);
+        playbackCheckIntervalRef.current = null;
+      }
+      
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('ended', handleEnded);
@@ -953,7 +1220,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       audio.removeEventListener('canplaythrough', handleCanPlayThrough);
       audio.removeEventListener('loadstart', handleLoadStart);
     };
-  }, [findNextTrack, playTrack, playStream, isPlayingStream]);
+  }, []); // Обработчики не зависят от isActive - музыка играет в фоне
 
   // Отправляем heartbeat каждые 30 секунд только когда вкладка активна
   useEffect(() => {
@@ -966,16 +1233,8 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     return () => clearInterval(interval);
   }, [sendHeartbeat, isActive]);
 
-  // Контроль активности вкладки - останавливаем плеер при переключении
-  useEffect(() => {
-    if (!isActive && playbackState === 'playing') {
-      // console.log('🔄 [WebRadioPlayer] Вкладка неактивна, останавливаем плеер');
-      setPlaybackState('paused');
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
-    }
-  }, [isActive, playbackState]);
+  // Убрали автоматическую остановку при переходе на другую вкладку
+  // Музыка теперь продолжает играть в фоне
 
   // Обработчики управления
   const handlePlayPause = async () => {
@@ -1336,12 +1595,12 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
             <Group gap="xs" align="center">
               <IconBug size={14} color="var(--theme-text-secondary)" />
               <Text size="xs" c="dimmed">
-                Версия: 1.1.4
+                Версия: 1.2.1
               </Text>
             </Group>
             {downloadState === 'complete' && (
               <Text size="xs" c="dimmed">
-                Готово: {downloadedCount} файлов • v1.1.4
+                Готово: {downloadedCount} файлов • v1.2.1
               </Text>
             )}
           </Box>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   Group, 
   ActionIcon, 
@@ -14,20 +14,40 @@ import { AppProvider } from './context/SelectedCategoryContext';
 import Hierarchy from './components/Hierarchy/Hierarchy';
 import CardGroup from './components/Card/CardGroup';
 import { DndProviderWrapper } from '../../../utils/dnd';
+import './Merch.css';
+
+// Константы
+const TRANSITION_DURATION = 300;
+const STORAGE_KEY = 'merchHierarchyVisible';
 
 function Merch() {
   const { setHeader, clearHeader } = usePageHeader();
-  const [isHierarchyVisible, setIsHierarchyVisible] = useState(true);
+  const [isHierarchyVisible, setIsHierarchyVisible] = useState<boolean>(true);
 
+  // Загрузка состояния из localStorage с обработкой ошибок
   useEffect(() => {
-    const savedState = localStorage.getItem('merchHierarchyVisible');
-    if (savedState !== null) {
-      setIsHierarchyVisible(JSON.parse(savedState));
+    try {
+      const savedState = localStorage.getItem(STORAGE_KEY);
+      if (savedState !== null) {
+        const parsed = JSON.parse(savedState);
+        if (typeof parsed === 'boolean') {
+          setIsHierarchyVisible(parsed);
+        }
+      }
+    } catch (error) {
+      console.error('Ошибка при чтении состояния иерархии из localStorage:', error);
+      // Используем значение по умолчанию при ошибке
+      setIsHierarchyVisible(true);
     }
   }, []);
 
+  // Сохранение состояния в localStorage
   useEffect(() => {
-    localStorage.setItem('merchHierarchyVisible', JSON.stringify(isHierarchyVisible));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(isHierarchyVisible));
+    } catch (error) {
+      console.error('Ошибка при сохранении состояния иерархии в localStorage:', error);
+    }
   }, [isHierarchyVisible]);
 
   // Устанавливаем заголовок страницы
@@ -41,93 +61,73 @@ function Merch() {
     return () => clearHeader();
   }, [setHeader, clearHeader]);
 
-  const toggleHierarchy = () => {
-    setIsHierarchyVisible(!isHierarchyVisible);
-  };
+  // Мемоизация функции переключения иерархии
+  const toggleHierarchy = useCallback(() => {
+    setIsHierarchyVisible(prev => !prev);
+  }, []);
+
+  // Мемоизация стилей кнопки
+  const toggleButtonClassName = useMemo(() => {
+    return `merch-toggle-button ${isHierarchyVisible ? 'merch-toggle-button--visible' : 'merch-toggle-button--hidden'}`;
+  }, [isHierarchyVisible]);
 
   return (
     <DndProviderWrapper>
       <AppProvider>
-        <Box
-          style={{
-            background: 'var(--theme-bg-primary)',
-            minHeight: '50vh'
-          }}
-        >
-        <Box p="xl">
-          <Group align="flex-start" gap="md">
-            {/* Контейнер для иерархии и кнопки */}
-            <Box style={{ 
-              display: 'flex', 
-              alignItems: 'flex-start',
-              position: 'relative'
-            }}>
-              {/* Иерархия с анимацией */}
-              <Collapse in={isHierarchyVisible} transitionDuration={300}>
-                <Paper 
-                  withBorder
-                  radius="md" 
-                  p="lg" 
-                  style={{ 
-                    width: 700,
-                    minHeight: 500,
-                    background: 'var(--theme-bg-primary)'
-                  }}
+        <Box className="merch-container">
+          <Box p="xl">
+            <Group align="flex-start" gap="md">
+              {/* Контейнер для иерархии и кнопки */}
+              <Box className="merch-hierarchy-container">
+                {/* Иерархия с анимацией */}
+                <Collapse in={isHierarchyVisible} transitionDuration={TRANSITION_DURATION}>
+                  <Paper 
+                    withBorder
+                    radius="md" 
+                    p="lg" 
+                    className="merch-hierarchy-paper"
+                  >
+                    <Stack gap="md">
+                      <Text size="lg" fw={600} className="merch-title">
+                        Категории товаров
+                      </Text>
+                      <Hierarchy/>
+                    </Stack>
+                  </Paper>
+                </Collapse>
+                
+                {/* Плавающая кнопка */}
+                <ActionIcon
+                  onClick={toggleHierarchy}
+                  variant="filled"
+                  size="md"
+                  className={toggleButtonClassName}
                 >
-                  <Stack gap="md">
-                    <Text size="lg" fw={600} style={{ color: 'var(--theme-text-primary)' }}>
-                      Категории товаров
-                    </Text>
-                    <Hierarchy/>
-                  </Stack>
-                </Paper>
-              </Collapse>
+                  {isHierarchyVisible ? 
+                    <IconChevronLeft size={16} /> : 
+                    <IconChevronRight size={16} />
+                  }
+                </ActionIcon>
+              </Box>
               
-              {/* Плавающая кнопка */}
-              <ActionIcon
-                onClick={toggleHierarchy}
-                variant="filled"
-                size="md"
-                style={{
-                  position: 'absolute',
-                  left: isHierarchyVisible ? 715 : -15,
-                  top: 10,
-                  zIndex: 10,
-                  transition: 'left 0.3s ease',
-                  background: 'var(--color-primary-500)'
-                }}
+              {/* Карточки */}
+              <Paper 
+                withBorder
+                radius="md" 
+                p="lg" 
+                className="merch-cards-paper"
               >
-                {isHierarchyVisible ? 
-                  <IconChevronLeft size={16} /> : 
-                  <IconChevronRight size={16} />
-                }
-              </ActionIcon>
-            </Box>
-            
-            {/* Карточки */}
-            <Paper 
-              withBorder
-              radius="md" 
-              p="lg" 
-              style={{ 
-                flex: 1,
-                minWidth: 300,
-                minHeight: 500,
-                background: 'var(--theme-bg-primary)',
-                transition: 'margin-left 0.3s ease'
-              }}
-            >
-              <Stack gap="md">
-                <Text size="lg" fw={600} style={{ color: 'var(--theme-text-primary)' }}>
-                  Карточки товаров
-                </Text>
-                <CardGroup/>
-              </Stack>
-            </Paper>
-          </Group>
+                <Stack gap="md">
+                  <Text size="lg" fw={600} className="merch-title">
+                    Карточки товаров
+                  </Text>
+                  <CardGroup/>
+                </Stack>
+              </Paper>
+            </Group>
+          </Box>
         </Box>
-      </Box>
-    </AppProvider>
+      </AppProvider>
     </DndProviderWrapper>
   );
 }

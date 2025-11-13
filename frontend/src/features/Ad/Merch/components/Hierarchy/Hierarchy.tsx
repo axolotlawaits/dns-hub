@@ -20,10 +20,39 @@ const HierarchyBlock = React.memo(({ group, onDataUpdate }: HierarchyProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [childCategories, setChildCategories] = useState<DataItem[]>([]);
   const [loadingChildren, setLoadingChildren] = useState(false);
-  const { setSelectedId } = useApp();
+  const [hasLoadedChildren, setHasLoadedChildren] = useState(false); // Флаг, что дочерние элементы уже загружались
+  const { selectedId, setSelectedId } = useApp();
+  const isSelected = selectedId === group.id;
 
-  // Кнопка разворачивания только для категорий (layer=1), не для карточек (layer=0)
-  const hasChildren = group.layer === 1 && (group.hasChildren || group.child.length > 0);
+  // Загружаем дочерние категории при монтировании, чтобы определить, есть ли они
+  useEffect(() => {
+    if (group.layer === 1 && !hasLoadedChildren) {
+      // Загружаем дочерние категории (layer=1) для определения наличия подкатегорий
+      getHierarchyData(group.id, 1)
+        .then(children => {
+          setChildCategories(children);
+          setHasLoadedChildren(true);
+        })
+        .catch(error => {
+          console.error('Ошибка загрузки дочерних категорий:', error);
+          setHasLoadedChildren(true); // Отмечаем, что загрузка была выполнена (даже при ошибке)
+        });
+    }
+  }, [group.id, group.layer, hasLoadedChildren]);
+
+  // Определяем, есть ли дочерние КАТЕГОРИИ (layer=1), а не карточки (layer=0)
+  // Показываем значок ТОЛЬКО если есть дочерние категории в иерархии
+  const hasChildren = useMemo(() => {
+    if (group.layer !== 1) return false; // Только для категорий (layer=1)
+    
+    // Если дочерние категории уже загружены, проверяем их количество
+    if (hasLoadedChildren) {
+      return childCategories.length > 0;
+    }
+    
+    // Если еще не загружены, не показываем значок
+    return false;
+  }, [group.layer, childCategories.length, hasLoadedChildren]);
   
   // Переменные для мониторинга открытия модалок
   const [openedEdit, setOpenedEdit] = useState(false);
@@ -50,8 +79,10 @@ const HierarchyBlock = React.memo(({ group, onDataUpdate }: HierarchyProps) => {
       try {
         const children = await getHierarchyData(group.id, 1); // Загружаем подкатегории (layer = 1)
         setChildCategories(children);
+        setHasLoadedChildren(true); // Отмечаем, что загрузка была выполнена
       } catch (error) {
         console.error('Ошибка загрузки детей:', error);
+        setHasLoadedChildren(true); // Отмечаем, что загрузка была выполнена (даже при ошибке)
       } finally {
         setLoadingChildren(false);
       }
@@ -66,8 +97,8 @@ const HierarchyBlock = React.memo(({ group, onDataUpdate }: HierarchyProps) => {
   // Функция для обновления данных после операций
   const handleSuccess = useCallback(async () => {
     onDataUpdate();
-    // Если есть дети, обновляем их тоже
-    if (childCategories.length > 0) {
+    // Если дочерние элементы уже загружались, обновляем их
+    if (hasLoadedChildren) {
       try {
         const children = await getHierarchyData(group.id, 1);
         setChildCategories(children);
@@ -75,7 +106,7 @@ const HierarchyBlock = React.memo(({ group, onDataUpdate }: HierarchyProps) => {
         console.error('Ошибка обновления детей:', error);
       }
     }
-  }, [onDataUpdate, childCategories.length, group.id]);
+  }, [onDataUpdate, hasLoadedChildren, group.id]);
 
   return (
     <>
@@ -85,21 +116,10 @@ const HierarchyBlock = React.memo(({ group, onDataUpdate }: HierarchyProps) => {
         radius="md"
         p="md"
         mb="sm"
-                    style={{ 
-                      marginLeft: group.layer * 20,
-                      transition: 'all 0.2s ease',
-                      cursor: 'pointer',
-                      background: 'var(--theme-bg-elevated)',
-                      border: '1px solid var(--theme-border-primary)'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = 'var(--color-primary-500)';
-                      e.currentTarget.style.boxShadow = 'var(--theme-shadow-md)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = 'var(--theme-border-primary)';
-                      e.currentTarget.style.boxShadow = 'var(--theme-shadow-sm)';
-                    }}
+        className={`hierarchy-block ${isSelected ? 'hierarchy-block-selected' : ''} ${isExpanded ? 'hierarchy-block-expanded' : ''}`}
+        style={{ 
+          '--layer': group.layer
+        } as React.CSSProperties}
       > 
         <Group gap="xs" justify="space-between">
           <Group gap="xs" style={{ flex: 1 }}>
@@ -175,16 +195,11 @@ const HierarchyBlock = React.memo(({ group, onDataUpdate }: HierarchyProps) => {
 
         {/* Дочерние элементы - рендерим только если раскрыто */}
         {isExpanded && hasChildren && (
-          <Box 
-                        style={{ 
-                          marginTop: 16,
-                          marginLeft: 20
-                        }}
-          >
+          <Box className="hierarchy-children-container">
             {loadingChildren ? (
-              <Text size="sm" c="dimmed" style={{ fontStyle: 'italic' }}>
-                Загрузка подкатегорий...
-              </Text>
+              <Box className="hierarchy-loading-container">
+                <Text size="sm" c="dimmed">Загрузка подкатегорий...</Text>
+              </Box>
             ) : (
               childCategories.map((childGroup) => (
                 <HierarchyBlock 
