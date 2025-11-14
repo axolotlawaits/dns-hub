@@ -1491,15 +1491,23 @@ class MerchBotService {
     
     if (this.isRunning) {
       console.log('⚠️ [MerchBot] Бот уже запущен');
-      return false;
+      return true; // Возвращаем true, так как бот уже работает
     }
     
     if (!this.bot) {
       console.error('❌ [MerchBot] Бот не инициализирован');
-      return false;
+      // Пытаемся переинициализировать бота
+      console.log('🔄 [MerchBot] Попытка переинициализации бота...');
+      this.initializeBot();
+      
+      if (!this.bot) {
+        console.error('❌ [MerchBot] Не удалось инициализировать бота после попытки');
+        return false;
+      }
     }
 
     try {
+      console.log('🔄 [MerchBot] Вызываем bot.start()...');
       await this.bot.start({
         drop_pending_updates: true,
         allowed_updates: ['message', 'callback_query'],
@@ -1510,44 +1518,26 @@ class MerchBotService {
       this.restartAttempts = 0; // Сбрасываем счетчик при успешном запуске
       console.log('✅ [MerchBot] Бот успешно запущен');
       
-      // Добавляем обработчик ошибок
-      this.bot.catch((error) => {
-        console.error('❌ [MerchBot] Ошибка бота:', error);
-        this.isRunning = false;
-        
-        // Автоматический перезапуск с ограничением попыток
-        if (this.restartAttempts < this.MAX_RESTART_ATTEMPTS) {
-          this.restartAttempts++;
-          const delay = Math.min(
-            this.RESTART_DELAY_BASE * Math.pow(2, this.restartAttempts - 1),
-            60000 // Максимальная задержка 60 секунд
-          );
-          console.log(`🔄 [MerchBot] Попытка перезапуска ${this.restartAttempts}/${this.MAX_RESTART_ATTEMPTS} через ${delay}ms...`);
-          setTimeout(() => {
-            this.launch().then((success) => {
-              if (success) {
-                this.restartAttempts = 0; // Сбрасываем счетчик при успешном перезапуске
-              }
-            });
-          }, delay);
-        } else {
-          console.error(`❌ [MerchBot] Превышено максимальное количество попыток перезапуска (${this.MAX_RESTART_ATTEMPTS})`);
-          console.error('❌ [MerchBot] Требуется ручное вмешательство администратора');
-          // Здесь можно добавить отправку уведомления администратору
-        }
-      });
+      // Обработчик ошибок уже установлен в initializeBot(), не нужно устанавливать здесь
       
       return true;
     } catch (error) {
       console.error('❌ [MerchBot] Ошибка запуска бота:', error);
+      if (error instanceof Error) {
+        console.error('❌ [MerchBot] Error message:', error.message);
+        console.error('❌ [MerchBot] Error stack:', error.stack);
+      }
 
+      // Упрощенный retry (как в Telegram боте)
       if (this.retryCount < this.MAX_RETRIES) {
         this.retryCount++;
         const delay = Math.min(2000 * this.retryCount, 10000);
+        console.log(`🔄 [MerchBot] Retry ${this.retryCount}/${this.MAX_RETRIES} через ${delay}ms...`);
         await new Promise((resolve) => setTimeout(resolve, delay));
         return this.launch();
       }
 
+      console.error('❌ [MerchBot] Превышено максимальное количество попыток запуска');
       return false;
     }
   }

@@ -115,23 +115,10 @@ router.post('/bot-start', async (req: any, res: any) => {
       });
     }
     
-    let success = false;
-    
-    // Если бот не инициализирован или не запущен, используем restart для полной переинициализации
-    if (!statusBefore.botInitialized || !statusBefore.isRunning) {
-      console.log('⚠️ [Routes] Бот не инициализирован или не запущен, выполняем полный перезапуск...');
-      // Используем restart для полной переинициализации и запуска
-      success = await merchBotService.restart();
-    } else {
-      console.log('✅ [Routes] Бот уже запущен, статус:', statusBefore.isRunning);
-      // Если бот уже запущен, просто возвращаем успех
-      const statusAfter = merchBotService.status;
-      return res.json({
-        success: true,
-        message: 'MerchBot is already running',
-        status: statusAfter
-      });
-    }
+    // Просто вызываем launch() (как в Telegram боте)
+    // Метод launch() сам проверит, запущен ли бот, и попытается переинициализировать, если нужно
+    console.log('🚀 [Routes] Вызываем merchBotService.launch()...');
+    const success = await merchBotService.launch();
     
     console.log('📊 [Routes] Результат запуска:', success);
     const statusAfter = merchBotService.status;
