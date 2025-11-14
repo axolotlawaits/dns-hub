@@ -12,6 +12,7 @@ import {
   deleteMerchAttachment
 } from '../../controllers/add/merch.js';
 import { authenticateToken } from '../../middleware/auth.js';
+import { merchBotService } from '../../controllers/app/merchBot.js';
 
 const router = Router();
 
@@ -31,9 +32,8 @@ router.get('/categories', getMerchHierarchy as any);
 router.get('/bot-status', async (req: any, res: any) => {
   try {
     console.log('🔍 [Routes] Проверяем статус Merch бота через /add/merch/bot-status...');
-    const { merchBotService } = await import('../../controllers/app/merchBot.js');
-    const service = merchBotService;
-    const status = service.status;
+    // merchBotService уже импортирован статически сверху
+    const status = merchBotService.status;
     
     res.json({
       success: true,
@@ -65,8 +65,7 @@ const handleBotStart = async (req: any, res: any) => {
     console.log('🚀 [Routes] Path:', req.path);
     console.log('🚀 [Routes] Original URL:', req.originalUrl);
     
-    const { merchBotService } = await import('../../controllers/app/merchBot.js');
-    
+    // merchBotService уже импортирован статически сверху
     // Получаем текущий статус перед запуском
     const statusBefore = merchBotService.status;
     console.log('📊 [Routes] Статус до запуска:', JSON.stringify(statusBefore, null, 2));
@@ -163,8 +162,7 @@ router.post('/bot-start', handleBotStart);
 router.post('/bot-stop', async (req: any, res: any) => {
   try {
     console.log('🛑 [Routes] Остановка Merch бота через /add/merch/bot-stop...');
-    const { merchBotService } = await import('../../controllers/app/merchBot.js');
-    
+    // merchBotService уже импортирован статически сверху
     await merchBotService.stop();
     
     res.json({ success: true, message: 'MerchBot stopped successfully' });
@@ -181,8 +179,7 @@ router.post('/bot-stop', async (req: any, res: any) => {
 router.post('/bot-restart', async (req: any, res: any) => {
   try {
     console.log('🔄 [Routes] Перезапуск Merch бота через /add/merch/bot-restart...');
-    const { merchBotService } = await import('../../controllers/app/merchBot.js');
-    
+    // merchBotService уже импортирован статически сверху
     const success = await merchBotService.restart();
     
     if (success) {

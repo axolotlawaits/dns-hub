@@ -43,6 +43,7 @@ import { refreshToken } from './middleware/auth.js';
 import { createServer } from 'http';
 import { SocketIOService } from './socketio.js';
 import { telegramService } from './controllers/app/telegram.js';
+import { merchBotService } from './controllers/app/merchBot.js';
 import { initToolsCron } from './tasks/cron.js';
 
 
@@ -370,8 +371,8 @@ server.listen(port, async function() {
             return;
           }
           
-          const { merchBotService } = await import('./controllers/app/merchBot');
-          console.log('✅ [Server] Модуль merchBot загружен');
+          // merchBotService уже импортирован статически сверху
+          console.log('✅ [Server] merchBotService доступен (статический импорт)');
           
           // Проверяем статус до запуска
           const statusBefore = merchBotService.status;
