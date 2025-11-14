@@ -18,6 +18,7 @@ interface MerchSessionData {
     text?: string;
     photos?: string[];
   };
+  lastMenuMessageId?: number; // ID последнего сообщения с меню для обновления
 }
 
 type MerchContext = Context & SessionFlavor<MerchSessionData>;
@@ -34,6 +35,9 @@ class MerchBotService {
   private isRunning = false;
   private readonly MAX_RETRIES = 3;
   private retryCount = 0;
+  private restartAttempts = 0;
+  private readonly MAX_RESTART_ATTEMPTS = 5;
+  private readonly RESTART_DELAY_BASE = 5000;
   private cache: CacheData = {
     buttonsHierarchy: {},
     lastUpdate: new Date(0)
@@ -64,6 +68,13 @@ class MerchBotService {
     };
   }
 
+  // Валидация токена
+  private validateToken(token: string): boolean {
+    // Telegram токены имеют формат: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz
+    const tokenPattern = /^\d+:[A-Za-z0-9_-]{35}$/;
+    return tokenPattern.test(token);
+  }
+
   // Инициализация бота
   private initializeBot(): void {
     console.log('🔧 [MerchBot] Инициализация бота...');
@@ -72,6 +83,11 @@ class MerchBotService {
     console.log('🔑 [MerchBot] Токен найден:', !!token);
     if (!token) {
       console.error('❌ [MerchBot] MERCH_BOT_TOKEN not found');
+      return;
+    }
+    
+    if (!this.validateToken(token)) {
+      console.error('❌ [MerchBot] Invalid token format');
       return;
     }
     
@@ -206,16 +222,15 @@ class MerchBotService {
       // Иначе игнорируем фотографии
     });
 
-    // Обработка кнопок постоянной клавиатуры (теперь обрабатывается через handleButtonClick)
-
-    // Обработка фотографий
-    this.bot.on('message:photo', async (ctx) => {
-      await this.handlePhotoMessage(ctx);
-    });
-
-    // Обработка ошибок
+    // Обработка ошибок (основной обработчик, детальная обработка в launch)
     this.bot.catch((err) => {
-      console.error('MerchBot error:', err);
+      console.error('❌ [MerchBot] Bot error:', err);
+      // Логируем детали ошибки для отладки
+      if (err instanceof Error) {
+        console.error('❌ [MerchBot] Error message:', err.message);
+        console.error('❌ [MerchBot] Error stack:', err.stack);
+      }
+      // Детальная обработка ошибок происходит в методе launch()
     });
   }
 
@@ -228,11 +243,11 @@ class MerchBotService {
       // Создаем постоянную клавиатуру с категориями
       const keyboard = new Keyboard();
       
-      // Добавляем основные функции (без навигационных кнопок в главном меню)
+      // Добавляем основные функции в один ряд
       keyboard.text('🔍 Поиск').text('📩 Обратная связь').row();
       
-      // Добавляем категории (максимум 6 на экран)
-      const maxCategories = 6;
+      // Добавляем категории в два столбца (по 2 кнопки в ряду)
+      const maxCategories = 12; // 6 рядов по 2 кнопки
       const categoriesToShow = rootItems.slice(0, maxCategories);
       
       for (let i = 0; i < categoriesToShow.length; i += 2) {
@@ -246,17 +261,40 @@ class MerchBotService {
         }
       }
       
-      // Если категорий больше 6, добавляем кнопку "Еще"
+      // Если категорий больше, добавляем кнопку "Еще"
       if (rootItems.length > maxCategories) {
         keyboard.text('📋 Еще категории').row();
       }
       
       keyboard.resized().persistent();
 
-      // Отправляем сообщение с постоянной клавиатурой
-      await ctx.reply('📑 Выбери категорию:', {
+      // Проверяем, есть ли уже сообщение с меню для обновления
+      if (ctx.session.lastMenuMessageId && ctx.chat) {
+        try {
+          // Обновляем существующее сообщение
+          await ctx.api.editMessageReplyMarkup(ctx.chat.id, ctx.session.lastMenuMessageId, {
+            reply_markup: keyboard
+          } as any);
+          // Также обновляем текст сообщения
+          await ctx.api.editMessageText(ctx.chat.id, ctx.session.lastMenuMessageId, '📑 Выбери категорию:', {
+            reply_markup: keyboard
+          } as any);
+          return;
+        } catch (error) {
+          // Если не удалось обновить (сообщение не найдено), отправляем новое
+          console.log('⚠️ [MerchBot] Не удалось обновить меню, отправляем новое сообщение');
+        }
+      }
+
+      // Отправляем новое сообщение с постоянной клавиатурой
+      const sentMessage = await ctx.reply('📑 Выбери категорию:', {
         reply_markup: keyboard
       });
+      
+      // Сохраняем ID сообщения для последующего обновления
+      if (sentMessage && 'message_id' in sentMessage) {
+        ctx.session.lastMenuMessageId = sentMessage.message_id as number;
+      }
       
       ctx.session.userChoiceHistory = [];
     } catch (error) {
@@ -400,8 +438,17 @@ class MerchBotService {
         await ctx.reply(foundButton.text);
       }
 
-      // Обновляем меню
-      await this.updateMenu(ctx, buttonsHierarchy);
+      // Обновляем меню после отправки всех данных
+      // Проверяем, есть ли дочерние элементы для текущей кнопки
+      const children = buttonsHierarchy[foundButton.id] || [];
+      
+      if (children.length > 0) {
+        // У кнопки есть дочерние элементы, показываем подменю
+        await this.showSubMenu(ctx, children);
+      } else {
+        // Это конечный элемент, показываем меню навигации
+        await this.showNavigationMenu(ctx);
+      }
 
     } catch (error) {
       console.error('❌ Ошибка при обработке нажатия кнопки:', error);
@@ -409,29 +456,10 @@ class MerchBotService {
     }
   }
 
-  // Обновление меню
+  // Обновление меню (не используется, заменено на обновление через editMessageReplyMarkup)
   private async updateMenu(ctx: MerchContext, buttonsHierarchy: any): Promise<void> {
-    try {
-      const currentMenuId = ctx.session.userChoiceHistory?.[ctx.session.userChoiceHistory.length - 1] || '0';
-      const keyboard = new Keyboard();
-
-      // Добавляем кнопки для текущего меню
-      const currentMenuButtons = buttonsHierarchy[currentMenuId] || [];
-      for (const button of currentMenuButtons) {
-        keyboard.text(button.name);
-      }
-
-      // Добавляем навигационные кнопки
-      if (currentMenuId !== '0' && currentMenuButtons.length > 0) {
-        keyboard.row().text('◀️ Назад').text('🏠 Главная');
-      }
-
-      await ctx.reply('➡️ Выберите действие:', {
-        reply_markup: keyboard
-      });
-    } catch (error) {
-      console.error('❌ Ошибка при обновлении меню:', error);
-    }
+    // Метод оставлен для обратной совместимости, но не используется
+    // Меню теперь обновляется через editMessageReplyMarkup в showMainMenu/showSubMenu
   }
 
   // Показать дополнительные категории
@@ -443,9 +471,10 @@ class MerchBotService {
       // Создаем клавиатуру для дополнительных категорий
       const keyboard = new Keyboard();
       
-      // Показываем категории начиная с 7-й (пропускаем первые 6)
-      const moreCategories = rootItems.slice(6);
+      // Показываем категории начиная с 13-й (пропускаем первые 12)
+      const moreCategories = rootItems.slice(12);
       
+      // Категории в два столбца (по 2 кнопки в ряду)
       for (let i = 0; i < moreCategories.length; i += 2) {
         const first = moreCategories[i];
         const second = moreCategories[i + 1];
@@ -457,14 +486,39 @@ class MerchBotService {
         }
       }
       
-      // Добавляем навигационные кнопки
-      keyboard.text('◀️ Назад').text('🏠 Главная').row();
+      // Добавляем навигационные кнопки: Главная и Назад в одном ряду, Поиск и Обратная связь в другом
+      keyboard.text('🏠 Главная').text('◀️ Назад').row();
+      keyboard.text('🔍 Поиск').text('📩 Обратная связь').row();
       
       keyboard.resized().persistent();
 
-      await ctx.reply('📋 Дополнительные категории:', {
+      // Проверяем, есть ли уже сообщение с меню для обновления
+      if (ctx.session.lastMenuMessageId && ctx.chat) {
+        try {
+          // Обновляем существующее сообщение
+          await ctx.api.editMessageReplyMarkup(ctx.chat.id, ctx.session.lastMenuMessageId, {
+            reply_markup: keyboard
+          } as any);
+          // Также обновляем текст сообщения
+          await ctx.api.editMessageText(ctx.chat.id, ctx.session.lastMenuMessageId, '📋 Дополнительные категории:', {
+            reply_markup: keyboard
+          } as any);
+          return;
+        } catch (error) {
+          // Если не удалось обновить (сообщение не найдено), отправляем новое
+          console.log('⚠️ [MerchBot] Не удалось обновить дополнительные категории, отправляем новое сообщение');
+        }
+      }
+
+      // Отправляем новое сообщение с постоянной клавиатурой
+      const sentMessage = await ctx.reply('📋 Дополнительные категории:', {
         reply_markup: keyboard
       });
+      
+      // Сохраняем ID сообщения для последующего обновления
+      if (sentMessage && 'message_id' in sentMessage) {
+        ctx.session.lastMenuMessageId = sentMessage.message_id as number;
+      }
     } catch (error) {
       console.error('❌ Ошибка при показе дополнительных категорий:', error);
       await ctx.reply('❌ Ошибка загрузки категорий. Попробуйте позже.');
@@ -577,10 +631,11 @@ class MerchBotService {
         }
         ctx.session.userChoiceHistory.push(itemId);
         
-        // Показываем дочерние элементы
+        // Показываем дочерние элементы (обновляем меню)
         await this.showSubMenu(ctx, children);
       } else {
         // Это конечный элемент, показываем меню навигации
+        // Меню обновляется через lastMenuMessageId
         await this.showNavigationMenu(ctx);
       }
     } catch (error) {
@@ -591,48 +646,87 @@ class MerchBotService {
 
   // Показать подменю
   private async showSubMenu(ctx: MerchContext, children: Array<{id: string, name: string, text: string}>): Promise<void> {
-    // Создаем постоянную клавиатуру
-    const keyboard = new Keyboard()
-      .text('🔍 Поиск')
-      .text('📩 Обратная связь')
-      .row()
-      .text('🏠 Главная')
-      .text('◀️ Назад')
-      .resized()
-      .persistent();
+    // Создаем постоянную клавиатуру в столбец
+    const keyboard = new Keyboard();
+    
+    // Кнопки подкатегорий в столбец (каждая в своем ряду)
+    for (const child of children) {
+      keyboard.text(child.name).row();
+    }
+    
+    // Навигационные кнопки: Главная и Назад в одном ряду, Поиск и Обратная связь в другом
+    keyboard.text('🏠 Главная').text('◀️ Назад').row();
+    keyboard.text('🔍 Поиск').text('📩 Обратная связь').row();
+    
+    keyboard.resized().persistent();
 
-    // Отправляем сообщение с постоянной клавиатурой
-    await ctx.reply('➡️ Выберите подкатегорию:', {
+    // Проверяем, есть ли уже сообщение с меню для обновления
+    if (ctx.session.lastMenuMessageId && ctx.chat) {
+      try {
+        // Обновляем существующее сообщение
+        await ctx.api.editMessageReplyMarkup(ctx.chat.id, ctx.session.lastMenuMessageId, {
+          reply_markup: keyboard
+        } as any);
+        // Также обновляем текст сообщения
+        await ctx.api.editMessageText(ctx.chat.id, ctx.session.lastMenuMessageId, '➡️ Выберите подкатегорию:', {
+          reply_markup: keyboard
+        } as any);
+        return;
+      } catch (error) {
+        // Если не удалось обновить (сообщение не найдено), отправляем новое
+        console.log('⚠️ [MerchBot] Не удалось обновить подменю, отправляем новое сообщение');
+      }
+    }
+
+    // Отправляем новое сообщение с постоянной клавиатурой
+    const sentMessage = await ctx.reply('➡️ Выберите подкатегорию:', {
       reply_markup: keyboard
     });
     
-    // Отправляем inline кнопки для подкатегорий
-    const inlineKeyboard = new InlineKeyboard();
-    for (const child of children) {
-      inlineKeyboard.text(child.name, `item_${child.id}`).row();
+    // Сохраняем ID сообщения для последующего обновления
+    if (sentMessage && 'message_id' in sentMessage) {
+      ctx.session.lastMenuMessageId = sentMessage.message_id as number;
     }
-    
-    await ctx.reply('Подкатегории:', {
-      reply_markup: inlineKeyboard
-    });
   }
 
   // Показать меню навигации
   private async showNavigationMenu(ctx: MerchContext): Promise<void> {
-    // Создаем постоянную клавиатуру
-    const keyboard = new Keyboard()
-      .text('🔍 Поиск')
-      .text('📩 Обратная связь')
-      .row()
-      .text('🏠 Главная')
-      .text('◀️ Назад')
-      .resized()
-      .persistent();
+    // Создаем постоянную клавиатуру в столбец
+    const keyboard = new Keyboard();
+    
+    // Навигационные кнопки: Главная и Назад в одном ряду, Поиск и Обратная связь в другом
+    keyboard.text('🏠 Главная').text('◀️ Назад').row();
+    keyboard.text('🔍 Поиск').text('📩 Обратная связь').row();
+    
+    keyboard.resized().persistent();
 
-    // Отправляем сообщение с постоянной клавиатурой
-    await ctx.reply('Выберите действие:', {
+    // Проверяем, есть ли уже сообщение с меню для обновления
+    if (ctx.session.lastMenuMessageId && ctx.chat) {
+      try {
+        // Обновляем существующее сообщение
+        await ctx.api.editMessageReplyMarkup(ctx.chat.id, ctx.session.lastMenuMessageId, {
+          reply_markup: keyboard
+        } as any);
+        // Также обновляем текст сообщения
+        await ctx.api.editMessageText(ctx.chat.id, ctx.session.lastMenuMessageId, 'Выберите действие:', {
+          reply_markup: keyboard
+        } as any);
+        return;
+      } catch (error) {
+        // Если не удалось обновить (сообщение не найдено), отправляем новое
+        console.log('⚠️ [MerchBot] Не удалось обновить меню навигации, отправляем новое сообщение');
+      }
+    }
+
+    // Отправляем новое сообщение с постоянной клавиатурой
+    const sentMessage = await ctx.reply('Выберите действие:', {
       reply_markup: keyboard
     });
+    
+    // Сохраняем ID сообщения для последующего обновления
+    if (sentMessage && 'message_id' in sentMessage) {
+      ctx.session.lastMenuMessageId = sentMessage.message_id as number;
+    }
   }
 
   // Назад
@@ -648,9 +742,14 @@ class MerchBotService {
     const buttonsHierarchy = await this.getButtonsHierarchy();
     const children = buttonsHierarchy[currentMenuId] || [];
     
-    if (children.length > 0) {
+    if (currentMenuId === '0') {
+      // Возвращаемся в главное меню
+      await this.showMainMenu(ctx);
+    } else if (children.length > 0) {
+      // Показываем подменю с дочерними элементами
       await this.showSubMenu(ctx, children);
     } else {
+      // Нет дочерних элементов, возвращаемся в главное меню
       await this.showMainMenu(ctx);
     }
   }
@@ -660,12 +759,13 @@ class MerchBotService {
     ctx.session.searchState = true;
     
     // Создаем постоянную клавиатуру
+    // Навигационные кнопки: Главная и Назад в одном ряду, Поиск и Обратная связь в другом
     const keyboard = new Keyboard()
-      .text('🔍 Поиск')
-      .text('📩 Обратная связь')
-      .row()
       .text('🏠 Главная')
       .text('◀️ Назад')
+      .row()
+      .text('🔍 Поиск')
+      .text('📩 Обратная связь')
       .resized()
       .persistent();
     
@@ -684,12 +784,13 @@ class MerchBotService {
     };
     
     // Создаем постоянную клавиатуру
+    // Навигационные кнопки: Главная и Назад в одном ряду, Поиск и Обратная связь в другом
     const keyboard = new Keyboard()
-      .text('🔍 Поиск')
-      .text('📩 Обратная связь')
-      .row()
       .text('🏠 Главная')
       .text('◀️ Назад')
+      .row()
+      .text('🔍 Поиск')
+      .text('📩 Обратная связь')
       .resized()
       .persistent();
     
@@ -722,26 +823,55 @@ class MerchBotService {
   // Обработка поискового запроса
   private async handleSearchQuery(ctx: MerchContext, query: string): Promise<void> {
     try {
-      if (ctx.from) {
-        await this.updateStats(ctx.from.id, 'search', query.toLowerCase());
+      // Валидация поискового запроса
+      if (!query || query.trim().length === 0) {
+        await ctx.reply('❌ Поисковый запрос не может быть пустым. Пожалуйста, введите ключевое слово:');
+        return;
       }
       
-      const results = await this.searchItems(query);
+      // Ограничение на длину поискового запроса
+      const MAX_QUERY_LENGTH = 100;
+      const MIN_QUERY_LENGTH = 2;
+      const trimmedQuery = query.trim();
+      
+      if (trimmedQuery.length < MIN_QUERY_LENGTH) {
+        await ctx.reply(`❌ Поисковый запрос слишком короткий (минимум ${MIN_QUERY_LENGTH} символа). Пожалуйста, введите более длинный запрос:`);
+        return;
+      }
+      
+      if (trimmedQuery.length > MAX_QUERY_LENGTH) {
+        await ctx.reply(`❌ Поисковый запрос слишком длинный (максимум ${MAX_QUERY_LENGTH} символов). Пожалуйста, сократите запрос:`);
+        return;
+      }
+      
+      if (ctx.from) {
+        await this.updateStats(ctx.from.id, 'search', trimmedQuery.toLowerCase());
+      }
+      
+      const results = await this.searchItems(trimmedQuery);
       
       if (results.length === 0) {
         await ctx.reply('Ничего не найдено. Попробуйте другое ключевое слово.');
         return;
       }
       
+      // Ограничение на количество результатов (максимум 20)
+      const MAX_RESULTS = 20;
+      const displayResults = results.slice(0, MAX_RESULTS);
+      
       const keyboard = new InlineKeyboard();
       
-      for (const result of results) {
+      for (const result of displayResults) {
         keyboard.text(result.name, `item_${result.id}`).row();
       }
       
       keyboard.text('◀️ Назад', 'back').text('🏠 Главная', 'main_menu');
       
-      await ctx.reply('Результаты поиска:', {
+      const resultsText = results.length > MAX_RESULTS 
+        ? `Результаты поиска (показано ${MAX_RESULTS} из ${results.length}):`
+        : `Результаты поиска (найдено ${results.length}):`;
+      
+      await ctx.reply(resultsText, {
         reply_markup: keyboard
       });
       
@@ -757,8 +887,21 @@ class MerchBotService {
     const feedback = ctx.session.feedbackState;
     if (!feedback) return;
     
+    // Ограничение на длину текста (Telegram ограничение: 4096 символов)
+    const MAX_TEXT_LENGTH = 4096;
+    const MIN_TEXT_LENGTH = 10;
+    
     switch (feedback.step) {
       case 'email':
+        // Валидация email
+        if (!text || text.length === 0) {
+          await ctx.reply('❌ Email не может быть пустым. Пожалуйста, введите email адрес:');
+          return;
+        }
+        if (text.length > 255) {
+          await ctx.reply('❌ Email слишком длинный. Пожалуйста, введите корректный email адрес:');
+          return;
+        }
         if (this.isValidEmail(text)) {
           feedback.email = text;
           feedback.step = 'text';
@@ -769,13 +912,18 @@ class MerchBotService {
         break;
         
       case 'text':
-        if (text.length >= 10) {
-          feedback.text = text;
-          feedback.step = 'photo';
-          await ctx.reply('📷 Теперь вы можете отправить фотографию (необязательно) или написать "готово":');
-        } else {
-          await ctx.reply('❌ Сообщение слишком короткое. Пожалуйста, введите более подробное сообщение (минимум 10 символов):');
+        // Валидация длины текста
+        if (!text || text.length < MIN_TEXT_LENGTH) {
+          await ctx.reply(`❌ Сообщение слишком короткое. Пожалуйста, введите более подробное сообщение (минимум ${MIN_TEXT_LENGTH} символов):`);
+          return;
         }
+        if (text.length > MAX_TEXT_LENGTH) {
+          await ctx.reply(`❌ Сообщение слишком длинное (максимум ${MAX_TEXT_LENGTH} символов). Пожалуйста, сократите текст:`);
+          return;
+        }
+        feedback.text = text;
+        feedback.step = 'photo';
+        await ctx.reply('📷 Теперь вы можете отправить фотографию (необязательно) или написать "готово":');
         break;
         
       case 'photo':
@@ -802,28 +950,62 @@ class MerchBotService {
     }
     
     try {
-      const photo = ctx.message.photo[ctx.message.photo.length - 1];
-      const file = await ctx.api.getFile(photo.file_id);
-      
-      // Сохраняем информацию о фото
+      // Ограничение на количество фотографий (максимум 10)
+      const MAX_PHOTOS = 10;
       if (!feedback.photos) {
         feedback.photos = [];
       }
-      if (file.file_path) {
-        feedback.photos.push(file.file_path);
+      
+      if (feedback.photos.length >= MAX_PHOTOS) {
+        await ctx.reply(`❌ Достигнуто максимальное количество фотографий (${MAX_PHOTOS}). Напишите "готово" для завершения.`);
+        return;
       }
       
-      await ctx.reply('✅ Фотография сохранена! Отправьте еще одну или напишите "готово":');
+      const photo = ctx.message.photo[ctx.message.photo.length - 1];
+      
+      // Проверка размера файла (Telegram ограничение: 20MB для фото)
+      const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+      if (photo.file_size && photo.file_size > MAX_FILE_SIZE) {
+        await ctx.reply('❌ Фотография слишком большая (максимум 20MB). Пожалуйста, отправьте фотографию меньшего размера:');
+        return;
+      }
+      
+      const file = await ctx.api.getFile(photo.file_id);
+      
+      // Сохраняем информацию о фото
+      if (file.file_path) {
+        feedback.photos.push(file.file_path);
+        const remaining = MAX_PHOTOS - feedback.photos.length;
+        if (remaining > 0) {
+          await ctx.reply(`✅ Фотография сохранена! Вы можете отправить еще ${remaining} фотографий или напишите "готово":`);
+        } else {
+          await ctx.reply('✅ Фотография сохранена! Достигнуто максимальное количество фотографий. Напишите "готово" для завершения:');
+        }
+      } else {
+        await ctx.reply('❌ Ошибка получения информации о фотографии.');
+      }
     } catch (error) {
       console.error('Error handling photo:', error);
-      await ctx.reply('❌ Ошибка сохранения фотографии.');
+      await ctx.reply('❌ Ошибка сохранения фотографии. Пожалуйста, попробуйте еще раз или напишите "готово":');
     }
   }
 
   // Завершить обратную связь
   private async finishFeedback(ctx: MerchContext): Promise<void> {
     const feedback = ctx.session.feedbackState;
-    if (!feedback) return;
+    if (!feedback) {
+      await ctx.reply('❌ Ошибка: состояние обратной связи не найдено. Пожалуйста, начните заново.');
+      await this.showMainMenu(ctx);
+      return;
+    }
+    
+    // Валидация обязательных полей
+    if (!feedback.email || !feedback.text) {
+      await ctx.reply('❌ Ошибка: не все обязательные поля заполнены. Пожалуйста, начните заново.');
+      ctx.session.feedbackState = undefined;
+      await this.showMainMenu(ctx);
+      return;
+    }
     
     try {
       // Отправляем сообщение администратору
@@ -841,7 +1023,7 @@ class MerchBotService {
       // Здесь можно отправить сообщение администратору
       console.log('Feedback received:', adminMessage);
       
-      // Очищаем состояние
+      // Очищаем состояние после успешной обработки
       ctx.session.feedbackState = undefined;
       
       await ctx.reply('✅ Спасибо за ваше сообщение! Мы получили вашу обратную связь и обязательно рассмотрим её.');
@@ -850,17 +1032,18 @@ class MerchBotService {
       await this.showMainMenu(ctx);
     } catch (error) {
       console.error('Error finishing feedback:', error);
-      await ctx.reply('❌ Ошибка отправки сообщения. Попробуйте позже.');
+      // Не очищаем состояние при ошибке, чтобы пользователь мог попробовать снова
+      await ctx.reply('❌ Ошибка отправки сообщения. Пожалуйста, попробуйте еще раз или напишите "готово" позже.');
     }
   }
 
   // Получение иерархии кнопок с кэшированием
-  private async getButtonsHierarchy(): Promise<Record<string, Array<{id: string, name: string, text: string}>>> {
+  private async getButtonsHierarchy(forceRefresh: boolean = false): Promise<Record<string, Array<{id: string, name: string, text: string}>>> {
     const now = new Date();
     const cacheAge = now.getTime() - this.cache.lastUpdate.getTime();
     
-    // Кэш действителен 1 час
-    if (cacheAge < 3600000 && Object.keys(this.cache.buttonsHierarchy).length > 0) {
+    // Кэш действителен 1 час, если не требуется принудительное обновление
+    if (!forceRefresh && cacheAge < 3600000 && Object.keys(this.cache.buttonsHierarchy).length > 0) {
       return this.cache.buttonsHierarchy;
     }
     
@@ -894,13 +1077,32 @@ class MerchBotService {
         });
       }
       
+      // Обновляем кэш только если загрузка прошла успешно
       this.cache.buttonsHierarchy = hierarchy;
       this.cache.lastUpdate = now;
       
       return hierarchy;
     } catch (error) {
       console.error('Error getting buttons hierarchy:', error);
+      // Если кэш пуст, возвращаем пустой объект вместо старого кэша
+      if (Object.keys(this.cache.buttonsHierarchy).length === 0) {
+        return {};
+      }
+      // Если есть старый кэш, возвращаем его, но логируем ошибку
+      console.warn('⚠️ [MerchBot] Using stale cache due to error');
       return this.cache.buttonsHierarchy;
+    }
+  }
+
+  // Принудительное обновление кэша
+  public async refreshCache(): Promise<boolean> {
+    try {
+      await this.getButtonsHierarchy(true);
+      console.log('✅ [MerchBot] Cache refreshed successfully');
+      return true;
+    } catch (error) {
+      console.error('❌ [MerchBot] Cache refresh failed:', error);
+      return false;
     }
   }
 
@@ -1075,20 +1277,53 @@ class MerchBotService {
     // Конвертируем Markdown в HTML для Telegram
     // Telegram HTML поддерживает: <b>bold</b>, <i>italic</i>, <u>underline</u>, 
     // <s>strike</s>, <code>code</code>, <a href="url">link</a>
+    // ВАЖНО: Telegram НЕ поддерживает тег <br>! Переносы строк должны быть \n
     
     let markdown = description.trim();
     
+    // Удаляем все теги <br> и заменяем их на переносы строк
+    // Это нужно на случай, если в базе данных уже есть HTML с тегами <br>
+    // Telegram НЕ поддерживает тег <br>, только переносы строк \n
+    markdown = markdown.replace(/<br\s*\/?>/gi, '\n');
+    
     console.log(`🔍 [formatDescription] Входной Markdown (первые 200 символов):`, markdown.substring(0, 200));
     console.log(`🔍 [formatDescription] Содержит **:`, markdown.includes('**'));
-    
-    // Если это уже HTML (для обратной совместимости), возвращаем как есть
-    if (markdown.includes('<b>') || markdown.includes('<strong>') || markdown.includes('<i>')) {
-      console.log(`⚠️ [formatDescription] Обнаружен HTML, возвращаем как есть (обратная совместимость)`);
-      return markdown;
-    }
+    console.log(`🔍 [formatDescription] Содержит <br> (после замены):`, markdown.includes('<br>'));
     
     // Конвертируем Markdown в HTML для Telegram
+    // Если текст уже содержит HTML теги, защищаем их перед обработкой Markdown
     let html = markdown;
+    
+    // Проверяем, есть ли уже HTML теги в тексте
+    const hasExistingHtmlTags = /<\/?(?:b|i|u|s|code|pre|a)(?:\s+[^>]*)?>/gi.test(html);
+    
+    // Если есть существующие HTML теги, защищаем их перед обработкой Markdown
+    const existingTags: Array<{ placeholder: string; tag: string }> = [];
+    let existingTagIndex = 0;
+    
+    if (hasExistingHtmlTags) {
+      // Защищаем существующие HTML теги перед обработкой Markdown
+      // Используем нежадный поиск для парных тегов, чтобы защитить их содержимое
+      const existingTagPattern = /<\/?(?:b|i|u|s|code|pre|a)(?:\s+[^>]*)?>/gi;
+      let tagMatch;
+      const tagMatches: Array<{ start: number; end: number; tag: string }> = [];
+      
+      // Находим все теги и их позиции
+      while ((tagMatch = existingTagPattern.exec(html)) !== null) {
+        tagMatches.push({
+          start: tagMatch.index,
+          end: tagMatch.index + tagMatch[0].length,
+          tag: tagMatch[0]
+        });
+      }
+      
+      // Защищаем теги с конца к началу (чтобы не сбить индексы)
+      tagMatches.reverse().forEach(({ start, end, tag }) => {
+        const placeholder = `__EXISTING_HTML_${existingTagIndex++}__`;
+        existingTags.unshift({ placeholder, tag }); // unshift для сохранения порядка
+        html = html.substring(0, start) + placeholder + html.substring(end);
+      });
+    }
     
     // Порядок важен! Обрабатываем от более специфичных к менее специфичным
     
@@ -1126,7 +1361,7 @@ class MerchBotService {
     // 3. Жирный текст: **текст** или __текст__
     // Важно: используем нежадное совпадение и обрабатываем до курсива
     html = html.replace(/\*\*([^*\n]+?)\*\*/g, '<b>$1</b>');
-    html = html.replace(/__(?!CODE_BLOCK_|LINK_|\d+__)([^_\n]+?)__(?!\d+__)/g, '<b>$1</b>');
+    html = html.replace(/__(?!CODE_BLOCK_|LINK_|EXISTING_HTML_|\d+__)([^_\n]+?)__(?!\d+__)/g, '<b>$1</b>');
     
     // 4. Зачеркнутый текст: ~~текст~~
     html = html.replace(/~~([^~\n]+?)~~/g, '<s>$1</s>');
@@ -1136,9 +1371,6 @@ class MerchBotService {
     // Курсив: _текст_ (но не __текст__)
     html = html.replace(/(?<!_)_([^_\n]+?)_(?!_)/g, '<i>$1</i>');
     
-    // 6. Переносы строк
-    html = html.replace(/\n/g, '<br>');
-    
     // Восстанавливаем код и ссылки
     codeBlocks.forEach((code, index) => {
       html = html.replace(`__CODE_BLOCK_${index}__`, code);
@@ -1147,34 +1379,101 @@ class MerchBotService {
       html = html.replace(`__LINK_${index}__`, link);
     });
     
+    // Восстанавливаем существующие HTML теги
+    existingTags.forEach(({ placeholder, tag }) => {
+      html = html.replace(placeholder, tag);
+    });
+    
     console.log(`🔄 [formatDescription] После конвертации (первые 200 символов):`, html.substring(0, 200));
     console.log(`🔄 [formatDescription] Содержит <b>:`, html.includes('<b>'));
-    console.log(`🔄 [formatDescription] Содержит **:`, html.includes('**'));
+    console.log(`🔄 [formatDescription] Содержит \n:`, html.includes('\n'));
     
-    // Экранируем оставшиеся HTML-символы в тексте (но не в тегах)
-    const allowedTags = /<\/?(?:b|i|u|s|code|pre|a)(?:\s[^>]*)?>/gi;
-    const tagMarkers: string[] = [];
-    let markerIndex = 0;
-    html = html.replace(allowedTags, (match) => {
-      tagMarkers.push(match);
-      return `__TAG_${markerIndex++}__`;
+    // Экранируем HTML-символы в тексте, но сохраняем разрешенные теги Telegram
+    // Telegram HTML поддерживает ТОЛЬКО: <b>, <i>, <u>, <s>, <code>, <pre>, <a href="url">
+    // ВАЖНО: Telegram НЕ поддерживает тег <br>! Переносы строк должны быть символами \n
+    // Стратегия: находим все теги, защищаем их маркерами, экранируем текст, восстанавливаем теги
+    
+    // Регулярное выражение для всех разрешенных тегов Telegram (включая атрибуты)
+    // Паттерн захватывает: <tag>, </tag>, <tag attr="value">
+    // НЕ включает <br>, так как Telegram его не поддерживает
+    const telegramTagRegex = /<\/?(?:b|i|u|s|code|pre|a)(?:\s+[^>]*)?>/gi;
+    
+    // Находим все теги и их позиции
+    const tagMatches: Array<{ start: number; end: number; tag: string }> = [];
+    let match;
+    
+    // Сбрасываем lastIndex для повторного использования
+    telegramTagRegex.lastIndex = 0;
+    while ((match = telegramTagRegex.exec(html)) !== null) {
+      tagMatches.push({
+        start: match.index,
+        end: match.index + match[0].length,
+        tag: match[0]
+      });
+    }
+    
+    // Если нет тегов, просто экранируем весь текст
+    if (tagMatches.length === 0) {
+      html = html
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      return html.trim();
+    }
+    
+    // Строим результат, защищая теги
+    let result = '';
+    let lastIndex = 0;
+    const placeholders: Array<{ placeholder: string; tag: string }> = [];
+    let placeholderIndex = 0;
+    
+    tagMatches.forEach(({ start, end, tag }) => {
+      // Экранируем текст до тега (но сохраняем переносы строк \n)
+      if (start > lastIndex) {
+        const textBefore = html.substring(lastIndex, start);
+        // Экранируем HTML символы, но сохраняем переносы строк
+        result += textBefore
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+        // Переносы строк \n остаются как есть - Telegram их поддерживает
+      }
+      
+      // Добавляем маркер для тега
+      const placeholder = `__TG_PL${placeholderIndex++}__`;
+      placeholders.push({ placeholder, tag });
+      result += placeholder;
+      lastIndex = end;
     });
     
-    // Экранируем специальные символы в тексте
-    html = html
-      .replace(/&(?!amp;|lt;|gt;|quot;|#\d+;)/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+    // Экранируем остаток текста после последнего тега (сохраняем переносы строк)
+    if (lastIndex < html.length) {
+      const textAfter = html.substring(lastIndex);
+      result += textAfter
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      // Переносы строк \n остаются как есть
+    }
     
     // Восстанавливаем теги
-    tagMarkers.forEach((tag, index) => {
-      html = html.replace(`__TAG_${index}__`, tag);
+    placeholders.forEach(({ placeholder, tag }) => {
+      result = result.replace(placeholder, tag);
     });
+    
+    html = result;
+    
+    // Финальная проверка: убеждаемся, что нет тегов <br> (Telegram их не поддерживает)
+    // Если остались какие-то <br> теги, заменяем их на переносы строк
+    html = html.replace(/<br\s*\/?>/gi, '\n');
     
     console.log(`📤 [formatDescription] Итоговый HTML (первые 200 символов):`, html.substring(0, 200));
     console.log(`📤 [formatDescription] Итоговый HTML содержит <b>:`, html.includes('<b>'));
-    console.log(`📤 [formatDescription] Итоговый HTML содержит **:`, html.includes('**'));
+    console.log(`📤 [formatDescription] Итоговый HTML содержит \n:`, html.includes('\n'));
+    console.log(`📤 [formatDescription] Итоговый HTML содержит <br>:`, html.includes('<br>'));
     
+    // Убираем только начальные и конечные пробелы
+    // Telegram HTML правильно обрабатывает переносы строк \n внутри текста
     return html.trim();
   }
 
@@ -1208,17 +1507,34 @@ class MerchBotService {
 
       this.isRunning = true;
       this.retryCount = 0;
+      this.restartAttempts = 0; // Сбрасываем счетчик при успешном запуске
       console.log('✅ [MerchBot] Бот успешно запущен');
       
       // Добавляем обработчик ошибок
       this.bot.catch((error) => {
         console.error('❌ [MerchBot] Ошибка бота:', error);
         this.isRunning = false;
-        // Автоматический перезапуск через 5 секунд
-        setTimeout(() => {
-          console.log('🔄 [MerchBot] Попытка перезапуска...');
-          this.launch();
-        }, 5000);
+        
+        // Автоматический перезапуск с ограничением попыток
+        if (this.restartAttempts < this.MAX_RESTART_ATTEMPTS) {
+          this.restartAttempts++;
+          const delay = Math.min(
+            this.RESTART_DELAY_BASE * Math.pow(2, this.restartAttempts - 1),
+            60000 // Максимальная задержка 60 секунд
+          );
+          console.log(`🔄 [MerchBot] Попытка перезапуска ${this.restartAttempts}/${this.MAX_RESTART_ATTEMPTS} через ${delay}ms...`);
+          setTimeout(() => {
+            this.launch().then((success) => {
+              if (success) {
+                this.restartAttempts = 0; // Сбрасываем счетчик при успешном перезапуске
+              }
+            });
+          }, delay);
+        } else {
+          console.error(`❌ [MerchBot] Превышено максимальное количество попыток перезапуска (${this.MAX_RESTART_ATTEMPTS})`);
+          console.error('❌ [MerchBot] Требуется ручное вмешательство администратора');
+          // Здесь можно добавить отправку уведомления администратору
+        }
       });
       
       return true;

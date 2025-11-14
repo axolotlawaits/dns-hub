@@ -80,6 +80,24 @@ router.post('/bot-restart', async (req: any, res: any) => {
   }
 });
 
+// Маршрут для принудительного обновления кэша
+router.post('/cache-refresh', async (req: any, res: any) => {
+  try {
+    const { merchBotService } = await import('../../controllers/app/merchBot.js');
+    
+    const success = await merchBotService.refreshCache();
+    
+    if (success) {
+      res.json({ success: true, message: 'Cache refreshed successfully' });
+    } else {
+      res.status(500).json({ success: false, message: 'Cache refresh failed' });
+    }
+  } catch (error) {
+    console.error('MerchBot cache refresh error:', error);
+    res.status(500).json({ error: 'Failed to refresh cache' });
+  }
+});
+
 // Маршрут для получения статистики Merch бота
 router.get('/stats', async (req: any, res: any) => {
   try {

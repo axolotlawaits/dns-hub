@@ -33,11 +33,23 @@ class TelegramService {
     return TelegramService.instance;
   }
 
+  // Валидация токена
+  private validateToken(token: string): boolean {
+    // Telegram токены имеют формат: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz
+    const tokenPattern = /^\d+:[A-Za-z0-9_-]{35}$/;
+    return tokenPattern.test(token);
+  }
+
   // 3. Инициализация бота
   private initializeBot(): void {
     const token = process.env.TELEGRAM_BOT_TOKEN;
     if (!token) {
       console.error('[Telegram] TELEGRAM_BOT_TOKEN not found');
+      return;
+    }
+    
+    if (!this.validateToken(token)) {
+      console.error('[Telegram] Invalid token format');
       return;
     }
     
@@ -63,13 +75,42 @@ class TelegramService {
         return ctx.reply('Для привязки аккаунта используйте ссылку из приложения');
       }
 
+      // Валидация формата токена
+      if (token.length < 10 || token.length > 100) {
+        return ctx.reply('❌ Неверный формат ссылки');
+      }
+
       try {
         const user = await prisma.user.findFirst({
           where: { telegramLinkToken: token },
+          select: {
+            id: true,
+            name: true,
+            telegramChatId: true,
+            updatedAt: true,
+          },
         });
 
         if (!user) {
           return ctx.reply('❌ Ссылка недействительна или истекла');
+        }
+
+        // Проверяем срок действия токена (15 минут)
+        const TOKEN_EXPIRY_TIME = 15 * 60 * 1000; // 15 минут в миллисекундах
+        const tokenAge = Date.now() - user.updatedAt.getTime();
+        
+        if (tokenAge > TOKEN_EXPIRY_TIME) {
+          // Удаляем истекший токен
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { telegramLinkToken: null },
+          });
+          return ctx.reply('❌ Ссылка истекла. Пожалуйста, сгенерируйте новую ссылку в приложении');
+        }
+
+        // Проверяем, не привязан ли уже аккаунт к другому чату
+        if (user.telegramChatId && user.telegramChatId !== ctx.chat.id.toString()) {
+          return ctx.reply('❌ Этот аккаунт уже привязан к другому чату Telegram');
         }
 
         await prisma.user.update({
@@ -94,10 +135,17 @@ class TelegramService {
       }
     });
 
-    // 5. Обработка ошибок
-    this.bot.catch((err) => {
-      console.error('[Telegram] Bot error:', err);
-    });
+  // 5. Обработка ошибок
+  this.bot.catch((err) => {
+    console.error('[Telegram] Bot error:', err);
+    // Логируем детали ошибки для отладки
+    if (err instanceof Error) {
+      console.error('[Telegram] Error message:', err.message);
+      console.error('[Telegram] Error stack:', err.stack);
+    }
+    // Не перезапускаем бота автоматически - пусть работает дальше
+    // Критические ошибки будут обработаны на уровне launch()
+  });
   }
 
   // 6. Запуск бота
@@ -156,17 +204,45 @@ class TelegramService {
       return false;
     }
 
+    // Валидация chatId
+    if (!chatId || chatId.length === 0) {
+      console.error('[Telegram] Invalid chatId');
+      return false;
+    }
+
+    // Валидация размера сообщения (Telegram ограничение: 4096 символов)
+    const message = `🔔 ${notification.title}\n\n${notification.message}`;
+    if (message.length > 4096) {
+      console.error('[Telegram] Message too long:', message.length);
+      // Обрезаем сообщение до допустимого размера
+      const truncatedMessage = message.substring(0, 4093) + '...';
+      try {
+        await this.bot.api.sendMessage(chatId, truncatedMessage, { parse_mode: 'Markdown' });
+        return true;
+      } catch (error) {
+        console.error('[Telegram] Send error:', error);
+        return false;
+      }
+    }
+
     try {
-      await this.bot.api.sendMessage(
-        chatId,
-        `🔔 ${notification.title}\n\n${notification.message}`,
-        { parse_mode: 'Markdown' }
-      );
+      await this.bot.api.sendMessage(chatId, message, { parse_mode: 'Markdown' });
       return true;
     } catch (error) {
       console.error('[Telegram] Send error:', error);
-      if (error instanceof Error && error.message.includes('chat not found')) {
-        await this.handleInvalidChat(chatId);
+      if (error instanceof Error) {
+        if (error.message.includes('chat not found') || error.message.includes('chat_id is empty')) {
+          await this.handleInvalidChat(chatId);
+        } else if (error.message.includes('message is too long')) {
+          // Пытаемся отправить без форматирования
+          try {
+            const plainMessage = message.replace(/\*\*/g, '').replace(/__/g, '');
+            await this.bot.api.sendMessage(chatId, plainMessage);
+            return true;
+          } catch (retryError) {
+            console.error('[Telegram] Retry send error:', retryError);
+          }
+        }
       }
       return false;
     }

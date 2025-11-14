@@ -11,19 +11,27 @@ router.get('/generate-link/:userId', async (req: any, res: any) => {
       return res.status(500).json({ error: 'Bot configuration error' });
     }
 
+    // Валидация userId
+    if (!req.params.userId || req.params.userId.length === 0) {
+      return res.status(400).json({ error: 'Invalid user ID' });
+    }
+
     const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 минут
     
     await prisma.user.update({
       where: { id: req.params.userId },
       data: { 
         telegramLinkToken: token,
+        // Используем updatedAt как время создания токена (будет обновлено автоматически)
       }
     });
 
     const link = `https://t.me/${botName}?start=${token}`;
     res.json({
       link,
-      expires_in: "15 minutes"
+      expires_in: "15 minutes",
+      expires_at: expiresAt.toISOString()
     });
   } catch (error) {
     console.error('Generate error:', error);
