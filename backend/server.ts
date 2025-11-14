@@ -338,16 +338,59 @@ server.listen(port, async function() {
         try {
           console.log('🤖 [Server] Загружаем и запускаем Merch бота...');
           console.log('📦 [Server] Импортируем модуль merchBot...');
+          
+          // Проверяем переменные окружения ДО импорта
+          const hasToken = !!process.env.MERCH_BOT_TOKEN;
+          const hasBotName = !!process.env.MERCH_BOT_NAME;
+          console.log('🔍 [Server] Проверка переменных окружения:');
+          console.log('  - MERCH_BOT_TOKEN:', hasToken ? 'найден' : 'НЕ НАЙДЕН');
+          console.log('  - MERCH_BOT_NAME:', hasBotName ? `найден (${process.env.MERCH_BOT_NAME})` : 'НЕ НАЙДЕН');
+          
+          if (!hasToken) {
+            console.error('❌ [Server] MERCH_BOT_TOKEN не найден в переменных окружения');
+            console.error('❌ [Server] Merch бот не может быть запущен без токена');
+            return;
+          }
+          
+          if (!hasBotName) {
+            console.error('❌ [Server] MERCH_BOT_NAME не найден в переменных окружения');
+            console.error('❌ [Server] Merch бот не может быть запущен без имени бота');
+            return;
+          }
+          
           const { merchBotService } = await import('./controllers/app/merchBot');
-          console.log('✅ [Server] Модуль merchBot загружен, статус:', merchBotService.status);
+          console.log('✅ [Server] Модуль merchBot загружен');
+          
+          // Проверяем статус до запуска
+          const statusBefore = merchBotService.status;
+          console.log('📊 [Server] Статус Merch бота до запуска:', JSON.stringify(statusBefore, null, 2));
+          
+          if (!statusBefore.botInitialized) {
+            console.error('❌ [Server] Merch бот не инициализирован');
+            console.error('❌ [Server] Возможные причины:');
+            console.error('  - Неверный формат токена');
+            console.error('  - Отсутствует MERCH_BOT_TOKEN');
+            console.error('  - Отсутствует MERCH_BOT_NAME');
+            return;
+          }
+          
           console.log('🚀 [Server] Запускаем Merch бота...');
           const merchBotStarted = await merchBotService.launch();
           
+          // Проверяем статус после запуска
+          const statusAfter = merchBotService.status;
+          console.log('📊 [Server] Статус Merch бота после запуска:', JSON.stringify(statusAfter, null, 2));
+          
           if (merchBotStarted) {
             console.log('✅ [Server] Merch bot started successfully');
+            console.log('📊 [Server] Final status:', statusAfter);
           } else {
-            console.log('❌ [Server] Merch bot failed to start - check .env file');
-            console.log('📊 [Server] Merch bot status:', merchBotService.status);
+            console.error('❌ [Server] Merch bot failed to start');
+            console.error('📊 [Server] Status:', statusAfter);
+            console.error('❌ [Server] Возможные причины:');
+            console.error('  - Ошибка подключения к Telegram API');
+            console.error('  - Неверный токен');
+            console.error('  - Конфликт с другим экземпляром бота');
           }
         } catch (error) {
           console.error('❌ [Server] Failed to load/start Merch bot:', error);

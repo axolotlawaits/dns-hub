@@ -78,37 +78,59 @@ class MerchBotService {
   // Инициализация бота
   private initializeBot(): void {
     console.log('🔧 [MerchBot] Инициализация бота...');
+    console.log('🔍 [MerchBot] Проверка переменных окружения:');
     
     const token = process.env.MERCH_BOT_TOKEN;
-    console.log('🔑 [MerchBot] Токен найден:', !!token);
+    console.log('  - MERCH_BOT_TOKEN:', token ? `найден (длина: ${token.length})` : 'НЕ НАЙДЕН');
+    
     if (!token) {
       console.error('❌ [MerchBot] MERCH_BOT_TOKEN not found');
+      console.error('❌ [MerchBot] Убедитесь, что переменная окружения MERCH_BOT_TOKEN установлена');
       return;
     }
     
     if (!this.validateToken(token)) {
       console.error('❌ [MerchBot] Invalid token format');
+      console.error('❌ [MerchBot] Токен должен иметь формат: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz');
+      console.error('❌ [MerchBot] Текущий токен:', token.substring(0, 10) + '...');
       return;
     }
     
     const botName = process.env.MERCH_BOT_NAME;
-    console.log('📛 [MerchBot] Имя бота найдено:', !!botName, botName);
+    console.log('  - MERCH_BOT_NAME:', botName ? `найден (${botName})` : 'НЕ НАЙДЕН');
+    
     if (!botName) {
       console.error('❌ [MerchBot] MERCH_BOT_NAME not found');
+      console.error('❌ [MerchBot] Убедитесь, что переменная окружения MERCH_BOT_NAME установлена');
       return;
     }
     
-    console.log('🤖 [MerchBot] Создаем экземпляр бота...');
-    this.bot = new Bot<MerchContext>(token);
+    try {
+      console.log('🤖 [MerchBot] Создаем экземпляр бота...');
+      this.bot = new Bot<MerchContext>(token);
+      console.log('✅ [MerchBot] Экземпляр бота создан успешно');
 
-    // Настройка middleware
-    this.bot.use(
-      session({
-        initial: (): MerchSessionData => ({}),
-      })
-    );
+      // Настройка middleware
+      console.log('⚙️ [MerchBot] Настройка middleware...');
+      this.bot.use(
+        session({
+          initial: (): MerchSessionData => ({}),
+        })
+      );
+      console.log('✅ [MerchBot] Middleware настроен');
 
-    this.setupHandlers();
+      console.log('⚙️ [MerchBot] Настройка обработчиков...');
+      this.setupHandlers();
+      console.log('✅ [MerchBot] Обработчики настроены');
+      console.log('✅ [MerchBot] Инициализация завершена успешно');
+    } catch (error) {
+      console.error('❌ [MerchBot] Ошибка при создании экземпляра бота:', error);
+      if (error instanceof Error) {
+        console.error('❌ [MerchBot] Error message:', error.message);
+        console.error('❌ [MerchBot] Error stack:', error.stack);
+      }
+      this.bot = null;
+    }
   }
 
   // Настройка обработчиков
@@ -1487,7 +1509,24 @@ class MerchBotService {
   // Запуск бота
   public async launch(): Promise<boolean> {
     console.log('🚀 [MerchBot] Попытка запуска бота...');
-    console.log('📊 [MerchBot] Статус:', { isRunning: this.isRunning, hasBot: !!this.bot });
+    console.log('📊 [MerchBot] Статус:', { isRunning: this.isRunning, hasBot: !!this.bot, botInitialized: this.bot !== null });
+    
+    // Проверяем переменные окружения
+    const hasToken = !!process.env.MERCH_BOT_TOKEN;
+    const hasBotName = !!process.env.MERCH_BOT_NAME;
+    console.log('🔍 [MerchBot] Проверка переменных окружения:');
+    console.log('  - MERCH_BOT_TOKEN:', hasToken ? 'найден' : 'НЕ НАЙДЕН');
+    console.log('  - MERCH_BOT_NAME:', hasBotName ? `найден (${process.env.MERCH_BOT_NAME})` : 'НЕ НАЙДЕН');
+    
+    if (!hasToken) {
+      console.error('❌ [MerchBot] MERCH_BOT_TOKEN не найден - невозможно запустить бота');
+      return false;
+    }
+    
+    if (!hasBotName) {
+      console.error('❌ [MerchBot] MERCH_BOT_NAME не найден - невозможно запустить бота');
+      return false;
+    }
     
     if (this.isRunning) {
       console.log('⚠️ [MerchBot] Бот уже запущен');
@@ -1502,8 +1541,13 @@ class MerchBotService {
       
       if (!this.bot) {
         console.error('❌ [MerchBot] Не удалось инициализировать бота после попытки');
+        console.error('❌ [MerchBot] Возможные причины:');
+        console.error('  - Неверный формат токена');
+        console.error('  - Отсутствует MERCH_BOT_TOKEN');
+        console.error('  - Отсутствует MERCH_BOT_NAME');
         return false;
       }
+      console.log('✅ [MerchBot] Бот успешно переинициализирован');
     }
 
     try {
@@ -1517,6 +1561,7 @@ class MerchBotService {
       this.retryCount = 0;
       this.restartAttempts = 0; // Сбрасываем счетчик при успешном запуске
       console.log('✅ [MerchBot] Бот успешно запущен');
+      console.log('📊 [MerchBot] Final status:', this.status);
       
       // Обработчик ошибок уже установлен в initializeBot(), не нужно устанавливать здесь
       
@@ -1526,6 +1571,15 @@ class MerchBotService {
       if (error instanceof Error) {
         console.error('❌ [MerchBot] Error message:', error.message);
         console.error('❌ [MerchBot] Error stack:', error.stack);
+        
+        // Проверяем специфичные ошибки Telegram API
+        if (error.message.includes('Conflict: terminated by other getUpdates request')) {
+          console.error('⚠️ [MerchBot] Конфликт: другой экземпляр бота может быть запущен');
+        } else if (error.message.includes('Unauthorized')) {
+          console.error('⚠️ [MerchBot] Неверный токен или токен отозван');
+        } else if (error.message.includes('network') || error.message.includes('timeout')) {
+          console.error('⚠️ [MerchBot] Проблема с сетью или таймаут');
+        }
       }
 
       // Упрощенный retry (как в Telegram боте)
