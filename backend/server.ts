@@ -333,7 +333,9 @@ server.listen(port, async function() {
       console.log('✅ [Server] Telegram bot запущен в фоне, переходим к Merch боту...');
 
       // Ленивая загрузка и запуск Merch бота (независимо от Telegram бота)
-      console.log('⏳ [Server] Планируем запуск Merch бота через 5 секунд...');
+      // Используем более длительную задержку для продакшена, чтобы убедиться, что все готово
+      const merchBotDelay = process.env.NODE_ENV === 'production' ? 10000 : 5000;
+      console.log(`⏳ [Server] Планируем запуск Merch бота через ${merchBotDelay / 1000} секунд...`);
       setTimeout(async () => {
         try {
           console.log('🤖 [Server] Загружаем и запускаем Merch бота...');
@@ -342,19 +344,29 @@ server.listen(port, async function() {
           // Проверяем переменные окружения ДО импорта
           const hasToken = !!process.env.MERCH_BOT_TOKEN;
           const hasBotName = !!process.env.MERCH_BOT_NAME;
+          const enableBots = process.env.ENABLE_BOTS !== 'false';
+          
           console.log('🔍 [Server] Проверка переменных окружения:');
+          console.log('  - ENABLE_BOTS:', enableBots ? 'включено' : 'выключено');
           console.log('  - MERCH_BOT_TOKEN:', hasToken ? 'найден' : 'НЕ НАЙДЕН');
           console.log('  - MERCH_BOT_NAME:', hasBotName ? `найден (${process.env.MERCH_BOT_NAME})` : 'НЕ НАЙДЕН');
+          
+          if (!enableBots) {
+            console.log('⚠️ [Server] Боты отключены (ENABLE_BOTS=false), пропускаем запуск Merch бота');
+            return;
+          }
           
           if (!hasToken) {
             console.error('❌ [Server] MERCH_BOT_TOKEN не найден в переменных окружения');
             console.error('❌ [Server] Merch бот не может быть запущен без токена');
+            console.error('❌ [Server] Проверьте, что переменная окружения MERCH_BOT_TOKEN установлена');
             return;
           }
           
           if (!hasBotName) {
             console.error('❌ [Server] MERCH_BOT_NAME не найден в переменных окружения');
             console.error('❌ [Server] Merch бот не может быть запущен без имени бота');
+            console.error('❌ [Server] Проверьте, что переменная окружения MERCH_BOT_NAME установлена');
             return;
           }
           
@@ -371,6 +383,7 @@ server.listen(port, async function() {
             console.error('  - Неверный формат токена');
             console.error('  - Отсутствует MERCH_BOT_TOKEN');
             console.error('  - Отсутствует MERCH_BOT_NAME');
+            console.error('❌ [Server] Бот не будет запущен автоматически. Используйте /hub-api/add/merch/bot-start для ручного запуска');
             return;
           }
           
@@ -391,15 +404,28 @@ server.listen(port, async function() {
             console.error('  - Ошибка подключения к Telegram API');
             console.error('  - Неверный токен');
             console.error('  - Конфликт с другим экземпляром бота');
+            console.error('❌ [Server] Бот не запущен. Используйте /hub-api/add/merch/bot-start для повторной попытки');
+            
+            // В продакшене логируем более детально
+            if (process.env.NODE_ENV === 'production') {
+              console.error('⚠️ [Server] PRODUCTION: Merch bot не запущен автоматически');
+              console.error('⚠️ [Server] Проверьте логи выше для деталей ошибки');
+            }
           }
         } catch (error) {
           console.error('❌ [Server] Failed to load/start Merch bot:', error);
           if (error instanceof Error) {
             console.error('❌ [Server] Error message:', error.message);
             console.error('❌ [Server] Error stack:', error.stack);
+            
+            // В продакшене логируем более детально
+            if (process.env.NODE_ENV === 'production') {
+              console.error('⚠️ [Server] PRODUCTION: Ошибка при попытке запустить Merch bot');
+              console.error('⚠️ [Server] Используйте /hub-api/add/merch/bot-start для ручного запуска');
+            }
           }
         }
-      }, 5000); // Увеличиваем задержку до 5 секунд для ленивой загрузки
+      }, merchBotDelay);
     });
   } else {
     console.log('🚫 [Server] Bots disabled (ENABLE_BOTS=false)');
