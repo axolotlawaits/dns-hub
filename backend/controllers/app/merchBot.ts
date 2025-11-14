@@ -1568,9 +1568,37 @@ class MerchBotService {
 
   // Перезапуск бота
   public async restart(): Promise<boolean> {
-    await this.stop();
+    console.log('🔄 [MerchBot] Перезапуск бота...');
+    
+    // Останавливаем бота, если он запущен
+    if (this.isRunning && this.bot) {
+      try {
+        await this.bot.stop();
+      } catch (error) {
+        console.error('⚠️ [MerchBot] Ошибка при остановке бота:', error);
+      }
+      this.isRunning = false;
+    }
+    
+    // Очищаем текущий экземпляр бота
+    this.bot = null;
+    
+    // Сбрасываем счетчики
     this.retryCount = 0;
+    this.restartAttempts = 0;
+    
+    // Переинициализируем бота (создаем новый экземпляр)
+    console.log('🔧 [MerchBot] Переинициализация бота...');
     this.initializeBot();
+    
+    // Если после инициализации бот все еще не создан, возвращаем false
+    if (!this.bot) {
+      console.error('❌ [MerchBot] Не удалось инициализировать бота после перезапуска');
+      console.error('❌ [MerchBot] Проверьте наличие MERCH_BOT_TOKEN и MERCH_BOT_NAME в .env');
+      return false;
+    }
+    
+    // Запускаем бота
     return this.launch();
   }
 }
