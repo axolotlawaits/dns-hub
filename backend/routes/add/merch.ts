@@ -15,10 +15,19 @@ import { authenticateToken } from '../../middleware/auth.js';
 
 const router = Router();
 
+// Middleware для логирования всех запросов (для отладки)
+router.use((req: any, res: any, next: any) => {
+  if (req.path.includes('bot-') || req.path.includes('cache-refresh')) {
+    console.log(`🔍 [Routes] Запрос к эндпоинту управления ботом: ${req.method} ${req.path}`);
+  }
+  next();
+});
+
 // GET запросы публичные (для чтения данных)
 router.get('/categories', getMerchHierarchy as any);
 
 // Роуты для управления Merch ботом (без аутентификации для удобства администрирования)
+// Эти эндпоинты должны обрабатываться ПЕРВЫМИ, до применения authenticateToken
 router.get('/bot-status', async (req: any, res: any) => {
   try {
     console.log('🔍 [Routes] Проверяем статус Merch бота через /add/merch/bot-status...');
@@ -50,7 +59,12 @@ router.get('/bot-status', async (req: any, res: any) => {
 
 router.post('/bot-start', async (req: any, res: any) => {
   try {
-    console.log('🚀 [Routes] Запуск Merch бота через /add/merch/bot-start...');
+    console.log('🚀 [Routes] POST /add/merch/bot-start - Запрос получен');
+    console.log('🚀 [Routes] Method:', req.method);
+    console.log('🚀 [Routes] Path:', req.path);
+    console.log('🚀 [Routes] Original URL:', req.originalUrl);
+    console.log('🚀 [Routes] Headers:', JSON.stringify(req.headers, null, 2));
+    
     const { merchBotService } = await import('../../controllers/app/merchBot.js');
     
     // Получаем текущий статус перед запуском
@@ -208,21 +222,21 @@ router.post('/bot-restart', async (req: any, res: any) => {
 });
 
 // Все остальные операции требуют аутентификации
-router.use(authenticateToken);
+// Применяем authenticateToken только к конкретным роутам, НЕ к эндпоинтам управления ботом
 
-// Роуты для категорий (layer = 1)
-router.post('/categories', ...(createMerchCategory as any));
-router.put('/categories/:id', ...(updateMerchCategory as any));
-router.delete('/categories/:id', deleteMerchCategory as any);
+// Роуты для категорий (layer = 1) - требуют аутентификации
+router.post('/categories', authenticateToken, ...(createMerchCategory as any));
+router.put('/categories/:id', authenticateToken, ...(updateMerchCategory as any));
+router.delete('/categories/:id', authenticateToken, deleteMerchCategory as any);
 
-// Роуты для карточек (layer = 0)
-router.post('/cards', ...(createMerchCard as any));
-router.put('/cards/:id', ...(updateMerchCard as any));
-router.delete('/cards/:id', deleteMerchCard as any);
-router.post('/cards/:id/images', ...(addCardImages as any));
+// Роуты для карточек (layer = 0) - требуют аутентификации
+router.post('/cards', authenticateToken, ...(createMerchCard as any));
+router.put('/cards/:id', authenticateToken, ...(updateMerchCard as any));
+router.delete('/cards/:id', authenticateToken, deleteMerchCard as any);
+router.post('/cards/:id/images', authenticateToken, ...(addCardImages as any));
 
-// Роуты для attachments
-router.post('/attachments/:recordId', ...(addMerchAttachment as any));
-router.delete('/attachments/:id', deleteMerchAttachment as any);
+// Роуты для attachments - требуют аутентификации
+router.post('/attachments/:recordId', authenticateToken, ...(addMerchAttachment as any));
+router.delete('/attachments/:id', authenticateToken, deleteMerchAttachment as any);
 
 export default router;
