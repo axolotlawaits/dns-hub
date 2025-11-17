@@ -362,17 +362,6 @@
   }
 }
 
-/* Красивые стили для карточек конструкций */
-.construction-card {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  backdrop-filter: blur(10px);
-}
-
-.construction-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(59, 130, 246, 0.1);
-}
-
 .attachment-item {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -1175,12 +1164,6 @@
   }
 }
 
-/* Эффект при наведении на карточку */
-.construction-cards-slider > div:hover {
-  transform: translateY(-2px);
-  transition: transform 0.2s ease;
-}
-
 /* Адаптивность для мобильных устройств */
 @media (max-width: 768px) {
   .construction-cards-slider > div {
@@ -1203,11 +1186,6 @@
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-.construction-cards-vertical > div:hover {
-  transform: translateY(-2px);
-  transition: transform 0.2s ease;
 }
 
 /* Стили для секции карточек конструкций в нижней части */
