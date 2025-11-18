@@ -385,11 +385,7 @@ export default function MediaList() {
           <Avatar
             size="sm"
             radius="xl"
-            style={{
-              background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
-              color: 'white',
-              fontWeight: '600'
-            }}
+            color='blue'
           >
             {row.original.userName.charAt(0).toUpperCase()}
           </Avatar>

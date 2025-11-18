@@ -1502,7 +1502,7 @@ export const DynamicFormModal = ({
             {isImage ? (
               <img 
                 src={fileUrl} 
-                alt={fileName} 
+                alt='preview' 
                 className="file-preview"
                 style={{ 
                   height: 70, 
