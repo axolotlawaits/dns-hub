@@ -1,4 +1,4 @@
-import { Modal, TextInput, Select, Button, Alert, Stack, Textarea, Text, Group, Card, Paper, ActionIcon, MultiSelect, Badge } from '@mantine/core';
+import { Modal, TextInput, Select, Button, Alert, Stack, Textarea, Text, Group, Card, Paper, ActionIcon, MultiSelect, Badge, Anchor } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useState, useEffect, useCallback, useMemo, useRef, JSX, memo } from 'react';
 import dayjs from 'dayjs';
@@ -7,6 +7,7 @@ import { FileDropZone } from './dnd';
 import { IconFile, IconFileTypePdf, IconFileTypeDoc, IconFileTypeXls, IconFileTypePpt, IconFileTypeZip, IconPhoto, IconFileTypeJs, IconFileTypeHtml, IconFileTypeCss, IconFileTypeTxt, IconFileTypeCsv, IconX, IconUpload, IconVideo, IconMusic, IconFileText } from '@tabler/icons-react';
 import { FilePreviewModal } from './FilePreviewModal';
 import './styles/formModal.css';
+import { saveAs } from 'file-saver'
 
 // Хук для управления blob URL с автоматической очисткой
 const useBlobUrl = (file: File | null): string | null => {
@@ -1493,7 +1494,7 @@ export const DynamicFormModal = ({
     const isImage = isImageFile(fileName);
     const fileId = attachment.id || `temp-${fileName}-${Math.random().toString(36).slice(2, 11)}`;
     return (
-      <Card key={fileId} p="sm" withBorder className="file-card">
+      <Card key={fileId} p={10} withBorder className="file-card">
         <Group justify="space-between" align="center">
           <Group gap="md" onClick={() => {
             setPreviewId(fileId);
@@ -1504,9 +1505,9 @@ export const DynamicFormModal = ({
                 alt={fileName} 
                 className="file-preview"
                 style={{ 
-                  height: 48, 
-                  width: 64, 
-                  objectFit: 'cover',
+                  height: 70, 
+                  width: 'auto', 
+                  objectFit: 'contain',
                   borderRadius: 'var(--radius-sm)',
                   border: '1px solid var(--theme-border)'
                 }} 
@@ -1534,18 +1535,30 @@ export const DynamicFormModal = ({
               </Text>
             </div>
           </Group>
-          <Button
-            size="xs"
-            variant="light"
-            color="blue"
-            onClick={(e) => {
-              e.stopPropagation();
-              window.open(fileUrl, '_blank');
-            }}
-            style={{ flexShrink: 0 }}
-          >
-            Скачать
-          </Button>
+          <Stack w='auto'>
+            <Button
+              size="xs"
+              variant="light"
+              color="blue"
+              onClick={(e) => {
+                e.stopPropagation();
+                window.open(fileUrl, '_blank');
+              }}
+            >
+              Открыть
+            </Button>
+            <Button
+              size="xs"
+              variant="light"
+              color="blue"
+              onClick={(e) => {
+                e.stopPropagation();
+                saveAs(fileUrl, fileName)
+              }}
+            >
+              Скачать
+            </Button>
+          </Stack>
         </Group>
       </Card>
     );

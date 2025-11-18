@@ -146,9 +146,7 @@
 }
 
 .form-modal .file-card:hover {
-  background: var(--theme-bg-hover);
   border-color: var(--color-blue-300);
-  transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
