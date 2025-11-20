@@ -1503,7 +1503,34 @@ class MerchBotService {
     if (imagePath.startsWith('http')) {
       return imagePath;
     }
-    return `${API}/public/add/merch/${imagePath}`;
+    
+    // Если imagePath содержит полный путь, извлекаем только имя файла
+    let fileName = imagePath;
+    
+    // Убираем пути файловой системы (Windows и Unix)
+    if (imagePath.includes('/') || imagePath.includes('\\')) {
+      // Извлекаем только имя файла из пути
+      const pathParts = imagePath.replace(/\\/g, '/').split('/');
+      fileName = pathParts[pathParts.length - 1];
+      console.log(`📁 [getImageUrl] Извлечено имя файла из пути: ${imagePath} -> ${fileName}`);
+    }
+    
+    // Убираем префикс "public/add/merch/" если он есть
+    if (fileName.startsWith('public/add/merch/')) {
+      fileName = fileName.replace('public/add/merch/', '');
+      console.log(`📁 [getImageUrl] Убран префикс public/add/merch/: ${fileName}`);
+    }
+    
+    // Убираем префикс "add/merch/" если он есть
+    if (fileName.startsWith('add/merch/')) {
+      fileName = fileName.replace('add/merch/', '');
+      console.log(`📁 [getImageUrl] Убран префикс add/merch/: ${fileName}`);
+    }
+    
+    // Формируем правильный URL
+    const url = `${API}/public/add/merch/${fileName}`;
+    console.log(`📁 [getImageUrl] Итоговый URL: ${url}`);
+    return url;
   }
 
   // Запуск бота
