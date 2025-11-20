@@ -404,20 +404,18 @@ class MerchBotService {
       
       for (const photoUrl of photoUrls) {
         try {
-          const fileName = photoUrl.split('/').pop();
-          if (!fileName) continue;
+          console.log(`📤 Отправляем изображение по URL: ${photoUrl}`);
           
-          const filePath = path.join(__dirname, '..', '..', 'public', 'add', 'merch', fileName);
-          console.log(`📤 Отправляем изображение: ${filePath}`);
-          
-          if (fs.existsSync(filePath)) {
-            await ctx.replyWithPhoto(new InputFile(filePath));
-            console.log(`✅ Изображение отправлено успешно: ${fileName}`);
-          } else {
-            console.log(`❌ Файл не найден: ${filePath}`);
-          }
+          // Отправляем фото напрямую по URL (grammy поддерживает это)
+          await ctx.replyWithPhoto(photoUrl);
+          console.log(`✅ Изображение отправлено успешно: ${photoUrl}`);
+          await new Promise(resolve => setTimeout(resolve, 500)); // Задержка между фото
         } catch (error) {
           console.error(`❌ Ошибка отправки изображения ${photoUrl}:`, error);
+          if (error instanceof Error) {
+            console.error(`❌ Error message: ${error.message}`);
+            console.error(`❌ Error stack: ${error.stack}`);
+          }
         }
       }
 
@@ -580,31 +578,18 @@ class MerchBotService {
       console.log(`📸 Отправляем ${photoUrls.length} изображений для элемента ${itemId}:`, photoUrls);
       for (const url of photoUrls) {
         try {
-          console.log(`📤 Отправляем изображение: ${url}`);
+          console.log(`📤 Отправляем изображение по URL: ${url}`);
           
-          // Извлекаем имя файла из URL
-          const fileName = url.split('/').pop();
-          if (!fileName) {
-            console.error(`❌ Не удалось извлечь имя файла из URL: ${url}`);
-            continue;
-          }
-          
-          // Путь к файлу на сервере
-          const filePath = path.join(__dirname, '..', '..', 'public', 'add', 'merch', fileName);
-          
-          // Проверяем, существует ли файл
-          if (!fs.existsSync(filePath)) {
-            console.error(`❌ Файл не найден: ${filePath}`);
-            continue;
-          }
-          
-          // Создаем InputFile и отправляем
-          const photo = new InputFile(filePath);
-          await ctx.replyWithPhoto(photo);
-          console.log(`✅ Изображение отправлено успешно: ${fileName}`);
+          // Отправляем фото напрямую по URL (grammy поддерживает это)
+          await ctx.replyWithPhoto(url);
+          console.log(`✅ Изображение отправлено успешно: ${url}`);
           await new Promise(resolve => setTimeout(resolve, 500)); // Задержка между фото
         } catch (error) {
           console.error(`❌ Ошибка отправки изображения ${url}:`, error);
+          if (error instanceof Error) {
+            console.error(`❌ Error message: ${error.message}`);
+            console.error(`❌ Error stack: ${error.stack}`);
+          }
         }
       }
 

@@ -8,7 +8,9 @@ import {
   Progress,
   Box,
   TextInput,
-  Select
+  Select,
+  Checkbox,
+  Divider
 } from '@mantine/core';
 import { 
   IconPlayerPlay, 
@@ -17,7 +19,8 @@ import {
   IconWifi, 
   IconWifiOff,
   IconBug,
-  IconPlayerSkipForward
+  IconPlayerSkipForward,
+  IconSettings
 } from '@tabler/icons-react';
 import { CustomModal } from '../../../../utils/CustomModal';
 import { API } from '../../../../config/constants';
@@ -117,6 +120,30 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
   // Локальное состояние типа филиала
   const [localBranchType, setLocalBranchType] = useState<string>(getStoredBranchType());
   const [tempBranchType, setTempBranchType] = useState<string>(localBranchType);
+  
+  // Получаем список отключенных потоков из localStorage
+  const getStoredDisabledStreams = useCallback(() => {
+    if (!user?.email) return new Set<string>();
+    try {
+      const stored = localStorage.getItem(`web-radio-player-disabled-streams-${user.email}`);
+      if (stored) {
+        const parsed = JSON.parse(stored) as string[];
+        return new Set(parsed);
+      }
+    } catch (error) {
+      console.warn('⚠️ [WebRadioPlayer] Ошибка чтения отключенных потоков из localStorage:', error);
+    }
+    return new Set<string>();
+  }, [user?.email]);
+  
+  // Состояние для отключенных потоков
+  const [disabledStreams, setDisabledStreams] = useState<Set<string>>(getStoredDisabledStreams());
+  
+  // Состояние для модального окна управления потоками
+  const [streamsModalOpen, setStreamsModalOpen] = useState(false);
+  
+  // Временное состояние для модального окна (чтобы не применять изменения сразу)
+  const [tempDisabledStreams, setTempDisabledStreams] = useState<Set<string>>(disabledStreams);
   
   // Функция для получения IP устройства в локальной сети
   const getUserIP = useCallback(async () => {
@@ -239,6 +266,37 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     }
   }, [user?.id, user?.branch, user?.email, tempBranchType]);
   
+  // Функции для работы с модальным окном управления потоками
+  const openStreamsModal = useCallback(() => {
+    setTempDisabledStreams(new Set(disabledStreams));
+    setStreamsModalOpen(true);
+  }, [disabledStreams]);
+  
+  const closeStreamsModal = useCallback(() => {
+    setStreamsModalOpen(false);
+  }, []);
+  
+  const saveStreamsChanges = useCallback(() => {
+    if (!user?.email) return;
+    
+    try {
+      // Сохраняем в состояние
+      setDisabledStreams(new Set(tempDisabledStreams));
+      
+      // Сохраняем в localStorage
+      const streamsArray = Array.from(tempDisabledStreams);
+      localStorage.setItem(
+        `web-radio-player-disabled-streams-${user.email}`, 
+        JSON.stringify(streamsArray)
+      );
+      
+      setStreamsModalOpen(false);
+      console.log('✅ [WebRadioPlayer] Настройки потоков сохранены:', streamsArray);
+    } catch (error) {
+      console.error('❌ [WebRadioPlayer] Ошибка сохранения настроек потоков:', error);
+    }
+  }, [user?.email, tempDisabledStreams]);
+  
   // Состояние воспроизведения
   const [playbackState, setPlaybackState] = useState<PlaybackState>('stopped');
   const [downloadState] = useState<DownloadState>('idle');
@@ -307,22 +365,62 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     
     return true;
   }, []);
+  
+  // Получаем потоки для текущего формата филиала
+  const streamsForCurrentBranchType = useMemo(() => {
+    const norm = (v: string | undefined | null) => (v || '').trim().toLowerCase();
+    return streams.filter(stream => 
+      stream.isActive && 
+      norm(stream.branchTypeOfDist) === norm(localBranchType) &&
+      isStreamDateActive(stream)
+    );
+  }, [streams, localBranchType, isStreamDateActive]);
+  
+  // Переключение потока в модальном окне
+  const toggleStream = useCallback((streamId: string) => {
+    setTempDisabledStreams(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(streamId)) {
+        newSet.delete(streamId);
+      } else {
+        newSet.add(streamId);
+      }
+      return newSet;
+    });
+  }, []);
+  
+  // Отключить все потоки
+  const disableAllStreams = useCallback(() => {
+    const allStreamIds = streamsForCurrentBranchType.map(s => s.id);
+    setTempDisabledStreams(new Set(allStreamIds));
+  }, [streamsForCurrentBranchType]);
+  
+  // Включить все потоки
+  const enableAllStreams = useCallback(() => {
+    setTempDisabledStreams(new Set());
+  }, []);
 
   // Отпечаток активных потоков (по id) для отслеживания изменений списка
+  // Учитываем отключенные потоки пользователем
   const activeStreamsFingerprint = useMemo(() => {
     const norm = (v: string | undefined | null) => (v || '').trim().toLowerCase();
     let active = streams.filter(s => 
       s.isActive && 
       norm(s.branchTypeOfDist) === norm(localBranchType) &&
-      isStreamDateActive(s)
+      isStreamDateActive(s) &&
+      !disabledStreams.has(s.id) // Исключаем отключенные потоки
     );
     if (active.length === 0) {
-      active = streams.filter(s => s.isActive && isStreamDateActive(s));
+      active = streams.filter(s => 
+        s.isActive && 
+        isStreamDateActive(s) &&
+        !disabledStreams.has(s.id) // Исключаем отключенные потоки
+      );
     }
     // Стабильный порядок по name/id
     const sorted = [...active].sort((a, b) => (a.name || '').localeCompare(b.name || '') || a.id.localeCompare(b.id));
     return sorted.map(s => s.id).join('|');
-  }, [streams, localBranchType, isStreamDateActive]);
+  }, [streams, localBranchType, isStreamDateActive, disabledStreams]);
   
   // Состояние UI
   const [error, setError] = useState<string | null>(null);
@@ -800,17 +898,21 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     if (shouldPlayStream && streams.length > 0) {
       // Активные потоки по типу филиала, сравнение без регистра и с trim
       // Также проверяем даты начала и окончания потока
+      // Исключаем отключенные потоки пользователем
       const norm = (v: string | undefined | null) => (v || '').trim().toLowerCase();
       let activeStreams = streams.filter(stream => 
         stream.isActive && 
         norm(stream.branchTypeOfDist) === norm(localBranchType) &&
-        isStreamDateActive(stream)
+        isStreamDateActive(stream) &&
+        !disabledStreams.has(stream.id) // Исключаем отключенные потоки
       );
 
       // Фолбэк: если по типу ничего не нашли, используем все активные по датам
       if (activeStreams.length === 0) {
         activeStreams = streams.filter(stream => 
-          stream.isActive && isStreamDateActive(stream)
+          stream.isActive && 
+          isStreamDateActive(stream) &&
+          !disabledStreams.has(stream.id) // Исключаем отключенные потоки
         );
       }
 
@@ -1971,6 +2073,15 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
               >
                 Сменить формат
               </Button>
+              <Button
+                variant="subtle"
+                size="xs"
+                color="blue"
+                onClick={openStreamsModal}
+                leftSection={<IconSettings size={12} />}
+              >
+                Управление потоками
+              </Button>
               {onTimeChange && (
                 <Button
                   variant="subtle"
@@ -2035,6 +2146,88 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
         controls={false}
         style={{ display: 'none' }}
       />
+
+      {/* Модальное окно для управления потоками */}
+      <CustomModal
+        opened={streamsModalOpen}
+        onClose={closeStreamsModal}
+        title="Управление потоками"
+        size="md"
+      >
+        <Stack gap="md">
+          <Text size="sm" c="dimmed">
+            Выберите потоки, которые хотите отключить. Отключенные потоки не будут воспроизводиться.
+          </Text>
+          <Text size="xs" c="dimmed">
+            Формат филиала: <strong>{localBranchType}</strong>
+          </Text>
+          
+          <Divider />
+          
+          <Group justify="space-between" mb="xs">
+            <Text size="sm" fw={500}>
+              Потоки для формата &quot;{localBranchType}&quot; ({streamsForCurrentBranchType.length})
+            </Text>
+            <Group gap="xs">
+              <Button
+                variant="subtle"
+                size="xs"
+                color="red"
+                onClick={disableAllStreams}
+                disabled={streamsForCurrentBranchType.length === 0}
+              >
+                Отключить все
+              </Button>
+              <Button
+                variant="subtle"
+                size="xs"
+                color="green"
+                onClick={enableAllStreams}
+              >
+                Включить все
+              </Button>
+            </Group>
+          </Group>
+          
+          {streamsForCurrentBranchType.length === 0 ? (
+            <Text size="sm" c="dimmed" ta="center" py="md">
+              Нет доступных потоков для формата &quot;{localBranchType}&quot;
+            </Text>
+          ) : (
+            <Stack gap="xs" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+              {streamsForCurrentBranchType.map((stream) => {
+                const isDisabled = tempDisabledStreams.has(stream.id);
+                return (
+                  <Checkbox
+                    key={stream.id}
+                    label={stream.name || 'Без названия'}
+                    checked={!isDisabled}
+                    onChange={() => toggleStream(stream.id)}
+                    size="sm"
+                  />
+                );
+              })}
+            </Stack>
+          )}
+          
+          <Divider />
+          
+          <Group justify="flex-end" mt="md">
+            <Button
+              variant="subtle"
+              onClick={closeStreamsModal}
+            >
+              Отмена
+            </Button>
+            <Button
+              color="blue"
+              onClick={saveStreamsChanges}
+            >
+              Сохранить
+            </Button>
+          </Group>
+        </Stack>
+      </CustomModal>
 
       {/* Модальное окно для выбора типа филиала */}
       <CustomModal
