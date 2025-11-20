@@ -5,7 +5,7 @@ import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { notificationSystem } from '../../../utils/Push';
 import { formatName } from '../../../utils/format';
 import { dateRange, FilterGroup } from '../../../utils/filter';
-import { Box, LoadingOverlay, Grid, Group, ActionIcon, Text, Badge, Avatar } from '@mantine/core';
+import { Box, LoadingOverlay, Grid, Group, ActionIcon, Text, Badge, Avatar, Stack } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
 import { IconPencil, IconTrash, IconPlus, IconPhoto, IconVideo, IconMusic, IconFile, IconEye } from '@tabler/icons-react';
@@ -238,20 +238,18 @@ export default function MediaList() {
     { 
       label: 'Название и тип контента', 
       value: (item: MediaWithFormattedData) => (
-        <Group gap="md" align="center" wrap="wrap">
-          <div style={{ flex: 1, minWidth: '200px' }}>
-            <Text fw={500} size="sm" c="var(--theme-text-primary)" mb="xs">Название:</Text>
-            <Text c="var(--theme-text-secondary)" size="sm" style={{ 
+        <Group gap="md" align="start" wrap="nowrap">
+          <Stack flex={2} align='center'>
+            <Text fw={500} size="sm" c='dimmed'>Название</Text>
+            <Text c="var(--theme-text-secondary)" size='md' style={{ 
               background: 'var(--theme-bg-secondary)', 
-              padding: 'var(--space-2) var(--space-3)', 
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--theme-border)'
+              borderRadius: 'var(--radius-sm)'
             }}>
               {item.name || 'Без названия'}
             </Text>
-          </div>
-          <div style={{ flex: 1, minWidth: '200px' }}>
-            <Text fw={500} size="sm" c="var(--theme-text-primary)" mb="xs">Тип контента:</Text>
+          </Stack>
+          <Stack flex={1} align='center' justify='space-between'>
+            <Text c='dimmed' fw={500} size="sm">Тип контента</Text>
             <Badge
               variant="light"
               style={{
@@ -267,7 +265,7 @@ export default function MediaList() {
             >
               {item.typeContentName || 'Без типа'}
             </Badge>
-          </div>
+          </Stack>
         </Group>
       )
     },
@@ -387,11 +385,7 @@ export default function MediaList() {
           <Avatar
             size="sm"
             radius="xl"
-            style={{
-              background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
-              color: 'white',
-              fontWeight: '600'
-            }}
+            color='blue'
           >
             {row.original.userName.charAt(0).toUpperCase()}
           </Avatar>

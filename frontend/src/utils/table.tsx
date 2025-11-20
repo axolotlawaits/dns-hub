@@ -6,7 +6,7 @@ import './styles/tableUtils.css';
 
 export interface TableComponentProps<TData> {
   data: TData[];
-  initialState: InitialTableState;
+  initialState?: InitialTableState;
   columns: ColumnDef<TData>[];
   columnFilters: ColumnFiltersState;
   sorting: SortingState;

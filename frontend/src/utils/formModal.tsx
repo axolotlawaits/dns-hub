@@ -1,4 +1,4 @@
-import { Modal, TextInput, Select, Button, Alert, Stack, Textarea, Text, Group, Card, Paper, ActionIcon, MultiSelect, Badge } from '@mantine/core';
+import { Modal, TextInput, Select, Button, Alert, Stack, Textarea, Text, Group, Card, Paper, ActionIcon, MultiSelect, Badge, Anchor } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useState, useEffect, useCallback, useMemo, useRef, JSX, memo } from 'react';
 import dayjs from 'dayjs';
@@ -7,6 +7,7 @@ import { FileDropZone } from './dnd';
 import { IconFile, IconFileTypePdf, IconFileTypeDoc, IconFileTypeXls, IconFileTypePpt, IconFileTypeZip, IconPhoto, IconFileTypeJs, IconFileTypeHtml, IconFileTypeCss, IconFileTypeTxt, IconFileTypeCsv, IconX, IconUpload, IconVideo, IconMusic, IconFileText } from '@tabler/icons-react';
 import { FilePreviewModal } from './FilePreviewModal';
 import './styles/formModal.css';
+import { saveAs } from 'file-saver'
 
 // Хук для управления blob URL с автоматической очисткой
 const useBlobUrl = (file: File | null): string | null => {
@@ -117,25 +118,18 @@ const COMMON_FIELD_PROPS = {
   style: {
     '--input-bd': 'var(--theme-border)',
     '--input-bg': 'var(--theme-bg-elevated)',
-    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
   }
 };
 
 // Мемоизированные стили для оптимизации
-const CARD_STYLES = {
-  background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
-  border: '1px solid var(--theme-border)',
-  position: 'relative' as const,
-  overflow: 'visible' as const
-};
 
 const DECORATIVE_STYLES = {
   position: 'absolute' as const,
   top: 0,
   right: 0,
-  width: '100px',
-  height: '100px',
+  width: '50px',
+  height: '50px',
   background: 'linear-gradient(135deg, var(--color-blue-500) 0%, var(--color-blue-600) 100%)',
   borderRadius: '0 0 0 100px',
   opacity: 0.1
@@ -698,17 +692,16 @@ const FileFieldsCard = memo(({
 
   return (
     <Card 
-      p="xl" 
+      p='md' 
       withBorder 
       shadow="lg" 
-      radius="lg"
+      radius="sm"
       className="construction-card"
-      style={CARD_STYLES}
     >
       {/* Декоративный элемент */}
       <div style={DECORATIVE_STYLES} />
       
-      <Stack gap="xl" style={{ position: 'relative' }}>
+      <Stack gap="md" style={{ position: 'relative' }}>
         {/* Заголовок с иконкой */}
         <Group gap="sm" align="center">
           <div style={{
@@ -726,14 +719,13 @@ const FileFieldsCard = memo(({
         {/* Preview файла */}
         {file.source && (
           <Card 
-            p="md" 
-            withBorder 
+            p='15px 0px' 
             radius="md" 
             style={{ 
               background: 'linear-gradient(135deg, var(--theme-bg-secondary) 0%, var(--theme-bg-elevated) 100%)',
-              border: '1px solid var(--theme-border)',
               position: 'relative',
-              overflow: 'hidden'
+              overflow: 'hidden',
+              boxShadow: 'none'
             }}
           >
             {/* Декоративная полоска */}
@@ -746,16 +738,15 @@ const FileFieldsCard = memo(({
               background: 'linear-gradient(90deg, var(--color-blue-500) 0%, var(--color-blue-600) 100%)'
             }} />
             
-            <Group gap="md" align="center" style={{ position: 'relative' }}>
+            <Group gap="md" wrap='nowrap' align="center" style={{ position: 'relative' }}>
               {/* Красивая рамка для превью */}
               <div style={{
                 position: 'relative',
                 borderRadius: '12px',
-                overflow: 'hidden',
                 boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
                 border: '2px solid var(--theme-border)',
                 background: 'var(--theme-bg-elevated)',
-                padding: '8px'
+
               }}>
                 {(() => {
                   const fileName = typeof fileSource === 'string' 
@@ -771,8 +762,8 @@ const FileFieldsCard = memo(({
                       src={imageUrl} 
                       alt={fileName} 
                       style={{ 
-                        height: 60, 
-                        width: 100, 
+                        height: 120, 
+                        width: 'auto', 
                         objectFit: 'contain', 
                         borderRadius: '8px',
                         display: 'block'
@@ -1503,7 +1494,7 @@ export const DynamicFormModal = ({
     const isImage = isImageFile(fileName);
     const fileId = attachment.id || `temp-${fileName}-${Math.random().toString(36).slice(2, 11)}`;
     return (
-      <Card key={fileId} p="sm" withBorder className="file-card">
+      <Card key={fileId} p={10} withBorder className="file-card">
         <Group justify="space-between" align="center">
           <Group gap="md" onClick={() => {
             setPreviewId(fileId);
@@ -1511,12 +1502,12 @@ export const DynamicFormModal = ({
             {isImage ? (
               <img 
                 src={fileUrl} 
-                alt={fileName} 
+                alt='preview' 
                 className="file-preview"
                 style={{ 
-                  height: 48, 
-                  width: 64, 
-                  objectFit: 'cover',
+                  height: 70, 
+                  width: 'auto', 
+                  objectFit: 'contain',
                   borderRadius: 'var(--radius-sm)',
                   border: '1px solid var(--theme-border)'
                 }} 
@@ -1544,18 +1535,30 @@ export const DynamicFormModal = ({
               </Text>
             </div>
           </Group>
-          <Button
-            size="xs"
-            variant="light"
-            color="blue"
-            onClick={(e) => {
-              e.stopPropagation();
-              window.open(fileUrl, '_blank');
-            }}
-            style={{ flexShrink: 0 }}
-          >
-            Скачать
-          </Button>
+          <Stack w='auto'>
+            <Button
+              size="xs"
+              variant="light"
+              color="blue"
+              onClick={(e) => {
+                e.stopPropagation();
+                window.open(fileUrl, '_blank');
+              }}
+            >
+              Открыть
+            </Button>
+            <Button
+              size="xs"
+              variant="light"
+              color="blue"
+              onClick={(e) => {
+                e.stopPropagation();
+                saveAs(fileUrl, fileName)
+              }}
+            >
+              Скачать
+            </Button>
+          </Stack>
         </Group>
       </Card>
     );
