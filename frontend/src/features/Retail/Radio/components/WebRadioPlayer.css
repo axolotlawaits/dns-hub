@@ -1,0 +1,609 @@
+/* ========================================
+   WEB RADIO PLAYER - Улучшенные стили
+   ======================================== */
+
+.web-radio-player {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+}
+
+/* ========================================
+   ОСНОВНОЙ КОНТЕЙНЕР
+   ======================================== */
+
+.web-radio-player-container {
+  background: var(--theme-bg-elevated);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  min-height: 500px;
+  position: relative;
+  overflow: hidden;
+}
+
+.web-radio-player-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, 
+    var(--color-primary-500) 0%, 
+    var(--color-primary-600) 50%, 
+    var(--color-primary-500) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 3s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0%, 100% {
+    background-position: 0% 0%;
+  }
+  50% {
+    background-position: 100% 0%;
+  }
+}
+
+.web-radio-player-container:hover {
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+/* ========================================
+   УВЕДОМЛЕНИЯ
+   ======================================== */
+
+.web-radio-player-offline-notice {
+  background: linear-gradient(135deg, 
+    var(--color-error-100) 0%, 
+    var(--color-error-50) 100%);
+  border: 1px solid var(--color-error-300);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ========================================
+   ЗАГОЛОВОК
+   ======================================== */
+
+.web-radio-player-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-6);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--theme-border);
+}
+
+.web-radio-player-date {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.web-radio-player-online-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-full);
+  background: var(--theme-bg-tertiary);
+  transition: all 0.2s ease;
+}
+
+.web-radio-player-online-status.online {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--color-success-600);
+}
+
+.web-radio-player-online-status.offline {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--color-error-600);
+}
+
+/* ========================================
+   ОСНОВНОЙ КОНТЕНТ
+   ======================================== */
+
+.web-radio-player-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  gap: var(--space-6);
+  padding: var(--space-4) 0;
+}
+
+/* ========================================
+   КНОПКИ УПРАВЛЕНИЯ
+   ======================================== */
+
+.web-radio-player-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+/* Кнопка воспроизведения */
+.web-radio-player-play-button {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.web-radio-player-play-button::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  transform: translate(-50%, -50%);
+  transition: width 0.6s, height 0.6s;
+}
+
+.web-radio-player-play-button:hover::before {
+  width: 300px;
+  height: 300px;
+}
+
+.web-radio-player-play-button:active {
+  transform: scale(0.95);
+}
+
+.web-radio-player-play-button.playing {
+  animation: pulse-glow 2s ease-in-out infinite;
+  box-shadow: 0 8px 32px rgba(59, 130, 246, 0.4);
+}
+
+.web-radio-player-play-button.loading {
+  background: linear-gradient(135deg, 
+    var(--color-gray-500), 
+    var(--color-gray-600));
+  cursor: not-allowed;
+  animation: rotate-gradient 2s linear infinite;
+}
+
+.web-radio-player-play-button:not(.loading):not(:disabled) {
+  background: linear-gradient(135deg, 
+    var(--color-primary-500) 0%, 
+    var(--color-primary-600) 50%,
+    var(--color-primary-700) 100%);
+  background-size: 200% 200%;
+  animation: gradient-shift 3s ease infinite;
+}
+
+.web-radio-player-play-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: linear-gradient(135deg, 
+    var(--color-gray-400), 
+    var(--color-gray-500));
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 8px 32px rgba(59, 130, 246, 0.4),
+                0 0 0 0 rgba(59, 130, 246, 0.7);
+  }
+  50% {
+    box-shadow: 0 8px 32px rgba(59, 130, 246, 0.6),
+                0 0 0 10px rgba(59, 130, 246, 0);
+  }
+}
+
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes rotate-gradient {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Кнопка следующего трека */
+.web-radio-player-next-button {
+  background: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-3) var(--space-5);
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.web-radio-player-next-button:hover:not(:disabled) {
+  background: var(--color-primary-50);
+  border-color: var(--color-primary-300);
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+}
+
+.web-radio-player-next-button:active:not(:disabled) {
+  transform: translateX(2px);
+}
+
+.web-radio-player-next-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ========================================
+   ИНФОРМАЦИЯ О ТРЕКЕ
+   ======================================== */
+
+.web-radio-player-track-info {
+  text-align: center;
+  max-width: 400px;
+  width: 100%;
+}
+
+.web-radio-player-track-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--theme-text-primary);
+  margin-bottom: var(--space-2);
+  transition: all 0.3s ease;
+  animation: fadeInUp 0.5s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.web-radio-player-track-subtitle {
+  font-size: 0.875rem;
+  color: var(--theme-text-secondary);
+  margin-bottom: var(--space-1);
+}
+
+.web-radio-player-track-meta {
+  font-size: 0.75rem;
+  color: var(--theme-text-tertiary);
+}
+
+/* ========================================
+   ПРОГРЕСС-БАР
+   ======================================== */
+
+.web-radio-player-progress-container {
+  width: 100%;
+  max-width: 400px;
+  margin-top: var(--space-4);
+}
+
+.web-radio-player-progress-bar {
+  position: relative;
+  cursor: pointer;
+  margin-bottom: var(--space-2);
+  transition: all 0.2s ease;
+}
+
+.web-radio-player-progress-bar:hover {
+  transform: scaleY(1.2);
+}
+
+.web-radio-player-progress-bar:hover .web-radio-player-progress-fill::after {
+  opacity: 1;
+}
+
+.web-radio-player-progress-fill {
+  position: relative;
+  background: linear-gradient(90deg, 
+    var(--color-primary-500) 0%, 
+    var(--color-primary-600) 50%,
+    var(--color-primary-500) 100%);
+  background-size: 200% 100%;
+  animation: progress-shimmer 2s ease-in-out infinite;
+  border-radius: var(--radius-full);
+  height: 8px;
+  transition: width 0.1s linear;
+}
+
+.web-radio-player-progress-fill::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-primary-500);
+  border: 3px solid var(--theme-bg-elevated);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+@keyframes progress-shimmer {
+  0%, 100% {
+    background-position: 0% 0%;
+  }
+  50% {
+    background-position: 100% 0%;
+  }
+}
+
+.web-radio-player-progress-time {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: 0.75rem;
+  color: var(--theme-text-tertiary);
+}
+
+/* ========================================
+   ИНДИКАТОРЫ
+   ======================================== */
+
+.web-radio-player-buffer-indicator {
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--color-success-600);
+  padding: var(--space-2);
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: var(--radius-md);
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ========================================
+   ИНФОРМАЦИЯ О ФИЛИАЛЕ
+   ======================================== */
+
+.web-radio-player-footer {
+  position: absolute;
+  bottom: 24px;
+  left: 24px;
+  right: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.web-radio-player-branch-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.web-radio-player-branch-name {
+  font-size: 1.25rem;
+  font-weight: 500;
+  color: var(--theme-text-primary);
+}
+
+.web-radio-player-branch-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.web-radio-player-footer-button {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  transition: all 0.2s ease;
+  font-size: 0.75rem;
+}
+
+.web-radio-player-footer-button:hover {
+  background: var(--color-primary-50);
+  transform: translateY(-1px);
+}
+
+.web-radio-player-footer-status {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.web-radio-player-status-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: 0.75rem;
+  color: var(--theme-text-tertiary);
+}
+
+/* ========================================
+   АНИМАЦИИ ЗАГРУЗКИ
+   ======================================== */
+
+.web-radio-player-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  gap: var(--space-4);
+}
+
+.web-radio-player-loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid transparent;
+  border-top-color: var(--color-primary-500);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ========================================
+   ПУСТОЕ СОСТОЯНИЕ
+   ======================================== */
+
+.web-radio-player-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  gap: var(--space-4);
+  text-align: center;
+  padding: var(--space-6);
+}
+
+.web-radio-player-empty-icon {
+  width: 80px;
+  height: 80px;
+  opacity: 0.3;
+  color: var(--theme-text-tertiary);
+}
+
+.web-radio-player-empty-text {
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: var(--theme-text-secondary);
+}
+
+.web-radio-player-empty-description {
+  font-size: 0.875rem;
+  color: var(--theme-text-tertiary);
+  max-width: 400px;
+}
+
+/* ========================================
+   АДАПТИВНОСТЬ
+   ======================================== */
+
+@media (max-width: 768px) {
+  .web-radio-player-container {
+    min-height: 400px;
+    padding: var(--space-4);
+  }
+
+  .web-radio-player-play-button {
+    width: 80px;
+    height: 80px;
+  }
+
+  .web-radio-player-controls {
+    gap: var(--space-3);
+  }
+
+  .web-radio-player-footer {
+    flex-direction: column;
+    gap: var(--space-4);
+    align-items: flex-start;
+  }
+
+  .web-radio-player-footer-status {
+    text-align: left;
+  }
+
+  .web-radio-player-track-title {
+    font-size: 1.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .web-radio-player-play-button {
+    width: 70px;
+    height: 70px;
+  }
+
+  .web-radio-player-track-title {
+    font-size: 1.125rem;
+  }
+}
+
+/* ========================================
+   ДОПОЛНИТЕЛЬНЫЕ ЭФФЕКТЫ
+   ======================================== */
+
+.web-radio-player-ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  transform: scale(0);
+  animation: ripple 0.6s ease-out;
+  pointer-events: none;
+}
+
+@keyframes ripple {
+  to {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+/* Улучшенная анимация для иконок */
+.web-radio-player-icon {
+  transition: transform 0.2s ease;
+}
+
+.web-radio-player-button:hover .web-radio-player-icon {
+  transform: scale(1.1);
+}
+
+/* Плавные переходы для текста */
+.web-radio-player-text-transition {
+  transition: all 0.3s ease;
+}
+

@@ -26,6 +26,7 @@ import { CustomModal } from '../../../../utils/CustomModal';
 import { API } from '../../../../config/constants';
 import { useUserContext } from '../../../../hooks/useUserContext';
 import { useAccessContext } from '../../../../hooks/useAccessContext';
+import './WebRadioPlayer.css';
 
 interface WebRadioPlayerProps {
   className?: string;
@@ -65,6 +66,22 @@ interface MusicTrack {
 
 type PlaybackState = 'stopped' | 'playing' | 'paused' | 'loading' | 'error';
 type DownloadState = 'idle' | 'downloading' | 'complete' | 'error';
+
+// Константы для конфигурации плеера
+const PLAYER_CONSTANTS = {
+  STREAM_FREQUENCY: 3, // Каждые 3 трека вставляется поток
+  MONITOR_INTERVAL: 5000, // Интервал мониторинга (мс)
+  WORKING_TIME_CHECK_INTERVAL: 60000, // Проверка рабочего времени (мс)
+  INTERNET_CHECK_INTERVAL: 10000, // Проверка интернета (мс)
+  HEARTBEAT_INTERVAL: 30000, // Интервал heartbeat (мс)
+  MAX_RETRY_CHECKS: 10, // Максимум попыток проверки недоступного контента
+  RETRY_CHECK_INTERVAL: 2000, // Интервал проверки недоступного контента (мс)
+  STALLED_TIMEOUT: 5000, // Таймаут для stalled события (мс)
+  WAITING_TIMEOUT: 3000, // Таймаут для waiting события (мс)
+  PLAYBACK_CHECK_INTERVAL: 1000, // Интервал проверки воспроизведения (мс)
+  METADATA_LOAD_TIMEOUT: 10000, // Таймаут загрузки метаданных (мс)
+  VERSION: '1.2.1'
+} as const;
 
 const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({ 
   className, 
@@ -446,7 +463,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     retryCount: number;
   } | null>(null);
   const unavailableContentCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const MAX_RETRY_CHECKS = 10; // Максимум 10 проверок (20 секунд при интервале 2 секунды)
+  const MAX_RETRY_CHECKS = PLAYER_CONSTANTS.MAX_RETRY_CHECKS;
 
   // Буферизация следующего трека
   const [nextTrackBuffered, setNextTrackBuffered] = useState(false);
@@ -747,14 +764,14 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
           }
         }
       }
-    }, 60000); // Проверяем каждую минуту
+    }, PLAYER_CONSTANTS.WORKING_TIME_CHECK_INTERVAL);
 
     return () => clearInterval(interval);
   }, [isWithinWorkingTime, playbackState, currentStream, isStreamDateActive]);
 
   // Проверка интернета
   useEffect(() => {
-    const interval = setInterval(checkInternetConnection, 10000);
+    const interval = setInterval(checkInternetConnection, PLAYER_CONSTANTS.INTERNET_CHECK_INTERVAL);
     checkInternetConnection(); // Проверяем сразу
     return () => clearInterval(interval);
   }, [checkInternetConnection]);
@@ -832,7 +849,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
           });
         }
       }
-    }, 5000); // Проверяем каждые 5 секунд
+    }, PLAYER_CONSTANTS.MONITOR_INTERVAL);
 
     return () => clearInterval(monitorInterval);
   }, [playbackState]);
@@ -861,7 +878,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       
       const heartbeatData = {
         deviceName: `DNS Radio Web (${user.email.split('@')[0]})`,
-        appVersion: '1.2.1',
+        appVersion: PLAYER_CONSTANTS.VERSION,
         macAddress: browserId,
         currentIP: userIP,
         userEmail: user.email
@@ -892,8 +909,8 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     // Схема: 1трек, 2трек, 3трек, поток, 4трек, 5трек, 6трек, поток...
     // songsCount: 3(после 3-го трека) -> поток
     // songsCount: 7(после 6-го трека) -> поток
-    // Android logic: every 3 songs, insert a stream (3, 6, 9, ...)
-    const shouldPlayStream = songsCount > 0 && songsCount % 3 === 0;
+    // Android logic: every N songs, insert a stream (N, 2N, 3N, ...)
+    const shouldPlayStream = songsCount > 0 && songsCount % PLAYER_CONSTANTS.STREAM_FREQUENCY === 0;
     
     if (shouldPlayStream && streams.length > 0) {
       // Активные потоки по типу филиала, сравнение без регистра и с trim
@@ -1094,7 +1111,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
           } else {
             resolve();
           }
-        }, 10000);
+        }, PLAYER_CONSTANTS.METADATA_LOAD_TIMEOUT);
       });
 
       // Проверяем, что файл действительно готов к воспроизведению
@@ -1313,7 +1330,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
           clearInterval(playbackCheckIntervalRef.current);
         }
         
-        // Проверяем каждые 2 секунды, не закончился ли трек
+        // Проверяем периодически, не закончился ли трек
         playbackCheckIntervalRef.current = setInterval(() => {
           if (!audio) {
             return;
@@ -1517,7 +1534,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
         clearTimeout(stalledTimeoutRef.current);
       }
       
-      // Если застряло более 10 секунд - перезагружаем
+      // Если застряло слишком долго - перезагружаем
       stalledTimeoutRef.current = setTimeout(() => {
         stalledTimeoutRef.current = null;
         if (audio && !audio.paused && audio.readyState < 3 && playbackState === 'playing') {
@@ -1559,7 +1576,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
             });
           }
         }
-      }, 10000);
+      }, PLAYER_CONSTANTS.WAITING_TIMEOUT);
     };
 
     const handleCanPlay = () => {
@@ -1730,7 +1747,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       return; // Не запускаем интервал если вкладка неактивна
     }
     
-    const interval = setInterval(sendHeartbeat, 30000);
+    const interval = setInterval(sendHeartbeat, PLAYER_CONSTANTS.HEARTBEAT_INTERVAL);
     sendHeartbeat(); // Отправляем сразу
     return () => clearInterval(interval);
   }, [sendHeartbeat, isActive]);
@@ -1828,13 +1845,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
           p="sm" 
           mb="md" 
           radius="md"
-          style={{
-            background: 'var(--color-error-100)',
-
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--space-2)'
-          }}
+          className="web-radio-player-offline-notice"
         >
           <IconWifiOff size={20} color="var(--color-error-500)" />
           <Text size="sm" c="red" fw={500}>
@@ -1850,33 +1861,23 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
         p="xl" 
         radius="lg" 
         shadow="sm"
-        style={{
-          background: 'var(--theme-bg-elevated)',
-
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
-          minHeight: '500px',
-          position: 'relative'
-        }}
+        className="web-radio-player-container"
       >
         {/* Заголовок с логотипом */}
-        <Group justify="space-between" align="center" mb="xl">
-          <Group gap="md" align="center">
-            <Box>
-              <Text size="xs" c="dimmed" style={{ fontFamily: 'var(--font-family-primary)' }}>
-                {new Date().toLocaleDateString('ru-RU', { 
-                  month: 'long', 
-                  year: 'numeric' 
-                })} 
-              </Text>
-              <Text size="sm" c="dimmed" style={{ fontFamily: 'var(--font-family-primary)' }}>
-                {new Date().toLocaleDateString('ru-RU')}
-              </Text>
-
-            </Box>
-          </Group>
+        <Group justify="space-between" align="center" className="web-radio-player-header">
+          <Box className="web-radio-player-date">
+            <Text size="xs" c="dimmed" style={{ fontFamily: 'var(--font-family-primary)' }}>
+              {new Date().toLocaleDateString('ru-RU', { 
+                month: 'long', 
+                year: 'numeric' 
+              })} 
+            </Text>
+            <Text size="sm" c="dimmed" style={{ fontFamily: 'var(--font-family-primary)' }}>
+              {new Date().toLocaleDateString('ru-RU')}
+            </Text>
+          </Box>
           
-          <Group gap="xs" align="center">
+          <Group gap="xs" align="center" className={`web-radio-player-online-status ${isOnline ? 'online' : 'offline'}`}>
             <IconWifi 
               size={20} 
               color={isOnline ? 'var(--color-success-500)' : 'var(--color-error-500)'} 
@@ -1888,111 +1889,82 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
         </Group>
 
         {/* Основной контент - кнопка воспроизведения по центру */}
-        <Box
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: '300px',
-            gap: 'var(--space-4)'
-          }}
-        >
-                     {/* Группа кнопок управления */}
-           <Group gap="md" align="center">
-             {/* Кнопка воспроизведения */}
-             <Button
-               size="xl"
-               radius="xl"
-               leftSection={
-                 playbackState === 'loading' ? 
-                   <div style={{ 
-                     width: '32px', 
-                     height: '32px', 
-                     
-                     borderTop: '3px solid transparent', 
-                     borderRadius: '50%', 
-                     animation: 'spin 1s linear infinite' 
-                   }} /> :
-                   playbackState === 'playing' ? 
-                     <IconPlayerPause size={32} /> : 
-                     <IconPlayerPlay size={32} />
-               }
-               onClick={handlePlayPause}
+        <Box className="web-radio-player-content">
+          {/* Группа кнопок управления */}
+          <Group gap="md" align="center" className="web-radio-player-controls">
+            {/* Кнопка воспроизведения */}
+            <Button
+              size="xl"
+              radius="xl"
+              className={`web-radio-player-play-button ${
+                playbackState === 'loading' ? 'loading' : 
+                playbackState === 'playing' ? 'playing' : ''
+              }`}
+              onClick={handlePlayPause}
               disabled={!isWithinWorkingTime() || playbackState === 'loading' || (musicTracks.length === 0 && streams.length === 0)}
-               style={{
-                 width: '80px',
-                 height: '80px',
-                 background: playbackState === 'loading' ? 
-                   'linear-gradient(135deg, var(--color-gray-500), var(--color-gray-600))' :
-                   'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
-                 border: 'none',
-                 boxShadow: 'var(--theme-shadow-lg)',
-                 borderRadius: '50%',
-                 display: 'flex',
-                 alignItems: 'center',
-                 justifyContent: 'center'
-               }}
-             />
+            >
+              {playbackState === 'loading' ? 
+                <div className="web-radio-player-loading-spinner" /> :
+                playbackState === 'playing' ? 
+                  <IconPlayerPause size={32} className="web-radio-player-icon" /> : 
+                  <IconPlayerPlay size={32} className="web-radio-player-icon" />
+              }
+            </Button>
              
-                           {/* Кнопка следующего трека - только для пользователей с полным доступом */}
-              {hasRadioFullAccess && (
-                <Button
-                  size="lg"
-                  radius="xl"
-                  leftSection={<IconPlayerSkipForward size={24} />}
-                  onClick={handleNextTrack}
-                  disabled={!isWithinWorkingTime() || (!currentStream && !currentTrack)}
-                  variant="light"
-                  style={{
-                    background: 'var(--theme-bg-elevated)',
-                    border: '1px solid var(--theme-border)',
-                    boxShadow: 'var(--theme-shadow-sm)'
-                  }}
-                >
-                  Далее
-                </Button>
-              )}
-           </Group>
+            {/* Кнопка следующего трека - только для пользователей с полным доступом */}
+            {hasRadioFullAccess && (
+              <Button
+                size="lg"
+                radius="xl"
+                className="web-radio-player-next-button"
+                leftSection={<IconPlayerSkipForward size={24} className="web-radio-player-icon" />}
+                onClick={handleNextTrack}
+                disabled={!isWithinWorkingTime() || (!currentStream && !currentTrack)}
+                variant="light"
+              >
+                Далее
+              </Button>
+            )}
+          </Group>
 
           {/* Регулятор громкости удален по запросу */}
 
           {/* Текущий трек/поток */}
-          <Box style={{ textAlign: 'center', maxWidth: '400px' }}>
+          <Box className="web-radio-player-track-info">
             {isPlayingStream && (pendingStream || currentStream) ? (
               <Stack gap="xs" align="center">
-                <Text size="xl" fw={600} style={{ color: 'var(--theme-text-primary)' }}>
+                <Text size="xl" fw={600} className="web-radio-player-track-title">
                   📻 {(pendingStream || currentStream)!.name}
                 </Text>
-                <Text size="sm" c="dimmed">
+                <Text size="sm" c="dimmed" className="web-radio-player-track-subtitle">
                   {(pendingStream || currentStream)!.branchTypeOfDist}
                 </Text>
-                <Text size="xs" c="dimmed">
+                <Text size="xs" c="dimmed" className="web-radio-player-track-meta">
                   Радио поток
                 </Text>
               </Stack>
             ) : (currentTrack || pendingTrack) ? (
               <Stack gap="xs" align="center">
-                <Text size="xl" fw={600} style={{ color: 'var(--theme-text-primary)' }}>
+                <Text size="xl" fw={600} className="web-radio-player-track-title">
                   🎵 {(currentTrack || pendingTrack)!.fileName.replace('.mp3', '')}
                 </Text>
-                <Text size="sm" c="dimmed">
+                <Text size="sm" c="dimmed" className="web-radio-player-track-subtitle">
                   Музыкальный трек
                 </Text>
                 {musicTracks.length > 0 && (
-                  <Text size="xs" c="dimmed">
+                  <Text size="xs" c="dimmed" className="web-radio-player-track-meta">
                     Треков: {musicTracks.length} • Сыграно: {songsPlayed}
                   </Text>
                 )}
               </Stack>
             ) : (
-              <Stack gap="xs" align="center">
-                <Text size="lg" c="dimmed" ta="center">
+              <Stack gap="xs" align="center" className="web-radio-player-empty-state">
+                <Text size="lg" c="dimmed" ta="center" className="web-radio-player-empty-text">
                   {!isWithinWorkingTime() ? 'Время работы истекло' : 
                    musicTracks.length > 0 ? 'Нажмите Play для начала воспроизведения' : 'Загружается музыка...'}
                 </Text>
                 {musicTracks.length > 0 && (
-                  <Text size="xs" c="dimmed">
+                  <Text size="xs" c="dimmed" className="web-radio-player-empty-description">
                     Треков загружено: {musicTracks.length}
                   </Text>
                 )}
@@ -2002,14 +1974,14 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
 
           {/* Прогресс воспроизведения */}
           {duration > 0 && (
-            <Box style={{ width: '100%', maxWidth: '400px' }}>
-              <Progress 
-                value={(currentTime / duration) * 100} 
-                size="md" 
-                radius="xl"
-                style={{ marginBottom: 'var(--space-2)' }}
-              />
-              <Group justify="space-between" gap="xs">
+            <Box className="web-radio-player-progress-container">
+              <Box className="web-radio-player-progress-bar">
+                <Box 
+                  className="web-radio-player-progress-fill"
+                  style={{ width: `${(currentTime / duration) * 100}%` }}
+                />
+              </Box>
+              <Group justify="space-between" gap="xs" className="web-radio-player-progress-time">
                 <Text size="xs" c="dimmed">
                   {formatTime(currentTime)}
                 </Text>
@@ -2022,7 +1994,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
 
         {/* Индикатор буферизации следующего трека */}
         {nextTrackBuffered && (
-          <Box style={{ width: '100%', maxWidth: '400px' }}>
+          <Box className="web-radio-player-buffer-indicator">
             <Text size="xs" c="dimmed" ta="center">
               ✓ Следующий трек готов
             </Text>
@@ -2031,7 +2003,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
 
           {/* Прогресс загрузки */}
           {downloadState === 'downloading' && (
-            <Box style={{ width: '100%', maxWidth: '300px' }}>
+            <Box className="web-radio-player-progress-container" style={{ maxWidth: '300px' }}>
               <Progress 
                 value={downloadProgress} 
                 size="sm" 
@@ -2046,22 +2018,12 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
         </Box>
 
         {/* Информация о филиале внизу */}
-        <Box
-          style={{
-            position: 'absolute',
-            bottom: '24px',
-            left: '24px',
-            right: '24px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-end'
-          }}
-        >
-          <Box>
-            <Text size="xl" fw={500} style={{ color: 'var(--theme-text-primary)' }}>
+        <Box className="web-radio-player-footer">
+          <Box className="web-radio-player-branch-info">
+            <Text size="xl" fw={500} className="web-radio-player-branch-name">
               {branchName}
             </Text>
-            <Group gap="xs" align="center" mt="xs">
+            <Group gap="xs" align="center" className="web-radio-player-branch-meta">
               <Text size="sm" c="dimmed">
                 {localBranchType} ({workingTime.start} — {workingTime.end})
               </Text>
@@ -2069,6 +2031,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
                 variant="subtle"
                 size="xs"
                 color="blue"
+                className="web-radio-player-footer-button"
                 onClick={openBranchTypeModal}
               >
                 Сменить формат
@@ -2077,6 +2040,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
                 variant="subtle"
                 size="xs"
                 color="blue"
+                className="web-radio-player-footer-button"
                 onClick={openStreamsModal}
                 leftSection={<IconSettings size={12} />}
               >
@@ -2087,6 +2051,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
                   variant="subtle"
                   size="xs"
                   color="blue"
+                  className="web-radio-player-footer-button"
                   onClick={openTimeModal}
                   leftSection={<IconClock size={12} />}
                 >
@@ -2096,22 +2061,22 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
             </Group>
           </Box>
           
-          <Box style={{ textAlign: 'right' }}>
-            <Group gap="xs" align="center" mb="xs">
+          <Box className="web-radio-player-footer-status">
+            <Group gap="xs" align="center" className="web-radio-player-status-item">
               <IconClock size={16} color="var(--theme-text-secondary)" />
               <Text size="xs" c="dimmed">
                 {isWithinWorkingTime() ? 'Рабочее время' : 'Вне рабочего времени'}
               </Text>
             </Group>
-            <Group gap="xs" align="center">
+            <Group gap="xs" align="center" className="web-radio-player-status-item">
               <IconBug size={14} color="var(--theme-text-secondary)" />
               <Text size="xs" c="dimmed">
-                Версия: 1.2.1
+                Версия: {PLAYER_CONSTANTS.VERSION}
               </Text>
             </Group>
             {downloadState === 'complete' && (
-              <Text size="xs" c="dimmed">
-                Готово: {downloadedCount} файлов • v1.2.1
+              <Text size="xs" c="dimmed" className="web-radio-player-status-item">
+                Готово: {downloadedCount} файлов • v{PLAYER_CONSTANTS.VERSION}
               </Text>
             )}
           </Box>

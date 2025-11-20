@@ -365,11 +365,53 @@ const ProfileInfo = () => {
 
 
   const handlePhotoSelect = async (values: Record<string, any>) => {
-    const file = values.photo;
-    if (!file || !(file instanceof File)) return;
+    const photoValue = values.photo;
+    
+    // Обрабатываем разные форматы данных
+    let file: File | null = null;
+    
+    // Если это массив FileAttachment (из FileUploadComponent)
+    if (Array.isArray(photoValue) && photoValue.length > 0) {
+      const attachment = photoValue[0];
+      if (attachment && attachment.source instanceof File) {
+        file = attachment.source;
+      } else if (attachment && typeof attachment.source === 'string') {
+        // Если это строка (путь к файлу), пропускаем
+        notificationSystem.addNotification(
+          'Ошибка',
+          'Пожалуйста, выберите новый файл для загрузки',
+          'error'
+        );
+        return;
+      }
+    }
+    // Если это напрямую File объект
+    else if (photoValue instanceof File) {
+      file = photoValue;
+    }
+    // Если это FileAttachment объект
+    else if (photoValue && photoValue.source instanceof File) {
+      file = photoValue.source;
+    }
+    
+    if (!file) {
+      notificationSystem.addNotification(
+        'Ошибка',
+        'Пожалуйста, выберите файл для загрузки',
+        'error'
+      );
+      return;
+    }
     
     setFile(file);
     const reader = new FileReader();
+    reader.onerror = () => {
+      notificationSystem.addNotification(
+        'Ошибка',
+        'Не удалось прочитать файл',
+        'error'
+      );
+    };
     reader.onloadend = () => {
       setNewPhoto(reader.result as string);
       closePhotoModal();
@@ -1092,7 +1134,7 @@ const ProfileInfo = () => {
         title={user?.image ? 'Смена фото профиля' : 'Добавление фото профиля'}
         mode="create"
         fields={photoSelectFields}
-        initialValues={{ photo: null }}
+        initialValues={{ photo: [] }}
         onSubmit={handlePhotoSelect}
         submitButtonText="Выбрать фото"
       />
