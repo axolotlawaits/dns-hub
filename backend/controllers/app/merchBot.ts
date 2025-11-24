@@ -404,9 +404,16 @@ class MerchBotService {
       
       for (const photoUrl of photoUrls) {
         try {
+          // Проверяем, что это валидный URL
+          if (!photoUrl.startsWith('http://') && !photoUrl.startsWith('https://')) {
+            console.error(`❌ Некорректный URL: ${photoUrl}`);
+            continue;
+          }
+          
           console.log(`📤 Отправляем изображение по URL: ${photoUrl}`);
           
-          // Отправляем фото напрямую по URL (grammy поддерживает это)
+          // В grammy можно передать URL напрямую как строку
+          // Telegram API автоматически загрузит изображение по URL
           await ctx.replyWithPhoto(photoUrl);
           console.log(`✅ Изображение отправлено успешно: ${photoUrl}`);
           await new Promise(resolve => setTimeout(resolve, 500)); // Задержка между фото
@@ -578,9 +585,16 @@ class MerchBotService {
       console.log(`📸 Отправляем ${photoUrls.length} изображений для элемента ${itemId}:`, photoUrls);
       for (const url of photoUrls) {
         try {
+          // Проверяем, что это валидный URL
+          if (!url.startsWith('http://') && !url.startsWith('https://')) {
+            console.error(`❌ Некорректный URL: ${url}`);
+            continue;
+          }
+          
           console.log(`📤 Отправляем изображение по URL: ${url}`);
           
-          // Отправляем фото напрямую по URL (grammy поддерживает это)
+          // В grammy можно передать URL напрямую как строку
+          // Telegram API автоматически загрузит изображение по URL
           await ctx.replyWithPhoto(url);
           console.log(`✅ Изображение отправлено успешно: ${url}`);
           await new Promise(resolve => setTimeout(resolve, 500)); // Задержка между фото
