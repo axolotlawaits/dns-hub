@@ -399,26 +399,25 @@ class MerchBotService {
       }
 
       // Отправляем изображения
-      const photoUrls = await this.getPhotoUrls(foundButton.id);
-      console.log(`📸 Найдено ${photoUrls.length} изображений для отправки`);
+      const photoPaths = await this.getPhotoPaths(foundButton.id);
+      console.log(`📸 Найдено ${photoPaths.length} изображений для отправки`);
       
-      for (const photoUrl of photoUrls) {
+      for (const photoPath of photoPaths) {
         try {
-          // Проверяем, что это валидный URL
-          if (!photoUrl.startsWith('http://') && !photoUrl.startsWith('https://')) {
-            console.error(`❌ Некорректный URL: ${photoUrl}`);
+          // Проверяем, что файл существует
+          if (!fs.existsSync(photoPath)) {
+            console.error(`❌ Файл не найден: ${photoPath}`);
             continue;
           }
           
-          console.log(`📤 Отправляем изображение по URL: ${photoUrl}`);
+          console.log(`📤 Отправляем изображение: ${photoPath}`);
           
-          // В grammy можно передать URL напрямую как строку
-          // Telegram API автоматически загрузит изображение по URL
-          await ctx.replyWithPhoto(photoUrl);
-          console.log(`✅ Изображение отправлено успешно: ${photoUrl}`);
+          // Отправляем изображение как файл напрямую с диска
+          await ctx.replyWithPhoto(new InputFile(photoPath));
+          console.log(`✅ Изображение отправлено успешно: ${photoPath}`);
           await new Promise(resolve => setTimeout(resolve, 500)); // Задержка между фото
         } catch (error) {
-          console.error(`❌ Ошибка отправки изображения ${photoUrl}:`, error);
+          console.error(`❌ Ошибка отправки изображения ${photoPath}:`, error);
           if (error instanceof Error) {
             console.error(`❌ Error message: ${error.message}`);
             console.error(`❌ Error stack: ${error.stack}`);
@@ -579,27 +578,26 @@ class MerchBotService {
       }
 
       // Получаем изображения
-      const photoUrls = await this.getPhotoUrls(itemId);
+      const photoPaths = await this.getPhotoPaths(itemId);
       
       // Отправляем изображения
-      console.log(`📸 Отправляем ${photoUrls.length} изображений для элемента ${itemId}:`, photoUrls);
-      for (const url of photoUrls) {
+      console.log(`📸 Отправляем ${photoPaths.length} изображений для элемента ${itemId}`);
+      for (const photoPath of photoPaths) {
         try {
-          // Проверяем, что это валидный URL
-          if (!url.startsWith('http://') && !url.startsWith('https://')) {
-            console.error(`❌ Некорректный URL: ${url}`);
+          // Проверяем, что файл существует
+          if (!fs.existsSync(photoPath)) {
+            console.error(`❌ Файл не найден: ${photoPath}`);
             continue;
           }
           
-          console.log(`📤 Отправляем изображение по URL: ${url}`);
+          console.log(`📤 Отправляем изображение: ${photoPath}`);
           
-          // В grammy можно передать URL напрямую как строку
-          // Telegram API автоматически загрузит изображение по URL
-          await ctx.replyWithPhoto(url);
-          console.log(`✅ Изображение отправлено успешно: ${url}`);
+          // Отправляем изображение как файл напрямую с диска
+          await ctx.replyWithPhoto(new InputFile(photoPath));
+          console.log(`✅ Изображение отправлено успешно: ${photoPath}`);
           await new Promise(resolve => setTimeout(resolve, 500)); // Задержка между фото
         } catch (error) {
-          console.error(`❌ Ошибка отправки изображения ${url}:`, error);
+          console.error(`❌ Ошибка отправки изображения ${photoPath}:`, error);
           if (error instanceof Error) {
             console.error(`❌ Error message: ${error.message}`);
             console.error(`❌ Error stack: ${error.stack}`);
@@ -1155,8 +1153,8 @@ class MerchBotService {
     }
   }
 
-  // Получение URL изображений
-  private async getPhotoUrls(itemId: string): Promise<string[]> {
+  // Получение локальных путей к изображениям
+  private async getPhotoPaths(itemId: string): Promise<string[]> {
     try {
       console.log(`🔍 Ищем изображения для элемента ${itemId}`);
       const item = await prisma.merch.findUnique({
@@ -1176,25 +1174,34 @@ class MerchBotService {
       
       console.log(`📋 Найден элемент: ${item.name}, attachments: ${item.attachments.length}`);
       
-      const urls: string[] = [];
+      const paths: string[] = [];
       const addedFiles = new Set<string>(); // Для отслеживания уже добавленных файлов
+      
+      // Путь к директории с изображениями
+      const merchDir = path.join(process.cwd(), 'public', 'add', 'merch');
       
       // Изображения из attachments
       for (const attachment of item.attachments) {
         if (!addedFiles.has(attachment.source)) { // Проверяем, не добавлен ли уже этот файл
-          const attachmentUrl = this.getImageUrl(attachment.source);
-          urls.push(attachmentUrl);
-          addedFiles.add(attachment.source);
-          console.log(`📎 Добавлено дополнительное изображение: ${attachmentUrl}`);
+          const filePath = path.join(merchDir, attachment.source);
+          
+          // Проверяем, существует ли файл
+          if (fs.existsSync(filePath)) {
+            paths.push(filePath);
+            addedFiles.add(attachment.source);
+            console.log(`📎 Добавлено изображение: ${filePath}`);
+          } else {
+            console.warn(`⚠️ Файл не найден: ${filePath}`);
+          }
         } else {
           console.log(`⏭️ Пропущено дублирующее изображение: ${attachment.source}`);
         }
       }
       
-      console.log(`📸 Итого URL изображений: ${urls.length}`, urls);
-      return urls;
+      console.log(`📸 Итого найдено изображений: ${paths.length}`);
+      return paths;
     } catch (error) {
-      console.error('Error getting photo URLs:', error);
+      console.error('Error getting photo paths:', error);
       return [];
     }
   }
@@ -1531,6 +1538,7 @@ class MerchBotService {
     console.log(`📁 [getImageUrl] Итоговый URL: ${url}`);
     return url;
   }
+
 
   // Запуск бота
   public async launch(): Promise<boolean> {
