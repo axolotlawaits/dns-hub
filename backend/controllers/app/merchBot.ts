@@ -1084,6 +1084,39 @@ class MerchBotService {
     }
     
     try {
+      // Получаем или создаем пользователя
+      let tgUser = await prisma.merchTgUser.findUnique({
+        where: { userId: ctx.from?.id || 0 }
+      });
+
+      if (!tgUser) {
+        tgUser = await prisma.merchTgUser.create({
+          data: {
+            userId: ctx.from?.id || 0,
+            username: ctx.from?.username || null,
+            firstName: ctx.from?.first_name || null,
+            lastName: ctx.from?.last_name || null
+          }
+        });
+      }
+
+      // Сохраняем обратную связь в универсальную таблицу с указанием инструмента
+      const savedFeedback = await (prisma as any).feedback.create({
+        data: {
+          tool: 'merch',
+          userId: tgUser.id,
+          email: feedback.email,
+          text: feedback.text,
+          photos: feedback.photos || [],
+          metadata: {
+            telegramUserId: ctx.from?.id,
+            username: ctx.from?.username,
+            firstName: ctx.from?.first_name,
+            lastName: ctx.from?.last_name
+          }
+        }
+      });
+
       // Отправляем сообщение администратору
       const adminMessage = `
 📩 НОВОЕ СООБЩЕНИЕ ОБРАТНОЙ СВЯЗИ
@@ -1098,6 +1131,7 @@ class MerchBotService {
       
       // Здесь можно отправить сообщение администратору
       console.log('Feedback received:', adminMessage);
+      console.log('Feedback saved with ID:', savedFeedback.id);
       
       // Очищаем состояние после успешной обработки
       ctx.session.feedbackState = undefined;
@@ -1445,8 +1479,9 @@ class MerchBotService {
       }
       
       // Защищаем теги с конца к началу (чтобы не сбить индексы)
+      // Используем уникальный формат плейсхолдеров, который точно не будет конфликтовать с Markdown
       tagMatches.reverse().forEach(({ start, end, tag }) => {
-        const placeholder = `__EXISTING_HTML_${existingTagIndex++}__`;
+        const placeholder = `{{EXISTING_HTML_${existingTagIndex++}}}`;
         existingTags.unshift({ placeholder, tag }); // unshift для сохранения порядка
         html = html.substring(0, start) + placeholder + html.substring(end);
       });
@@ -1464,7 +1499,7 @@ class MerchBotService {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
       codeBlocks.push(`<code>${escapedContent}</code>`);
-      return `__CODE_BLOCK_${index}__`;
+      return `{{CODE_BLOCK_${index}}}`;
     });
     
     // 2. Обрабатываем ссылки (чтобы не обрабатывать markdown внутри ссылок)
@@ -1482,13 +1517,16 @@ class MerchBotService {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
       links.push(`<a href="${escapedUrl}">${escapedText}</a>`);
-      return `__LINK_${index}__`;
+      return `{{LINK_${index}}}`;
     });
     
     // 3. Жирный текст: **текст** или __текст__
     // Важно: используем нежадное совпадение и обрабатываем до курсива
+    // НЕ обрабатываем плейсхолдеры (CODE_BLOCK_, LINK_, EXISTING_HTML_)
     html = html.replace(/\*\*([^*\n]+?)\*\*/g, '<b>$1</b>');
-    html = html.replace(/__(?!CODE_BLOCK_|LINK_|EXISTING_HTML_|\d+__)([^_\n]+?)__(?!\d+__)/g, '<b>$1</b>');
+    // Улучшенное регулярное выражение для __текст__, которое точно исключает плейсхолдеры
+    // Плейсхолдеры теперь используют формат {{...}}, поэтому они не конфликтуют с __текст__
+    html = html.replace(/__(?!CODE_BLOCK_|LINK_|EXISTING_HTML_)([^_\n]+?)__/g, '<b>$1</b>');
     
     // 4. Зачеркнутый текст: ~~текст~~
     html = html.replace(/~~([^~\n]+?)~~/g, '<s>$1</s>');
@@ -1500,20 +1538,21 @@ class MerchBotService {
     
     // Восстанавливаем код и ссылки
     codeBlocks.forEach((code, index) => {
-      html = html.replace(`__CODE_BLOCK_${index}__`, code);
+      html = html.replace(`{{CODE_BLOCK_${index}}}`, code);
     });
     links.forEach((link, index) => {
-      html = html.replace(`__LINK_${index}__`, link);
+      html = html.replace(`{{LINK_${index}}}`, link);
     });
     
-    // Восстанавливаем существующие HTML теги
+    // Восстанавливаем существующие HTML теги ПЕРЕД финальной обработкой
     existingTags.forEach(({ placeholder, tag }) => {
-      html = html.replace(placeholder, tag);
+      html = html.replace(new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), tag);
     });
     
     console.log(`🔄 [formatDescription] После конвертации (первые 200 символов):`, html.substring(0, 200));
     console.log(`🔄 [formatDescription] Содержит <b>:`, html.includes('<b>'));
     console.log(`🔄 [formatDescription] Содержит \n:`, html.includes('\n'));
+    console.log(`🔄 [formatDescription] Содержит EXISTING_HTML:`, html.includes('EXISTING_HTML'));
     
     // Экранируем HTML-символы в тексте, но сохраняем разрешенные теги Telegram
     // Telegram HTML поддерживает ТОЛЬКО: <b>, <i>, <u>, <s>, <code>, <pre>, <a href="url">

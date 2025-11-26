@@ -56,6 +56,7 @@ import Bookmarks from './Bookmarks';
 import Notification from './Notification';
 import Radio from '../features/Retail/Radio/Radio';
 import AppStore from '../features/Retail/AppStore/AppStore';
+import FeedbackModule from '../features/Feedback/Feedback';
 import BugReports from '../features/Retail/BugReports/BugReports';
 import LogViewer from '../components/LogViewer';
 
@@ -166,6 +167,7 @@ function App() {
                   <Route path='/retail/radio' element={<Radio />} />
                   <Route path='/retail/bug-reports' element={<BugReports />} />
                   <Route path='/logs' element={<LogViewer />} />
+                  <Route path='/feedback' element={<FeedbackModule />} />
                 </Route>
                 <Route path='/supply/loaders' element={<LoadersHome />} />
                 <Route path='/supply/loaders/route/:id' element={<RouteComponent />} />

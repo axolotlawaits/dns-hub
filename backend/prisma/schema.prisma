@@ -796,6 +796,26 @@ model MerchTgUserStats {
   user      MerchTgUser @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+// Универсальная таблица обратной связи
+model Feedback {
+  id        String   @id @default(uuid())
+  tool      String   // Инструмент/модуль (merch, radio, и т.д.)
+  userId    String?  // ID пользователя (может быть из разных источников)
+  email     String
+  text      String
+  photos    String[] @default([]) // Массив путей к фотографиям
+  metadata  Json?    // Дополнительные данные (имя пользователя, username и т.д.)
+  createdAt DateTime @default(now())
+  isRead    Boolean  @default(false)
+  readAt    DateTime?
+  readBy    String?  // ID пользователя системы, который прочитал
+
+  @@index([tool])
+  @@index([createdAt])
+  @@index([isRead])
+  @@index([tool, isRead])
+}
+
 // ========================================
 // СВЯЗУЮЩИЕ ТАБЛИЦЫ - Junction Tables
 // ========================================

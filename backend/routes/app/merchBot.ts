@@ -1,5 +1,6 @@
 import express from 'express';
 import { prisma } from '../../server.js';
+import { authenticateToken } from '../../middleware/auth.js';
 
 const router = express.Router();
 
@@ -348,6 +349,199 @@ router.get('/stats', async (req: any, res: any) => {
       }
     });
 
+    // Среднее количество действий на пользователя
+    const avgActionsPerUser = activeUsers.length > 0 ? (totalActions / activeUsers.length) : 0;
+
+    // Статистика по дням недели
+    const weekdayStats: Record<number, number> = {};
+    dailyStatsRaw.forEach(stat => {
+      const weekday = stat.timestamp.getDay(); // 0 = воскресенье, 1 = понедельник, и т.д.
+      weekdayStats[weekday] = (weekdayStats[weekday] || 0) + 1;
+    });
+
+    // Статистика по времени суток (утро 6-12, день 12-18, вечер 18-24, ночь 0-6)
+    const timeOfDayStats = {
+      morning: 0,   // 6-12
+      afternoon: 0, // 12-18
+      evening: 0,  // 18-24
+      night: 0     // 0-6
+    };
+    dailyStatsRaw.forEach(stat => {
+      const hour = stat.timestamp.getHours();
+      if (hour >= 6 && hour < 12) timeOfDayStats.morning++;
+      else if (hour >= 12 && hour < 18) timeOfDayStats.afternoon++;
+      else if (hour >= 18 && hour < 24) timeOfDayStats.evening++;
+      else timeOfDayStats.night++;
+    });
+
+    // Статистика по длине поисковых запросов
+    const searchLengthStats = {
+      short: 0,    // 1-5 символов
+      medium: 0,  // 6-15 символов
+      long: 0     // 16+ символов
+    };
+    searches.forEach(search => {
+      if (search.details) {
+        const length = search.details.length;
+        if (length <= 5) searchLengthStats.short++;
+        else if (length <= 15) searchLengthStats.medium++;
+        else searchLengthStats.long++;
+      }
+    });
+
+    // Статистика по сессиям (группировка действий по пользователям и времени)
+    // Сессия = действия пользователя в течение 30 минут
+    const sessionStats: Record<string, { userId: string; startTime: Date; endTime: Date; actions: number }> = {};
+    const userActions = await prisma.merchTgUserStats.findMany({
+      where: {
+        timestamp: { gte: startDate }
+      },
+      select: {
+        userId: true,
+        timestamp: true,
+        action: true
+      },
+      orderBy: {
+        timestamp: 'asc'
+      }
+    });
+
+    // Группируем действия по сессиям (30 минут между действиями = новая сессия)
+    const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 минут в миллисекундах
+    const sessions: Array<{ userId: string; startTime: Date; endTime: Date; actions: number; actionsList: string[] }> = [];
+    
+    userActions.forEach(action => {
+      const lastSession = sessions[sessions.length - 1];
+      if (lastSession && 
+          lastSession.userId === action.userId && 
+          (action.timestamp.getTime() - lastSession.endTime.getTime()) < SESSION_TIMEOUT) {
+        // Продолжаем текущую сессию
+        lastSession.endTime = action.timestamp;
+        lastSession.actions++;
+        lastSession.actionsList.push(action.action);
+      } else {
+        // Начинаем новую сессию
+        sessions.push({
+          userId: action.userId,
+          startTime: action.timestamp,
+          endTime: action.timestamp,
+          actions: 1,
+          actionsList: [action.action]
+        });
+      }
+    });
+
+    const avgSessionDuration = sessions.length > 0
+      ? sessions.reduce((sum, s) => sum + (s.endTime.getTime() - s.startTime.getTime()), 0) / sessions.length / 1000 / 60 // в минутах
+      : 0;
+
+    const avgActionsPerSession = sessions.length > 0
+      ? sessions.reduce((sum, s) => sum + s.actions, 0) / sessions.length
+      : 0;
+
+    // Статистика по возвратам (пользователи, которые вернулись после первого использования)
+    const returningUsers = await prisma.merchTgUser.findMany({
+      where: {
+        createdAt: { lt: startDate } // Зарегистрированы до начала периода
+      },
+      select: {
+        id: true
+      }
+    });
+
+    const returningUsersCount = await prisma.merchTgUserStats.findMany({
+      where: {
+        userId: { in: returningUsers.map(u => u.id) },
+        timestamp: { gte: startDate }
+      },
+      select: {
+        userId: true
+      },
+      distinct: ['userId']
+    });
+
+    // Воронка действий (start -> button_click -> search/feedback)
+    const funnelStats = {
+      started: await prisma.merchTgUserStats.count({
+        where: {
+          action: 'start',
+          timestamp: { gte: startDate }
+        }
+      }),
+      clickedButton: await prisma.merchTgUserStats.count({
+        where: {
+          action: 'button_click',
+          timestamp: { gte: startDate }
+        }
+      }),
+      searched: await prisma.merchTgUserStats.count({
+        where: {
+          action: 'search',
+          timestamp: { gte: startDate }
+        }
+      }),
+      gaveFeedback: await prisma.merchTgUserStats.count({
+        where: {
+          action: 'feedback',
+          timestamp: { gte: startDate }
+        }
+      })
+    };
+
+    // Статистика по карточкам (какие карточки просматриваются чаще всего)
+    // Карточки - это button_click с деталями, которые не являются системными кнопками
+    const cardViews = popularButtons
+      .filter(btn => !['start', 'search', 'back', 'main_menu', 'more_categories', 'feedback'].includes(btn.name))
+      .slice(0, 15);
+
+    // Статистика по retention (сколько пользователей вернулись через разные периоды)
+    const retentionStats = {
+      day1: 0,   // Вернулись на следующий день
+      day7: 0,   // Вернулись через неделю
+      day30: 0  // Вернулись через месяц
+    };
+
+    // Для каждого пользователя проверяем, когда он вернулся
+    const userFirstAction = await prisma.merchTgUserStats.findMany({
+      where: {
+        timestamp: { gte: startDate }
+      },
+      select: {
+        userId: true,
+        timestamp: true
+      },
+      orderBy: {
+        timestamp: 'asc'
+      }
+    });
+
+    const userFirstActions: Record<string, Date> = {};
+    userFirstAction.forEach(action => {
+      if (!userFirstActions[action.userId]) {
+        userFirstActions[action.userId] = action.timestamp;
+      }
+    });
+
+    const userLastActions: Record<string, Date> = {};
+    userFirstAction.forEach(action => {
+      if (!userLastActions[action.userId] || action.timestamp > userLastActions[action.userId]) {
+        userLastActions[action.userId] = action.timestamp;
+      }
+    });
+
+    Object.keys(userFirstActions).forEach(userId => {
+      const firstAction = userFirstActions[userId];
+      const lastAction = userLastActions[userId];
+      const daysDiff = (lastAction.getTime() - firstAction.getTime()) / (1000 * 60 * 60 * 24);
+      
+      if (daysDiff >= 1 && daysDiff < 2) retentionStats.day1++;
+      else if (daysDiff >= 7 && daysDiff < 8) retentionStats.day7++;
+      else if (daysDiff >= 30 && daysDiff < 31) retentionStats.day30++;
+    });
+
+    // Статистика по популярным карточкам (топ просматриваемых карточек)
+    const popularCards = cardViews;
+
     res.json({
       period: days,
       summary: {
@@ -358,7 +552,12 @@ router.get('/stats', async (req: any, res: any) => {
         activeUsersMonth: activeUsersMonth.length,
         newUsers,
         totalActions,
-        feedbackRequests: feedbackStats
+        avgActionsPerUser: Math.round(avgActionsPerUser * 100) / 100,
+        feedbackRequests: feedbackStats,
+        returningUsers: returningUsersCount.length,
+        totalSessions: sessions.length,
+        avgSessionDuration: Math.round(avgSessionDuration * 100) / 100, // в минутах
+        avgActionsPerSession: Math.round(avgActionsPerSession * 100) / 100
       },
       actions: actionStats.map(stat => ({
         action: stat.action,
@@ -366,6 +565,7 @@ router.get('/stats', async (req: any, res: any) => {
       })),
       popularButtons,
       popularSearches,
+      popularCards,
       categoryClicks: categoryClicks.slice(0, 10),
       dailyStats: Object.values(dailyStats).sort((a, b) => 
         new Date(a.date).getTime() - new Date(b.date).getTime()
@@ -373,6 +573,17 @@ router.get('/stats', async (req: any, res: any) => {
       hourlyStats: Object.entries(hourlyStats)
         .map(([hour, count]) => ({ hour: parseInt(hour, 10), count }))
         .sort((a, b) => a.hour - b.hour),
+      weekdayStats: Object.entries(weekdayStats)
+        .map(([day, count]) => ({ 
+          day: parseInt(day, 10), 
+          dayName: ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'][parseInt(day, 10)],
+          count 
+        }))
+        .sort((a, b) => a.day - b.day),
+      timeOfDayStats,
+      searchLengthStats,
+      funnelStats,
+      retentionStats,
       topUsers
     });
   } catch (error) {
@@ -510,6 +721,136 @@ router.get('/item/:id', async (req: any, res: any) => {
   } catch (error) {
     console.error('MerchBot item error:', error);
     res.status(500).json({ error: 'Failed to get item' });
+  }
+});
+
+// Получение списка обратной связи (с фильтрацией по инструменту)
+router.get('/feedback', authenticateToken, async (req: any, res: any) => {
+  try {
+    const { page = '1', limit = '50', isRead, tool } = req.query;
+    const pageNum = parseInt(page as string, 10);
+    const limitNum = parseInt(limit as string, 10);
+    const skip = (pageNum - 1) * limitNum;
+
+    const where: any = {};
+    if (isRead !== undefined) {
+      where.isRead = isRead === 'true';
+    }
+    if (tool) {
+      where.tool = tool;
+    }
+
+    const [feedbacks, total] = await Promise.all([
+      (prisma as any).feedback.findMany({
+        where,
+        orderBy: {
+          createdAt: 'desc'
+        },
+        skip,
+        take: limitNum
+      }),
+      (prisma as any).feedback.count({ where })
+    ]);
+
+    // Форматируем ответ для совместимости с фронтендом
+    const formattedFeedbacks = feedbacks.map((fb: any) => ({
+      ...fb,
+      user: {
+        userId: (fb.metadata as any)?.telegramUserId || 0,
+        username: (fb.metadata as any)?.username || null,
+        firstName: (fb.metadata as any)?.firstName || null,
+        lastName: (fb.metadata as any)?.lastName || null
+      }
+    }));
+
+    res.json({
+      feedbacks: formattedFeedbacks,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum)
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching feedback:', error);
+    res.status(500).json({ error: 'Failed to fetch feedback' });
+  }
+});
+
+// Отметка обратной связи как прочитанной
+router.patch('/feedback/:id/read', authenticateToken, async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.id;
+
+    const feedback = await (prisma as any).feedback.update({
+      where: { id },
+      data: {
+        isRead: true,
+        readAt: new Date(),
+        readBy: userId
+      }
+    });
+
+    // Форматируем ответ для совместимости с фронтендом
+    const formattedFeedback = {
+      ...feedback,
+      user: {
+        userId: (feedback.metadata as any)?.telegramUserId || 0,
+        username: (feedback.metadata as any)?.username || null,
+        firstName: (feedback.metadata as any)?.firstName || null,
+        lastName: (feedback.metadata as any)?.lastName || null
+      }
+    };
+
+    res.json(formattedFeedback);
+  } catch (error) {
+    console.error('Error marking feedback as read:', error);
+    res.status(500).json({ error: 'Failed to mark feedback as read' });
+  }
+});
+
+// Получение статистики по обратной связи (с фильтрацией по инструменту)
+router.get('/feedback/stats', authenticateToken, async (req: any, res: any) => {
+  try {
+    const { tool } = req.query;
+    const where: any = {};
+    if (tool) {
+      where.tool = tool;
+    }
+
+    const total = await (prisma as any).feedback.count({ where });
+    const unread = await (prisma as any).feedback.count({ where: { ...where, isRead: false } });
+    const read = await (prisma as any).feedback.count({ where: { ...where, isRead: true } });
+
+    // Статистика по инструментам
+    const allFeedbacks = await (prisma as any).feedback.findMany({
+      select: { tool: true, isRead: true }
+    });
+
+    const byTool: Record<string, { total: number; unread: number; read: number }> = {};
+    allFeedbacks.forEach((fb: { tool: string; isRead: boolean }) => {
+      if (!byTool[fb.tool]) {
+        byTool[fb.tool] = { total: 0, unread: 0, read: 0 };
+      }
+      byTool[fb.tool].total++;
+      if (fb.isRead) {
+        byTool[fb.tool].read++;
+      } else {
+        byTool[fb.tool].unread++;
+      }
+    });
+
+    res.json({
+      total,
+      unread,
+      read,
+      byTool
+    });
+  } catch (error) {
+    console.error('Error fetching feedback stats:', error);
+    res.status(500).json({ error: 'Failed to fetch feedback stats' });
   }
 });
 

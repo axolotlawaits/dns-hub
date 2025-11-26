@@ -9,12 +9,13 @@ import {
   Stack,
   Tabs
 } from '@mantine/core';
-import { IconChevronLeft, IconChevronRight, IconChartBar, IconShoppingBag } from '@tabler/icons-react';
+import { IconChevronLeft, IconChevronRight, IconChartBar, IconShoppingBag, IconMail } from '@tabler/icons-react';
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { AppProvider } from './context/SelectedCategoryContext';
 import Hierarchy from './components/Hierarchy/Hierarchy';
 import CardGroup from './components/Card/CardGroup';
 import MerchStats from './components/Stats/MerchStats';
+import MerchFeedback from './components/Feedback/MerchFeedback';
 import { DndProviderWrapper } from '../../../utils/dnd';
 import './Merch.css';
 
@@ -86,6 +87,9 @@ function Merch() {
                 <Tabs.Tab value="stats" leftSection={<IconChartBar size={16} />}>
                   Статистика
                 </Tabs.Tab>
+                <Tabs.Tab value="feedback" leftSection={<IconMail size={16} />}>
+                  Обратная связь
+                </Tabs.Tab>
               </Tabs.List>
 
               <Tabs.Panel value="management" pt="md">
@@ -142,6 +146,10 @@ function Merch() {
 
               <Tabs.Panel value="stats" pt="md">
                 <MerchStats />
+              </Tabs.Panel>
+
+              <Tabs.Panel value="feedback" pt="md">
+                <MerchFeedback />
               </Tabs.Panel>
             </Tabs>
           </Box>

@@ -46,6 +46,42 @@ export interface MerchStatsResponse {
     actionsCount: number;
     registeredAt: Date | null;
   }>;
+  weekdayStats?: Array<{
+    day: number;
+    dayName: string;
+    count: number;
+  }>;
+  timeOfDayStats?: {
+    morning: number;
+    afternoon: number;
+    evening: number;
+    night: number;
+  };
+  searchLengthStats?: {
+    short: number;
+    medium: number;
+    long: number;
+  };
+  funnelStats?: {
+    started: number;
+    clickedButton: number;
+    searched: number;
+    gaveFeedback: number;
+  };
+  retentionStats?: {
+    day1: number;
+    day7: number;
+    day30: number;
+  };
+  popularCards?: Array<{
+    name: string;
+    count: number;
+  }>;
+  avgActionsPerUser?: number;
+  returningUsers?: number;
+  totalSessions?: number;
+  avgSessionDuration?: number;
+  avgActionsPerSession?: number;
 }
 
 export const fetchMerchStats = async (period: number = 30): Promise<MerchStatsResponse> => {
