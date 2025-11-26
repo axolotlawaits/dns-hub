@@ -71,7 +71,6 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
         select: { uuid: true, name: true, typeOfDist: true }
       });
       
-      console.log('🔍 [createOrUpdateDevice] Обновленный филиал:', updatedBranch);
 
       // Подготавливаем данные устройства
       // Приоритет: полный IP от устройства > network+number > заголовки прокси > req.ip
@@ -88,14 +87,12 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
           deviceIP = fullDeviceIP;
           networkIP = ipParts.slice(0, 3).join('.') + '.';
           deviceNumber = ipParts[3];
-          console.log('[Device] Using full device IP:', deviceIP, '-> network:', networkIP, 'number:', deviceNumber);
         }
       } else if (network && number) {
         // Используем IP адрес, отправленный устройством
         deviceIP = `${network}${number}`;
         networkIP = network;
         deviceNumber = number;
-        console.log('[Device] Using device-provided IP:', deviceIP);
       } else if (network && !number) {
         // Если передан только network (например, "192.168.1."), извлекаем IP из req.ip
         const forwardedFor = req.headers['x-forwarded-for'] as string;
@@ -108,13 +105,11 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
           deviceIP = normalizedIP;
           networkIP = network;
           deviceNumber = normalizedIP.split('.').pop() || '1';
-          console.log('[Device] Using server IP that matches device network:', deviceIP);
         } else {
           // Если не соответствует, используем переданный network + последний октет из serverIP
           deviceIP = `${network}${normalizedIP.split('.').pop() || '1'}`;
           networkIP = network;
           deviceNumber = normalizedIP.split('.').pop() || '1';
-          console.log('[Device] Using device network with server IP last octet:', deviceIP);
         }
       } else {
         // Пытаемся получить реальный IP из заголовков (для NAT/Proxy)
@@ -131,14 +126,6 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
                   'Unknown';
         const normalizedIP = deviceIP.replace(/^::ffff:/, '');
         
-        console.log('[Device] Device IP detection (fallback):', {
-          'x-forwarded-for': forwardedFor,
-          'x-real-ip': realIP,
-          'x-client-ip': clientIP,
-          'cf-connecting-ip': cfConnectingIP,
-          'req.ip': req.ip,
-          'final-ip': deviceIP
-        });
         
         networkIP = normalizedIP.includes('.') 
           ? normalizedIP.split('.').slice(0, 3).join('.') + '.' 
@@ -146,12 +133,6 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
         deviceNumber = normalizedIP.split('.').pop() || '1';
       }
 
-      console.log('[Device] Final device IP data:', {
-        deviceIP,
-        networkIP,
-        deviceNumber,
-        fullIP: `${networkIP}${deviceNumber}`
-      });
 
       const deviceData = {
         branchId,
@@ -178,7 +159,6 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
           },
           select: { id: true, network: true, number: true, name: true, vendor: true, os: true, macAddress: true }
         });
-        console.log('[Device] Search by MAC address:', deviceData.macAddress, 'Found:', !!existingDevice);
       }
       
       // Специальная проверка для веб-плеера по userEmail + vendor + macAddress
@@ -192,7 +172,6 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
           },
           select: { id: true, network: true, number: true, name: true, vendor: true, os: true, macAddress: true }
         });
-        console.log('[Device] Search by web player email+vendor+mac: Found:', !!existingDevice);
       }
       
       // Приоритет 2: По deviceId/deviceUuid (если не найден по MAC)
@@ -205,7 +184,6 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
             },
             select: { id: true, network: true, number: true, name: true, vendor: true, os: true, macAddress: true }
           });
-          console.log('[Device] Search by deviceId/deviceUuid:', deviceIdentifier, 'Found:', !!existingDevice);
         }
       }
       
@@ -220,7 +198,6 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
           },
           select: { id: true, network: true, number: true, name: true, vendor: true, os: true, macAddress: true }
         });
-        console.log('[Device] Search by vendor+os+name: Found:', !!existingDevice);
       }
       
       // Приоритет 4: Только по vendor + os (если не найден по полной комбинации)
@@ -233,18 +210,10 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
           },
           select: { id: true, network: true, number: true, name: true, vendor: true, os: true, macAddress: true }
         });
-        console.log('[Device] Search by vendor+os: Found:', !!existingDevice);
       }
 
       let device;
       if (existingDevice) {
-        console.log('[Device] Found existing device:', {
-          id: existingDevice.id,
-          oldIP: existingDevice.network + existingDevice.number,
-          newIP: deviceData.network + deviceData.number,
-          name: deviceData.name
-        });
-        
         // Обновляем существующее устройство
         device = await tx.devices.update({
           where: { id: existingDevice.id },
@@ -263,26 +232,13 @@ export const createOrUpdateDevice = async (req: Request, res: Response): Promise
           }
         });
         
-        console.log('[Device] Device updated successfully:', {
-          id: device.id,
-          newIP: device.network + device.number
-        });
       } else {
-        console.log('[Device] Creating new device:', {
-          name: deviceData.name,
-          IP: deviceData.network + deviceData.number,
-          branchId: deviceData.branchId
-        });
         
         // Создаем новое устройство
         device = await tx.devices.create({
           data: deviceData
         });
         
-        console.log('[Device] New device created:', {
-          id: device.id,
-          IP: device.network + device.number
-        });
       }
 
       return { device, branch: updatedBranch };
@@ -400,20 +356,49 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
       // Ищем существующее устройство по приоритету
       let existingDevice = null;
       
-      // Для веб-плеера ищем только по userEmail + branchId + vendor
-      if (updateData.userEmail && userBranchId) {
-        // console.log(`🔍 [Heartbeat] Поиск по userEmail + branchId + vendor: email=${updateData.userEmail}, branchId=${userBranchId}`);
+      // Приоритет 1: Для веб-плеера сначала ищем по macAddress (sessionId) - это уникальный идентификатор сессии
+      if (updateData.macAddress && updateData.macAddress.startsWith('web-')) {
+        // console.log(`🔍 [Heartbeat] Поиск веб-плеера по macAddress (sessionId): ${updateData.macAddress}`);
+        existingDevice = await prisma.devices.findFirst({
+          where: {
+            macAddress: updateData.macAddress,
+            vendor: 'Web Browser'
+          }
+        });
+        // console.log(`🔍 [Heartbeat] Результат поиска по macAddress:`, existingDevice ? 'найдено' : 'не найдено');
+      }
+      
+      // Приоритет 2: Для веб-плеера ищем по userEmail + branchId + vendor + macAddress (если не найдено по macAddress)
+      if (!existingDevice && updateData.userEmail && userBranchId && updateData.macAddress && updateData.macAddress.startsWith('web-')) {
+        // console.log(`🔍 [Heartbeat] Поиск веб-плеера по userEmail + branchId + vendor + macAddress: email=${updateData.userEmail}, branchId=${userBranchId}, macAddress=${updateData.macAddress}`);
+        existingDevice = await prisma.devices.findFirst({
+          where: {
+            userEmail: updateData.userEmail,
+            branchId: userBranchId,
+            vendor: 'Web Browser',
+            macAddress: updateData.macAddress
+          }
+        });
+        // console.log(`🔍 [Heartbeat] Результат поиска по userEmail + branchId + vendor + macAddress:`, existingDevice ? 'найдено' : 'не найдено');
+      }
+      
+      // Приоритет 3: Для веб-плеера ищем по userEmail + branchId + vendor (fallback, если macAddress не указан)
+      if (!existingDevice && updateData.userEmail && userBranchId) {
+        // console.log(`🔍 [Heartbeat] Поиск веб-плеера по userEmail + branchId + vendor (fallback): email=${updateData.userEmail}, branchId=${userBranchId}`);
         existingDevice = await prisma.devices.findFirst({
           where: {
             userEmail: updateData.userEmail,
             branchId: userBranchId,
             vendor: 'Web Browser'
+          },
+          orderBy: {
+            lastSeen: 'desc' // Берем последнее активное устройство
           }
         });
         // console.log(`🔍 [Heartbeat] Результат поиска по userEmail + branchId + vendor:`, existingDevice ? 'найдено' : 'не найдено');
       }
       
-      // Для обычных устройств ищем по deviceId или macAddress
+      // Приоритет 4: Для обычных устройств ищем по deviceId
       if (!existingDevice && deviceId) {
         // console.log(`🔍 [Heartbeat] Поиск по deviceId: ${deviceId}`);
         existingDevice = await prisma.devices.findUnique({
@@ -422,6 +407,7 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
         // console.log(`🔍 [Heartbeat] Результат поиска по deviceId:`, existingDevice ? 'найдено' : 'не найдено');
       }
       
+      // Приоритет 5: Для обычных устройств ищем по macAddress (не веб-плеер)
       if (!existingDevice && updateData.macAddress && !updateData.macAddress.startsWith('web-')) {
         // console.log(`🔍 [Heartbeat] Поиск по macAddress: ${updateData.macAddress}`);
         existingDevice = await prisma.devices.findFirst({
@@ -432,27 +418,41 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
 
       if (existingDevice) {
         // Проверяем, что найденное устройство действительно соответствует запрашиваемому
-        // Для веб плеера важны: userEmail + branchId + vendor
         const isWebPlayer = existingDevice.vendor === 'Web Browser';
         
         if (isWebPlayer) {
-          // Для веб плеера проверяем соответствие по email и филиалу
-          const userEmailMatch = existingDevice.userEmail === updateData.userEmail;
-          const branchMatch = existingDevice.branchId === userBranchId;
+          // Для веб-плеера, если устройство найдено по macAddress (sessionId), 
+          // это уникальный идентификатор сессии - всегда обновляем
+          const foundByMacAddress = updateData.macAddress && 
+                                   updateData.macAddress.startsWith('web-') && 
+                                   existingDevice.macAddress === updateData.macAddress;
           
-          if (!userEmailMatch || !branchMatch) {
-            console.warn(`⚠️ [Heartbeat] Web player found but user/branch mismatch: found user=${existingDevice.userEmail}, requested=${updateData.userEmail}, found branch=${existingDevice.branchId}, requested=${userBranchId}`);
-            // Создаем новое устройство для другого пользователя/филиала
-            existingDevice = null;
-          } else {
-            // Совпадает email и филиал - обновляем устройство
+          if (foundByMacAddress) {
+            // Найдено по macAddress - это уникальная сессия, обновляем без дополнительных проверок
             const updateDeviceId = existingDevice.id;
             await prisma.devices.update({ 
               where: { id: updateDeviceId }, 
               data: updateData
             });
+            // console.log(`✅ [Heartbeat] Web player updated by macAddress: ${updateDeviceId}`);
+          } else {
+            // Найдено по другим параметрам - проверяем соответствие по email и филиалу
+            const userEmailMatch = existingDevice.userEmail === updateData.userEmail;
+            const branchMatch = existingDevice.branchId === userBranchId;
             
-            // console.log(`✅ [Heartbeat] Web player updated: ${updateDeviceId}`);
+            if (!userEmailMatch || !branchMatch) {
+              console.warn(`⚠️ [Heartbeat] Web player found but user/branch mismatch: found user=${existingDevice.userEmail}, requested=${updateData.userEmail}, found branch=${existingDevice.branchId}, requested=${userBranchId}`);
+              // Создаем новое устройство для другого пользователя/филиала
+              existingDevice = null;
+            } else {
+              // Совпадает email и филиал - обновляем устройство
+              const updateDeviceId = existingDevice.id;
+              await prisma.devices.update({ 
+                where: { id: updateDeviceId }, 
+                data: updateData
+              });
+              // console.log(`✅ [Heartbeat] Web player updated: ${updateDeviceId}`);
+            }
           }
         } else {
           // Для обычных устройств проверяем только deviceId
@@ -465,7 +465,6 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
               where: { id: updateDeviceId }, 
               data: updateData
             });
-            
             // console.log(`✅ [Heartbeat] Device updated: ${updateDeviceId}`);
           }
         }
@@ -490,8 +489,13 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
           return res.status(500).json({ success: false, error: 'No branches available' });
         }
 
-        const newDeviceData = {
-          name: deviceName || `Web Player ${deviceId || 'unknown'}`,
+        // Для веб-плеера используем macAddress (sessionId) как id, чтобы избежать дублей
+        const deviceIdForWebPlayer = updateData.macAddress && updateData.macAddress.startsWith('web-') 
+          ? updateData.macAddress 
+          : (deviceId || undefined);
+
+        const newDeviceData: any = {
+          name: deviceName || `Web Player ${deviceIdForWebPlayer || 'unknown'}`,
           vendor: 'Web Browser',
           app: updateData.app || 'Web Player',
           os: 'Web Browser',
@@ -505,25 +509,46 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
           lastSeen: updateData.lastSeen
         };
 
+        // Если это веб-плеер и есть macAddress, используем его как id
+        if (deviceIdForWebPlayer) {
+          newDeviceData.id = deviceIdForWebPlayer;
+        }
+
         // console.log(`🆕 [Heartbeat] Данные для создания устройства:`, newDeviceData);
         
         try {
           await prisma.devices.create({
             data: newDeviceData
           });
-          // console.log(`✅ [Heartbeat] Устройство создано успешно: ${deviceId}`);
+          // console.log(`✅ [Heartbeat] Устройство создано успешно: ${deviceIdForWebPlayer || deviceId}`);
         } catch (createError: any) {
-          if (createError.code === 'P2002' && createError.meta?.target?.includes('id')) {
-            // Устройство с таким ID уже существует, попробуем найти и обновить его
-            // console.log(`🔄 [Heartbeat] Устройство уже существует, ищем по deviceName: ${deviceName}`);
-            const foundDevice = await prisma.devices.findFirst({
-              where: {
-                name: deviceName,
-                userEmail: updateData.userEmail,
-                branchId: userBranchId || firstBranch.uuid,
-                vendor: 'Web Browser'
-              }
-            });
+          if (createError.code === 'P2002') {
+            // Устройство с таким ID или macAddress уже существует, попробуем найти и обновить его
+            // console.log(`🔄 [Heartbeat] Устройство уже существует, ищем для обновления`);
+            
+            let foundDevice = null;
+            
+            // Для веб-плеера ищем по macAddress
+            if (updateData.macAddress && updateData.macAddress.startsWith('web-')) {
+              foundDevice = await prisma.devices.findFirst({
+                where: {
+                  macAddress: updateData.macAddress,
+                  vendor: 'Web Browser'
+                }
+              });
+            }
+            
+            // Если не найдено, ищем по другим параметрам
+            if (!foundDevice) {
+              foundDevice = await prisma.devices.findFirst({
+                where: {
+                  userEmail: updateData.userEmail,
+                  branchId: userBranchId || firstBranch.uuid,
+                  vendor: 'Web Browser',
+                  ...(updateData.macAddress ? { macAddress: updateData.macAddress } : {})
+                }
+              });
+            }
             
             if (foundDevice) {
               await prisma.devices.update({
@@ -532,7 +557,7 @@ export const heartbeat = async (req: Request, res: Response): Promise<any> => {
               });
               // console.log(`✅ [Heartbeat] Устройство обновлено: ${foundDevice.id}`);
             } else {
-              console.warn(`⚠️ [Heartbeat] Устройство не найдено для обновления: ${deviceName}`);
+              console.warn(`⚠️ [Heartbeat] Устройство не найдено для обновления после ошибки создания`);
             }
           } else {
             throw createError;
@@ -557,7 +582,6 @@ export const getDeviceByIP = async (req: Request, res: Response): Promise<any> =
   try {
     const { ip } = req.params;
     
-    console.log('[Device] Getting device by IP:', ip);
     
     // Ищем устройство по IP адресу
     let device = null;
@@ -609,18 +633,8 @@ export const getDeviceByIP = async (req: Request, res: Response): Promise<any> =
     }
 
     if (!device) {
-      console.log('[Device] Device not found by IP:', ip);
       return res.status(404).json({ error: 'Устройство с таким IP адресом не найдено' });
     }
-
-    console.log('[Device] Device found by IP:', {
-      id: device.id,
-      name: device.name,
-      network: device.network,
-      number: device.number,
-      fullIP: device.network + device.number,
-      branch: device.branch?.name
-    });
 
     return res.json({
       success: true,
@@ -637,7 +651,6 @@ export const getDeviceByMAC = async (req: Request, res: Response): Promise<any> 
   try {
     const { macAddress } = req.params;
     
-    console.log('[Device] Getting device by MAC address:', macAddress);
     
     const device = await prisma.devices.findFirst({
       where: { macAddress },
@@ -652,18 +665,8 @@ export const getDeviceByMAC = async (req: Request, res: Response): Promise<any> 
     });
 
     if (!device) {
-      console.log('[Device] Device not found by MAC address:', macAddress);
       return res.status(404).json({ error: 'Устройство с таким MAC адресом не найдено' });
     }
-
-    console.log('[Device] Device found by MAC address:', {
-      id: device.id,
-      name: device.name,
-      macAddress: device.macAddress,
-      network: device.network,
-      number: device.number,
-      branch: device.branch.name
-    });
 
     return res.json({
       success: true,
@@ -680,7 +683,6 @@ export const getDeviceById = async (req: Request, res: Response): Promise<any> =
   try {
     const { id } = req.params;
     
-    console.log('[Device] Getting device by ID:', id);
     
     const device = await prisma.devices.findUnique({
       where: { id },
@@ -695,17 +697,8 @@ export const getDeviceById = async (req: Request, res: Response): Promise<any> =
     });
 
     if (!device) {
-      console.log('[Device] Device not found:', id);
       return res.status(404).json({ error: 'Устройство не найдено' });
     }
-
-    console.log('[Device] Device found:', {
-      id: device.id,
-      name: device.name,
-      network: device.network,
-      number: device.number,
-      branch: device.branch?.name
-    });
 
     return res.json({
       success: true,
@@ -742,14 +735,6 @@ export const updateDeviceIP = async (req: Request, res: Response): Promise<any> 
     } else {
       return res.status(400).json({ error: 'Необходимо указать deviceIP или network+number' });
     }
-
-    console.log('[Device] Updating device IP:', {
-      deviceId,
-      deviceIP,
-      network: networkIP,
-      number: deviceNumber,
-      fullIP: `${networkIP}${deviceNumber}`
-    });
 
     const updatedDevice = await prisma.devices.update({
       where: { id: deviceId },

@@ -80,7 +80,7 @@ const PLAYER_CONSTANTS = {
   WAITING_TIMEOUT: 3000, // Таймаут для waiting события (мс)
   PLAYBACK_CHECK_INTERVAL: 1000, // Интервал проверки воспроизведения (мс)
   METADATA_LOAD_TIMEOUT: 10000, // Таймаут загрузки метаданных (мс)
-  VERSION: '1.2.1'
+  VERSION: '1.2.2'
 } as const;
 
 const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({ 
@@ -340,6 +340,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
   }, [user?.email, localBranchType]);
 
   // Проверка активности потока по датам начала и окончания
+  // Сравнение только по датам (год, месяц, день), без учета времени
   const isStreamDateActive = useCallback((stream: RadioStream): boolean => {
     if (!stream.startDate && !stream.endDate) {
       // Если даты не указаны, поток всегда активен (по датам)
@@ -347,39 +348,50 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     }
     
     const now = new Date();
+    // Нормализуем текущую дату (убираем время, оставляем только дату)
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
     let startDate: Date | null = null;
     let endDate: Date | null = null;
     
     // Парсим дату начала
     if (stream.startDate) {
-      startDate = new Date(stream.startDate);
+      const parsed = new Date(stream.startDate);
       // Проверяем, что дата валидна
-      if (isNaN(startDate.getTime())) {
+      if (isNaN(parsed.getTime())) {
         console.warn('⚠️ [WebRadioPlayer] Неверная дата начала потока:', stream.startDate);
         startDate = null;
+      } else {
+        // Нормализуем дату начала (убираем время, оставляем только дату)
+        startDate = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
       }
     }
     
     // Парсим дату окончания
     if (stream.endDate) {
-      endDate = new Date(stream.endDate);
+      const parsed = new Date(stream.endDate);
       // Проверяем, что дата валидна
-      if (isNaN(endDate.getTime())) {
+      if (isNaN(parsed.getTime())) {
         console.warn('⚠️ [WebRadioPlayer] Неверная дата окончания потока:', stream.endDate);
         endDate = null;
+      } else {
+        // Нормализуем дату окончания (убираем время, оставляем только дату)
+        endDate = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
       }
     }
     
-    // Если есть дата начала и текущая дата раньше даты начала - поток неактивен
-    if (startDate && now < startDate) {
+    // Если есть дата начала - проверяем, что текущая дата >= даты начала
+    if (startDate && today < startDate) {
       return false;
     }
     
-    // Если есть дата окончания и текущая дата позже даты окончания - поток неактивен
-    if (endDate && now > endDate) {
+    // Если есть дата окончания - проверяем, что текущая дата <= даты окончания
+    if (endDate && today > endDate) {
       return false;
     }
     
+    // Если есть только startDate (без endDate) - поток активен всегда после даты начала
+    // Если есть endDate - поток активен до даты окончания включительно
     return true;
   }, []);
   
@@ -441,6 +453,8 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
   
   // Состояние UI
   const [error, setError] = useState<string | null>(null);
+  const [musicLoadingError, setMusicLoadingError] = useState<string | null>(null);
+  const [isLoadingMusic, setIsLoadingMusic] = useState(true);
   const [isOnline, setIsOnline] = useState(true);
   const [downloadProgress] = useState(0);
   const [downloadedCount] = useState(0);
@@ -577,20 +591,47 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
   const loadMusicFolders = useCallback(async () => {
     try {
       const response = await fetch(`${API}/radio/folders`);
+      
       if (!response.ok) {
-        throw new Error('Ошибка загрузки папок с музыкой');
+        const errorText = await response.text();
+        throw new Error(`Ошибка загрузки папок: ${response.status} ${response.statusText}. ${errorText}`);
       }
       
       const data = await response.json();
-            if (data.success && data.folders && data.folders.length > 0) {
-              // Берем первую папку (текущий месяц)
-              const currentFolder = data.folders[0];
-              // console.log('🎵 [WebRadioPlayer] Текущая папка с музыкой:', currentFolder.name);
-              return currentFolder.name;
-            }
-      return null;
+      
+      if (data.success && data.folders && Array.isArray(data.folders) && data.folders.length > 0) {
+        // Определяем текущий месяц в формате MM-YYYY
+        const now = new Date();
+        const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+        const currentYear = now.getFullYear();
+        const currentMonthFolder = `${currentMonth}-${currentYear}`;
+        
+        // Ищем папку текущего месяца
+        let selectedFolder = data.folders.find((folder: any) => folder.name === currentMonthFolder);
+        
+        // Если папка текущего месяца не найдена, ищем предыдущий месяц
+        if (!selectedFolder) {
+          const prevMonth = now.getMonth() === 0 ? 12 : now.getMonth();
+          const prevYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+          const prevMonthFolder = `${String(prevMonth).padStart(2, '0')}-${prevYear}`;
+          selectedFolder = data.folders.find((folder: any) => folder.name === prevMonthFolder);
+        }
+        
+        // Если и предыдущий месяц не найден, берем последнюю папку (самую новую)
+        if (!selectedFolder) {
+          selectedFolder = data.folders[0];
+        }
+        
+        return selectedFolder.name;
+      } else {
+        console.warn('⚠️ [WebRadioPlayer] Папки с музыкой не найдены');
+        setMusicLoadingError('Папки с музыкой не найдены на сервере');
+        return null;
+      }
     } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Неизвестная ошибка';
       console.error('❌ [WebRadioPlayer] Ошибка загрузки папок с музыкой:', err);
+      setMusicLoadingError(errorMsg);
       return null;
     }
   }, []);
@@ -598,14 +639,35 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
   // Загрузка музыки из папки
   const loadMusicFromFolder = useCallback(async (folderName: string) => {
     try {
+      setIsLoadingMusic(true);
+      setMusicLoadingError(null);
+      
       const response = await fetch(`${API}/radio/folder/${folderName}/music`);
+      
       if (!response.ok) {
-        throw new Error('Ошибка загрузки музыки');
+        const errorText = await response.text();
+        throw new Error(`Ошибка загрузки музыки: ${response.status} ${response.statusText}. ${errorText}`);
       }
       
       const data = await response.json();
-      if (data.success && data.files) {
-        const musicTracks = data.files
+      
+      // Проверяем разные варианты структуры ответа
+      let filesArray: any[] = [];
+      
+      if (data.success) {
+        if (Array.isArray(data.files)) {
+          filesArray = data.files;
+        } else if (Array.isArray(data.data)) {
+          filesArray = data.data;
+        } else if (data.files && typeof data.files === 'object') {
+          // Если files это объект, попробуем преобразовать в массив
+          filesArray = Object.values(data.files);
+        }
+      }
+      
+      if (filesArray.length > 0) {
+        const musicTracks = filesArray
+          .filter((file: any) => file && file.name) // Фильтруем только файлы с именем
           .sort((a: any, b: any) => a.name.localeCompare(b.name)) // Дополнительная сортировка по имени
           .map((file: any, index: number) => ({
             id: `${file.name}_${index}`, // Уникальный ID
@@ -615,14 +677,27 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
             fileSize: file.size || 0,
             index: index // Добавляем индекс для сортировки
           }));
-        setMusicTracks(musicTracks);
-        // console.log('🎵 [WebRadioPlayer] Загружено треков:', musicTracks.length);
-        // console.log('🎵 [WebRadioPlayer] Порядок треков:', musicTracks.map((t: any) => `${t.index}: ${t.fileName}`));
-        return musicTracks;
+        
+        if (musicTracks.length > 0) {
+          setMusicTracks(musicTracks);
+          setIsLoadingMusic(false);
+          setMusicLoadingError(null);
+          return musicTracks;
+        } else {
+          setMusicLoadingError('Файлы найдены, но не удалось их обработать');
+        }
+      } else {
+        setMusicLoadingError(`Папка "${folderName}" не содержит музыкальных файлов или они не прошли фильтрацию (поддерживаются: .mp3, .wav, .ogg, .m4a, .flac)`);
       }
+      
+      setMusicTracks([]);
+      setIsLoadingMusic(false);
       return [];
     } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Неизвестная ошибка загрузки музыки';
       console.error('❌ [WebRadioPlayer] Ошибка загрузки музыки:', err);
+      setMusicLoadingError(errorMsg);
+      setIsLoadingMusic(false);
       return [];
     }
   }, []);
@@ -670,13 +745,26 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
   // Инициализация при загрузке компонента
   useEffect(() => {
     const initializePlayer = async () => {
-      // Получаем IP пользователя
-      await getUserIP();
+      setIsLoadingMusic(true);
       
-      await loadStreams();
-      const folderName = await loadMusicFolders();
-      if (folderName) {
-        await loadMusicFromFolder(folderName);
+      try {
+        // Получаем IP пользователя
+        await getUserIP();
+        
+        // Загружаем потоки
+        await loadStreams();
+        
+        // Загружаем музыку
+        const folderName = await loadMusicFolders();
+        if (folderName) {
+          await loadMusicFromFolder(folderName);
+        } else {
+          setIsLoadingMusic(false);
+        }
+      } catch (error) {
+        console.error('❌ [WebRadioPlayer] Ошибка инициализации:', error);
+        setMusicLoadingError('Ошибка инициализации плеера');
+        setIsLoadingMusic(false);
       }
     };
     initializePlayer();
@@ -939,13 +1027,6 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
         const nextStreamIndex = (currentIndex + 1) % activeStreams.length;
         const nextStream = activeStreams[nextStreamIndex];
         
-        console.log('[WebRadio] Simple rotation:',
-          `songsCount=${songsCount}`,
-          `lastIndex=${currentIndex}`,
-          `nextIndex=${nextStreamIndex}`,
-          `selected=${nextStream?.name}`
-        );
-        
         return { type: 'stream', content: nextStream, index: nextStreamIndex } as const;
       }
     }
@@ -953,13 +1034,20 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     // Иначе играем следующий музыкальный трек
     if (musicTracks.length > 0) {
       // Используем lastTrackIndex для расчета следующего трека
+      // Исправлено: используем позицию в массиве, а не track.index
       const currentIndex = lastTrackIndex >= 0 ? lastTrackIndex : -1;
       const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % musicTracks.length : 0;
-      const nextTrack = musicTracks.find(track => track.index === nextIndex);
+      
+      // Исправлено: используем прямое обращение к массиву вместо find
+      const nextTrack = musicTracks[nextIndex];
       
       if (nextTrack) {
         return { type: 'track', content: nextTrack } as const;
+      } else {
+        console.warn('[WebRadio] Track not found at index:', nextIndex, 'total tracks:', musicTracks.length);
       }
+    } else {
+      console.warn('[WebRadio] No music tracks available. Total tracks:', musicTracks.length);
     }
     
     return null;
@@ -1961,11 +2049,19 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
               <Stack gap="xs" align="center" className="web-radio-player-empty-state">
                 <Text size="lg" c="dimmed" ta="center" className="web-radio-player-empty-text">
                   {!isWithinWorkingTime() ? 'Время работы истекло' : 
-                   musicTracks.length > 0 ? 'Нажмите Play для начала воспроизведения' : 'Загружается музыка...'}
+                   musicLoadingError ? `Ошибка: ${musicLoadingError}` :
+                   isLoadingMusic ? 'Загружается музыка...' :
+                   musicTracks.length > 0 ? 'Нажмите Play для начала воспроизведения' : 
+                   'Музыка не загружена. Проверьте консоль для деталей.'}
                 </Text>
                 {musicTracks.length > 0 && (
                   <Text size="xs" c="dimmed" className="web-radio-player-empty-description">
                     Треков загружено: {musicTracks.length}
+                  </Text>
+                )}
+                {musicLoadingError && (
+                  <Text size="xs" c="red" className="web-radio-player-empty-description">
+                    {musicLoadingError}
                   </Text>
                 )}
               </Stack>

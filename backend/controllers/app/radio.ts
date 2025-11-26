@@ -293,17 +293,29 @@ export const getMusicInFolder = async (req: Request, res: Response): Promise<any
       return res.status(400).json({ error: 'Название папки обязательно' });
     }
     const folderPath = `./public/retail/radio/music/${folderName}`;
+    
     if (!fs.existsSync(folderPath)) {
       return res.status(404).json({ error: 'Папка не найдена' });
     }
-    const files = fs.readdirSync(folderPath)
-      .filter(file => ['.mp3', '.wav', '.ogg', '.m4a', '.flac'].includes(path.extname(file).toLowerCase()))
+    
+    // Читаем все файлы из папки
+    const allFiles = fs.readdirSync(folderPath);
+    
+    // Фильтруем по расширениям
+    const supportedExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.flac'];
+    const musicFiles = allFiles.filter(file => {
+      const ext = path.extname(file).toLowerCase();
+      return supportedExtensions.includes(ext);
+    });
+    
+    const files = musicFiles
       .map(file => {
         const filePath = path.join(folderPath, file);
         const stats = fs.statSync(filePath);
         return { name: file, size: stats.size, created: stats.birthtime, modified: stats.mtime, path: `/retail/radio/music/${folderName}/${file}` };
       })
       .sort((a, b) => a.name.localeCompare(b.name)); // Сортируем по имени файла
+    
     return res.status(200).json({ success: true, folderName, files });
   } catch (error) {
     console.error('[Radio] Error getting music in folder:', error);
@@ -329,7 +341,6 @@ export const deleteMusicFolder = async (req: Request, res: Response): Promise<an
 export const getDevicesByBranches = async (req: Request, res: Response) => {
   try {
     // Убираем фильтрацию на бэкенде - пусть фронтенд фильтрует по правам доступа
-    console.log('🔍 [getDevicesByBranches] Возвращаем все устройства, фильтрация на фронтенде');
 
     const devices = await prisma.devices.findMany({
       select: {
@@ -437,9 +448,6 @@ export const getDevicesStatus = async (req: Request, res: Response) => {
       };
     });
     
-    const onlineCount = data.filter(d => d.online).length;
-    console.log(`📊 [getDevicesStatus] Онлайн устройств: ${onlineCount}/${devices.length}`);
-
     res.json({ success: true, data });
   } catch (error) {
     console.error('[Radio] Error getting devices status:', error);
@@ -482,9 +490,6 @@ export const getDevicesStatusPing = async (req: Request, res: Response) => {
       }
     });
     
-    const onlineCount = data.filter(d => d.online).length;
-    console.log(`📊 [getDevicesStatusPing] Онлайн устройств: ${onlineCount}/${devices.length}`);
-
     res.json({ success: true, data });
   } catch (error) {
     console.error('[Radio] Error getting devices status ping:', error);
@@ -634,15 +639,10 @@ export const getDevicesStats = async (req: Request, res: Response) => {
     const pingResults = await socketService.pingDevices(deviceIds, 1500);
     const activeDevices = Object.values(pingResults).filter(result => result.online).length;
     
-    console.log('📊 [getDevicesStats] Всего устройств в БД:', deviceIds.length);
-    console.log('📊 [getDevicesStats] Результаты пинга:', pingResults);
-    console.log('📊 [getDevicesStats] Количество онлайн устройств (ping):', activeDevices);
-    
     // Асинхронный подсчет файлов
     const totalMusicFiles = await countMusicFilesAsync();
     
     const data = { totalDevices, activeDevices, totalBranches, totalMusicFiles, topBranches };
-    console.log('📊 [getDevicesStats] Финальная статистика:', data);
     
     // Кэшируем результат
     statsCache.set(cacheKey, { data, timestamp: Date.now() });
@@ -669,15 +669,12 @@ export const getDeviceInfo = async (req: Request, res: Response) => {
 export const actionRestartApp = async (req: Request, res: Response) => {
   try {
     const { deviceId } = req.params as any;
-    console.log(`🔄 [actionRestartApp] Отправка команды перезапуска приложения для устройства: ${deviceId}`);
     
     // Проверяем, что устройство подключено
     const socketService = SocketIOService.getInstance();
     const connectedDevices = socketService.getConnectedDeviceIds();
-    console.log(`🔄 [actionRestartApp] Подключенные устройства:`, connectedDevices);
     
     if (!connectedDevices.includes(deviceId)) {
-      console.log(`❌ [actionRestartApp] Устройство ${deviceId} не подключено к Socket.IO`);
       return res.status(400).json({ 
         success: false, 
         error: 'DEVICE_OFFLINE',
@@ -687,15 +684,7 @@ export const actionRestartApp = async (req: Request, res: Response) => {
     
     const result = await socketService.sendToDeviceWithAck(deviceId, 'device_restart_app');
     
-    console.log(`🔄 [actionRestartApp] Результат отправки команды:`, {
-      deviceId,
-      ok: result.ok,
-      error: result.error,
-      data: result.data
-    });
-    
     if (!result.ok) {
-      console.log(`❌ [actionRestartApp] Устройство недоступно: ${result.error}`);
       return res.status(400).json({ 
         success: false, 
         error: result.error || 'DEVICE_OFFLINE',
@@ -705,11 +694,9 @@ export const actionRestartApp = async (req: Request, res: Response) => {
     
     // Проверяем ответ от устройства
     const deviceResponse = result.data as any;
-    console.log(`🔄 [actionRestartApp] Ответ от устройства:`, deviceResponse);
     
     // Если устройство вернуло ошибку
     if (deviceResponse?.error) {
-      console.log(`❌ [actionRestartApp] Устройство вернуло ошибку:`, deviceResponse.error);
       return res.status(400).json({ 
         success: false, 
         error: deviceResponse.error,
@@ -719,7 +706,6 @@ export const actionRestartApp = async (req: Request, res: Response) => {
     
     // Если устройство явно отказалось выполнить команду
     if (deviceResponse?.ok === false) {
-      console.log(`❌ [actionRestartApp] Устройство отказалось выполнить команду:`, deviceResponse);
       return res.status(400).json({ 
         success: false, 
         error: 'COMMAND_REJECTED',
@@ -728,7 +714,6 @@ export const actionRestartApp = async (req: Request, res: Response) => {
     }
     
     // Команда успешно отправлена
-    console.log(`✅ [actionRestartApp] Команда перезапуска успешно отправлена`);
     res.json({ 
       success: true, 
       data: result.data ?? null, 
@@ -832,15 +817,12 @@ export const actionConfigureWifi = async (req: Request, res: Response) => {
 export const actionReboot = async (req: Request, res: Response) => {
   try {
     const { deviceId } = req.params as any;
-    console.log(`🔄 [actionReboot] Отправка команды перезагрузки для устройства: ${deviceId}`);
     
     // Проверяем, что устройство подключено
     const socketService = SocketIOService.getInstance();
     const connectedDevices = socketService.getConnectedDeviceIds();
-    console.log(`🔄 [actionReboot] Подключенные устройства:`, connectedDevices);
     
     if (!connectedDevices.includes(deviceId)) {
-      console.log(`❌ [actionReboot] Устройство ${deviceId} не подключено к Socket.IO`);
       return res.status(400).json({ 
         success: false, 
         error: 'DEVICE_OFFLINE',
@@ -850,15 +832,7 @@ export const actionReboot = async (req: Request, res: Response) => {
     
     const result = await socketService.sendToDeviceWithAck(deviceId, 'device_reboot');
     
-    console.log(`🔄 [actionReboot] Результат отправки команды:`, {
-      deviceId,
-      ok: result.ok,
-      error: result.error,
-      data: result.data
-    });
-    
     if (!result.ok) {
-      console.log(`❌ [actionReboot] Устройство недоступно: ${result.error}`);
       return res.status(400).json({ 
         success: false, 
         error: result.error || 'DEVICE_OFFLINE',
@@ -868,11 +842,9 @@ export const actionReboot = async (req: Request, res: Response) => {
     
     // Проверяем ответ от устройства
     const deviceResponse = result.data as any;
-    console.log(`🔄 [actionReboot] Ответ от устройства:`, deviceResponse);
     
     // Если устройство вернуло ошибку
     if (deviceResponse?.error) {
-      console.log(`❌ [actionReboot] Устройство вернуло ошибку:`, deviceResponse.error);
       return res.status(400).json({ 
         success: false, 
         error: deviceResponse.error,
@@ -882,7 +854,6 @@ export const actionReboot = async (req: Request, res: Response) => {
     
     // Если устройство явно отказалось выполнить команду
     if (deviceResponse?.ok === false) {
-      console.log(`❌ [actionReboot] Устройство отказалось выполнить команду:`, deviceResponse);
       return res.status(400).json({ 
         success: false, 
         error: 'COMMAND_REJECTED',
@@ -891,7 +862,6 @@ export const actionReboot = async (req: Request, res: Response) => {
     }
     
     // Команда успешно отправлена
-    console.log(`✅ [actionReboot] Команда перезагрузки успешно отправлена`);
     res.json({ 
       success: true, 
       data: result.data ?? null, 
