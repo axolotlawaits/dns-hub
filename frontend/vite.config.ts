@@ -23,6 +23,9 @@ export default defineConfig({
       '@tabler/icons-react': '@tabler/icons-react/dist/esm/icons/index.mjs',
     },
   },
+  optimizeDeps: {
+    include: ['pdfjs-dist'],
+  },
   define: {
     APP_VERSION: JSON.stringify(process.env.npm_package_version),
   }

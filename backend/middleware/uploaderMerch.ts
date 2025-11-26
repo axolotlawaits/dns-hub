@@ -26,13 +26,13 @@ const storage = multer.diskStorage({
 // Фильтр для проверки типов файлов
 const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   console.log(`🔍 [uploaderMerch] Проверяем файл: ${file.originalname}, тип: ${file.mimetype}`);
-  // Разрешаем только изображения
-  if (file.mimetype.startsWith('image/')) {
+  // Разрешаем изображения и PDF
+  if (file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf') {
     console.log(`✅ [uploaderMerch] Файл ${file.originalname} принят`);
     cb(null, true);
   } else {
-    console.log(`❌ [uploaderMerch] Файл ${file.originalname} отклонен (не изображение)`);
-    cb(new Error('Разрешены только изображения!'));
+    console.log(`❌ [uploaderMerch] Файл ${file.originalname} отклонен (не изображение и не PDF)`);
+    cb(new Error('Разрешены только изображения и PDF файлы!'));
   }
 };
 

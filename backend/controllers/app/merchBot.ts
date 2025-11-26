@@ -343,6 +343,8 @@ class MerchBotService {
 
       // Обработка специальных кнопок
       if (messageText === '🏠 Главная') {
+        ctx.session.searchState = false;
+        ctx.session.feedbackState = undefined;
         await this.updateStats(ctx.from.id, 'button_click', 'main_menu');
         await this.showMainMenu(ctx);
         return;
@@ -351,6 +353,20 @@ class MerchBotService {
       if (messageText === '◀️ Назад') {
         await this.updateStats(ctx.from.id, 'button_click', 'back');
         await this.goBack(ctx);
+        return;
+      }
+
+      if (messageText === '🔍 Поиск') {
+        ctx.session.feedbackState = undefined;
+        await this.updateStats(ctx.from.id, 'button_click', 'search');
+        await this.startSearch(ctx);
+        return;
+      }
+
+      if (messageText === '📩 Обратная связь') {
+        ctx.session.searchState = false;
+        await this.updateStats(ctx.from.id, 'button_click', 'feedback');
+        await this.startFeedback(ctx);
         return;
       }
 
@@ -820,8 +836,49 @@ class MerchBotService {
 
   // Обработка текстовых сообщений
   private async handleTextMessage(ctx: MerchContext): Promise<void> {
-    if (!ctx.message || !ctx.message.text) return;
+    if (!ctx.message || !ctx.message.text || !ctx.from) return;
     const text = ctx.message.text;
+    
+    // Обработка специальных кнопок (даже в режиме поиска/обратной связи)
+    if (text === '🏠 Главная') {
+      ctx.session.searchState = false;
+      ctx.session.feedbackState = undefined;
+      await this.updateStats(ctx.from.id, 'button_click', 'main_menu');
+      await this.showMainMenu(ctx);
+      return;
+    }
+
+    if (text === '◀️ Назад') {
+      await this.updateStats(ctx.from.id, 'button_click', 'back');
+      // Если в режиме поиска или обратной связи, выходим из режима
+      if (ctx.session.searchState) {
+        ctx.session.searchState = false;
+        await this.showMainMenu(ctx);
+        return;
+      }
+      if (ctx.session.feedbackState) {
+        ctx.session.feedbackState = undefined;
+        await this.showMainMenu(ctx);
+        return;
+      }
+      // Обычная навигация назад
+      await this.goBack(ctx);
+      return;
+    }
+
+    if (text === '🔍 Поиск') {
+      ctx.session.feedbackState = undefined;
+      await this.updateStats(ctx.from.id, 'button_click', 'search');
+      await this.startSearch(ctx);
+      return;
+    }
+
+    if (text === '📩 Обратная связь') {
+      ctx.session.searchState = false;
+      await this.updateStats(ctx.from.id, 'button_click', 'feedback');
+      await this.startFeedback(ctx);
+      return;
+    }
     
     // Обработка поиска
     if (ctx.session.searchState) {
@@ -1159,16 +1216,28 @@ class MerchBotService {
       console.log(`🔍 Ищем изображения для элемента ${itemId}`);
       const item = await prisma.merch.findUnique({
         where: { id: itemId },
-        include: {
+        select: {
+          id: true,
+          name: true,
+          isActive: true,
           attachments: {
             where: { type: 'image' },
-            orderBy: { sortOrder: 'asc' }
+            orderBy: { sortOrder: 'asc' },
+            select: {
+              source: true
+            }
           }
         }
       });
       
       if (!item) {
         console.log(`❌ Элемент ${itemId} не найден в базе данных`);
+        return [];
+      }
+      
+      // Проверяем активность элемента
+      if (!item.isActive) {
+        console.log(`❌ Элемент ${itemId} неактивен, изображения не будут отправлены`);
         return [];
       }
       
@@ -1216,12 +1285,19 @@ class MerchBotService {
           id: true,
           name: true,
           description: true,
-          layer: true
+          layer: true,
+          isActive: true
         }
       });
       
       if (!item) {
         console.log(`❌ [findItemById] Элемент ${itemId} не найден в БД`);
+        return null;
+      }
+      
+      // Проверяем активность элемента
+      if (!item.isActive) {
+        console.log(`❌ [findItemById] Элемент ${itemId} неактивен`);
         return null;
       }
       
@@ -1301,18 +1377,41 @@ class MerchBotService {
   private formatDescription(description: string): string {
     if (!description) return '';
     
-    // Description хранится в формате Markdown
-    // Конвертируем Markdown в HTML для Telegram
+    // Description хранится в формате Markdown или HTML
+    // Конвертируем в HTML для Telegram
     // Telegram HTML поддерживает: <b>bold</b>, <i>italic</i>, <u>underline</u>, 
     // <s>strike</s>, <code>code</code>, <a href="url">link</a>
-    // ВАЖНО: Telegram НЕ поддерживает тег <br>! Переносы строк должны быть \n
+    // ВАЖНО: Telegram НЕ поддерживает теги <p>, <br>, <div> и другие! Переносы строк должны быть \n
     
     let markdown = description.trim();
     
-    // Удаляем все теги <br> и заменяем их на переносы строк
+    // 1. Заменяем теги <p> и </p> на переносы строк
+    // <p> в начале строки или после другого тега -> перенос строки
+    // </p> -> перенос строки
+    markdown = markdown.replace(/<\/p>/gi, '\n');
+    markdown = markdown.replace(/<p[^>]*>/gi, '\n');
+    
+    // 2. Удаляем все теги <br> и заменяем их на переносы строк
     // Это нужно на случай, если в базе данных уже есть HTML с тегами <br>
     // Telegram НЕ поддерживает тег <br>, только переносы строк \n
     markdown = markdown.replace(/<br\s*\/?>/gi, '\n');
+    
+    // 3. Заменяем <strong> на <b> (Telegram поддерживает оба, но <b> более стандартный)
+    markdown = markdown.replace(/<strong>/gi, '<b>');
+    markdown = markdown.replace(/<\/strong>/gi, '</b>');
+    
+    // 4. Заменяем <em> на <i>
+    markdown = markdown.replace(/<em>/gi, '<i>');
+    markdown = markdown.replace(/<\/em>/gi, '</i>');
+    
+    // 5. Удаляем другие неподдерживаемые теги (div, span, и т.д.), но сохраняем их содержимое
+    markdown = markdown.replace(/<\/?(?:div|span|h[1-6]|ul|ol|li|table|tr|td|th|thead|tbody|tfoot)[^>]*>/gi, '');
+    
+    // 6. Убираем множественные переносы строк (более 2 подряд)
+    markdown = markdown.replace(/\n{3,}/g, '\n\n');
+    
+    // 7. Убираем переносы строк в начале и конце
+    markdown = markdown.replace(/^\n+|\n+$/g, '');
     
     console.log(`🔍 [formatDescription] Входной Markdown (первые 200 символов):`, markdown.substring(0, 200));
     console.log(`🔍 [formatDescription] Содержит **:`, markdown.includes('**'));
@@ -1491,14 +1590,24 @@ class MerchBotService {
     
     html = result;
     
-    // Финальная проверка: убеждаемся, что нет тегов <br> (Telegram их не поддерживает)
-    // Если остались какие-то <br> теги, заменяем их на переносы строк
+    // Финальная проверка: убеждаемся, что нет неподдерживаемых тегов
+    // Telegram НЕ поддерживает: <p>, <br>, <div>, <span>, заголовки и другие
     html = html.replace(/<br\s*\/?>/gi, '\n');
+    html = html.replace(/<\/p>/gi, '\n');
+    html = html.replace(/<p[^>]*>/gi, '\n');
+    html = html.replace(/<\/?(?:div|span|h[1-6]|ul|ol|li|table|tr|td|th|thead|tbody|tfoot|article|section|header|footer|nav|aside)[^>]*>/gi, '');
+    
+    // Убираем множественные переносы строк (более 2 подряд)
+    html = html.replace(/\n{3,}/g, '\n\n');
+    
+    // Убираем переносы строк в начале и конце
+    html = html.trim();
     
     console.log(`📤 [formatDescription] Итоговый HTML (первые 200 символов):`, html.substring(0, 200));
     console.log(`📤 [formatDescription] Итоговый HTML содержит <b>:`, html.includes('<b>'));
     console.log(`📤 [formatDescription] Итоговый HTML содержит \n:`, html.includes('\n'));
     console.log(`📤 [formatDescription] Итоговый HTML содержит <br>:`, html.includes('<br>'));
+    console.log(`📤 [formatDescription] Итоговый HTML содержит <p>:`, html.includes('<p>'));
     
     // Убираем только начальные и конечные пробелы
     // Telegram HTML правильно обрабатывает переносы строк \n внутри текста

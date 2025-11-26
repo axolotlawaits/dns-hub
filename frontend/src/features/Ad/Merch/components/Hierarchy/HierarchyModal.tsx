@@ -206,8 +206,12 @@ export function HierarchyEditModal({ item, onClose, onSuccess }: ItemModalProps)
     setError(null);
 
     try {
-      await deleteCategoryImage(item.id);
-      setCurrentImageUrl(null);
+      const updatedItem = await deleteCategoryImage(item.id);
+      setCurrentImageUrl(updatedItem.imageUrl || null);
+      // Обновляем item для отображения изменений
+      if (updatedItem.imageUrl === null || updatedItem.imageUrl === undefined) {
+        setCurrentImageUrl(null);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка при удалении изображения');
     } finally {

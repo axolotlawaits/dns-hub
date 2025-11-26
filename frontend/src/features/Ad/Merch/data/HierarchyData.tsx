@@ -7,10 +7,16 @@ export interface DataItem {
   child: string[];
   layer: number;
   imageUrl?: string;
+  imageUrls?: string[]; // Массив URL изображений
   isActive?: boolean;
   attachmentsCount?: number;
   hasChildren?: boolean; // Флаг наличия детей
   sortOrder?: number;
+  attachments?: Array<{
+    id: string;
+    source: string;
+    type: string;
+  }>;
 }
 
 // Базовый URL API
@@ -172,7 +178,7 @@ export const updateCategory = async (id: string, categoryData: {
       item.id === id ? data : item
     );
     
-    console.log('✅ Категория обновлена, изображение:', data.imageUrl ? 'обновлено' : 'нет');
+    console.log('✅ Категория обновлена, изображений:', data.imageUrls?.length || 0);
     return data;
   } catch (error) {
     console.error('❌ Ошибка при обновлении категории:', error);
@@ -273,6 +279,37 @@ export const hasCategoryImage = (category: DataItem): boolean => {
   return !!category.imageUrl;
 };
 
+// Функция для получения всех дочерних элементов категории (для предпросмотра перед удалением)
+export const getCategoryChildren = async (id: string): Promise<{
+  categoryId: string;
+  children: Array<{
+    id: string;
+    name: string;
+    layer: number;
+    attachmentsCount: number;
+    hasChildren: boolean;
+    depth: number;
+    children?: any[];
+  }>;
+  totalCount: number;
+}> => {
+  try {
+    const response = await fetch(`${API_BASE}/categories/${id}/children`, {
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP Error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('❌ Ошибка при получении дочерних элементов:', error);
+    throw error;
+  }
+};
+
 // Экспорт всех функций для использования в компонентах
 export default {
   getHierarchyData,
@@ -285,5 +322,6 @@ export default {
   getCategoryImageUrl,
   hasCategoryImage,
   getGlobalDataList,
-  setGlobalDataList
+  setGlobalDataList,
+  getCategoryChildren
 };

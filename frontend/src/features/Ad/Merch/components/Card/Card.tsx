@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef, useCallback } from 'react';
 import { 
   Title, 
   Group, 
@@ -10,7 +10,8 @@ import {
   Badge,
   Switch,
   Box,
-  Paper
+  Paper,
+  Loader
 } from '@mantine/core';
 import { 
   IconEdit, 
@@ -18,15 +19,83 @@ import {
   IconInfoCircle, 
   IconZoomIn, 
   IconEye,
-  IconEyeOff
+  IconEyeOff,
+  IconFileTypePdf
 } from '@tabler/icons-react';
+import { Document, Page, pdfjs } from 'react-pdf';
+import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
+import 'react-pdf/dist/esm/Page/TextLayer.css';
 import type { CardItem } from '../../data/CardData';
 import { toggleCardActive } from '../../data/CardData';
 import { FilePreviewModal } from '../../../../../utils/FilePreviewModal';
 import { API } from '../../../../../config/constants';
 import { truncateText } from '../../../../../utils/format';
 import './Card.css';
+
+// Настройка worker для PDF.js - используем локальный worker из node_modules
+if (typeof window !== 'undefined') {
+  pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
+}
 // Теперь description уже в формате HTML
+
+// Компонент для превью PDF в карточке
+interface PdfCardPreviewProps {
+  src: string;
+}
+
+const PdfCardPreview = ({ src }: PdfCardPreviewProps) => {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const onDocumentLoadSuccess = useCallback(() => {
+    setLoading(false);
+  }, []);
+
+  const onDocumentLoadError = useCallback((error: Error) => {
+    console.error('Error loading PDF:', error);
+    setError(true);
+    setLoading(false);
+  }, []);
+
+  const onPageLoadSuccess = useCallback(() => {
+    setLoading(false);
+  }, []);
+
+  if (error) {
+    return (
+      <Box style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <IconFileTypePdf size={48} color="var(--mantine-color-red-6)" />
+      </Box>
+    );
+  }
+
+  return (
+    <Box style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+      {loading && (
+        <Box style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--mantine-color-gray-1)' }}>
+          <Loader size="sm" />
+        </Box>
+      )}
+      <Document
+        file={src}
+        onLoadSuccess={onDocumentLoadSuccess}
+        onLoadError={onDocumentLoadError}
+        loading={null}
+      >
+        <Page
+          pageNumber={1}
+          onLoadSuccess={onPageLoadSuccess}
+          renderTextLayer={false}
+          renderAnnotationLayer={false}
+          width={undefined}
+          height={200}
+          canvasRef={canvasRef}
+        />
+      </Document>
+    </Box>
+  );
+};
 
 //----------------------------Карточка
 interface CardProps {
@@ -68,13 +137,21 @@ function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
     }
   };
 
-  const imageMeta = useMemo(() => {
-    return (cardData.imageUrls || []).map((imageUrl, index) => {
-      const resolvedUrl = imageUrl.startsWith('http')
-        ? imageUrl
-        : `${API}/public/add/merch/${imageUrl}`;
+  const fileMeta = useMemo(() => {
+    // Используем attachments, если они есть, иначе fallback на imageUrls
+    const attachments = cardData.attachments || cardData.imageUrls.map((url, idx) => ({
+      id: `${cardData.id}-att-${idx}`,
+      source: url,
+      type: 'image' // По умолчанию считаем изображением
+    }));
 
-      const cleanPath = imageUrl.split('?')[0];
+    return attachments.map((attachment, index) => {
+      const source = attachment.source;
+      const resolvedUrl = source.startsWith('http')
+        ? source
+        : `${API}/public/add/merch/${source}`;
+
+      const cleanPath = source.split('?')[0];
       const segments = cleanPath.split(/[\\\/]/);
       const fullFileName = decodeURIComponent(
         segments[segments.length - 1] || `file-${index + 1}`
@@ -86,26 +163,31 @@ function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
       const extension =
         lastDotIndex > 0 ? fullFileName.slice(lastDotIndex + 1).toLowerCase() : '';
 
-      const mimeType = extension
-        ? extension === 'jpg'
-          ? 'image/jpeg'
-          : `image/${extension}`
-        : 'image/*';
+      // Определяем тип файла
+      const isPdf = attachment.type === 'pdf' || extension === 'pdf';
+      const mimeType = isPdf 
+        ? 'application/pdf'
+        : extension
+          ? extension === 'jpg'
+            ? 'image/jpeg'
+            : `image/${extension}`
+          : 'image/*';
 
       return {
-        id: `${cardData.id}-image-${index}`,
+        id: attachment.id || `${cardData.id}-file-${index}`,
         baseName,
         extension,
         resolvedUrl,
+        isPdf,
         attachment: {
-          id: `${cardData.id}-image-${index}`,
+          id: attachment.id || `${cardData.id}-file-${index}`,
           name: baseName,
           source: resolvedUrl,
           mimeType
         }
       };
     });
-  }, [cardData.id, cardData.imageUrls]);
+  }, [cardData.id, cardData.imageUrls, cardData.attachments]);
 
   const openImageZoom = (index: number) => {
     setSelectedImageIndex(index);
@@ -192,34 +274,103 @@ function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
         </Box>
       )}
 
-      {/* Изображения */}
-      {imageMeta.length > 0 && (
+      {/* Файлы (изображения и PDF) */}
+      {fileMeta.length > 0 && (
         <Box mb="md">
           <Text size="sm" c="dimmed" mb="xs">
-            Изображения ({imageMeta.length}):
+            Файлы ({fileMeta.length}):
           </Text>
           <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md">
-            {imageMeta.map((meta, index) => (
+            {fileMeta.map((meta, index) => (
               <Box
                 key={meta.id}
                 className="card-image-container"
               >
-                <Image
-                  src={meta.resolvedUrl}
-                  alt={`${cardData.name} - изображение ${index + 1}`}
-                  className="card-image"
-                  onClick={() => openImageZoom(index)}
-                  loading="lazy"
-                />
-                <ActionIcon
-                  size="sm"
-                  variant="filled"
-                  color="blue"
-                  className="card-image-zoom-button"
-                  onClick={() => openImageZoom(index)}
-                >
-                  <IconZoomIn size={12} />
-                </ActionIcon>
+                {meta.isPdf ? (
+                  // Отображение PDF файла с превью
+                  <Box
+                    style={{
+                      width: '100%',
+                      height: 200,
+                      position: 'relative',
+                      backgroundColor: 'var(--mantine-color-gray-1)',
+                      borderRadius: 'var(--mantine-radius-md)',
+                      border: '1px solid var(--mantine-color-gray-3)',
+                      cursor: 'pointer',
+                      overflow: 'hidden',
+                      display: 'flex',
+                      flexDirection: 'column'
+                    }}
+                    onClick={() => openImageZoom(index)}
+                  >
+                    {/* Превью PDF через react-pdf */}
+                    <PdfCardPreview src={meta.resolvedUrl} />
+                    {/* Overlay с иконкой и информацией */}
+                    <Box
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: 'rgba(0, 0, 0, 0.3)',
+                        opacity: 0,
+                        transition: 'opacity 0.2s',
+                        pointerEvents: 'none'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.opacity = '1';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.opacity = '0';
+                      }}
+                    >
+                      <IconFileTypePdf size={48} color="white" />
+                      <Text size="sm" mt="xs" c="white" fw={500}>
+                        {meta.baseName}
+                      </Text>
+                      <Text size="xs" c="white">
+                        PDF
+                      </Text>
+                    </Box>
+                    <ActionIcon
+                      size="sm"
+                      variant="filled"
+                      color="blue"
+                      className="card-image-zoom-button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openImageZoom(index);
+                      }}
+                    >
+                      <IconZoomIn size={12} />
+                    </ActionIcon>
+                  </Box>
+                ) : (
+                  // Отображение изображения
+                  <>
+                    <Image
+                      src={meta.resolvedUrl}
+                      alt={`${cardData.name} - изображение ${index + 1}`}
+                      className="card-image"
+                      onClick={() => openImageZoom(index)}
+                      loading="lazy"
+                    />
+                    <ActionIcon
+                      size="sm"
+                      variant="filled"
+                      color="blue"
+                      className="card-image-zoom-button"
+                      onClick={() => openImageZoom(index)}
+                    >
+                      <IconZoomIn size={12} />
+                    </ActionIcon>
+                  </>
+                )}
                 <Box style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <Text
                     size="sm"
@@ -234,7 +385,7 @@ function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
                     c="dimmed"
                     className="card-image-extension"
                   >
-                    {meta.extension ? meta.extension : 'Формат не указан'}
+                    {meta.extension ? meta.extension.toUpperCase() : 'Формат не указан'}
                   </Text>
                 </Box>
               </Box>
@@ -250,7 +401,7 @@ function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
             Категория: {cardData.category.name}
           </Text>
           <Text size="xs" c="dimmed">
-            Фотографий: {cardData.imageUrls.length}
+            Файлов: {fileMeta.length}
           </Text>
         </Group>
         <Text size="xs" c="dimmed">
@@ -258,11 +409,11 @@ function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
         </Text>
       </Group>
 
-      {/* Модалка для увеличенного просмотра изображения */}
+      {/* Модалка для просмотра файлов (изображения и PDF) */}
       <FilePreviewModal
         opened={zoomModalOpened}
         onClose={() => setZoomModalOpened(false)}
-        attachments={imageMeta.map((meta) => meta.attachment)}
+        attachments={fileMeta.map((meta) => meta.attachment)}
         initialIndex={selectedImageIndex ?? 0}
       />
     </Paper>

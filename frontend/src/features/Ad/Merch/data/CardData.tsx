@@ -8,6 +8,11 @@ export interface CardItem {
   name: string;
   description: string;
   imageUrls: string[];
+  attachments?: Array<{
+    id: string;
+    source: string;
+    type: string;
+  }>;
   isActive: boolean;
   categoryId: string;
   category: {
@@ -83,20 +88,28 @@ export const fetchCardsByCategory = async (
     
     if (data && Array.isArray(data)) {
       // Преобразуем данные в формат CardItem
-      const cards: CardItem[] = data.map((item: any) => ({
-        id: item.id,
-        name: item.name,
-        description: item.description || '',
-        imageUrls: (item.attachments || []).map((att: any) => att.source),
-        isActive: item.isActive,
-        categoryId: categoryId,
-        category: {
-          id: categoryId,
-          name: 'Категория' // TODO: получить название категории
-        },
-        createdAt: item.createdAt,
-        updatedAt: item.updatedAt
-      }));
+      const cards: CardItem[] = data.map((item: any) => {
+        // Используем imageUrls если они есть (полные URL), иначе формируем из attachments
+        const imageUrls = item.imageUrls || (item.attachments || []).map((att: any) => 
+          att.source.startsWith('http') ? att.source : `${API}/public/add/merch/${att.source}`
+        );
+        
+        return {
+          id: item.id,
+          name: item.name,
+          description: item.description || '',
+          imageUrls: imageUrls,
+          attachments: item.attachments || [], // Сохраняем полную информацию об attachments
+          isActive: item.isActive,
+          categoryId: categoryId,
+          category: {
+            id: categoryId,
+            name: 'Категория' // TODO: получить название категории
+          },
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt
+        };
+      });
       
       console.log(`✅ Получено ${cards.length} карточек для категории ${categoryId} (страница ${page})`);
       return { 
@@ -267,11 +280,17 @@ export const updateCard = async (id: string, cardData: Partial<{
     console.log('✅ Карточка обновлена:', data);
     
     // Преобразуем ответ в формат CardItem
+    // Используем imageUrls если они есть (полные URL), иначе формируем из attachments
+    const imageUrls = data.imageUrls || (data.attachments || []).map((att: any) => 
+      att.source.startsWith('http') ? att.source : `${API}/public/add/merch/${att.source}`
+    );
+    
     const card: CardItem = {
       id: data.id,
       name: data.name,
       description: data.description || '',
-      imageUrls: data.attachments ? data.attachments.map((att: any) => att.source) : [],
+      imageUrls: imageUrls,
+      attachments: data.attachments || [],
       isActive: data.isActive,
       categoryId: cardData.categoryId || '',
       category: {
@@ -368,9 +387,26 @@ export const deleteCardImage = async (id: string, imageUrl: string): Promise<Car
     }
     
     const data = await handleResponse(response);
-    console.log('✅ Изображение удалено:', data);
+    console.log('✅ Изображение удалено, ответ сервера:', data);
 
-    return data;
+    // Преобразуем ответ в формат CardItem
+    const card: CardItem = {
+      id: data.id,
+      name: data.name,
+      description: data.description || '',
+      imageUrls: data.imageUrls || [],
+      isActive: data.isActive,
+      categoryId: data.categoryId || '',
+      category: data.category || {
+        id: data.categoryId || '',
+        name: 'Категория'
+      },
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt
+    };
+
+    console.log('✅ Преобразовано в CardItem:', card);
+    return card;
   } catch (error) {
     console.error('❌ Ошибка при удалении изображения:', error);
     throw error;
@@ -399,14 +435,20 @@ export const toggleCardActive = async (id: string, isActive: boolean): Promise<C
     console.log('✅ Активность карточки обновлена:', data);
     
     // Преобразуем ответ в формат CardItem
+    // Используем imageUrls если они есть (полные URL), иначе формируем из attachments
+    const imageUrls = data.imageUrls || (data.attachments || []).map((att: any) => 
+      att.source && att.source.startsWith('http') ? att.source : `${API}/public/add/merch/${att.source || ''}`
+    ).filter((url: string) => url);
+    
     const card: CardItem = {
       id: data.id,
       name: data.name,
       description: data.description || '',
-      imageUrls: data.imageUrl ? [data.imageUrl] : [],
+      imageUrls: imageUrls,
+      attachments: data.attachments || [],
       isActive: data.isActive,
-      categoryId: '', // TODO: получить categoryId
-      category: {
+      categoryId: data.categoryId || '',
+      category: data.category || {
         id: '',
         name: 'Категория'
       },

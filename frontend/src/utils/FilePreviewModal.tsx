@@ -1,8 +1,16 @@
-import { Modal, Image, Loader, Stack, Text, Group, Paper, Box, ActionIcon, Tooltip, Button, Slider } from '@mantine/core';
+import { Modal, Loader, Stack, Text, Group, Paper, Box, ActionIcon, Tooltip, Button, Slider } from '@mantine/core';
 import { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
 import { API } from '../config/constants';
 import { IconFile, IconFileText, IconFileTypePdf, IconPhoto, IconMusic, IconVideo, IconDownload, IconChevronLeft, IconChevronRight, IconX, IconTrash, IconExternalLink, IconRotate2, IconRotateClockwise2, IconZoomIn, IconZoomOut } from '@tabler/icons-react';
+import { Document, Page, pdfjs } from 'react-pdf';
+import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
+import 'react-pdf/dist/esm/Page/TextLayer.css';
 import './styles/FilePreviewModal.css';
+
+// Настройка worker для PDF.js - используем локальный worker из node_modules
+if (typeof window !== 'undefined') {
+  pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
+}
 
 // Интерфейсы для типизации
 interface AuthFileLoaderProps {
@@ -127,15 +135,87 @@ const AuthImage = ({ src, alt, onMimeTypeDetected, onLoad, onError, ...props }: 
       onError={onError}
     >
       {(blobUrl: string) => (
-        <Image 
+        <img 
           src={blobUrl} 
           alt={alt || ''} 
           onLoad={handleLoad}
           onError={onError}
+          style={{
+            maxWidth: '100%',
+            maxHeight: '100%',
+            width: 'auto',
+            height: 'auto',
+            objectFit: 'contain',
+            objectPosition: 'center',
+            display: 'block'
+          }}
           {...props} 
         />
       )}
     </AuthFileLoader>
+  );
+};
+
+// Компонент для превью PDF (рендерит первую страницу как изображение)
+interface PdfThumbnailProps {
+  src: string;
+  className?: string;
+}
+
+const PdfThumbnail = ({ src, className }: PdfThumbnailProps) => {
+  const [pageNumber] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const onDocumentLoadSuccess = useCallback(() => {
+    setLoading(false);
+  }, []);
+
+  const onDocumentLoadError = useCallback((error: Error) => {
+    console.error('Error loading PDF:', error);
+    setError(true);
+    setLoading(false);
+  }, []);
+
+  const onPageLoadSuccess = useCallback(() => {
+    setLoading(false);
+  }, []);
+
+  if (error) {
+    return (
+      <Box className={className} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--mantine-color-gray-1)' }}>
+        <IconFileTypePdf size={48} color="var(--mantine-color-red-6)" />
+      </Box>
+    );
+  }
+
+  return (
+    <Box className={className} style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+      {loading && (
+        <Box style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--mantine-color-gray-1)' }}>
+          <Loader size="sm" />
+        </Box>
+      )}
+      <Document
+        file={src}
+        onLoadSuccess={onDocumentLoadSuccess}
+        onLoadError={onDocumentLoadError}
+        loading={null}
+        className="pdf-thumbnail-document"
+      >
+        <Page
+          pageNumber={pageNumber}
+          onLoadSuccess={onPageLoadSuccess}
+          renderTextLayer={false}
+          renderAnnotationLayer={false}
+          className="pdf-thumbnail-page"
+          width={undefined}
+          height={undefined}
+          canvasRef={canvasRef}
+        />
+      </Document>
+    </Box>
   );
 };
 
@@ -439,10 +519,18 @@ export const FilePreviewModal = ({
   const handleImageLoad = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
     const target = event.currentTarget;
     setLoading(false);
-    if (target?.naturalWidth && target?.naturalHeight) {
+    // Для PNG и других изображений получаем реальные размеры
+    const img = target as HTMLImageElement;
+    if (img?.naturalWidth && img?.naturalHeight) {
       setImageNaturalSize({
-        width: target.naturalWidth,
-        height: target.naturalHeight
+        width: img.naturalWidth,
+        height: img.naturalHeight
+      });
+    } else if (img?.width && img?.height) {
+      // Fallback на отображаемые размеры, если natural размеры недоступны
+      setImageNaturalSize({
+        width: img.width,
+        height: img.height
       });
     }
   }, []);
@@ -490,32 +578,40 @@ export const FilePreviewModal = ({
       if (limitedValue <= 100) {
         setImageOffset({ x: 0, y: 0 });
       } else {
-        const nextScale = baseScale * (limitedValue / 100);
-        setImageOffset(current => clampOffset(current.x, current.y, nextScale));
+        const scale = limitedValue / 100;
+        const availableWidth = containerSize.width || 1;
+        const availableHeight = Math.max(
+          (containerSize.height || 1) - overlayHeights.top - overlayHeights.bottom,
+          1
+        );
+        
+        if (isPdf) {
+          // Для PDF рассчитываем offset на основе размера контейнера
+          const excessWidth = Math.max(0, availableWidth * scale - availableWidth);
+          const excessHeight = Math.max(0, availableHeight * scale - availableHeight);
+          const maxOffsetX = excessWidth / 2;
+          const maxOffsetY = excessHeight / 2;
+          setImageOffset(current => ({
+            x: Math.min(Math.max(current.x, -maxOffsetX), maxOffsetX),
+            y: Math.min(Math.max(current.y, -maxOffsetY), maxOffsetY)
+          }));
+        } else {
+          // Для изображений используем расчет с учетом реальных размеров изображения
+          const actualScale = baseScale * scale;
+          const excessWidth = Math.max(0, displayedWidth * actualScale - availableWidth);
+          const excessHeight = Math.max(0, displayedHeight * actualScale - availableHeight);
+          const maxOffsetX = excessWidth / 2;
+          const maxOffsetY = excessHeight / 2;
+          setImageOffset(current => ({
+            x: Math.min(Math.max(current.x, -maxOffsetX), maxOffsetX),
+            y: Math.min(Math.max(current.y, -maxOffsetY), maxOffsetY)
+          }));
+        }
       }
     },
-    [baseScale, clampOffset]
+    [baseScale, isPdf, containerSize, overlayHeights, displayedWidth, displayedHeight]
   );
 
-  const handleWheelZoom = useCallback(
-    (event: React.WheelEvent<HTMLDivElement>) => {
-      if (!isImage) return;
-      event.preventDefault();
-      event.stopPropagation();
-      const delta = event.deltaY > 0 ? -10 : 10;
-      setImageZoom(prev => {
-        const next = Math.min(Math.max(prev + delta, MIN_IMAGE_ZOOM), MAX_IMAGE_ZOOM);
-        if (next <= 100) {
-          setImageOffset({ x: 0, y: 0 });
-        } else {
-          const nextScale = baseScale * (next / 100);
-          setImageOffset(current => clampOffset(current.x, current.y, nextScale));
-        }
-        return next;
-      });
-    },
-    [isImage, baseScale, clampOffset]
-  );
 
   const handlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -543,10 +639,30 @@ export const FilePreviewModal = ({
       setImageOffset(() => {
         const nextX = event.clientX - dragStartRef.current.x;
         const nextY = event.clientY - dragStartRef.current.y;
-        return clampOffset(nextX, nextY, effectiveScale);
+        
+        if (isPdf) {
+          // Для PDF рассчитываем offset на основе размера контейнера
+          const scale = imageZoom / 100;
+          const availableWidth = containerSize.width || 1;
+          const availableHeight = Math.max(
+            (containerSize.height || 1) - overlayHeights.top - overlayHeights.bottom,
+            1
+          );
+          const excessWidth = Math.max(0, availableWidth * scale - availableWidth);
+          const excessHeight = Math.max(0, availableHeight * scale - availableHeight);
+          const maxOffsetX = excessWidth / 2;
+          const maxOffsetY = excessHeight / 2;
+          return {
+            x: Math.min(Math.max(nextX, -maxOffsetX), maxOffsetX),
+            y: Math.min(Math.max(nextY, -maxOffsetY), maxOffsetY)
+          };
+        } else {
+          // Для изображений используем clampOffset с учетом реальных размеров
+          return clampOffset(nextX, nextY, effectiveScale);
+        }
       });
     },
-    [isDragging, clampOffset, effectiveScale]
+    [isDragging, clampOffset, effectiveScale, isPdf, imageZoom, containerSize, overlayHeights]
   );
 
   const handlePointerUp = useCallback(
@@ -685,8 +801,64 @@ export const FilePreviewModal = ({
 
     updateSize();
     window.addEventListener('resize', updateSize);
+    
+    // Добавляем обработчик wheel с passive: false для возможности preventDefault
+    const container = rotationContainerRef.current || imageContainerRef.current;
+    if (container && (isImage || isPdf)) {
+      const wheelHandler = (e: WheelEvent) => {
+        if (isImage || isPdf) {
+          e.preventDefault();
+          e.stopPropagation();
+          const delta = e.deltaY > 0 ? -10 : 10;
+          setImageZoom(prev => {
+            const next = Math.min(Math.max(prev + delta, MIN_IMAGE_ZOOM), MAX_IMAGE_ZOOM);
+            if (next <= 100) {
+              setImageOffset({ x: 0, y: 0 });
+            } else {
+              const scale = next / 100;
+              const availableWidth = containerSize.width || 1;
+              const availableHeight = Math.max(
+                (containerSize.height || 1) - overlayHeights.top - overlayHeights.bottom,
+                1
+              );
+              
+              if (isPdf) {
+                // Для PDF рассчитываем offset на основе размера контейнера
+                const excessWidth = Math.max(0, availableWidth * scale - availableWidth);
+                const excessHeight = Math.max(0, availableHeight * scale - availableHeight);
+                const maxOffsetX = excessWidth / 2;
+                const maxOffsetY = excessHeight / 2;
+                setImageOffset(current => ({
+                  x: Math.min(Math.max(current.x, -maxOffsetX), maxOffsetX),
+                  y: Math.min(Math.max(current.y, -maxOffsetY), maxOffsetY)
+                }));
+              } else {
+                // Для изображений используем расчет с учетом реальных размеров изображения
+                const actualScale = baseScale * scale;
+                const excessWidth = Math.max(0, displayedWidth * actualScale - availableWidth);
+                const excessHeight = Math.max(0, displayedHeight * actualScale - availableHeight);
+                const maxOffsetX = excessWidth / 2;
+                const maxOffsetY = excessHeight / 2;
+                setImageOffset(current => ({
+                  x: Math.min(Math.max(current.x, -maxOffsetX), maxOffsetX),
+                  y: Math.min(Math.max(current.y, -maxOffsetY), maxOffsetY)
+                }));
+              }
+            }
+            return next;
+          });
+        }
+      };
+      
+      container.addEventListener('wheel', wheelHandler, { passive: false });
+      return () => {
+        window.removeEventListener('resize', updateSize);
+        container.removeEventListener('wheel', wheelHandler);
+      };
+    }
+    
     return () => window.removeEventListener('resize', updateSize);
-  }, [opened, currentIndex, normalizedRotation]);
+  }, [opened, currentIndex, normalizedRotation, isImage, isPdf, containerSize, overlayHeights, baseScale, displayedWidth, displayedHeight]);
 
   useEffect(() => {
     if (!currentAttachment) return;
@@ -825,11 +997,7 @@ export const FilePreviewModal = ({
               {meta.isPdf && (
                 <AuthFileLoader src={meta.previewUrl}>
                   {(blobUrl: string) => (
-                    <iframe
-                      title={`${meta.name}-preview`}
-                      src={`${blobUrl}#toolbar=0&navpanes=0&scrollbar=0`}
-                      className="file-preview-modal__thumbnail-media"
-                    />
+                    <PdfThumbnail src={blobUrl} className="file-preview-modal__thumbnail-media" />
                   )}
                 </AuthFileLoader>
               )}
@@ -941,7 +1109,6 @@ export const FilePreviewModal = ({
           <Box
             ref={rotationContainerRef}
             className="rotation-container"
-            onWheel={handleWheelZoom}
           >
             <Box
               className="rotation-wrapper"
@@ -1044,17 +1211,54 @@ export const FilePreviewModal = ({
           <Box
             ref={rotationContainerRef}
             className="rotation-container"
+            style={{
+              overflow: 'hidden',
+              cursor: imageZoom > 100 ? (isDragging ? 'grabbing' : 'grab') : 'default',
+              position: 'relative'
+            }}
+            onMouseDown={(e) => {
+              if (imageZoom > 100) {
+                setIsDragging(true);
+                dragStartRef.current = { 
+                  x: e.clientX - imageOffset.x, 
+                  y: e.clientY - imageOffset.y 
+                };
+              }
+            }}
+            onMouseMove={(e) => {
+              if (isDragging && imageZoom > 100) {
+                const scale = imageZoom / 100;
+                const availableWidth = containerSize.width || 1;
+                const availableHeight = Math.max(
+                  (containerSize.height || 1) - overlayHeights.top - overlayHeights.bottom,
+                  1
+                );
+                const excessWidth = Math.max(0, availableWidth * scale - availableWidth);
+                const excessHeight = Math.max(0, availableHeight * scale - availableHeight);
+                const maxOffsetX = excessWidth / 2;
+                const maxOffsetY = excessHeight / 2;
+                setImageOffset({
+                  x: Math.min(Math.max(e.clientX - dragStartRef.current.x, -maxOffsetX), maxOffsetX),
+                  y: Math.min(Math.max(e.clientY - dragStartRef.current.y, -maxOffsetY), maxOffsetY)
+                });
+              }
+            }}
+            onMouseUp={() => setIsDragging(false)}
+            onMouseLeave={() => setIsDragging(false)}
           >
             <Box
               className="rotation-wrapper"
               style={{
-                transform: `rotate(${normalizedRotation}deg)`,
+                transform: `rotate(${normalizedRotation}deg) scale(${imageZoom / 100}) translate(${imageOffset.x}px, ${imageOffset.y}px)`,
                 width: isRotated90or270
                   ? `${Math.min(containerSize.height, containerSize.width)}px`
                   : '100%',
                 height: isRotated90or270
                   ? `${Math.min(containerSize.height, containerSize.width)}px`
-                  : '100%'
+                  : '100%',
+                transformOrigin: 'center center',
+                transition: isDragging ? 'none' : 'transform 0.1s ease-out',
+                overflow: 'hidden'
               }}
             >
               <AuthFileLoader 
@@ -1066,12 +1270,38 @@ export const FilePreviewModal = ({
                 {(blobUrl: string) => (
                   <iframe
                     title="PDF Viewer"
-                    src={`${blobUrl}#toolbar=0&navpanes=0`}
+                    src={`${blobUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      border: 'none',
+                      overflow: 'hidden',
+                      display: 'block'
+                    }}
+                    scrolling="no"
+                    frameBorder="0"
                   />
                 )}
               </AuthFileLoader>
             </Box>
           </Box>
+          {/* Панель зума для PDF */}
+          <Group gap="sm" align="center" justify="center" className="image-zoom-bar" ref={bottomControlsRef} style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 10 }}>
+            <IconZoomOut size={16} className="file-preview-modal__zoom-icon" />
+            <Slider
+              value={imageZoom}
+              onChange={handleZoomChange}
+              min={MIN_IMAGE_ZOOM}
+              max={MAX_IMAGE_ZOOM}
+              step={5}
+              className="file-preview-modal__zoom-slider"
+              style={{ width: 200 }}
+            />
+            <IconZoomIn size={16} className="file-preview-modal__zoom-icon" />
+            <Text size="sm" className="file-preview-modal__zoom-value">
+              {imageZoom}%
+            </Text>
+          </Group>
         </Box>
       );
     }

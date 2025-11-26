@@ -17,7 +17,7 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconUpload, IconX, IconEye } from '@tabler/icons-react';
-import { createCard, updateCard, addCardImages, deleteCard, type CardItem } from '../../data/CardData';
+import { createCard, updateCard, addCardImages, deleteCard, deleteCardImage, type CardItem } from '../../data/CardData';
 import { API } from '../../../../../config/constants';
 import TiptapEditor from '../../../../../utils/editor';
 import { TelegramPreview } from './TelegramPreview';
@@ -205,7 +205,7 @@ export function AddCardModal({ categoryId, onSuccess, onClose }: AddCardModalPro
           <FileInput
             label="Изображения"
             placeholder="Выберите изображения"
-            accept="image/*"
+            accept="image/*,application/pdf"
             multiple
             value={imageFiles}
             onChange={handleImageChange}
@@ -354,10 +354,34 @@ export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) 
     setPreviewUrls(newPreviews);
   };
 
-  const removeCurrentImage = (index: number) => {
-    const newImages = [...currentImages];
-    newImages.splice(index, 1);
-    setCurrentImages(newImages);
+  const removeCurrentImage = async (index: number) => {
+    const imageUrlToRemove = currentImages[index];
+    if (!imageUrlToRemove) {
+      console.log('❌ [removeCurrentImage] imageUrlToRemove не найден для индекса:', index);
+      return;
+    }
+
+    console.log(`🗑️ [removeCurrentImage] Удаляем изображение с индексом ${index}, URL: ${imageUrlToRemove}`);
+
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Удаляем изображение из базы данных
+      console.log(`🔄 [removeCurrentImage] Вызываем deleteCardImage для карточки ${card.id}`);
+      const updatedCard = await deleteCardImage(card.id, imageUrlToRemove);
+      console.log(`✅ [removeCurrentImage] Изображение удалено, обновленная карточка:`, updatedCard);
+      
+      // Обновляем локальное состояние
+      const newImageUrls = updatedCard.imageUrls || [];
+      console.log(`🔄 [removeCurrentImage] Обновляем currentImages с ${currentImages.length} на ${newImageUrls.length} изображений`);
+      setCurrentImages(newImageUrls);
+    } catch (err) {
+      console.error('❌ [removeCurrentImage] Ошибка при удалении изображения:', err);
+      setError(err instanceof Error ? err.message : 'Ошибка при удалении изображения');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -372,12 +396,11 @@ export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) 
       setLoading(true);
       setError(null);
 
-      // Обновляем основные данные карточки
+      // Обновляем основные данные карточки (imageUrls уже обновлены через removeCurrentImage)
       await updateCard(card.id, {
         name: name.trim(),
         description: description.trim(),
-        isActive: isActive,
-        imageUrls: currentImages
+        isActive: isActive
       });
 
       // Добавляем новые изображения, если есть
@@ -489,7 +512,7 @@ export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) 
           <FileInput
             label="Добавить новые изображения"
             placeholder="Выберите изображения"
-            accept="image/*"
+            accept="image/*,application/pdf"
             multiple
             value={imageFiles}
             onChange={handleImageChange}
