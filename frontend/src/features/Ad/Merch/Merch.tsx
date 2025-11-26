@@ -6,10 +6,16 @@ import {
   Paper,
   Text,
   Stack,
-  Tabs
+  Tabs,
+  Modal,
+  Image,
+  Group
 } from '@mantine/core';
-import { IconChevronLeft, IconChevronRight, IconChartBar, IconShoppingBag, IconMail } from '@tabler/icons-react';
+import { useDisclosure } from '@mantine/hooks';
+import { IconChevronLeft, IconChevronRight, IconChartBar, IconShoppingBag, IconMail, IconQrcode } from '@tabler/icons-react';
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
+import { useAccessContext } from '../../../hooks/useAccessContext';
+import { useUserContext } from '../../../hooks/useUserContext';
 import { AppProvider } from './context/SelectedCategoryContext';
 import Hierarchy from './components/Hierarchy/Hierarchy';
 import CardGroup from './components/Card/CardGroup';
@@ -24,7 +30,30 @@ const STORAGE_KEY = 'merchHierarchyVisible';
 
 function Merch() {
   const { setHeader, clearHeader } = usePageHeader();
+  const { access } = useAccessContext();
+  const { user } = useUserContext();
   const [isHierarchyVisible, setIsHierarchyVisible] = useState<boolean>(true);
+  const [qrOpened, { open: qrOpen, close: qrClose }] = useDisclosure(false);
+  
+  // Ссылка на бота
+  const botLink = 'https://t.me/merchzs_bot';
+  // URL для генерации QR-кода
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(botLink)}`;
+
+  // Проверка доступа к управлению (FULL доступ)
+  const hasFullAccess = useMemo(() => {
+    // DEVELOPER и ADMIN имеют полный доступ
+    if (user && ['DEVELOPER', 'ADMIN'].includes(user.role)) {
+      return true;
+    }
+    
+    // Проверяем доступ через access context
+    const merchAccess = access.find(tool => 
+      tool.link === 'add/merch' || tool.link === '/add/merch'
+    );
+    
+    return merchAccess?.accessLevel === 'FULL';
+  }, [access, user]);
 
   // Загрузка состояния из localStorage с обработкой ошибок
   useEffect(() => {
@@ -79,17 +108,27 @@ function Merch() {
         <Box className="merch-container">
           <Box p="xl">
             <Tabs defaultValue="management">
-              <Tabs.List>
-                <Tabs.Tab value="management" leftSection={<IconShoppingBag size={16} />}>
-                  Управление
-                </Tabs.Tab>
-                <Tabs.Tab value="stats" leftSection={<IconChartBar size={16} />}>
-                  Статистика
-                </Tabs.Tab>
-                <Tabs.Tab value="feedback" leftSection={<IconMail size={16} />}>
-                  Обратная связь
-                </Tabs.Tab>
-              </Tabs.List>
+              <Group justify="space-between" align="center" mb="md">
+                <Tabs.List>
+                  <Tabs.Tab value="management" leftSection={<IconShoppingBag size={16} />}>
+                    Управление
+                  </Tabs.Tab>
+                  <Tabs.Tab value="stats" leftSection={<IconChartBar size={16} />}>
+                    Статистика
+                  </Tabs.Tab>
+                  <Tabs.Tab value="feedback" leftSection={<IconMail size={16} />}>
+                    Обратная связь
+                  </Tabs.Tab>
+                </Tabs.List>
+                <ActionIcon 
+                  variant="outline" 
+                  size={35} 
+                  aria-label="QR код бота" 
+                  onClick={qrOpen}
+                >
+                  <IconQrcode style={{ width: '80%', height: '80%' }} stroke={1.5} />
+                </ActionIcon>
+              </Group>
 
               <Tabs.Panel value="management" pt="md">
                 <Box style={{ display: 'flex', gap: 'var(--mantine-spacing-md)', width: '100%', alignItems: 'flex-start', flexWrap: 'nowrap' }}>
@@ -113,7 +152,7 @@ function Merch() {
                           <Text size="lg" fw={600} className="merch-title">
                             Категории товаров
                           </Text>
-                          <Hierarchy/>
+                          <Hierarchy hasFullAccess={hasFullAccess} />
                         </Stack>
                       </Paper>
                     </Collapse>
@@ -148,7 +187,7 @@ function Merch() {
                       <Text size="lg" fw={600} className="merch-title">
                         Карточки товаров
                       </Text>
-                      <CardGroup/>
+                      <CardGroup hasFullAccess={hasFullAccess} />
                     </Stack>
                   </Paper>
                 </Box>
@@ -162,6 +201,33 @@ function Merch() {
                 <MerchFeedback />
               </Tabs.Panel>
             </Tabs>
+            
+            {/* Модальное окно с QR-кодом */}
+            <Modal 
+              opened={qrOpened} 
+              onClose={qrClose} 
+              title="QR-код телеграм бота @merchzs_bot" 
+              centered 
+              zIndex={99999} 
+              size="auto"
+            >
+              <Stack gap="md" align="center">
+                <Image
+                  radius="md"
+                  h={300}
+                  w={300}
+                  fit="contain"
+                  src={qrCodeUrl}
+                  alt="QR код для бота @merchzs_bot"
+                />
+                <Text size="sm" c="dimmed" ta="center">
+                  Отсканируйте QR-код, чтобы перейти к боту в Telegram
+                </Text>
+                <Text size="sm" c="blue" style={{ cursor: 'pointer' }} onClick={() => window.open(botLink, '_blank')}>
+                  Или перейдите по ссылке: {botLink}
+                </Text>
+              </Stack>
+            </Modal>
           </Box>
         </Box>
       </AppProvider>

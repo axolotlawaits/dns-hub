@@ -229,34 +229,40 @@ function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
         </Group>
         
         <Group gap="xs">
-          <Tooltip label="Переключить активность" withArrow>
-            <Switch
-              checked={cardData.isActive}
-              onChange={(event) => handleToggleActive(event.currentTarget.checked)}
-              disabled={isActiveLoading}
-              size="sm"
-            />
-          </Tooltip>
+          {onToggleActive && (
+            <Tooltip label="Переключить активность" withArrow>
+              <Switch
+                checked={cardData.isActive}
+                onChange={(event) => handleToggleActive(event.currentTarget.checked)}
+                disabled={isActiveLoading}
+                size="sm"
+              />
+            </Tooltip>
+          )}
           
-          <Tooltip label="Редактировать" withArrow>
-            <ActionIcon 
-              variant="outline" 
-              color="blue"
-              onClick={CardEdit}
-            >
-              <IconEdit size={16} />
-            </ActionIcon>
-          </Tooltip>
+          {onEdit && (
+            <Tooltip label="Редактировать" withArrow>
+              <ActionIcon 
+                variant="outline" 
+                color="blue"
+                onClick={CardEdit}
+              >
+                <IconEdit size={16} />
+              </ActionIcon>
+            </Tooltip>
+          )}
           
-          <Tooltip label="Удалить" withArrow>
-            <ActionIcon 
-              variant="outline" 
-              color="red"
-              onClick={CardDelete}
-            >
-              <IconTrash size={16} />
-            </ActionIcon>
-          </Tooltip>
+          {onDelete && (
+            <Tooltip label="Удалить" withArrow>
+              <ActionIcon 
+                variant="outline" 
+                color="red"
+                onClick={CardDelete}
+              >
+                <IconTrash size={16} />
+              </ActionIcon>
+            </Tooltip>
+          )}
         </Group>
       </Group>
 

@@ -1291,7 +1291,7 @@ class MerchBotService {
           // Проверяем, существует ли файл
           if (fs.existsSync(filePath)) {
             paths.push(filePath);
-            addedFiles.add(attachment.source);
+          addedFiles.add(attachment.source);
             console.log(`📎 Добавлено изображение: ${filePath}`);
           } else {
             console.warn(`⚠️ Файл не найден: ${filePath}`);
@@ -1672,6 +1672,51 @@ class MerchBotService {
     
     // Запускаем бота
     return this.launch();
+  }
+
+  // Отправка сообщения пользователю по Telegram user ID
+  public async sendMessageToUser(userId: number, message: string, parseMode: 'HTML' | 'Markdown' = 'HTML'): Promise<boolean> {
+    if (!this.bot) {
+      console.error('[MerchBot] Bot not initialized');
+      return false;
+    }
+
+    try {
+      await this.bot.api.sendMessage(userId, message, {
+        parse_mode: parseMode
+      } as any);
+      return true;
+    } catch (error: any) {
+      console.error(`[MerchBot] Error sending message to user ${userId}:`, error.message);
+      return false;
+    }
+  }
+
+  // Массовая отправка сообщений пользователям
+  public async broadcastMessage(userIds: number[], message: string, parseMode: 'HTML' | 'Markdown' = 'HTML'): Promise<{ success: number; failed: number; errors: Array<{ userId: number; error: string }> }> {
+    if (!this.bot) {
+      console.error('[MerchBot] Bot not initialized');
+      return { success: 0, failed: userIds.length, errors: userIds.map(id => ({ userId: id, error: 'Bot not initialized' })) };
+    }
+
+    let success = 0;
+    let failed = 0;
+    const errors: Array<{ userId: number; error: string }> = [];
+
+    for (const userId of userIds) {
+      try {
+        await this.bot.api.sendMessage(userId, message, {
+          parse_mode: parseMode
+        } as any);
+        success++;
+      } catch (error: any) {
+        failed++;
+        errors.push({ userId, error: error.message || 'Unknown error' });
+        console.error(`[MerchBot] Failed to send message to user ${userId}:`, error.message);
+      }
+    }
+
+    return { success, failed, errors };
   }
 }
 

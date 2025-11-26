@@ -13,20 +13,50 @@ import {
   Box,
   Card,
   Title,
-  Divider
+  Divider,
+  Button,
+  Modal,
+  MultiSelect,
+  Alert,
+  Checkbox
 } from '@mantine/core';
+import { IconSend, IconAlertCircle, IconCheck } from '@tabler/icons-react';
 import { fetchMerchStats, MerchStatsResponse } from '../../data/MerchStatsData';
+import { API } from '../../../../../config/constants';
+import TiptapEditor from '../../../../../utils/editor';
 import './MerchStats.css';
+
+interface BotUser {
+  userId: number;
+  username: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  createdAt: Date;
+}
 
 function MerchStats() {
   const [stats, setStats] = useState<MerchStatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<string>('30');
+  const [sendModalOpened, setSendModalOpened] = useState(false);
+  const [message, setMessage] = useState('');
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [sendToAll, setSendToAll] = useState(false);
+  const [users, setUsers] = useState<BotUser[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendResult, setSendResult] = useState<{ success: number; failed: number; errors: Array<{ userId: number; error: string }> } | null>(null);
 
   useEffect(() => {
     loadStats();
   }, [period]);
+
+  useEffect(() => {
+    if (sendModalOpened) {
+      loadUsers();
+    }
+  }, [sendModalOpened]);
 
   const loadStats = async () => {
     setLoading(true);
@@ -39,6 +69,99 @@ function MerchStats() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadUsers = async () => {
+    setLoadingUsers(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Токен не найден');
+      }
+
+      const response = await fetch(`${API}/merch-bot/users`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Ошибка загрузки пользователей');
+      }
+
+      const data = await response.json();
+      setUsers(data);
+    } catch (err) {
+      console.error('Ошибка загрузки пользователей:', err);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!message.trim()) {
+      return;
+    }
+
+    if (!sendToAll && selectedUsers.length === 0) {
+      return;
+    }
+
+    setSending(true);
+    setSendResult(null);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Токен не найден');
+      }
+
+      // Если выбрано "отправить всем", используем всех пользователей
+      const userIds = sendToAll 
+        ? users.map(user => user.userId)
+        : selectedUsers.map(id => parseInt(id, 10));
+
+      const response = await fetch(`${API}/merch-bot/send-message`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          message: message.trim(),
+          userIds,
+          parseMode: 'HTML'
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Ошибка отправки сообщения');
+      }
+
+      const result = await response.json();
+      setSendResult(result.result);
+    } catch (err) {
+      console.error('Ошибка отправки сообщения:', err);
+      const totalUsers = sendToAll ? users.length : selectedUsers.length;
+      setSendResult({
+        success: 0,
+        failed: totalUsers,
+        errors: (sendToAll ? users : selectedUsers.map(id => users.find(u => u.userId.toString() === id))).map(user => ({ 
+          userId: user?.userId || 0, 
+          error: err instanceof Error ? err.message : 'Unknown error' 
+        }))
+      });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleCloseModal = () => {
+    setSendModalOpened(false);
+    setMessage('');
+    setSelectedUsers([]);
+    setSendToAll(false);
+    setSendResult(null);
   };
 
   if (loading) {
@@ -82,24 +205,119 @@ function MerchStats() {
     return labels[action] || action;
   };
 
+  const userOptions = users.map(user => ({
+    value: user.userId.toString(),
+    label: `${user.firstName || ''} ${user.lastName || ''}${user.username ? ` (@${user.username})` : ''}`.trim() || `User ${user.userId}`
+  }));
+
   return (
     <Stack gap="md">
       <Group justify="space-between" align="center">
         <Title order={2}>Статистика бота</Title>
-        <Select
-          label="Период"
-          value={period}
-          onChange={(value) => value && setPeriod(value)}
-          data={[
-            { value: '7', label: '7 дней' },
-            { value: '30', label: '30 дней' },
-            { value: '90', label: '90 дней' },
-            { value: '180', label: '180 дней' },
-            { value: '365', label: '1 год' }
-          ]}
-          style={{ width: 150 }}
-        />
+        <Group>
+          <Button
+            leftSection={<IconSend size={16} />}
+            onClick={() => setSendModalOpened(true)}
+            color="blue"
+          >
+            Отправить сообщение
+          </Button>
+          <Select
+            label="Период"
+            value={period}
+            onChange={(value) => value && setPeriod(value)}
+            data={[
+              { value: '7', label: '7 дней' },
+              { value: '30', label: '30 дней' },
+              { value: '90', label: '90 дней' },
+              { value: '180', label: '180 дней' },
+              { value: '365', label: '1 год' }
+            ]}
+            style={{ width: 150 }}
+          />
+        </Group>
       </Group>
+
+      <Modal
+        opened={sendModalOpened}
+        onClose={handleCloseModal}
+        title="Отправить сообщение пользователям"
+        size="xl"
+      >
+        <Stack gap="md">
+          <Box>
+            <Text size="sm" fw={500} mb="xs">Сообщение</Text>
+            <TiptapEditor
+              content={message}
+              onChange={setMessage}
+              telegramMode={true}
+            />
+            <Text size="xs" c="dimmed" mt="xs">
+              Поддерживается HTML форматирование: <b>жирный</b>, <i>курсив</i>, <u>подчеркнутый</u>, <s>зачеркнутый</s>, <code>код</code>
+            </Text>
+          </Box>
+          <Checkbox
+            label={`Отправить всем пользователям (${users.length} чел.)`}
+            checked={sendToAll}
+            onChange={(e) => {
+              setSendToAll(e.currentTarget.checked);
+              if (e.currentTarget.checked) {
+                setSelectedUsers([]);
+              }
+            }}
+          />
+          <MultiSelect
+            label="Получатели"
+            placeholder={sendToAll ? "Выбрано: все пользователи" : "Выберите пользователей..."}
+            data={userOptions}
+            value={selectedUsers}
+            onChange={setSelectedUsers}
+            searchable
+            clearable
+            loading={loadingUsers}
+            disabled={sendToAll}
+            required={!sendToAll}
+          />
+          {sendResult && (
+            <Alert
+              icon={sendResult.failed === 0 ? <IconCheck size={16} /> : <IconAlertCircle size={16} />}
+              title={sendResult.failed === 0 ? 'Сообщения отправлены успешно' : 'Отправка завершена с ошибками'}
+              color={sendResult.failed === 0 ? 'green' : 'orange'}
+            >
+              <Text size="sm">
+                Успешно отправлено: {sendResult.success} из {sendResult.success + sendResult.failed}
+              </Text>
+              {sendResult.failed > 0 && (
+                <Text size="sm" mt="xs">
+                  Не удалось отправить: {sendResult.failed}
+                </Text>
+              )}
+              {sendResult.errors.length > 0 && sendResult.errors.length <= 5 && (
+                <Stack gap="xs" mt="xs">
+                  {sendResult.errors.map((err, idx) => (
+                    <Text key={idx} size="xs" c="dimmed">
+                      User {err.userId}: {err.error}
+                    </Text>
+                  ))}
+                </Stack>
+              )}
+            </Alert>
+          )}
+          <Group justify="flex-end">
+            <Button variant="subtle" onClick={handleCloseModal}>
+              Отмена
+            </Button>
+            <Button
+              onClick={handleSendMessage}
+              loading={sending}
+              disabled={!message.trim() || (!sendToAll && selectedUsers.length === 0)}
+              leftSection={<IconSend size={16} />}
+            >
+              Отправить {sendToAll ? `всем (${users.length})` : `(${selectedUsers.length})`}
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       {/* Сводная статистика */}
       <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="md">

@@ -11,7 +11,11 @@ import { notificationSystem } from '../../../../../utils/Push';
 import './CardGroup.css';
 
 //---------------------------------------------Группа карточек
-function CardGroup() {
+interface CardGroupProps {
+  hasFullAccess?: boolean;
+}
+
+function CardGroup({ hasFullAccess = true }: CardGroupProps) {
   const { selectedId } = useApp();
   const { cards, loading, error, pagination, loadCardsByCategory, removeCard, toggleCardActive } = useCardStore();
   const [addModalOpened, { open: openAddModal, close: closeAddModal }] = useDisclosure(false);
@@ -195,6 +199,16 @@ function CardGroup() {
           <Box mb="md">
             <Group justify="space-between" align="center">
               <Group>
+                {hasFullAccess && (
+                  <Button
+                    leftSection={<IconPlus size={16} />}
+                    onClick={openAddModal}
+                    variant="filled"
+                    color="blue"
+                  >
+                    Добавить карточку
+                  </Button>
+                )}
                 <Select
                   label="Статус"
                   placeholder="Все карточки"
@@ -232,15 +246,17 @@ function CardGroup() {
                 <Text size="sm" c="dimmed">
                   Показано {cards.length} из {pagination.total} карточек
                 </Text>
-                <Button 
-                  onClick={openAddModal}
-                  size="sm"
-                  leftSection={<IconPlus size={16} />}
-                  variant="gradient"
-                  gradient={{ from: 'blue', to: 'cyan' }}
-                >
-                  Добавить карточку
-                </Button>
+                {hasFullAccess && (
+                  <Button 
+                    onClick={openAddModal}
+                    size="sm"
+                    leftSection={<IconPlus size={16} />}
+                    variant="gradient"
+                    gradient={{ from: 'blue', to: 'cyan' }}
+                  >
+                    Добавить карточку
+                  </Button>
+                )}
               </Group>
             </Group>
           </Box>
@@ -250,9 +266,9 @@ function CardGroup() {
             <Card 
               key={card.id} 
               cardData={card}
-              onEdit={handleEditCard}
-              onDelete={handleDeleteCard}
-              onToggleActive={handleToggleActive}
+              onEdit={hasFullAccess ? handleEditCard : undefined}
+              onDelete={hasFullAccess ? handleDeleteCard : undefined}
+              onToggleActive={hasFullAccess ? handleToggleActive : undefined}
             />
           ))}
           
@@ -274,16 +290,18 @@ function CardGroup() {
             <div className="card-group-empty-message-large">
               В этой категории пока нет карточек
             </div>
-            <Button 
-              onClick={openAddModal}
-              size="xl"
-              leftSection={<IconPlus size={24} />}
-              variant="gradient"
-              gradient={{ from: 'blue', to: 'cyan' }}
-              className="card-group-empty-button"
-            >
-              Создать первую карточку
-            </Button>
+            {hasFullAccess && (
+              <Button 
+                onClick={openAddModal}
+                size="xl"
+                leftSection={<IconPlus size={24} />}
+                variant="gradient"
+                gradient={{ from: 'blue', to: 'cyan' }}
+                className="card-group-empty-button"
+              >
+                Создать первую карточку
+              </Button>
+            )}
           </Box>
         </Center>
       )}

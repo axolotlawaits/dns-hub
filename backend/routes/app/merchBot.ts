@@ -1051,4 +1051,59 @@ router.get('/feedback/tools', authenticateToken, async (req: any, res: any) => {
   }
 });
 
+// Маршрут для получения списка пользователей бота
+router.get('/users', authenticateToken, async (req: any, res: any) => {
+  try {
+    const users = await prisma.merchTgUser.findMany({
+      select: {
+        userId: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        createdAt: true
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching bot users:', error);
+    res.status(500).json({ error: 'Failed to fetch bot users' });
+  }
+});
+
+// Маршрут для отправки сообщения пользователям
+router.post('/send-message', authenticateToken, async (req: any, res: any) => {
+  try {
+    const { message, userIds, parseMode = 'HTML' } = req.body;
+
+    if (!message || !message.trim()) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ error: 'User IDs array is required' });
+    }
+
+    const { merchBotService } = await import('../../controllers/app/merchBot.js');
+    
+    const result = await merchBotService.broadcastMessage(userIds, message, parseMode);
+
+    res.json({
+      success: true,
+      result: {
+        total: userIds.length,
+        success: result.success,
+        failed: result.failed,
+        errors: result.errors
+      }
+    });
+  } catch (error) {
+    console.error('Error sending message:', error);
+    res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
 export default router;

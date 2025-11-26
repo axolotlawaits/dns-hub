@@ -13,10 +13,11 @@ import { CustomModal } from '../../../../../utils/CustomModal';
 interface HierarchyProps {
   group: DataItem;
   onDataUpdate: () => void;
+  hasFullAccess?: boolean;
 }
 
 // Мемоизированный компонент для блоков иерархии
-const HierarchyBlock = React.memo(({ group, onDataUpdate }: HierarchyProps) => {
+const HierarchyBlock = React.memo(({ group, onDataUpdate, hasFullAccess = true }: HierarchyProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [childCategories, setChildCategories] = useState<DataItem[]>([]);
   const [loadingChildren, setLoadingChildren] = useState(false);
@@ -156,41 +157,43 @@ const HierarchyBlock = React.memo(({ group, onDataUpdate }: HierarchyProps) => {
             </Button>
           </Group>
           
-          {/* Кнопки действий с иконками */}
-          <Group gap="xs">
-            <Tooltip label="Добавить подкатегорию" withArrow>
-              <ActionIcon 
-                variant="light" 
-                size="sm" 
-                color="blue"
-                onClick={handleAdd}
-              >
-                <IconPlus size={14} />
-              </ActionIcon>
-            </Tooltip>
+          {/* Кнопки действий с иконками - только для пользователей с полным доступом */}
+          {hasFullAccess && (
+            <Group gap="xs">
+              <Tooltip label="Добавить подкатегорию" withArrow>
+                <ActionIcon 
+                  variant="light" 
+                  size="sm" 
+                  color="blue"
+                  onClick={handleAdd}
+                >
+                  <IconPlus size={14} />
+                </ActionIcon>
+              </Tooltip>
 
-            <Tooltip label="Редактировать категорию" withArrow>
-              <ActionIcon 
-                variant="light" 
-                size="sm" 
-                color="orange"
-                onClick={handleEdit}
-              >
-                <IconEdit size={14} />
-              </ActionIcon>
-            </Tooltip>
+              <Tooltip label="Редактировать категорию" withArrow>
+                <ActionIcon 
+                  variant="light" 
+                  size="sm" 
+                  color="orange"
+                  onClick={handleEdit}
+                >
+                  <IconEdit size={14} />
+                </ActionIcon>
+              </Tooltip>
 
-            <Tooltip label="Удалить категорию" withArrow>
-              <ActionIcon 
-                variant="light" 
-                size="sm" 
-                color="red"
-                onClick={handleDelete}
-              >
-                <IconTrash size={14} />
-              </ActionIcon>
-            </Tooltip>
-          </Group>
+              <Tooltip label="Удалить категорию" withArrow>
+                <ActionIcon 
+                  variant="light" 
+                  size="sm" 
+                  color="red"
+                  onClick={handleDelete}
+                >
+                  <IconTrash size={14} />
+                </ActionIcon>
+              </Tooltip>
+            </Group>
+          )}
         </Group>
 
         {/* Дочерние элементы - рендерим только если раскрыто */}
@@ -206,6 +209,7 @@ const HierarchyBlock = React.memo(({ group, onDataUpdate }: HierarchyProps) => {
                   key={childGroup.id} 
                   group={childGroup} 
                   onDataUpdate={onDataUpdate}
+                  hasFullAccess={hasFullAccess}
                 />
               ))
             )}
@@ -268,7 +272,11 @@ const HierarchyBlock = React.memo(({ group, onDataUpdate }: HierarchyProps) => {
   );
 });
 
-function Hierarchy() {
+interface HierarchyComponentProps {
+  hasFullAccess?: boolean;
+}
+
+function Hierarchy({ hasFullAccess = true }: HierarchyComponentProps) {
   const [data, setData] = useState<DataItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [openedAdd, setOpenedAdd] = useState(false);
@@ -327,6 +335,7 @@ function Hierarchy() {
             key={group.id} 
             group={group} 
             onDataUpdate={handleDataUpdate}
+            hasFullAccess={hasFullAccess}
           />
         ))
       ) : (
@@ -335,18 +344,20 @@ function Hierarchy() {
         </Alert>
       )}
       
-                  {/* Кнопка добавления корневого элемента */}
-                  <Paper shadow="xs" radius="md" p="lg" style={{ textAlign: 'center' }}>
-                    <Button 
-                      onClick={() => setOpenedAdd(true)}
-                      size="md"
-                      leftSection={<IconPlus size={20} />}
-                      variant="filled"
-                      color="blue"
-                    >
-                      Добавить корневую категорию
-                    </Button>
-                  </Paper>
+                  {/* Кнопка добавления корневого элемента - только для пользователей с полным доступом */}
+                  {hasFullAccess && (
+                    <Paper shadow="xs" radius="md" p="lg" style={{ textAlign: 'center' }}>
+                      <Button 
+                        onClick={() => setOpenedAdd(true)}
+                        size="md"
+                        leftSection={<IconPlus size={20} />}
+                        variant="filled"
+                        color="blue"
+                      >
+                        Добавить корневую категорию
+                      </Button>
+                    </Paper>
+                  )}
 
       {/* Модалка добавления корневой категории */}
       <CustomModal
