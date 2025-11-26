@@ -1411,164 +1411,40 @@ class MerchBotService {
   private formatDescription(description: string): string {
     if (!description) return '';
     
-    // Description хранится в формате Markdown или HTML
-    // Конвертируем в HTML для Telegram
-    // Telegram HTML поддерживает: <b>bold</b>, <i>italic</i>, <u>underline</u>, 
-    // <s>strike</s>, <code>code</code>, <a href="url">link</a>
-    // ВАЖНО: Telegram НЕ поддерживает теги <p>, <br>, <div> и другие! Переносы строк должны быть \n
+    // Description уже хранится в правильном формате HTML
+    // Нужна только минимальная конвертация для Telegram:
+    // - <strong> -> <b>, <em> -> <i>
+    // - <p> -> перенос строки \n
+    // - <br> -> перенос строки \n
+    // - Удалить неподдерживаемые теги
     
-    let markdown = description.trim();
+    let html = description.trim();
     
-    // 1. Заменяем теги <p> и </p> на переносы строк
-    // <p> в начале строки или после другого тега -> перенос строки
-    // </p> -> перенос строки
-    markdown = markdown.replace(/<\/p>/gi, '\n');
-    markdown = markdown.replace(/<p[^>]*>/gi, '\n');
+    // Минимальная конвертация для Telegram:
+    // 1. <strong> -> <b>, <em> -> <i>
+    html = html.replace(/<strong>/gi, '<b>');
+    html = html.replace(/<\/strong>/gi, '</b>');
+    html = html.replace(/<em>/gi, '<i>');
+    html = html.replace(/<\/em>/gi, '</i>');
     
-    // 2. Удаляем все теги <br> и заменяем их на переносы строк
-    // Это нужно на случай, если в базе данных уже есть HTML с тегами <br>
-    // Telegram НЕ поддерживает тег <br>, только переносы строк \n
-    markdown = markdown.replace(/<br\s*\/?>/gi, '\n');
+    // 2. <p> -> перенос строки \n
+    html = html.replace(/<\/p>/gi, '\n');
+    html = html.replace(/<p[^>]*>/gi, '\n');
     
-    // 3. Заменяем <strong> на <b> (Telegram поддерживает оба, но <b> более стандартный)
-    markdown = markdown.replace(/<strong>/gi, '<b>');
-    markdown = markdown.replace(/<\/strong>/gi, '</b>');
+    // 3. <br> -> перенос строки \n
+    html = html.replace(/<br\s*\/?>/gi, '\n');
     
-    // 4. Заменяем <em> на <i>
-    markdown = markdown.replace(/<em>/gi, '<i>');
-    markdown = markdown.replace(/<\/em>/gi, '</i>');
+    // 4. Удаляем неподдерживаемые теги (сохраняем содержимое)
+    html = html.replace(/<\/?(?:div|span|h[1-6]|ul|ol|li|table|tr|td|th|thead|tbody|tfoot|article|section|header|footer|nav|aside)[^>]*>/gi, '');
     
-    // 5. Удаляем другие неподдерживаемые теги (div, span, и т.д.), но сохраняем их содержимое
-    markdown = markdown.replace(/<\/?(?:div|span|h[1-6]|ul|ol|li|table|tr|td|th|thead|tbody|tfoot)[^>]*>/gi, '');
+    // 5. Убираем множественные переносы строк
+    html = html.replace(/\n{3,}/g, '\n\n');
     
-    // 6. Убираем множественные переносы строк (более 2 подряд)
-    markdown = markdown.replace(/\n{3,}/g, '\n\n');
-    
-    // 7. Убираем переносы строк в начале и конце
-    markdown = markdown.replace(/^\n+|\n+$/g, '');
-    
-    console.log(`🔍 [formatDescription] Входной Markdown (первые 200 символов):`, markdown.substring(0, 200));
-    console.log(`🔍 [formatDescription] Содержит **:`, markdown.includes('**'));
-    console.log(`🔍 [formatDescription] Содержит <br> (после замены):`, markdown.includes('<br>'));
-    
-    // Конвертируем Markdown в HTML для Telegram
-    // Если текст уже содержит HTML теги, защищаем их перед обработкой Markdown
-    let html = markdown;
-    
-    // Проверяем, есть ли уже HTML теги в тексте
-    const hasExistingHtmlTags = /<\/?(?:b|i|u|s|code|pre|a)(?:\s+[^>]*)?>/gi.test(html);
-    
-    // Если есть существующие HTML теги, защищаем их перед обработкой Markdown
-    const existingTags: Array<{ placeholder: string; tag: string }> = [];
-    let existingTagIndex = 0;
-    
-    if (hasExistingHtmlTags) {
-      // Защищаем существующие HTML теги перед обработкой Markdown
-      // Используем нежадный поиск для парных тегов, чтобы защитить их содержимое
-      const existingTagPattern = /<\/?(?:b|i|u|s|code|pre|a)(?:\s+[^>]*)?>/gi;
-      let tagMatch;
-      const tagMatches: Array<{ start: number; end: number; tag: string }> = [];
-      
-      // Находим все теги и их позиции
-      while ((tagMatch = existingTagPattern.exec(html)) !== null) {
-        tagMatches.push({
-          start: tagMatch.index,
-          end: tagMatch.index + tagMatch[0].length,
-          tag: tagMatch[0]
-        });
-      }
-      
-      // Защищаем теги с конца к началу (чтобы не сбить индексы)
-      // Используем уникальный формат плейсхолдеров, который точно не будет конфликтовать с Markdown
-      tagMatches.reverse().forEach(({ start, end, tag }) => {
-        const placeholder = `{{EXISTING_HTML_${existingTagIndex++}}}`;
-        existingTags.unshift({ placeholder, tag }); // unshift для сохранения порядка
-        html = html.substring(0, start) + placeholder + html.substring(end);
-      });
-    }
-    
-    // Порядок важен! Обрабатываем от более специфичных к менее специфичным
-    
-    // 1. Сначала обрабатываем код (чтобы не обрабатывать markdown внутри кода)
-    const codeBlocks: string[] = [];
-    html = html.replace(/`([^`]+)`/g, (_match, content) => {
-      const index = codeBlocks.length;
-      // Экранируем HTML-символы в коде
-      const escapedContent = content
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-      codeBlocks.push(`<code>${escapedContent}</code>`);
-      return `{{CODE_BLOCK_${index}}}`;
-    });
-    
-    // 2. Обрабатываем ссылки (чтобы не обрабатывать markdown внутри ссылок)
-    const links: string[] = [];
-    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, text, url) => {
-      const index = links.length;
-      // Экранируем URL и текст для HTML
-      const escapedUrl = url
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-      const escapedText = text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-      links.push(`<a href="${escapedUrl}">${escapedText}</a>`);
-      return `{{LINK_${index}}}`;
-    });
-    
-    // 3. Жирный текст: **текст** или __текст__
-    // Важно: используем нежадное совпадение и обрабатываем до курсива
-    // НЕ обрабатываем плейсхолдеры (CODE_BLOCK_, LINK_, EXISTING_HTML_)
-    html = html.replace(/\*\*([^*\n]+?)\*\*/g, '<b>$1</b>');
-    // Улучшенное регулярное выражение для __текст__, которое точно исключает плейсхолдеры
-    // Плейсхолдеры теперь используют формат {{...}}, поэтому они не конфликтуют с __текст__
-    html = html.replace(/__(?!CODE_BLOCK_|LINK_|EXISTING_HTML_)([^_\n]+?)__/g, '<b>$1</b>');
-    
-    // 4. Зачеркнутый текст: ~~текст~~
-    html = html.replace(/~~([^~\n]+?)~~/g, '<s>$1</s>');
-    
-    // 5. Курсив: *текст* (но не **текст**)
-    html = html.replace(/(?<!\*)\*([^*\n]+?)\*(?!\*)/g, '<i>$1</i>');
-    // Курсив: _текст_ (но не __текст__)
-    html = html.replace(/(?<!_)_([^_\n]+?)_(?!_)/g, '<i>$1</i>');
-    
-    // Восстанавливаем код и ссылки
-    codeBlocks.forEach((code, index) => {
-      html = html.replace(`{{CODE_BLOCK_${index}}}`, code);
-    });
-    links.forEach((link, index) => {
-      html = html.replace(`{{LINK_${index}}}`, link);
-    });
-    
-    // Восстанавливаем существующие HTML теги ПЕРЕД финальной обработкой
-    existingTags.forEach(({ placeholder, tag }) => {
-      html = html.replace(new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), tag);
-    });
-    
-    console.log(`🔄 [formatDescription] После конвертации (первые 200 символов):`, html.substring(0, 200));
-    console.log(`🔄 [formatDescription] Содержит <b>:`, html.includes('<b>'));
-    console.log(`🔄 [formatDescription] Содержит \n:`, html.includes('\n'));
-    console.log(`🔄 [formatDescription] Содержит EXISTING_HTML:`, html.includes('EXISTING_HTML'));
-    
-    // Экранируем HTML-символы в тексте, но сохраняем разрешенные теги Telegram
-    // Telegram HTML поддерживает ТОЛЬКО: <b>, <i>, <u>, <s>, <code>, <pre>, <a href="url">
-    // ВАЖНО: Telegram НЕ поддерживает тег <br>! Переносы строк должны быть символами \n
-    // Стратегия: находим все теги, защищаем их маркерами, экранируем текст, восстанавливаем теги
-    
-    // Регулярное выражение для всех разрешенных тегов Telegram (включая атрибуты)
-    // Паттерн захватывает: <tag>, </tag>, <tag attr="value">
-    // НЕ включает <br>, так как Telegram его не поддерживает
+    // 6. Экранируем HTML-символы, но сохраняем разрешенные теги Telegram
     const telegramTagRegex = /<\/?(?:b|i|u|s|code|pre|a)(?:\s+[^>]*)?>/gi;
-    
-    // Находим все теги и их позиции
     const tagMatches: Array<{ start: number; end: number; tag: string }> = [];
     let match;
     
-    // Сбрасываем lastIndex для повторного использования
     telegramTagRegex.lastIndex = 0;
     while ((match = telegramTagRegex.exec(html)) !== null) {
       tagMatches.push({
@@ -1578,7 +1454,6 @@ class MerchBotService {
       });
     }
     
-    // Если нет тегов, просто экранируем весь текст
     if (tagMatches.length === 0) {
       html = html
         .replace(/&/g, '&amp;')
@@ -1587,39 +1462,33 @@ class MerchBotService {
       return html.trim();
     }
     
-    // Строим результат, защищая теги
+    // Защищаем теги при экранировании
     let result = '';
     let lastIndex = 0;
     const placeholders: Array<{ placeholder: string; tag: string }> = [];
     let placeholderIndex = 0;
     
     tagMatches.forEach(({ start, end, tag }) => {
-      // Экранируем текст до тега (но сохраняем переносы строк \n)
       if (start > lastIndex) {
         const textBefore = html.substring(lastIndex, start);
-        // Экранируем HTML символы, но сохраняем переносы строк
         result += textBefore
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;');
-        // Переносы строк \n остаются как есть - Telegram их поддерживает
       }
       
-      // Добавляем маркер для тега
       const placeholder = `__TG_PL${placeholderIndex++}__`;
       placeholders.push({ placeholder, tag });
       result += placeholder;
       lastIndex = end;
     });
     
-    // Экранируем остаток текста после последнего тега (сохраняем переносы строк)
     if (lastIndex < html.length) {
       const textAfter = html.substring(lastIndex);
       result += textAfter
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
-      // Переносы строк \n остаются как есть
     }
     
     // Восстанавливаем теги
@@ -1627,30 +1496,7 @@ class MerchBotService {
       result = result.replace(placeholder, tag);
     });
     
-    html = result;
-    
-    // Финальная проверка: убеждаемся, что нет неподдерживаемых тегов
-    // Telegram НЕ поддерживает: <p>, <br>, <div>, <span>, заголовки и другие
-    html = html.replace(/<br\s*\/?>/gi, '\n');
-    html = html.replace(/<\/p>/gi, '\n');
-    html = html.replace(/<p[^>]*>/gi, '\n');
-    html = html.replace(/<\/?(?:div|span|h[1-6]|ul|ol|li|table|tr|td|th|thead|tbody|tfoot|article|section|header|footer|nav|aside)[^>]*>/gi, '');
-    
-    // Убираем множественные переносы строк (более 2 подряд)
-    html = html.replace(/\n{3,}/g, '\n\n');
-    
-    // Убираем переносы строк в начале и конце
-    html = html.trim();
-    
-    console.log(`📤 [formatDescription] Итоговый HTML (первые 200 символов):`, html.substring(0, 200));
-    console.log(`📤 [formatDescription] Итоговый HTML содержит <b>:`, html.includes('<b>'));
-    console.log(`📤 [formatDescription] Итоговый HTML содержит \n:`, html.includes('\n'));
-    console.log(`📤 [formatDescription] Итоговый HTML содержит <br>:`, html.includes('<br>'));
-    console.log(`📤 [formatDescription] Итоговый HTML содержит <p>:`, html.includes('<p>'));
-    
-    // Убираем только начальные и конечные пробелы
-    // Telegram HTML правильно обрабатывает переносы строк \n внутри текста
-    return html.trim();
+    return result.trim();
   }
 
   private getImageUrl(imagePath: string): string {

@@ -17,6 +17,8 @@ export interface Feedback {
     username: string | null;
     firstName: string | null;
     lastName: string | null;
+    dbName: string | null; // ФИО из базы данных (User или UserData)
+    tgName: string | null; // ФИО из Telegram metadata
   };
 }
 

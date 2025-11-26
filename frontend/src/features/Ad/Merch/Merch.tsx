@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
-  Group, 
   ActionIcon, 
   Box, 
   Collapse,
@@ -93,9 +92,15 @@ function Merch() {
               </Tabs.List>
 
               <Tabs.Panel value="management" pt="md">
-                <Group align="flex-start" gap="md" style={{ width: '100%' }}>
+                <Box style={{ display: 'flex', gap: 'var(--mantine-spacing-md)', width: '100%', alignItems: 'flex-start', flexWrap: 'nowrap' }}>
                   {/* Контейнер для иерархии и кнопки */}
-                  <Box className="merch-hierarchy-container">
+                  <Box className="merch-hierarchy-container" style={{ 
+                    flex: isHierarchyVisible ? '0 0 40%' : '0 0 0', 
+                    maxWidth: isHierarchyVisible ? '40%' : '0', 
+                    minWidth: 0,
+                    overflow: 'hidden',
+                    transition: 'flex 0.3s ease, max-width 0.3s ease'
+                  }}>
                     {/* Иерархия с анимацией */}
                     <Collapse in={isHierarchyVisible} transitionDuration={TRANSITION_DURATION}>
                       <Paper 
@@ -133,6 +138,11 @@ function Merch() {
                     radius="md" 
                     p="lg" 
                     className="merch-cards-paper"
+                    style={{ 
+                      flex: isHierarchyVisible ? '1 1 60%' : '1 1 100%', 
+                      minWidth: 0,
+                      transition: 'flex 0.3s ease'
+                    }}
                   >
                     <Stack gap="md">
                       <Text size="lg" fw={600} className="merch-title">
@@ -141,7 +151,7 @@ function Merch() {
                       <CardGroup/>
                     </Stack>
                   </Paper>
-                </Group>
+                </Box>
               </Tabs.Panel>
 
               <Tabs.Panel value="stats" pt="md">

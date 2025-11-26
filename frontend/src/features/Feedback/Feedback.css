@@ -2,3 +2,42 @@
   width: 100%;
 }
 
+/* Стили для таблицы обратной связи в темной теме */
+.feedback-container .mantine-Table-th {
+  color: var(--mantine-color-text) !important;
+  background-color: var(--mantine-color-body) !important;
+}
+
+.feedback-container .mantine-Table-td {
+  color: var(--mantine-color-text) !important;
+}
+
+.feedback-container .mantine-Table-tr {
+  color: var(--mantine-color-text) !important;
+}
+
+.feedback-container .mantine-Table-tr:hover {
+  background-color: var(--mantine-color-gray-8) !important;
+}
+
+/* Глобальные стили для таблицы обратной связи */
+.feedback-container table th,
+.feedback-container table td {
+  color: var(--mantine-color-text) !important;
+}
+
+.feedback-container table thead th {
+  color: var(--mantine-color-text) !important;
+  background-color: var(--mantine-color-body) !important;
+}
+
+/* Фон для непрочитанных строк */
+.feedback-container .feedback-unread-row {
+  background-color: var(--mantine-color-blue-0) !important;
+}
+
+/* Фон для непрочитанных строк в темной теме */
+[data-mantine-color-scheme="dark"] .feedback-container .feedback-unread-row {
+  background-color: rgba(37, 99, 235, 0.15) !important;
+}
+

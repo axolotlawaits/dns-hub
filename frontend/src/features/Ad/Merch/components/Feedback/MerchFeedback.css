@@ -2,3 +2,13 @@
   width: 100%;
 }
 
+/* Фон для непрочитанных строк */
+.merch-feedback-container .feedback-unread-row {
+  background-color: var(--mantine-color-blue-0) !important;
+}
+
+/* Фон для непрочитанных строк в темной теме */
+[data-mantine-color-scheme="dark"] .merch-feedback-container .feedback-unread-row {
+  background-color: rgba(37, 99, 235, 0.15) !important;
+}
+

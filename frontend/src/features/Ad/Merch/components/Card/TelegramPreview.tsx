@@ -39,6 +39,7 @@ export function TelegramPreview({ name, description, images }: TelegramPreviewPr
     };
   }, []);
 
+  // Описание уже в формате HTML - используем как есть
   // Формируем полный HTML с названием, если оно есть
   const htmlDescription = name && description 
     ? `<b>${name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</b><br><br>${description}`

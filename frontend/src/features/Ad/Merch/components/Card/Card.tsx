@@ -202,7 +202,7 @@ function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
     });
   };
 
-  // Description уже в формате HTML
+  // Описание уже в формате HTML - отображаем как есть
   const formattedDescription = cardData.description || '';
 
   return (
@@ -268,8 +268,11 @@ function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
             Описание:
           </Text>
           <div 
-            dangerouslySetInnerHTML={{ __html: formattedDescription }}
+            dangerouslySetInnerHTML={{ 
+              __html: formattedDescription.replace(/\n/g, '<br>') 
+            }}
             className="card-description-content"
+            style={{ whiteSpace: 'pre-wrap' }}
           />
         </Box>
       )}

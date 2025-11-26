@@ -1,6 +1,7 @@
 import express from 'express';
 import { prisma } from '../../server.js';
 import { authenticateToken } from '../../middleware/auth.js';
+import uploadFeedback from '../../middleware/uploaderFeedback.js';
 
 const router = express.Router();
 
@@ -724,6 +725,45 @@ router.get('/item/:id', async (req: any, res: any) => {
   }
 });
 
+// Создание обратной связи (универсальный endpoint)
+router.post('/feedback', authenticateToken, uploadFeedback.array('photos', 10), async (req: any, res: any) => {
+  try {
+    const { tool, text, email } = req.body;
+    const userId = req.user?.id;
+
+    if (!text || !text.trim()) {
+      return res.status(400).json({ error: 'Текст обратной связи обязателен' });
+    }
+
+    // Получаем пути к загруженным файлам
+    const photos: string[] = [];
+    if (req.files && Array.isArray(req.files)) {
+      photos.push(...req.files.map((file: Express.Multer.File) => file.filename));
+    }
+
+    const feedback = await (prisma as any).feedback.create({
+      data: {
+        tool: tool || 'general',
+        userId: userId || null,
+        email: email || null,
+        text: text.trim(),
+        photos: photos,
+        metadata: {
+          userAgent: req.headers['user-agent'],
+          ip: req.ip || req.connection.remoteAddress,
+          userName: req.user?.name || null,
+          userEmail: req.user?.email || null
+        }
+      }
+    });
+
+    res.status(201).json(feedback);
+  } catch (error) {
+    console.error('Error creating feedback:', error);
+    res.status(500).json({ error: 'Failed to create feedback' });
+  }
+});
+
 // Получение списка обратной связи (с фильтрацией по инструменту)
 router.get('/feedback', authenticateToken, async (req: any, res: any) => {
   try {
@@ -753,15 +793,53 @@ router.get('/feedback', authenticateToken, async (req: any, res: any) => {
     ]);
 
     // Форматируем ответ для совместимости с фронтендом
-    const formattedFeedbacks = feedbacks.map((fb: any) => ({
-      ...fb,
-      user: {
-        userId: (fb.metadata as any)?.telegramUserId || 0,
-        username: (fb.metadata as any)?.username || null,
-        firstName: (fb.metadata as any)?.firstName || null,
-        lastName: (fb.metadata as any)?.lastName || null
-      }
-    }));
+    // Получаем данные пользователей из базы по email
+    const emails = feedbacks.map((fb: any) => fb.email).filter(Boolean);
+    const usersByEmail = new Map();
+    const userDataByEmail = new Map();
+
+    if (emails.length > 0) {
+      // Получаем пользователей из User
+      const users = await prisma.user.findMany({
+        where: { email: { in: emails } },
+        select: { email: true, name: true }
+      });
+      users.forEach((user: any) => {
+        usersByEmail.set(user.email.toLowerCase(), user.name);
+      });
+
+      // Получаем пользователей из UserData
+      const userDataList = await prisma.userData.findMany({
+        where: { email: { in: emails } },
+        select: { email: true, fio: true }
+      });
+      userDataList.forEach((userData: any) => {
+        userDataByEmail.set(userData.email.toLowerCase(), userData.fio);
+      });
+    }
+
+    const formattedFeedbacks = feedbacks.map((fb: any) => {
+      const emailLower = fb.email?.toLowerCase();
+      const dbName = usersByEmail.get(emailLower) || userDataByEmail.get(emailLower) || null;
+      const tgMetadata = fb.metadata as any;
+      const tgFirstName = tgMetadata?.firstName || null;
+      const tgLastName = tgMetadata?.lastName || null;
+      const tgName = (tgFirstName || tgLastName) 
+        ? `${tgFirstName || ''} ${tgLastName || ''}`.trim() 
+        : null;
+
+      return {
+        ...fb,
+        user: {
+          userId: tgMetadata?.telegramUserId || 0,
+          username: tgMetadata?.username || null,
+          firstName: tgMetadata?.firstName || null,
+          lastName: tgMetadata?.lastName || null,
+          dbName: dbName, // ФИО из базы данных
+          tgName: tgName // ФИО из Telegram
+        }
+      };
+    });
 
     res.json({
       feedbacks: formattedFeedbacks,
@@ -793,14 +871,43 @@ router.patch('/feedback/:id/read', authenticateToken, async (req: any, res: any)
       }
     });
 
+    // Получаем данные пользователя из базы по email
+    let dbName = null;
+    if (feedback.email) {
+      const user = await prisma.user.findUnique({
+        where: { email: feedback.email },
+        select: { name: true }
+      });
+      if (user?.name) {
+        dbName = user.name;
+      } else {
+        const userData = await prisma.userData.findUnique({
+          where: { email: feedback.email },
+          select: { fio: true }
+        });
+        if (userData?.fio) {
+          dbName = userData.fio;
+        }
+      }
+    }
+
+    const tgMetadata = feedback.metadata as any;
+    const tgFirstName = tgMetadata?.firstName || null;
+    const tgLastName = tgMetadata?.lastName || null;
+    const tgName = (tgFirstName || tgLastName) 
+      ? `${tgFirstName || ''} ${tgLastName || ''}`.trim() 
+      : null;
+
     // Форматируем ответ для совместимости с фронтендом
     const formattedFeedback = {
       ...feedback,
       user: {
-        userId: (feedback.metadata as any)?.telegramUserId || 0,
-        username: (feedback.metadata as any)?.username || null,
-        firstName: (feedback.metadata as any)?.firstName || null,
-        lastName: (feedback.metadata as any)?.lastName || null
+        userId: tgMetadata?.telegramUserId || 0,
+        username: tgMetadata?.username || null,
+        firstName: tgMetadata?.firstName || null,
+        lastName: tgMetadata?.lastName || null,
+        dbName: dbName,
+        tgName: tgName
       }
     };
 
@@ -851,6 +958,96 @@ router.get('/feedback/stats', authenticateToken, async (req: any, res: any) => {
   } catch (error) {
     console.error('Error fetching feedback stats:', error);
     res.status(500).json({ error: 'Failed to fetch feedback stats' });
+  }
+});
+
+// Получение списка инструментов для обратной связи с иерархией
+router.get('/feedback/tools', authenticateToken, async (req: any, res: any) => {
+  try {
+    // Получаем родительские инструменты (без parent_id)
+    const parentTools = await prisma.tool.findMany({
+      where: {
+        included: true,
+        parent_id: null
+      },
+      select: {
+        id: true,
+        name: true,
+        link: true,
+        description: true
+      },
+      orderBy: {
+        order: 'asc'
+      }
+    });
+
+    // Получаем дочерние инструменты (с parent_id)
+    const childTools = await prisma.tool.findMany({
+      where: {
+        included: true,
+        parent_id: { not: null }
+      },
+      select: {
+        id: true,
+        name: true,
+        link: true,
+        description: true,
+        parent_id: true
+      },
+      orderBy: {
+        order: 'asc'
+      }
+    });
+
+    // Формируем список родительских инструментов
+    const parentToolsList = parentTools.map(tool => ({
+      value: tool.link,
+      label: tool.name
+    }));
+
+    // Группируем дочерние инструменты по parent_id
+    const childToolsByParent: Record<string, Array<{ value: string; label: string }>> = {};
+    childTools.forEach(tool => {
+      if (tool.parent_id) {
+        if (!childToolsByParent[tool.parent_id]) {
+          childToolsByParent[tool.parent_id] = [];
+        }
+        childToolsByParent[tool.parent_id].push({
+          value: tool.link,
+          label: tool.name
+        });
+      }
+    });
+
+    // Создаем маппинг link -> id для родительских инструментов
+    const linkToIdMap: Record<string, string> = {};
+    parentTools.forEach(parent => {
+      linkToIdMap[parent.link] = parent.id;
+    });
+
+    // Находим parent_id по link для каждого родительского инструмента
+    const parentToolsWithChildren = parentTools.map(parent => {
+      const children = childToolsByParent[parent.id] || [];
+      return {
+        value: parent.link,
+        label: parent.name,
+        id: parent.id,
+        children: children
+      };
+    });
+
+    res.json({
+      parentTools: [
+        { value: 'general', label: 'Общая обратная связь' },
+        ...parentToolsList,
+        { value: 'other', label: 'Другое' }
+      ],
+      linkToIdMap: linkToIdMap,
+      parentToolsWithChildren: parentToolsWithChildren
+    });
+  } catch (error) {
+    console.error('Error fetching feedback tools:', error);
+    res.status(500).json({ error: 'Failed to fetch feedback tools' });
   }
 });
 

@@ -109,11 +109,24 @@ function MerchFeedbackComponent() {
   };
 
   const getUserName = (feedback: MerchFeedback) => {
-    const { firstName, lastName, username } = feedback.user;
-    if (firstName || lastName) {
-      return `${firstName || ''} ${lastName || ''}`.trim();
+    const { dbName, tgName, username, userId } = feedback.user;
+    
+    // Для мерча используем данные из Telegram, но если есть и ФИО из базы, показываем оба
+    if (tgName) {
+      // Если есть и ФИО из базы, показываем оба
+      if (dbName && dbName !== tgName) {
+        return `${dbName} (${tgName})`;
+      }
+      return tgName;
     }
-    return username ? `@${username}` : `ID: ${feedback.user.userId}`;
+    
+    // Если нет данных из Telegram, используем ФИО из базы
+    if (dbName) {
+      return dbName;
+    }
+    
+    // Fallback
+    return username ? `@${username}` : `ID: ${userId}`;
   };
 
   if (loading && !feedbacks.length) {
@@ -223,13 +236,13 @@ function MerchFeedbackComponent() {
           <Table>
             <Table.Thead>
               <Table.Tr>
-                <Table.Th>Пользователь</Table.Th>
-                <Table.Th>Email</Table.Th>
-                <Table.Th>Сообщение</Table.Th>
-                <Table.Th>Фото</Table.Th>
-                <Table.Th>Дата</Table.Th>
-                <Table.Th>Статус</Table.Th>
-                <Table.Th>Действия</Table.Th>
+                <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Пользователь</Table.Th>
+                <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Email</Table.Th>
+                <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Сообщение</Table.Th>
+                <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Фото</Table.Th>
+                <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Дата</Table.Th>
+                <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Статус</Table.Th>
+                <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Действия</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -245,25 +258,25 @@ function MerchFeedbackComponent() {
                 feedbacks.map((feedback) => (
                   <Table.Tr
                     key={feedback.id}
+                    className={feedback.isRead ? undefined : 'feedback-unread-row'}
                     style={{
-                      cursor: 'pointer',
-                      backgroundColor: feedback.isRead ? undefined : 'var(--mantine-color-blue-0)'
+                      cursor: 'pointer'
                     }}
                     onClick={() => handleOpenModal(feedback)}
                   >
                     <Table.Td>
                       <Group gap="xs">
                         <IconUser size={16} />
-                        <Text size="sm" fw={feedback.isRead ? 400 : 600}>
+                        <Text size="sm" fw={feedback.isRead ? 400 : 600} c="var(--mantine-color-text)">
                           {getUserName(feedback)}
                         </Text>
                       </Group>
                     </Table.Td>
                     <Table.Td>
-                      <Text size="sm">{feedback.email}</Text>
+                      <Text size="sm" c="var(--mantine-color-text)">{feedback.email}</Text>
                     </Table.Td>
                     <Table.Td>
-                      <Text size="sm" lineClamp={2}>
+                      <Text size="sm" c="var(--mantine-color-text)" lineClamp={2}>
                         {feedback.text}
                       </Text>
                     </Table.Td>
@@ -286,11 +299,11 @@ function MerchFeedbackComponent() {
                     </Table.Td>
                     <Table.Td>
                       {feedback.isRead ? (
-                        <Badge color="green" variant="light" leftSection={<IconCheck size={12} />}>
+                        <Badge color="green" variant="filled" leftSection={<IconCheck size={12} />}>
                           Прочитано
                         </Badge>
                       ) : (
-                        <Badge color="red" variant="light" leftSection={<IconX size={12} />}>
+                        <Badge color="red" variant="filled" leftSection={<IconX size={12} />}>
                           Непрочитано
                         </Badge>
                       )}
@@ -358,11 +371,11 @@ function MerchFeedbackComponent() {
                 <Text fw={600}>{getUserName(selectedFeedback)}</Text>
               </Group>
               {selectedFeedback.isRead ? (
-                <Badge color="green" variant="light">
+                <Badge color="green" variant="filled">
                   Прочитано
                 </Badge>
               ) : (
-                <Badge color="red" variant="light">
+                <Badge color="red" variant="filled">
                   Непрочитано
                 </Badge>
               )}
@@ -398,10 +411,20 @@ function MerchFeedbackComponent() {
                 <Text size="sm" c="dimmed" mb="xs">Фотографии ({selectedFeedback.photos.length}):</Text>
                 <SimpleGrid cols={2} spacing="md">
                   {selectedFeedback.photos.map((photo, index) => {
-                    // Определяем путь к фото в зависимости от инструмента
-                    const photoPath = selectedFeedback.tool === 'merch' 
-                      ? `${API}/public/add/merch/${photo}`
-                      : photo.startsWith('http') ? photo : `${API}/public/${photo}`;
+                    // Для merch бота фото могут быть в разных местах
+                    // Если это путь к файлу (file_path от Telegram), используем его как есть
+                    // Если это имя файла, проверяем, откуда оно
+                    let photoPath: string;
+                    if (photo.startsWith('http')) {
+                      photoPath = photo;
+                    } else if (selectedFeedback.tool === 'merch') {
+                      // Для merch бота фото могут быть в public/add/merch или public/feedback
+                      // Проверяем, есть ли файл в public/add/merch, если нет - пробуем public/feedback
+                      photoPath = `${API}/public/add/merch/${photo}`;
+                    } else {
+                      // Для остальных инструментов фото в public/feedback/
+                      photoPath = `${API}/public/feedback/${photo}`;
+                    }
                     
                     return (
                       <Image
