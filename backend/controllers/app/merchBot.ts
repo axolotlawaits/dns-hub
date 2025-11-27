@@ -1125,9 +1125,28 @@ class MerchBotService {
       
       // Скачиваем файл из Telegram
       const fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
-      const response = await axios.get(fileUrl, {
-        responseType: 'arraybuffer'
-      });
+      
+      let response;
+      try {
+        response = await axios.get(fileUrl, {
+          responseType: 'arraybuffer',
+          timeout: 30000, // 30 секунд таймаут
+          validateStatus: (status) => status >= 200 && status < 300 // Принимаем только успешные статусы
+        });
+      } catch (axiosError: any) {
+        // Проверяем, является ли это ошибкой 404
+        if (axiosError.response?.status === 404) {
+          console.warn(`⚠️ Файл не найден в Telegram: ${file.file_path}. Возможно, файл был удален или недоступен.`);
+          await ctx.reply('❌ Фотография недоступна в Telegram (файл не найден). Пожалуйста, отправьте фотографию заново или напишите "готово":');
+          return;
+        }
+        // Для других ошибок пробрасываем дальше
+        throw axiosError;
+      }
+      
+      if (!response || !response.data) {
+        throw new Error('Пустой ответ от Telegram API');
+      }
       
       const buffer = Buffer.from(response.data);
       
@@ -1155,9 +1174,26 @@ class MerchBotService {
       } else {
         await ctx.reply('✅ Фотография сохранена! Достигнуто максимальное количество фотографий. Напишите "готово" для завершения:');
       }
-    } catch (error) {
-      console.error('Error handling photo:', error);
-      await ctx.reply('❌ Ошибка сохранения фотографии. Пожалуйста, попробуйте еще раз или напишите "готово":');
+    } catch (error: any) {
+      // Более детальная обработка ошибок
+      if (error.response?.status === 404) {
+        console.warn(`⚠️ Файл не найден в Telegram API: ${error.config?.url}`);
+        await ctx.reply('❌ Фотография недоступна в Telegram (файл не найден). Пожалуйста, отправьте фотографию заново или напишите "готово":');
+      } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        console.error('⏱️ Таймаут при загрузке фотографии из Telegram:', error.message);
+        await ctx.reply('❌ Превышено время ожидания при загрузке фотографии. Пожалуйста, попробуйте еще раз или напишите "готово":');
+      } else if (error.response?.status >= 500) {
+        console.error('🔴 Ошибка сервера Telegram при загрузке фотографии:', error.response?.status, error.message);
+        await ctx.reply('❌ Временная ошибка сервера Telegram. Пожалуйста, попробуйте еще раз позже или напишите "готово":');
+      } else {
+        console.error('❌ Ошибка обработки фотографии:', {
+          message: error.message,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          url: error.config?.url
+        });
+        await ctx.reply('❌ Ошибка сохранения фотографии. Пожалуйста, попробуйте еще раз или напишите "готово":');
+      }
     }
   }
 
