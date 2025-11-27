@@ -55,6 +55,8 @@
 .tiptap-editor .editor-content .tiptap {
     outline: none; /* Убираем границу при фокусировке */
     min-height: inherit; /* Наследуем минимальную высоту от родителя */
+    white-space: pre-wrap; /* Сохраняем переносы строк */
+    word-wrap: break-word; /* Переносим длинные слова */
 }
 
 /* Стили контента редактора */

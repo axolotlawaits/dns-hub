@@ -28,6 +28,8 @@ export const getMerchHierarchy = async (req: Request, res: Response, next: NextF
   try {
     const { parentId, layer } = req.query;
     
+    console.log('📥 [getMerchHierarchy] Запрос:', { parentId, layer });
+    
     let whereClause: any = {};
     
     // Логика по принципу старого MerchBot:
@@ -44,6 +46,8 @@ export const getMerchHierarchy = async (req: Request, res: Response, next: NextF
       whereClause.parentId = null;
       whereClause.layer = 1;
     }
+
+    console.log('🔍 [getMerchHierarchy] Условие поиска:', whereClause);
 
     const categories = await prisma.merch.findMany({
       where: whereClause,
@@ -70,6 +74,8 @@ export const getMerchHierarchy = async (req: Request, res: Response, next: NextF
       }
     });
 
+    console.log('✅ [getMerchHierarchy] Найдено категорий:', categories.length);
+
     const formattedData = categories.map((category: any) => {
       // Формируем imageUrls из attachments
       const imageUrls = category.attachments
@@ -90,10 +96,11 @@ export const getMerchHierarchy = async (req: Request, res: Response, next: NextF
       };
     });
 
+    console.log('📤 [getMerchHierarchy] Отправляем данных:', formattedData.length);
     return res.json(formattedData);
   } catch (error) {
     console.error('❌ Ошибка при получении иерархии мерч-категорий:', error);
-    next(error);
+    res.status(500).json({ error: 'Ошибка при получении иерархии', details: error instanceof Error ? error.message : String(error) });
   }
 };
 
@@ -546,6 +553,16 @@ export const createMerchCard = [
       const imageUrls = newCard.attachments
         .map(att => `${API}/public/add/merch/${att.source}`);
 
+      // Обновляем кэш бота после создания карточки
+      try {
+        const { merchBotService } = await import('../app/merchBot.js');
+        await merchBotService.refreshCache();
+        console.log('✅ [createMerchCard] Кэш бота обновлен после создания карточки');
+      } catch (cacheError) {
+        console.warn('⚠️ [createMerchCard] Не удалось обновить кэш бота:', cacheError);
+        // Не прерываем выполнение, если не удалось обновить кэш
+      }
+
       res.status(201).json({
         id: newCard.id,
         name: newCard.name,
@@ -690,6 +707,18 @@ export const updateMerchCard = [
         .filter(att => att.type === 'image')
         .map(att => `${API}/public/add/merch/${att.source}`);
 
+      // Обновляем кэш бота после обновления карточки (если карточка активна)
+      if (updatedCard.isActive) {
+        try {
+          const { merchBotService } = await import('../app/merchBot.js');
+          await merchBotService.refreshCache();
+          console.log('✅ [updateMerchCard] Кэш бота обновлен после обновления карточки');
+        } catch (cacheError) {
+          console.warn('⚠️ [updateMerchCard] Не удалось обновить кэш бота:', cacheError);
+          // Не прерываем выполнение, если не удалось обновить кэш
+        }
+      }
+
       return res.json({
         id: updatedCard.id,
         name: updatedCard.name,
@@ -796,6 +825,18 @@ export const addCardImages = [
         }
       });
 
+      // Обновляем кэш бота после добавления изображений (если карточка активна)
+      if (updatedCard?.isActive) {
+        try {
+          const { merchBotService } = await import('../app/merchBot.js');
+          await merchBotService.refreshCache();
+          console.log('✅ [addCardImages] Кэш бота обновлен после добавления изображений');
+        } catch (cacheError) {
+          console.warn('⚠️ [addCardImages] Не удалось обновить кэш бота:', cacheError);
+          // Не прерываем выполнение, если не удалось обновить кэш
+        }
+      }
+
       return res.json({
         id: updatedCard?.id,
         attachmentsCount: updatedCard?.attachments.length || 0,
@@ -847,6 +888,200 @@ export const addMerchAttachment = [
 ];
 
 // Удалить attachment
+// Обновить порядок attachments
+export const updateAttachmentsOrder = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { recordId } = req.params;
+    const { attachmentIds } = req.body; // Массив ID attachments в новом порядке
+
+    if (!Array.isArray(attachmentIds)) {
+      return res.status(400).json({ error: 'attachmentIds должен быть массивом' });
+    }
+
+    // Обновляем sortOrder для каждого attachment
+    for (let i = 0; i < attachmentIds.length; i++) {
+      await prisma.merchAttachment.update({
+        where: { id: attachmentIds[i] },
+        data: { sortOrder: i }
+      });
+    }
+
+    // Возвращаем обновленные attachments
+    const attachments = await prisma.merchAttachment.findMany({
+      where: { recordId },
+      orderBy: { sortOrder: 'asc' }
+    });
+
+    return res.json({ success: true, attachments });
+  } catch (error) {
+    console.error('❌ Ошибка при обновлении порядка attachments:', error);
+    next(error);
+  }
+};
+
+// Обновить порядок карточек
+export const updateCardsOrder = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { categoryId } = req.params;
+    const { cardIds } = req.body; // Массив ID карточек в новом порядке
+
+    if (!Array.isArray(cardIds)) {
+      return res.status(400).json({ error: 'cardIds должен быть массивом' });
+    }
+
+    // Обновляем sortOrder для каждой карточки
+    for (let i = 0; i < cardIds.length; i++) {
+      await prisma.merch.update({
+        where: { id: cardIds[i], layer: 0 },
+        data: { sortOrder: i }
+      });
+    }
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Ошибка при обновлении порядка карточек:', error);
+    next(error);
+  }
+};
+
+// Обновить порядок категорий
+export const updateCategoriesOrder = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { parentId } = req.params; // parentId может быть null для корневых категорий
+    const { categoryIds } = req.body; // Массив ID категорий в новом порядке
+
+    if (!Array.isArray(categoryIds)) {
+      return res.status(400).json({ error: 'categoryIds должен быть массивом' });
+    }
+
+    // Обновляем sortOrder для каждой категории
+    for (let i = 0; i < categoryIds.length; i++) {
+      await prisma.merch.update({
+        where: { id: categoryIds[i], layer: 1 },
+        data: { sortOrder: i }
+      });
+    }
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Ошибка при обновлении порядка категорий:', error);
+    next(error);
+  }
+};
+
+// Обновить parentId категории
+export const updateCategoryParent = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { categoryId } = req.params;
+    const { parentId } = req.body; // parentId может быть null для корневых категорий
+
+    // Проверяем, что категория существует
+    const category = await prisma.merch.findUnique({
+      where: { id: categoryId, layer: 1 }
+    });
+
+    if (!category) {
+      return res.status(404).json({ error: 'Категория не найдена' });
+    }
+
+    // Если parentId указан, проверяем что родитель существует
+    if (parentId) {
+      const parent = await prisma.merch.findUnique({
+        where: { id: parentId, layer: 1 }
+      });
+
+      if (!parent) {
+        return res.status(404).json({ error: 'Родительская категория не найдена' });
+      }
+
+      // Проверяем, что не пытаемся сделать категорию родителем самой себя
+      if (categoryId === parentId) {
+        return res.status(400).json({ error: 'Категория не может быть родителем самой себя' });
+      }
+
+      // Проверяем, что не создаем циклическую зависимость
+      let currentParentId: string | null = parentId;
+      const visited = new Set<string>([categoryId]);
+      
+      while (currentParentId) {
+        if (visited.has(currentParentId)) {
+          return res.status(400).json({ error: 'Невозможно создать циклическую зависимость' });
+        }
+        visited.add(currentParentId);
+        
+        const currentParent = await prisma.merch.findUnique({
+          where: { id: currentParentId, layer: 1 },
+          select: { parentId: true }
+        });
+        
+        currentParentId = currentParent?.parentId || null;
+      }
+    }
+
+    // Обновляем parentId
+    await prisma.merch.update({
+      where: { id: categoryId, layer: 1 },
+      data: { parentId: parentId || null }
+    });
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Ошибка при обновлении parentId категории:', error);
+    next(error);
+  }
+};
+
+
+// Переместить карточку в другую категорию
+export const moveCardToCategory = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { cardId } = req.params;
+    const { newCategoryId } = req.body;
+
+    if (!newCategoryId) {
+      return res.status(400).json({ error: 'newCategoryId обязателен' });
+    }
+
+    // Проверяем, что новая категория существует
+    const newCategory = await prisma.merch.findUnique({
+      where: { id: newCategoryId, layer: 1 }
+    });
+
+    if (!newCategory) {
+      return res.status(404).json({ error: 'Категория не найдена' });
+    }
+
+    // Получаем максимальный sortOrder в новой категории
+    const maxSortOrder = await prisma.merch.findFirst({
+      where: { parentId: newCategoryId, layer: 0 },
+      orderBy: { sortOrder: 'desc' },
+      select: { sortOrder: true }
+    });
+
+    const newSortOrder = maxSortOrder ? maxSortOrder.sortOrder + 1 : 0;
+
+    // Обновляем карточку
+    const updatedCard = await prisma.merch.update({
+      where: { id: cardId, layer: 0 },
+      data: {
+        parentId: newCategoryId,
+        sortOrder: newSortOrder
+      },
+      include: {
+        attachments: {
+          where: { type: 'image' },
+          orderBy: { sortOrder: 'asc' }
+        }
+      }
+    });
+
+    return res.json({ success: true, card: updatedCard });
+  } catch (error) {
+    console.error('❌ Ошибка при перемещении карточки:', error);
+    next(error);
+  }
+};
+
 export const deleteMerchAttachment = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;

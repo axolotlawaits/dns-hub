@@ -53,6 +53,7 @@ function Management() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null)
+  const [selectedGroupFilter, setSelectedGroupFilter] = useState<string | null>(null)
   const navigate = useNavigate()
 
   const modals = {
@@ -79,7 +80,14 @@ function Management() {
   useEffect(() => {
     getEntities()
     setCurEntity(null)
-  }, [getEntities])
+    // Загружаем группы для фильтрации должностей
+    if (entityType === 'position') {
+      fetch(`${API}/search/group/all`)
+        .then(res => res.json())
+        .then(json => setGroups(json))
+        .catch(err => console.error('Error fetching groups:', err))
+    }
+  }, [getEntities, entityType])
 
   const getTools = useCallback(async (search?: string) => {
     try {
@@ -194,10 +202,17 @@ function Management() {
 
   const entityOptions = useMemo(() => {
     if (entityType === 'group') return groups.map((g: any) => ({value: g.uuid, label: g.name}))
-    if (entityType === 'position') return positions.map((p: any) => ({value: p.uuid, label: p.name}))
+    if (entityType === 'position') {
+      // Фильтруем должности по выбранной группе, если выбрана
+      let filteredPositions = positions;
+      if (selectedGroupFilter) {
+        filteredPositions = positions.filter((p: any) => p.groupUuid === selectedGroupFilter);
+      }
+      return filteredPositions.map((p: any) => ({value: p.uuid, label: p.name}))
+    }
     if (entityType === 'user') return users.map((u: User) => ({value: u.id, label: u.name}))
     return []
-  }, [entityType, groups, positions, users])
+  }, [entityType, groups, positions, users, selectedGroupFilter])
 
   const statistics = useMemo(() => {
     const totalTools = tools.length
@@ -329,6 +344,22 @@ function Management() {
                 }
               />
             </Box>
+            {entityType === 'position' && (
+              <Box style={{ flex: 1 }}>
+                <Text size="sm" fw={500} c="var(--theme-text-primary)" mb="xs">
+                  Группа должностей (фильтр)
+                </Text>
+                <Select 
+                  data={groups.map((g: any) => ({value: g.uuid, label: g.name}))} 
+                  value={selectedGroupFilter} 
+                  onChange={setSelectedGroupFilter} 
+                  placeholder="Все группы"
+                  searchable
+                  clearable
+                  disabled={loading}
+                />
+              </Box>
+            )}
             <Box style={{ flex: 2 }}>
               <Text size="sm" fw={500} c="var(--theme-text-primary)" mb="xs">
                 {entityType === 'group' ? 'Группа должностей' : 

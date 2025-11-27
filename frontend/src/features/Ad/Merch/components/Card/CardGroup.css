@@ -5,13 +5,13 @@
 
 .card-group-empty-message {
   font-size: 18px;
-  color: gray;
+  color: var(--theme-text-secondary);
   margin-bottom: 20px;
 }
 
 .card-group-empty-message-large {
   font-size: 18px;
-  color: gray;
+  color: var(--theme-text-secondary);
   margin-bottom: 30px;
 }
 

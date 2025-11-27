@@ -54,12 +54,20 @@ export const getHierarchyData = async (parentId?: string, layer?: number): Promi
     }
     
     const url = `${API_BASE}/categories?${params.toString()}`;
-    const response = await fetch(url);
+    console.log('📡 Запрос иерархии:', url);
+    
+    const response = await fetch(url, {
+      headers: getAuthHeaders()
+    });
     
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Ошибка HTTP:', response.status, errorText);
       throw new Error(`Ошибка HTTP: ${response.status}`);
     }
-    const data = await response.json(); 
+    
+    const data = await response.json();
+    console.log('✅ Данные загружены:', data.length, 'элементов');
     return data;
   } catch (error) {
     console.error('❌ Ошибка при загрузке иерархии:', error);
@@ -280,6 +288,35 @@ export const hasCategoryImage = (category: DataItem): boolean => {
 };
 
 // Функция для получения всех дочерних элементов категории (для предпросмотра перед удалением)
+
+// Обновить порядок категорий
+export const updateCategoriesOrder = async (parentId: string | null, categoryIds: string[]): Promise<void> => {
+  try {
+    const url = parentId 
+      ? `${API_BASE}/categories/${parentId}/order`
+      : `${API_BASE}/categories/order`;
+    console.log(`🔄 Обновляем порядок категорий для parentId ${parentId}:`, categoryIds);
+    
+    const response = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        ...getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ categoryIds }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP Error: ${response.status}`);
+    }
+    
+    console.log('✅ Порядок категорий обновлен');
+  } catch (error) {
+    console.error('❌ Ошибка при обновлении порядка категорий:', error);
+    throw error;
+  }
+};
+
 export const getCategoryChildren = async (id: string): Promise<{
   categoryId: string;
   children: Array<{

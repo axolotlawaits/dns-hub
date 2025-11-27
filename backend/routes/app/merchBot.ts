@@ -202,6 +202,88 @@ router.get('/stats', async (req: any, res: any) => {
       .sort((a, b) => b.count - a.count)
       .slice(0, 20);
 
+    // Статистика по реакциям на сообщения
+    const reactions = await prisma.merchTgUserStats.findMany({
+      where: {
+        action: 'message_reaction',
+        timestamp: { gte: startDate },
+        details: { not: null }
+      },
+      select: {
+        details: true,
+        timestamp: true
+      }
+    });
+
+    const reactionCounts: Record<string, number> = {};
+    const reactionsByMessage: Record<string, {
+      messageId: number;
+      chatId: number;
+      reactions: Array<{ emoji: string; count: number; lastReaction: Date }>;
+      totalReactions: number;
+    }> = {};
+
+    reactions.forEach(reaction => {
+      if (reaction.details) {
+        try {
+          const parsed = JSON.parse(reaction.details);
+          const emoji = parsed.emoji || 'unknown';
+          const messageId = parsed.messageId;
+          const chatId = parsed.chatId;
+          
+          // Подсчет по эмодзи
+          reactionCounts[emoji] = (reactionCounts[emoji] || 0) + 1;
+          
+          // Подсчет по сообщениям
+          if (messageId && chatId) {
+            const messageKey = `${chatId}_${messageId}`;
+            if (!reactionsByMessage[messageKey]) {
+              reactionsByMessage[messageKey] = {
+                messageId,
+                chatId,
+                reactions: [],
+                totalReactions: 0
+              };
+            }
+            
+            const messageReactions = reactionsByMessage[messageKey].reactions;
+            const existingReaction = messageReactions.find(r => r.emoji === emoji);
+            if (existingReaction) {
+              existingReaction.count++;
+              if (reaction.timestamp > existingReaction.lastReaction) {
+                existingReaction.lastReaction = reaction.timestamp;
+              }
+            } else {
+              messageReactions.push({
+                emoji,
+                count: 1,
+                lastReaction: reaction.timestamp
+              });
+            }
+            reactionsByMessage[messageKey].totalReactions++;
+          }
+        } catch (e) {
+          // Игнорируем ошибки парсинга
+        }
+      }
+    });
+
+    const popularReactions = Object.entries(reactionCounts)
+      .map(([emoji, count]) => ({ emoji, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 20);
+
+    // Топ сообщений по количеству реакций
+    const topMessages = Object.values(reactionsByMessage)
+      .sort((a, b) => b.totalReactions - a.totalReactions)
+      .slice(0, 20)
+      .map(msg => ({
+        messageId: msg.messageId,
+        chatId: msg.chatId,
+        totalReactions: msg.totalReactions,
+        reactions: msg.reactions.sort((a, b) => b.count - a.count)
+      }));
+
     // Популярные поисковые запросы
     const searches = await prisma.merchTgUserStats.findMany({
       where: {
@@ -566,6 +648,14 @@ router.get('/stats', async (req: any, res: any) => {
       })),
       popularButtons,
       popularSearches,
+      popularReactions,
+      reactionStats: {
+        total: reactions.length,
+        uniqueEmojis: Object.keys(reactionCounts).length,
+        topReactions: popularReactions,
+        topMessages: topMessages,
+        messagesWithReactions: Object.keys(reactionsByMessage).length
+      },
       popularCards,
       categoryClicks: categoryClicks.slice(0, 10),
       dailyStats: Object.values(dailyStats).sort((a, b) => 
@@ -1090,6 +1180,49 @@ router.post('/send-message', authenticateToken, async (req: any, res: any) => {
     const { merchBotService } = await import('../../controllers/app/merchBot.js');
     
     const result = await merchBotService.broadcastMessage(userIds, message, parseMode);
+
+    // Отправляем in_app уведомления для всех пользователей
+    try {
+      const { NotificationController } = await import('../../controllers/app/notification.js');
+      const senderId = req.user?.id; // ID отправителя из токена
+      
+      if (!senderId) {
+        console.warn('Sender ID not found, skipping in_app notifications');
+      } else {
+        // Ищем пользователей по их Telegram userId через User.telegramChatId
+        // userIds - это массив Telegram user IDs (числа)
+        const users = await prisma.user.findMany({
+          where: {
+            telegramChatId: {
+              in: userIds.map(id => id.toString())
+            }
+          },
+          select: { id: true, telegramChatId: true }
+        });
+
+        // Отправляем уведомления каждому пользователю
+        for (const user of users) {
+          if (user.id && senderId) {
+            try {
+              await NotificationController.create({
+                type: 'INFO',
+                channels: ['IN_APP'],
+                title: 'Сообщение от Merch бота',
+                message: message.replace(/<[^>]*>/g, ''), // Убираем HTML теги для уведомления
+                senderId: senderId,
+                receiverId: user.id,
+                priority: 'MEDIUM'
+              });
+            } catch (notifError) {
+              console.error(`Failed to send in_app notification to user ${user.id}:`, notifError);
+            }
+          }
+        }
+      }
+    } catch (notifError) {
+      console.error('Error sending in_app notifications:', notifError);
+      // Не прерываем выполнение, если уведомления не отправились
+    }
 
     res.json({
       success: true,

@@ -21,7 +21,6 @@ import Hierarchy from './components/Hierarchy/Hierarchy';
 import CardGroup from './components/Card/CardGroup';
 import MerchStats from './components/Stats/MerchStats';
 import MerchFeedback from './components/Feedback/MerchFeedback';
-import { DndProviderWrapper } from '../../../utils/dnd';
 import './Merch.css';
 
 // Константы
@@ -102,35 +101,35 @@ function Merch() {
     return `merch-toggle-button ${isHierarchyVisible ? 'merch-toggle-button--visible' : 'merch-toggle-button--hidden'}`;
   }, [isHierarchyVisible]);
 
-  return (
-    <DndProviderWrapper>
-      <AppProvider>
-        <Box className="merch-container">
-          <Box p="xl">
-            <Tabs defaultValue="management">
-              <Group justify="space-between" align="center" mb="md">
-                <Tabs.List>
-                  <Tabs.Tab value="management" leftSection={<IconShoppingBag size={16} />}>
-                    Управление
-                  </Tabs.Tab>
-                  <Tabs.Tab value="stats" leftSection={<IconChartBar size={16} />}>
-                    Статистика
-                  </Tabs.Tab>
-                  <Tabs.Tab value="feedback" leftSection={<IconMail size={16} />}>
-                    Обратная связь
-                  </Tabs.Tab>
-                </Tabs.List>
-                <ActionIcon 
-                  variant="outline" 
-                  size={35} 
-                  aria-label="QR код бота" 
-                  onClick={qrOpen}
-                >
-                  <IconQrcode style={{ width: '80%', height: '80%' }} stroke={1.5} />
-                </ActionIcon>
-              </Group>
 
-              <Tabs.Panel value="management" pt="md">
+  return (
+    <AppProvider>
+          <Box className="merch-container">
+            <Box p="xl">
+              <Tabs defaultValue="management">
+                <Group justify="space-between" align="center" mb="md">
+                  <Tabs.List>
+                    <Tabs.Tab value="management" leftSection={<IconShoppingBag size={16} />}>
+                      Управление
+                    </Tabs.Tab>
+                    <Tabs.Tab value="stats" leftSection={<IconChartBar size={16} />}>
+                      Статистика
+                    </Tabs.Tab>
+                    <Tabs.Tab value="feedback" leftSection={<IconMail size={16} />}>
+                      Обратная связь
+                    </Tabs.Tab>
+                  </Tabs.List>
+                  <ActionIcon 
+                    variant="outline" 
+                    size={35} 
+                    aria-label="QR код бота" 
+                    onClick={qrOpen}
+                  >
+                    <IconQrcode style={{ width: '80%', height: '80%' }} stroke={1.5} />
+                  </ActionIcon>
+                </Group>
+
+                <Tabs.Panel value="management" pt="md">
                 <Box style={{ display: 'flex', gap: 'var(--mantine-spacing-md)', width: '100%', alignItems: 'flex-start', flexWrap: 'nowrap' }}>
                   {/* Контейнер для иерархии и кнопки */}
                   <Box className="merch-hierarchy-container" style={{ 
@@ -149,10 +148,15 @@ function Merch() {
                         className="merch-hierarchy-paper"
                       >
                         <Stack gap="md">
-                          <Text size="lg" fw={600} className="merch-title">
-                            Категории товаров
-                          </Text>
-                          <Hierarchy hasFullAccess={hasFullAccess} />
+                          <Group justify="space-between" align="center">
+                            <Text size="lg" fw={600} className="merch-title">
+                              Категории товаров
+                            </Text>
+                          </Group>
+                          <Hierarchy 
+                            hasFullAccess={hasFullAccess}
+                            onDataUpdate={() => {}}
+                          />
                         </Stack>
                       </Paper>
                     </Collapse>
@@ -184,12 +188,18 @@ function Merch() {
                     }}
                   >
                     <Stack gap="md">
-                      <Text size="lg" fw={600} className="merch-title">
-                        Карточки товаров
-                      </Text>
-                      <CardGroup hasFullAccess={hasFullAccess} />
+                      <Group justify="space-between" align="center">
+                        <Text size="lg" fw={600} className="merch-title">
+                          Карточки товаров
+                        </Text>
+                      </Group>
+                      <CardGroup 
+                        hasFullAccess={hasFullAccess}
+                        onCardsUpdate={() => {}}
+                      />
                     </Stack>
                   </Paper>
+
                 </Box>
               </Tabs.Panel>
 
@@ -231,7 +241,6 @@ function Merch() {
           </Box>
         </Box>
       </AppProvider>
-    </DndProviderWrapper>
   );
 }
 

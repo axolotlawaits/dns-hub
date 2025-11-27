@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Button, Container, Group, Alert, ActionIcon, Tooltip, Box, Stack, Paper, Text } from '@mantine/core';
+import { Button, Container, Group, Alert, ActionIcon, Tooltip, Box, Stack, Paper, Text, TextInput } from '@mantine/core';
 import { useApp } from '../../context/SelectedCategoryContext';
-import { IconPlus, IconEdit, IconTrash, IconFolder, IconFolderOpen, IconChevronRight } from '@tabler/icons-react';
+import { IconPlus, IconEdit, IconTrash, IconFolder, IconFolderOpen, IconChevronRight, IconSearch, IconArrowsSort } from '@tabler/icons-react';
 //Импорт Data
 import type { DataItem } from '../../data/HierarchyData';
 import { getHierarchyData } from '../../data/HierarchyData';
 //Импорт Модалок
 import { HierarchyAddModal, HierarchyDeleteModal, HierarchyEditModal } from './HierarchyModalMultiple';
+import { HierarchySortModal } from './HierarchySortModal';
 import { CustomModal } from '../../../../../utils/CustomModal';
+import { notificationSystem } from '../../../../../utils/Push';
 
 
 interface HierarchyProps {
@@ -29,15 +31,20 @@ const HierarchyBlock = React.memo(({ group, onDataUpdate, hasFullAccess = true }
   useEffect(() => {
     if (group.layer === 1 && !hasLoadedChildren) {
       // Загружаем дочерние категории (layer=1) для определения наличия подкатегорий
-      getHierarchyData(group.id, 1)
-        .then(children => {
-          setChildCategories(children);
-          setHasLoadedChildren(true);
-        })
-        .catch(error => {
-          console.error('Ошибка загрузки дочерних категорий:', error);
-          setHasLoadedChildren(true); // Отмечаем, что загрузка была выполнена (даже при ошибке)
-        });
+      // Добавляем задержку для предотвращения слишком частых запросов
+      const timeoutId = setTimeout(() => {
+        getHierarchyData(group.id, 1)
+          .then(children => {
+            setChildCategories(children);
+            setHasLoadedChildren(true);
+          })
+          .catch(error => {
+            console.error('Ошибка загрузки дочерних категорий:', error);
+            setHasLoadedChildren(true); // Отмечаем, что загрузка была выполнена (даже при ошибке)
+          });
+      }, 100); // Задержка 100мс для предотвращения одновременных запросов
+      
+      return () => clearTimeout(timeoutId);
     }
   }, [group.id, group.layer, hasLoadedChildren]);
 
@@ -95,6 +102,7 @@ const HierarchyBlock = React.memo(({ group, onDataUpdate, hasFullAccess = true }
     setSelectedId(group.id);
   }, [group.id, setSelectedId]);
 
+
   // Функция для обновления данных после операций
   const handleSuccess = useCallback(async () => {
     onDataUpdate();
@@ -140,18 +148,17 @@ const HierarchyBlock = React.memo(({ group, onDataUpdate, hasFullAccess = true }
               </ActionIcon>
             )}
             
-            {/* Название категории с возможностью выбора */}
             <Button 
               onClick={handleSelect}
               variant="subtle"
               leftSection={hasChildren ? (isExpanded ? <IconFolderOpen size={16} /> : <IconFolder size={16} />) : <IconFolder size={16} />}
               size="sm"
-                          style={{ 
-                            flex: 1,
-                            justifyContent: 'flex-start',
-                            color: 'var(--theme-text-primary)',
-                            fontWeight: 500
-                          }}
+              style={{ 
+                flex: 1,
+                justifyContent: 'flex-start',
+                color: 'var(--theme-text-primary)',
+                fontWeight: 500
+              }}
             > 
               <Text size="sm" fw={500}>{group.name}</Text>
             </Button>
@@ -204,14 +211,16 @@ const HierarchyBlock = React.memo(({ group, onDataUpdate, hasFullAccess = true }
                 <Text size="sm" c="dimmed">Загрузка подкатегорий...</Text>
               </Box>
             ) : (
-              childCategories.map((childGroup) => (
-                <HierarchyBlock 
-                  key={childGroup.id} 
-                  group={childGroup} 
-                  onDataUpdate={onDataUpdate}
-                  hasFullAccess={hasFullAccess}
-                />
-              ))
+              <Box>
+                {childCategories.map((childGroup) => (
+                  <HierarchyBlock 
+                    key={childGroup.id}
+                    group={childGroup} 
+                    onDataUpdate={onDataUpdate}
+                    hasFullAccess={hasFullAccess}
+                  />
+                ))}
+              </Box>
             )}
           </Box>
         )}
@@ -274,31 +283,57 @@ const HierarchyBlock = React.memo(({ group, onDataUpdate, hasFullAccess = true }
 
 interface HierarchyComponentProps {
   hasFullAccess?: boolean;
+  onDataUpdate?: (data: DataItem[]) => void;
 }
 
-function Hierarchy({ hasFullAccess = true }: HierarchyComponentProps) {
+function Hierarchy({ hasFullAccess = true, onDataUpdate }: HierarchyComponentProps) {
   const [data, setData] = useState<DataItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [openedAdd, setOpenedAdd] = useState(false);
+  const [openedSort, setOpenedSort] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Функция для загрузки данных
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
+      console.log('🔄 [Hierarchy] Начинаем загрузку данных иерархии...');
       const hierarchyData = await getHierarchyData();
+      console.log('✅ [Hierarchy] Данные загружены:', hierarchyData.length, 'элементов');
+      console.log('📋 [Hierarchy] Структура данных:', hierarchyData);
+      // Проверяем структуру данных
+      if (hierarchyData.length > 0) {
+        console.log('📋 [Hierarchy] Первый элемент:', hierarchyData[0]);
+        console.log('📋 [Hierarchy] Layer первого элемента:', hierarchyData[0].layer);
+      }
       setData(hierarchyData);
+      // Уведомляем родителя об обновлении данных
+      if (onDataUpdate) {
+        onDataUpdate(hierarchyData);
+      }
     } catch (error) {
-      console.error('Ошибка загрузки данных:', error);
+      console.error('❌ [Hierarchy] Ошибка загрузки данных:', error);
       setData([]);
+      // Показываем ошибку пользователю
+      notificationSystem.addNotification(
+        'Ошибка!',
+        'Не удалось загрузить категории. Проверьте подключение к серверу.',
+        'error'
+      );
     } finally {
+      console.log('🏁 [Hierarchy] Завершение загрузки, устанавливаем loading = false');
       setLoading(false);
+      console.log('🏁 [Hierarchy] loading установлен в false');
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Убираем onDataUpdate из зависимостей, чтобы избежать бесконечного цикла
 
-  // Проверяем статус загрузки
+  // Проверяем статус загрузки - загружаем только один раз при монтировании
   useEffect(() => {
+    console.log('🚀 [Hierarchy] Компонент смонтирован, запускаем загрузку данных');
     loadData();
-  }, [loadData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Загружаем только один раз при монтировании
 
   // Функция для обновления данных после операций
   const handleDataUpdate = useCallback(async () => {
@@ -306,13 +341,24 @@ function Hierarchy({ hasFullAccess = true }: HierarchyComponentProps) {
   }, [loadData]);
 
   // Мемоизируем корневые элементы (категории с layer = 1)
-  const rootElements = useMemo(() => 
-    data.filter(item => item.layer === 1), 
-    [data]
-  );
+  const rootElements = useMemo(() => {
+    const filtered = data.filter(item => {
+      // Фильтруем только корневые категории (layer = 1 и parentId = null или отсутствует)
+      // Но в данных может не быть parentId, поэтому проверяем только layer
+      return item.layer === 1;
+    });
+    console.log('🔍 [Hierarchy] Всего данных:', data.length);
+    console.log('🔍 [Hierarchy] Данные:', data);
+    console.log('🔍 [Hierarchy] Корневые элементы:', filtered.length);
+    console.log('🔍 [Hierarchy] Корневые элементы данные:', filtered);
+    return filtered;
+  }, [data]);
 
   // Обработка на случай, если не были загружены данные 
+  console.log('🔍 [Hierarchy] Рендер компонента. loading:', loading, 'data.length:', data.length, 'rootElements.length:', rootElements.length);
+  
   if (loading) {
+    console.log('⏳ [Hierarchy] Показываем загрузку...');
     return (
       <Container style={{ 
         display: 'flex', 
@@ -325,9 +371,33 @@ function Hierarchy({ hasFullAccess = true }: HierarchyComponentProps) {
       </Container>
     );
   }
+  
+  console.log('✅ [Hierarchy] Загрузка завершена, рендерим контент');
 
   return (
-    <Stack gap="md"> 
+    <Stack gap="md">
+      {/* Поиск и кнопка сортировки */}
+      <Group gap="xs">
+        <TextInput
+          placeholder="Поиск по категориям..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.currentTarget.value)}
+          leftSection={<IconSearch size={16} />}
+          size="sm"
+          style={{ flex: 1 }}
+        />
+        {hasFullAccess && (
+          <Button
+            size="sm"
+            variant="outline"
+            leftSection={<IconArrowsSort size={16} />}
+            onClick={() => setOpenedSort(true)}
+          >
+            Сортировка
+          </Button>
+        )}
+      </Group>
+      
       {/* Основная иерархия */}
       {rootElements.length > 0 ? (
         rootElements.map((group) => (
@@ -372,6 +442,23 @@ function Hierarchy({ hasFullAccess = true }: HierarchyComponentProps) {
           onSuccess={() => {
             handleDataUpdate();
             setOpenedAdd(false);
+          }}
+        />
+      </CustomModal>
+
+      {/* Модалка сортировки */}
+      <CustomModal
+        opened={openedSort}
+        onClose={() => setOpenedSort(false)}
+        title="Сортировка иерархии и карточек"
+        size="xl"
+        icon={<IconArrowsSort size={20} />}
+      >
+        <HierarchySortModal
+          onClose={() => setOpenedSort(false)}
+          onSuccess={() => {
+            handleDataUpdate();
+            setOpenedSort(false);
           }}
         />
       </CustomModal>

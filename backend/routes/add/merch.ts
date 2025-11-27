@@ -9,7 +9,12 @@ import {
   deleteMerchCard,
   addCardImages,
   addMerchAttachment,
-  deleteMerchAttachment
+  deleteMerchAttachment,
+  updateAttachmentsOrder,
+  updateCardsOrder,
+  updateCategoriesOrder,
+  updateCategoryParent,
+  moveCardToCategory
 } from '../../controllers/add/merch.js';
 import { authenticateToken } from '../../middleware/auth.js';
 import { merchBotService } from '../../controllers/app/merchBot.js';
@@ -407,6 +412,18 @@ router.delete('/cards/:id/images', authenticateToken, async (req: any, res: any,
 // Роуты для attachments - требуют аутентификации
 router.post('/attachments/:recordId', authenticateToken, ...(addMerchAttachment as any));
 router.delete('/attachments/:id', authenticateToken, deleteMerchAttachment as any);
+router.patch('/attachments/:recordId/order', authenticateToken, updateAttachmentsOrder as any);
+
+// Роуты для обновления порядка
+router.patch('/cards/:categoryId/order', authenticateToken, updateCardsOrder as any);
+router.patch('/categories/order', authenticateToken, async (req: any, res: any, next: any) => {
+  // Для корневых категорий (parentId = null)
+  req.params.parentId = null;
+  await updateCategoriesOrder(req, res, next);
+});
+router.patch('/categories/:parentId/order', authenticateToken, updateCategoriesOrder as any);
+router.patch('/categories/:categoryId/parent', authenticateToken, updateCategoryParent as any);
+router.patch('/cards/:cardId/move', authenticateToken, moveCardToCategory as any);
 
 // Роут для удаления изображения категории (для обратной совместимости)
 router.delete('/categories/:id/image', authenticateToken, async (req: any, res: any, next: any) => {

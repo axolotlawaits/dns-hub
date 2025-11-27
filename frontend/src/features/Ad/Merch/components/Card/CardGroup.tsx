@@ -13,11 +13,14 @@ import './CardGroup.css';
 //---------------------------------------------Группа карточек
 interface CardGroupProps {
   hasFullAccess?: boolean;
+  onCardsUpdate?: (cards: CardItem[]) => void;
 }
 
-function CardGroup({ hasFullAccess = true }: CardGroupProps) {
+function CardGroup({ hasFullAccess = true, onCardsUpdate }: CardGroupProps) {
   const { selectedId } = useApp();
   const { cards, loading, error, pagination, loadCardsByCategory, removeCard, toggleCardActive } = useCardStore();
+  
+  const visibleCards = cards;
   const [addModalOpened, { open: openAddModal, close: closeAddModal }] = useDisclosure(false);
   const [editModalOpened, { open: openEditModal, close: closeEditModal }] = useDisclosure(false);
   const [deleteModalOpened, { open: openDeleteModal, close: closeDeleteModal }] = useDisclosure(false);
@@ -31,7 +34,16 @@ function CardGroup({ hasFullAccess = true }: CardGroupProps) {
       const activeFilterValue = activeFilter === 'all' ? undefined : activeFilter === 'active';
       loadCardsByCategory(selectedId, currentPage, pageSize, activeFilterValue);
     }
-  }, [selectedId, currentPage, pageSize, activeFilter, loadCardsByCategory]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, currentPage, pageSize, activeFilter]); // Убираем loadCardsByCategory из зависимостей
+
+  // Уведомляем родителя об обновлении карточек только при изменении selectedId
+  useEffect(() => {
+    if (onCardsUpdate && cards.length > 0 && selectedId) {
+      onCardsUpdate(cards);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cards.length, selectedId]); // Убираем onCardsUpdate и cards из зависимостей, оставляем только length и selectedId
 
   const handleEditCard = (card: CardItem) => {
     setSelectedCard(card);
@@ -103,6 +115,9 @@ function CardGroup({ hasFullAccess = true }: CardGroupProps) {
       loadCardsByCategory(selectedId, 1, pageSize, activeFilterValue);
     }
   }, [selectedId, loadCardsByCategory, activeFilter, pageSize]);
+
+  // Обработчик drag and drop для карточек (теперь обрабатывается в Merch.handleGlobalDragEnd)
+  // Этот компонент только предоставляет Droppable
 
   if (loading) {
     return (
@@ -199,16 +214,6 @@ function CardGroup({ hasFullAccess = true }: CardGroupProps) {
           <Box mb="md">
             <Group justify="space-between" align="center">
               <Group>
-                {hasFullAccess && (
-                  <Button
-                    leftSection={<IconPlus size={16} />}
-                    onClick={openAddModal}
-                    variant="filled"
-                    color="blue"
-                  >
-                    Добавить карточку
-                  </Button>
-                )}
                 <Select
                   label="Статус"
                   placeholder="Все карточки"
@@ -261,16 +266,18 @@ function CardGroup({ hasFullAccess = true }: CardGroupProps) {
             </Group>
           </Box>
 
-          {/* Карточки отображаются ПЕРВЫМИ */}
-          {cards.map((card) => (
-            <Card 
-              key={card.id} 
-              cardData={card}
-              onEdit={hasFullAccess ? handleEditCard : undefined}
-              onDelete={hasFullAccess ? handleDeleteCard : undefined}
-              onToggleActive={hasFullAccess ? handleToggleActive : undefined}
-            />
-          ))}
+          {/* Карточки */}
+          <Box>
+            {visibleCards.map((card) => (
+              <Card 
+                key={card.id}
+                cardData={card}
+                onEdit={hasFullAccess ? handleEditCard : undefined}
+                onDelete={hasFullAccess ? handleDeleteCard : undefined}
+                onToggleActive={hasFullAccess ? handleToggleActive : undefined}
+              />
+            ))}
+          </Box>
           
           {/* Пагинация */}
           {pagination.totalPages > 1 && (

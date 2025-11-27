@@ -22,16 +22,17 @@
 
 .hierarchy-block:hover {
   border-color: var(--color-primary-400);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--theme-shadow-sm);
   transform: translateX(2px);
+  background: var(--theme-bg-hover);
 }
 
 .hierarchy-block-selected {
   border-color: var(--color-primary-500);
   border-left-width: 4px;
   border-left-color: var(--color-primary-500);
-  background: var(--color-primary-50);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  background: var(--theme-active-bg);
+  box-shadow: var(--theme-shadow-md);
 }
 
 .hierarchy-block-selected::before {
@@ -51,7 +52,7 @@
 
 .hierarchy-block-selected.hierarchy-block-expanded {
   border-left-color: var(--color-primary-600);
-  background: var(--color-primary-100);
+  background: var(--theme-active-bg);
 }
 
 .hierarchy-block-selected.hierarchy-block-expanded::before {
@@ -81,7 +82,7 @@
   margin-top: 12px;
   margin-left: 24px;
   padding-left: 16px;
-  border-left: 2px solid var(--color-primary-200);
+  border-left: 2px solid var(--theme-border-secondary);
   position: relative;
 }
 
@@ -92,7 +93,7 @@
   top: -12px;
   width: 2px;
   height: 12px;
-  background: var(--color-primary-200);
+  background: var(--theme-border-secondary);
 }
 
 .hierarchy-block-selected .hierarchy-children-container {
@@ -105,6 +106,19 @@
   background: var(--color-primary-400);
   width: 3px;
   left: -3px;
+}
+
+/* Темная тема */
+[data-mantine-color-scheme="dark"] .hierarchy-block-selected {
+  background: var(--theme-active-bg);
+}
+
+[data-mantine-color-scheme="dark"] .hierarchy-block-selected .hierarchy-button {
+  color: var(--color-primary-300);
+}
+
+[data-mantine-color-scheme="dark"] .hierarchy-block:hover {
+  background: var(--theme-bg-hover);
 }
 
 .hierarchy-loading-container {

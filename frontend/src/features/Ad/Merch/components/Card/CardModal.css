@@ -19,7 +19,7 @@
   height: 120px;
   object-fit: cover;
   border-radius: 8px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--theme-border-primary);
 }
 
 .card-modal-preview-container {
@@ -68,5 +68,19 @@
 .card-modal-drawer-body {
   padding: 24px;
   background: var(--theme-bg-elevated);
+}
+
+/* Темная тема */
+[data-mantine-color-scheme="dark"] .card-modal-preview-grid {
+  border-color: var(--theme-border-primary);
+}
+
+[data-mantine-color-scheme="dark"] .card-modal-drawer-content {
+  background: var(--theme-bg-elevated);
+  border-color: var(--theme-border);
+}
+
+[data-mantine-color-scheme="dark"] .card-modal-drawer-header {
+  background: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-700) 100%);
 }
 

@@ -4,6 +4,7 @@ import { API } from '../../server.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import axios from 'axios';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -212,6 +213,51 @@ class MerchBotService {
       const itemId = ctx.callbackQuery.data.replace('item_', '');
       console.log(`🔘 [callbackQuery] Извлечен itemId: ${itemId}`);
       await this.handleItemClick(ctx, itemId);
+    });
+
+    // Обработка реакций на сообщения
+    this.bot.on('message_reaction', async (ctx) => {
+      try {
+        const userId = ctx.from?.id;
+        if (!userId) return;
+
+        // Получаем или создаем пользователя
+        let user = await prisma.merchTgUser.findUnique({
+          where: { userId }
+        });
+
+        if (!user) {
+          user = await prisma.merchTgUser.create({
+            data: {
+              userId,
+              username: ctx.from?.username || null,
+              firstName: ctx.from?.first_name || null,
+              lastName: ctx.from?.last_name || null
+            }
+          });
+        }
+
+        const reactions = ctx.messageReaction?.new_reaction || [];
+        if (reactions.length === 0) return;
+
+        // Сохраняем статистику для каждой реакции
+        for (const reaction of reactions) {
+          const emoji = reaction.type === 'emoji' ? reaction.emoji : 'unknown';
+          await prisma.merchTgUserStats.create({
+            data: {
+              userId: user.id,
+              action: 'message_reaction',
+              details: JSON.stringify({
+                emoji,
+                messageId: ctx.messageReaction?.message_id,
+                chatId: ctx.messageReaction?.chat?.id
+              })
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Ошибка при обработке реакции:', error);
+      }
     });
 
     // Обработка текстовых сообщений
@@ -771,8 +817,17 @@ class MerchBotService {
       return;
     }
 
+    // Удаляем текущий элемент из истории
     ctx.session.userChoiceHistory.pop();
-    const currentMenuId = ctx.session.userChoiceHistory[ctx.session.userChoiceHistory.length - 1] || '0';
+    
+    // Если после удаления история пуста, возвращаемся в главное меню
+    if (ctx.session.userChoiceHistory.length === 0) {
+      await this.showMainMenu(ctx);
+      return;
+    }
+    
+    // Получаем предыдущий элемент из истории
+    const currentMenuId = ctx.session.userChoiceHistory[ctx.session.userChoiceHistory.length - 1];
     
     const buttonsHierarchy = await this.getButtonsHierarchy();
     const children = buttonsHierarchy[currentMenuId] || [];
@@ -784,8 +839,23 @@ class MerchBotService {
       // Показываем подменю с дочерними элементами
       await this.showSubMenu(ctx, children);
     } else {
-      // Нет дочерних элементов, возвращаемся в главное меню
-      await this.showMainMenu(ctx);
+      // Нет дочерних элементов (конечная категория), возвращаемся еще на уровень выше
+      // Удаляем еще один элемент из истории и повторяем логику
+      if (ctx.session.userChoiceHistory.length > 0) {
+        ctx.session.userChoiceHistory.pop();
+        const parentMenuId = ctx.session.userChoiceHistory[ctx.session.userChoiceHistory.length - 1] || '0';
+        const parentChildren = buttonsHierarchy[parentMenuId] || [];
+        
+        if (parentMenuId === '0') {
+          await this.showMainMenu(ctx);
+        } else if (parentChildren.length > 0) {
+          await this.showSubMenu(ctx, parentChildren);
+        } else {
+          await this.showMainMenu(ctx);
+        }
+      } else {
+        await this.showMainMenu(ctx);
+      }
     }
   }
 
@@ -1048,17 +1118,42 @@ class MerchBotService {
       
       const file = await ctx.api.getFile(photo.file_id);
       
-      // Сохраняем информацию о фото
-      if (file.file_path) {
-        feedback.photos.push(file.file_path);
-        const remaining = MAX_PHOTOS - feedback.photos.length;
-        if (remaining > 0) {
-          await ctx.reply(`✅ Фотография сохранена! Вы можете отправить еще ${remaining} фотографий или напишите "готово":`);
-        } else {
-          await ctx.reply('✅ Фотография сохранена! Достигнуто максимальное количество фотографий. Напишите "готово" для завершения:');
-        }
-      } else {
+      if (!file.file_path) {
         await ctx.reply('❌ Ошибка получения информации о фотографии.');
+        return;
+      }
+      
+      // Скачиваем файл из Telegram
+      const fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
+      const response = await axios.get(fileUrl, {
+        responseType: 'arraybuffer'
+      });
+      
+      const buffer = Buffer.from(response.data);
+      
+      // Создаем директорию для feedback фотографий, если её нет
+      const feedbackDir = path.join(process.cwd(), 'public', 'feedback');
+      if (!fs.existsSync(feedbackDir)) {
+        fs.mkdirSync(feedbackDir, { recursive: true });
+      }
+      
+      // Генерируем уникальное имя файла
+      const fileExtension = path.extname(file.file_path) || '.jpg';
+      const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+      const fileName = `feedback-${uniqueSuffix}${fileExtension}`;
+      const filePath = path.join(feedbackDir, fileName);
+      
+      // Сохраняем файл
+      fs.writeFileSync(filePath, buffer);
+      
+      // Сохраняем имя файла в сессии
+      feedback.photos.push(fileName);
+      
+      const remaining = MAX_PHOTOS - feedback.photos.length;
+      if (remaining > 0) {
+        await ctx.reply(`✅ Фотография сохранена! Вы можете отправить еще ${remaining} фотографий или напишите "готово":`);
+      } else {
+        await ctx.reply('✅ Фотография сохранена! Достигнуто максимальное количество фотографий. Напишите "готово" для завершения:');
       }
     } catch (error) {
       console.error('Error handling photo:', error);
@@ -1582,7 +1677,7 @@ class MerchBotService {
       console.log('🔄 [MerchBot] Вызываем bot.start()...');
       await this.bot.start({
         drop_pending_updates: true,
-        allowed_updates: ['message', 'callback_query'],
+        allowed_updates: ['message', 'callback_query', 'message_reaction', 'message_reaction_count'],
       });
 
       this.isRunning = true;

@@ -13,15 +13,17 @@
   width: 100%;
   min-width: 0;
   min-height: 500px;
-  background: var(--theme-bg-primary);
+  background: var(--theme-bg-elevated);
   position: relative;
+  border-color: var(--theme-border-primary);
 }
 
 .merch-cards-paper {
   min-width: 250px;
   min-height: 500px;
-  background: var(--theme-bg-primary);
+  background: var(--theme-bg-elevated);
   transition: margin-left 0.3s ease;
+  border-color: var(--theme-border-primary);
 }
 
 .merch-toggle-button {
@@ -30,6 +32,10 @@
   z-index: 10;
   transition: left 0.3s ease, right 0.3s ease;
   background: var(--color-primary-500);
+}
+
+.merch-toggle-button:hover {
+  background: var(--color-primary-600);
 }
 
 .merch-toggle-button--visible {
@@ -44,5 +50,24 @@
 
 .merch-title {
   color: var(--theme-text-primary);
+}
+
+/* Темная тема */
+[data-mantine-color-scheme="dark"] .merch-hierarchy-paper {
+  background: var(--theme-bg-elevated);
+  border-color: var(--theme-border);
+}
+
+[data-mantine-color-scheme="dark"] .merch-cards-paper {
+  background: var(--theme-bg-elevated);
+  border-color: var(--theme-border);
+}
+
+[data-mantine-color-scheme="dark"] .merch-toggle-button {
+  background: var(--color-primary-600);
+}
+
+[data-mantine-color-scheme="dark"] .merch-toggle-button:hover {
+  background: var(--color-primary-500);
 }
 

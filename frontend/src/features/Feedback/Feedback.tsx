@@ -51,11 +51,57 @@ function FeedbackModule() {
   const [selectedFeedback, setSelectedFeedback] = useState<Feedback | null>(null);
   const [modalOpened, setModalOpened] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('all');
+  const [toolsMap, setToolsMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
     loadFeedbacks();
     loadStats();
+    loadTools();
   }, [page, limit, isReadFilter, toolFilter, activeTab]);
+
+  const loadTools = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch(`${API}/merch-bot/feedback/tools`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) return;
+
+      const data = await response.json();
+      const map: Record<string, string> = {};
+      
+      // Добавляем родительские инструменты
+      if (data.parentTools) {
+        data.parentTools.forEach((tool: { value: string; label: string }) => {
+          map[tool.value] = tool.label;
+        });
+      }
+      
+      // Добавляем дочерние инструменты
+      if (data.parentToolsWithChildren) {
+        data.parentToolsWithChildren.forEach((parent: { value: string; label: string; children?: Array<{ value: string; label: string }> }) => {
+          map[parent.value] = parent.label;
+          if (parent.children) {
+            parent.children.forEach((child: { value: string; label: string }) => {
+              // Составной ключ: parent:child
+              map[`${parent.value}:${child.value}`] = `${parent.label}: ${child.label}`;
+            });
+          }
+        });
+      }
+      
+      setToolsMap(map);
+    } catch (err) {
+      console.error('Ошибка загрузки инструментов:', err);
+    }
+  };
 
   const loadFeedbacks = async () => {
     setLoading(true);
@@ -116,42 +162,85 @@ function FeedbackModule() {
   const getUserName = (feedback: Feedback) => {
     const { dbName, tgName, username, userId } = feedback.user;
     
+    // Формируем части имени
+    const nameParts: string[] = [];
+    
     // Если это не мерч, используем ФИО из базы
     if (feedback.tool !== 'merch') {
       if (dbName) {
         // Если есть и данные из Telegram, показываем оба
         if (tgName && tgName !== dbName) {
-          return `${dbName} (${tgName})`;
+          nameParts.push(`${dbName} (${tgName})`);
+        } else {
+          nameParts.push(dbName);
         }
-        return dbName;
+      } else if (tgName) {
+        // Если нет ФИО из базы, но есть из Telegram
+        nameParts.push(tgName);
       }
-      // Если нет ФИО из базы, но есть из Telegram
+    } else {
+      // Для мерча используем данные из Telegram
       if (tgName) {
-        return tgName;
+        // Если есть и ФИО из базы, показываем оба
+        if (dbName && dbName !== tgName) {
+          nameParts.push(`${dbName} (${tgName})`);
+        } else {
+          nameParts.push(tgName);
+        }
+      } else if (dbName) {
+        nameParts.push(dbName);
       }
-      return username ? `@${username}` : `ID: ${userId}`;
     }
     
-    // Для мерча используем данные из Telegram
-    if (tgName) {
-      // Если есть и ФИО из базы, показываем оба
-      if (dbName && dbName !== tgName) {
-        return `${dbName} (${tgName})`;
+    // Добавляем Telegram username, если есть
+    if (username) {
+      const usernamePart = `@${username}`;
+      if (nameParts.length > 0) {
+        nameParts.push(`(${usernamePart})`);
+      } else {
+        nameParts.push(usernamePart);
       }
-      return tgName;
     }
     
-    // Fallback для мерча
-    return username ? `@${username}` : `ID: ${userId}`;
+    // Если ничего не найдено, используем ID
+    if (nameParts.length === 0) {
+      return `ID: ${userId}`;
+    }
+    
+    return nameParts.join(' ');
   };
 
   const getToolLabel = (tool: string) => {
+    // Сначала проверяем маппинг из загруженных инструментов
+    if (toolsMap[tool]) {
+      return toolsMap[tool];
+    }
+    
+    // Если tool содержит двоеточие (составной формат parent:child), пытаемся найти parent
+    if (tool.includes(':')) {
+      const [parent, child] = tool.split(':');
+      if (toolsMap[parent]) {
+        // Ищем дочерний инструмент
+        const childLabel = toolsMap[tool] || child;
+        return `${toolsMap[parent]}: ${childLabel}`;
+      }
+    }
+    
+    // Fallback на старый маппинг для обратной совместимости
     const labels: Record<string, string> = {
       'merch': 'Мерч',
       'radio': 'Радио',
       'app': 'Приложения',
-      'other': 'Другое'
+      'other': 'Другое',
+      'general': 'Общая обратная связь'
     };
+    
+    // Пытаемся извлечь последнюю часть из пути (например, add/merch -> merch)
+    const lastPart = tool.split('/').pop() || tool;
+    if (labels[lastPart]) {
+      return labels[lastPart];
+    }
+    
     return labels[tool] || tool;
   };
 

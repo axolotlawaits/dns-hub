@@ -576,7 +576,7 @@ export function HierarchyDeleteModal({ item, onClose, onSuccess }: ItemModalProp
             <Text size="sm" fw={600} mb="xs" c="orange">
               Внимание! Будет удалено {children.length} дочерних элементов:
             </Text>
-            <ScrollArea h={200} style={{ border: '1px solid #e0e0e0', borderRadius: 4, padding: 8 }}>
+            <ScrollArea h={200} style={{ border: '1px solid var(--theme-border-primary)', borderRadius: 4, padding: 8 }}>
               {renderChildren(children)}
             </ScrollArea>
           </Box>
@@ -596,3 +596,4 @@ export function HierarchyDeleteModal({ item, onClose, onSuccess }: ItemModalProp
     </Stack>
   );
 }
+

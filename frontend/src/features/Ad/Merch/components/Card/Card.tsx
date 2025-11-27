@@ -20,7 +20,7 @@ import {
   IconZoomIn, 
   IconEye,
   IconEyeOff,
-  IconFileTypePdf
+  IconFileTypePdf,
 } from '@tabler/icons-react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
@@ -214,7 +214,7 @@ function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
       className="card-container"
     >
       {/* Заголовок с кнопками */}
-      <Group justify="space-between" mb="md">
+      <Group justify="space-between" mb="md" align="center">
         <Group>
           <Title order={3} style={{ margin: 0 }}>
             {truncateText(cardData.name, 50)}

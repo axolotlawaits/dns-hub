@@ -24,6 +24,29 @@ export interface MerchStatsResponse {
     query: string;
     count: number;
   }>;
+  popularReactions?: Array<{
+    emoji: string;
+    count: number;
+  }>;
+  reactionStats?: {
+    total: number;
+    uniqueEmojis: number;
+    topReactions: Array<{
+      emoji: string;
+      count: number;
+    }>;
+    topMessages?: Array<{
+      messageId: number;
+      chatId: number;
+      totalReactions: number;
+      reactions: Array<{
+        emoji: string;
+        count: number;
+        lastReaction: Date;
+      }>;
+    }>;
+    messagesWithReactions?: number;
+  };
   categoryClicks: Array<{
     name: string;
     count: number;

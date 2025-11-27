@@ -946,6 +946,8 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.volume = 1;
+      audioRef.current.muted = false; // Убеждаемся, что звук не отключен
+      console.log('🔊 [WebRadioPlayer] Инициализация audio: volume =', audioRef.current.volume, 'muted =', audioRef.current.muted);
     }
   }, []);
 
@@ -1209,7 +1211,22 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
         await new Promise((r) => setTimeout(r, 500));
       }
 
+      // Убеждаемся, что звук включен перед воспроизведением
+      audioRef.current.muted = false;
+      audioRef.current.volume = 1;
+      
+      console.log('▶️ [WebRadioPlayer] Запуск воспроизведения трека:', track.fileName);
+      console.log('🔊 [WebRadioPlayer] Audio состояние перед play(): volume =', audioRef.current.volume, 'muted =', audioRef.current.muted, 'paused =', audioRef.current.paused);
+      
       await audioRef.current.play();
+      
+      // Проверяем, что воспроизведение действительно началось
+      if (audioRef.current.paused) {
+        console.error('❌ [WebRadioPlayer] Воспроизведение не началось после play()');
+        throw new Error('Воспроизведение не началось');
+      }
+      
+      console.log('✅ [WebRadioPlayer] Воспроизведение началось успешно');
       
       setPlaybackState('playing');
       setCurrentTrack(track);
@@ -1340,8 +1357,23 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       retryCountsRef.current[streamUrl] = 0;
       
       console.log('[WebRadio] Applying stream URL:', streamUrl);
+      
+      // Убеждаемся, что звук включен перед воспроизведением
+      audioRef.current.muted = false;
+      audioRef.current.volume = 1;
+      
+      console.log('🔊 [WebRadioPlayer] Audio состояние перед play() потока: volume =', audioRef.current.volume, 'muted =', audioRef.current.muted, 'paused =', audioRef.current.paused);
+      
       await audioRef.current.load();
       await audioRef.current.play();
+      
+      // Проверяем, что воспроизведение действительно началось
+      if (audioRef.current.paused) {
+        console.error('❌ [WebRadioPlayer] Воспроизведение потока не началось после play()');
+        throw new Error('Воспроизведение потока не началось');
+      }
+      
+      console.log('✅ [WebRadioPlayer] Воспроизведение потока началось успешно');
       console.log('[WebRadio] Audio element src after play:', audioRef.current.currentSrc || audioRef.current.src);
       
       setPlaybackState('playing');
@@ -1584,6 +1616,8 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
               audioRef.current.removeAttribute('src');
               audioRef.current.load();
               audioRef.current.src = src;
+              audioRef.current.muted = false;
+              audioRef.current.volume = 1;
               await audioRef.current.load();
               await audioRef.current.play();
               
@@ -1670,11 +1704,19 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
     const handleCanPlay = () => {
       // Аудио готово к воспроизведению
       console.log('✅ [WebRadioPlayer] Аудио готово к воспроизведению');
+      if (audio) {
+        audio.muted = false;
+        audio.volume = 1;
+      }
     };
 
     const handleCanPlayThrough = () => {
       // Аудио готово к воспроизведению без прерываний
       console.log('✅ [WebRadioPlayer] Аудио готово к воспроизведению без прерываний');
+      if (audio) {
+        audio.muted = false;
+        audio.volume = 1;
+      }
     };
 
     const handleLoadStart = () => {
@@ -1858,6 +1900,9 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
       setPlaybackState('paused');
     } else if (playbackState === 'paused') {
       try {
+        // Убеждаемся, что звук включен перед возобновлением
+        audioRef.current.muted = false;
+        audioRef.current.volume = 1;
         await audioRef.current.play();
         setPlaybackState('playing');
         setError(null);
@@ -2205,6 +2250,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
         crossOrigin="anonymous"
         playsInline
         controls={false}
+        muted={false}
         style={{ display: 'none' }}
       />
 

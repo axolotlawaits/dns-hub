@@ -12,3 +12,16 @@
   background-color: rgba(37, 99, 235, 0.15) !important;
 }
 
+/* Темная тема - синеватый оттенок как в карточках */
+[data-mantine-color-scheme="dark"] .merch-feedback-container .mantine-Paper-root {
+  background: linear-gradient(135deg, var(--theme-bg-elevated) 0%, rgba(59, 130, 246, 0.08) 100%);
+  border-color: var(--color-primary-700);
+  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.15), 0 1px 3px rgba(59, 130, 246, 0.1);
+}
+
+[data-mantine-color-scheme="dark"] .merch-feedback-container .mantine-Paper-root:hover {
+  background: linear-gradient(135deg, var(--theme-bg-elevated) 0%, rgba(59, 130, 246, 0.12) 100%);
+  border-color: var(--color-primary-600);
+  box-shadow: 0 8px 25px rgba(59, 130, 246, 0.2), 0 4px 10px rgba(59, 130, 246, 0.15);
+}
+

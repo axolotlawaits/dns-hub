@@ -16,8 +16,9 @@ import {
   Stack
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconUpload, IconX, IconEye } from '@tabler/icons-react';
-import { createCard, updateCard, addCardImages, deleteCard, deleteCardImage, type CardItem } from '../../data/CardData';
+import { IconUpload, IconX, IconEye, IconGripVertical } from '@tabler/icons-react';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
+import { createCard, updateCard, addCardImages, deleteCard, deleteCardImage, updateCardAttachmentsOrder, type CardItem } from '../../data/CardData';
 import { API } from '../../../../../config/constants';
 import TiptapEditor from '../../../../../utils/editor';
 import { TelegramPreview } from './TelegramPreview';
@@ -287,6 +288,13 @@ export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) 
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [currentImages, setCurrentImages] = useState<string[]>(card.imageUrls || []);
+  // Храним attachments с их ID для drag and drop
+  const [currentAttachments, setCurrentAttachments] = useState<Array<{ id: string; url: string }>>(
+    (card.attachments || []).map(att => ({
+      id: att.id,
+      url: att.source.startsWith('http') ? att.source : `${API}/public/add/merch/${att.source}`
+    }))
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewDrawerOpened, previewDrawerHandlers] = useDisclosure(false);
@@ -313,6 +321,12 @@ export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) 
     setImageFiles([]);
     setPreviewUrls([]);
     setCurrentImages(card.imageUrls || []);
+    setCurrentAttachments(
+      (card.attachments || []).map(att => ({
+        id: att.id,
+        url: att.source.startsWith('http') ? att.source : `${API}/public/add/merch/${att.source}`
+      }))
+    );
     setError(null);
 
     // Cleanup: освобождаем blob URLs при размонтировании или изменении карточки
@@ -355,13 +369,13 @@ export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) 
   };
 
   const removeCurrentImage = async (index: number) => {
-    const imageUrlToRemove = currentImages[index];
-    if (!imageUrlToRemove) {
-      console.log('❌ [removeCurrentImage] imageUrlToRemove не найден для индекса:', index);
+    const attachmentToRemove = currentAttachments[index];
+    if (!attachmentToRemove) {
+      console.log('❌ [removeCurrentImage] attachment не найден для индекса:', index);
       return;
     }
 
-    console.log(`🗑️ [removeCurrentImage] Удаляем изображение с индексом ${index}, URL: ${imageUrlToRemove}`);
+    console.log(`🗑️ [removeCurrentImage] Удаляем изображение с индексом ${index}, ID: ${attachmentToRemove.id}`);
 
     try {
       setLoading(true);
@@ -369,18 +383,50 @@ export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) 
       
       // Удаляем изображение из базы данных
       console.log(`🔄 [removeCurrentImage] Вызываем deleteCardImage для карточки ${card.id}`);
-      const updatedCard = await deleteCardImage(card.id, imageUrlToRemove);
+      const updatedCard = await deleteCardImage(card.id, attachmentToRemove.url);
       console.log(`✅ [removeCurrentImage] Изображение удалено, обновленная карточка:`, updatedCard);
       
       // Обновляем локальное состояние
       const newImageUrls = updatedCard.imageUrls || [];
+      const newAttachments = (updatedCard.attachments || []).map(att => ({
+        id: att.id,
+        url: att.source.startsWith('http') ? att.source : `${API}/public/add/merch/${att.source}`
+      }));
       console.log(`🔄 [removeCurrentImage] Обновляем currentImages с ${currentImages.length} на ${newImageUrls.length} изображений`);
       setCurrentImages(newImageUrls);
+      setCurrentAttachments(newAttachments);
     } catch (err) {
       console.error('❌ [removeCurrentImage] Ошибка при удалении изображения:', err);
       setError(err instanceof Error ? err.message : 'Ошибка при удалении изображения');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Обработчик drag and drop для фотографий
+  const handleImageDragEnd = async (result: DropResult) => {
+    if (!result.destination) return;
+
+    const sourceIndex = result.source.index;
+    const destIndex = result.destination.index;
+
+    if (sourceIndex === destIndex) return;
+
+    // Обновляем локальное состояние сразу для отзывчивости UI
+    const newAttachments = Array.from(currentAttachments);
+    const [removed] = newAttachments.splice(sourceIndex, 1);
+    newAttachments.splice(destIndex, 0, removed);
+    setCurrentAttachments(newAttachments);
+
+    // Обновляем порядок на сервере
+    try {
+      const attachmentIds = newAttachments.map(att => att.id);
+      await updateCardAttachmentsOrder(card.id, attachmentIds);
+    } catch (err) {
+      console.error('❌ Ошибка при обновлении порядка фотографий:', err);
+      // Откатываем изменения при ошибке
+      setCurrentAttachments(currentAttachments);
+      setError('Не удалось обновить порядок фотографий');
     }
   };
 
@@ -472,40 +518,79 @@ export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) 
             style={{ marginBottom: 15 }}
           />
 
-          {/* Текущие изображения */}
-          {currentImages.length > 0 && (
+          {/* Текущие изображения с drag and drop */}
+          {currentAttachments.length > 0 && (
             <Box style={{ marginBottom: 15 }}>
-              <Text size="sm" style={{ marginBottom: 10 }}>Текущие изображения:</Text>
-              <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="md">
-                {currentImages.map((url, index) => (
-                  <Box key={index} style={{ position: 'relative' }}>
-                    <Image
-                      src={url.startsWith('http') ? url : `${API}/public/add/merch/${url}`}
-                      alt={`Current ${index + 1}`}
-                      style={{ 
-                        width: '100%', 
-                        height: 120, 
-                        objectFit: 'cover',
-                        borderRadius: 8,
-                        border: '1px solid #e0e0e0'
-                      }}
-                    />
-                    <ActionIcon
-                      size="sm"
-                      color="red"
-                      variant="filled"
-                      style={{
-                        position: 'absolute',
-                        top: 4,
-                        right: 4
-                      }}
-                      onClick={() => removeCurrentImage(index)}
+              <Text size="sm" style={{ marginBottom: 10 }}>Текущие изображения (перетащите для изменения порядка):</Text>
+              <DragDropContext onDragEnd={handleImageDragEnd}>
+                <Droppable droppableId="current-images" direction="horizontal">
+                  {(provided) => (
+                    <div
+                      {...provided.droppableProps}
+                      ref={provided.innerRef}
+                      style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}
                     >
-                      <IconX size={12} />
-                    </ActionIcon>
-                  </Box>
-                ))}
-              </SimpleGrid>
+                      {currentAttachments.map((attachment, index) => (
+                        <Draggable key={attachment.id} draggableId={attachment.id} index={index}>
+                          {(provided, snapshot) => (
+                            <Box
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              style={{
+                                position: 'relative',
+                                width: '120px',
+                                height: '120px',
+                                opacity: snapshot.isDragging ? 0.5 : 1,
+                                ...provided.draggableProps.style
+                              }}
+                            >
+                              <Image
+                                src={attachment.url}
+                                alt={`Current ${index + 1}`}
+                                style={{ 
+                                  width: '100%', 
+                                  height: '100%', 
+                                  objectFit: 'cover',
+                                  borderRadius: 8,
+                                  border: '1px solid var(--theme-border-primary)'
+                                }}
+                              />
+                              <ActionIcon
+                                {...provided.dragHandleProps}
+                                size="sm"
+                                color="gray"
+                                variant="filled"
+                                style={{
+                                  position: 'absolute',
+                                  top: 4,
+                                  left: 4,
+                                  cursor: 'grab'
+                                }}
+                              >
+                                <IconGripVertical size={12} />
+                              </ActionIcon>
+                              <ActionIcon
+                                size="sm"
+                                color="red"
+                                variant="filled"
+                                style={{
+                                  position: 'absolute',
+                                  top: 4,
+                                  right: 4
+                                }}
+                                onClick={() => removeCurrentImage(index)}
+                              >
+                                <IconX size={12} />
+                              </ActionIcon>
+                            </Box>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </DragDropContext>
             </Box>
           )}
 

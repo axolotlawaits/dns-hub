@@ -13,14 +13,14 @@ import {
   Box,
   Card,
   Title,
-  Divider,
   Button,
   Modal,
   MultiSelect,
   Alert,
-  Checkbox
+  Checkbox,
+  Tabs
 } from '@mantine/core';
-import { IconSend, IconAlertCircle, IconCheck } from '@tabler/icons-react';
+import { IconSend, IconAlertCircle, IconCheck, IconChartBar, IconUsers, IconClock, IconSearch, IconThumbUp } from '@tabler/icons-react';
 import { fetchMerchStats, MerchStatsResponse } from '../../data/MerchStatsData';
 import { API } from '../../../../../config/constants';
 import TiptapEditor from '../../../../../utils/editor';
@@ -44,7 +44,7 @@ function MerchStats() {
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [sendToAll, setSendToAll] = useState(false);
   const [users, setUsers] = useState<BotUser[]>([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [, setLoadingUsers] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<{ success: number; failed: number; errors: Array<{ userId: number; error: string }> } | null>(null);
 
@@ -191,9 +191,6 @@ function MerchStats() {
     return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
-  const formatHour = (hour: number) => {
-    return `${hour.toString().padStart(2, '0')}:00`;
-  };
 
   const getActionLabel = (action: string) => {
     const labels: Record<string, string> = {
@@ -238,6 +235,27 @@ function MerchStats() {
         </Group>
       </Group>
 
+      <Tabs defaultValue="overview">
+        <Tabs.List>
+          <Tabs.Tab value="overview" leftSection={<IconChartBar size={16} />}>
+            Обзор
+          </Tabs.Tab>
+          <Tabs.Tab value="users" leftSection={<IconUsers size={16} />}>
+            Пользователи
+          </Tabs.Tab>
+          <Tabs.Tab value="actions" leftSection={<IconClock size={16} />}>
+            Действия
+          </Tabs.Tab>
+          <Tabs.Tab value="search" leftSection={<IconSearch size={16} />}>
+            Поиск
+          </Tabs.Tab>
+          {stats.reactionStats && (
+            <Tabs.Tab value="reactions" leftSection={<IconThumbUp size={16} />}>
+              Реакции
+            </Tabs.Tab>
+          )}
+        </Tabs.List>
+
       <Modal
         opened={sendModalOpened}
         onClose={handleCloseModal}
@@ -274,7 +292,6 @@ function MerchStats() {
             onChange={setSelectedUsers}
             searchable
             clearable
-            loading={loadingUsers}
             disabled={sendToAll}
             required={!sendToAll}
           />
@@ -319,6 +336,7 @@ function MerchStats() {
         </Stack>
       </Modal>
 
+        <Tabs.Panel value="overview" pt="md">
       {/* Сводная статистика */}
       <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="md">
         <Card withBorder p="md" radius="md">
@@ -385,125 +403,173 @@ function MerchStats() {
             {stats.summary.activeUsersMonth}
           </Text>
         </Card>
-        {stats.summary.avgActionsPerUser !== undefined && (
+        {stats.summary && 'avgActionsPerUser' in stats.summary && stats.summary.avgActionsPerUser !== undefined && (
           <Card withBorder p="md" radius="md">
             <Text size="sm" c="dimmed" mb={4}>
               Среднее действий на пользователя
             </Text>
             <Text size="xl" fw={700} c="violet">
-              {stats.summary.avgActionsPerUser}
+              {String(stats.summary.avgActionsPerUser)}
             </Text>
           </Card>
         )}
-        {stats.summary.returningUsers !== undefined && (
+        {stats.summary && 'returningUsers' in stats.summary && stats.summary.returningUsers !== undefined && (
           <Card withBorder p="md" radius="md">
             <Text size="sm" c="dimmed" mb={4}>
               Вернувшихся пользователей
             </Text>
             <Text size="xl" fw={700} c="cyan">
-              {stats.summary.returningUsers}
+              {String(stats.summary.returningUsers)}
             </Text>
           </Card>
         )}
-        {stats.summary.totalSessions !== undefined && (
+        {stats.summary && 'totalSessions' in stats.summary && stats.summary.totalSessions !== undefined && (
           <Card withBorder p="md" radius="md">
             <Text size="sm" c="dimmed" mb={4}>
               Всего сессий
             </Text>
             <Text size="xl" fw={700} c="grape">
-              {stats.summary.totalSessions}
+              {String(stats.summary.totalSessions)}
             </Text>
           </Card>
         )}
-        {stats.summary.avgSessionDuration !== undefined && (
+        {stats.summary && 'avgSessionDuration' in stats.summary && stats.summary.avgSessionDuration !== undefined && (
           <Card withBorder p="md" radius="md">
             <Text size="sm" c="dimmed" mb={4}>
               Средняя длительность сессии (мин)
             </Text>
             <Text size="xl" fw={700} c="indigo">
-              {stats.summary.avgSessionDuration}
+              {String(stats.summary.avgSessionDuration)}
             </Text>
           </Card>
         )}
-        {stats.summary.avgActionsPerSession !== undefined && (
+        {stats.summary && 'avgActionsPerSession' in stats.summary && stats.summary.avgActionsPerSession !== undefined && (
           <Card withBorder p="md" radius="md">
             <Text size="sm" c="dimmed" mb={4}>
               Среднее действий в сессии
             </Text>
             <Text size="xl" fw={700} c="pink">
-              {stats.summary.avgActionsPerSession}
+              {String(stats.summary.avgActionsPerSession)}
             </Text>
           </Card>
         )}
       </SimpleGrid>
+        </Tabs.Panel>
 
-      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-        {/* Статистика по действиям */}
-        <Paper withBorder p="md" radius="md">
-          <Title order={3} mb="md">Статистика по действиям</Title>
-          <ScrollArea h={300}>
-            <Table>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Действие</Table.Th>
-                  <Table.Th>Количество</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {stats.actions.map((action) => (
-                  <Table.Tr key={action.action}>
-                    <Table.Td>{getActionLabel(action.action)}</Table.Td>
-                    <Table.Td>
-                      <Badge variant="light" size="lg">
-                        {action.count}
-                      </Badge>
-                    </Table.Td>
+        <Tabs.Panel value="users" pt="md">
+          <Paper withBorder p="md" radius="md">
+            <Title order={3} mb="md">Топ активных пользователей</Title>
+            <ScrollArea h={400}>
+              <Table>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>#</Table.Th>
+                    <Table.Th>Пользователь</Table.Th>
+                    <Table.Th>Действий</Table.Th>
+                    <Table.Th>Регистрация</Table.Th>
                   </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-          </ScrollArea>
-        </Paper>
-
-        {/* Популярные кнопки */}
-        <Paper withBorder p="md" radius="md">
-          <Title order={3} mb="md">Популярные кнопки</Title>
-          <ScrollArea h={300}>
-            <Table>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Кнопка</Table.Th>
-                  <Table.Th>Нажатий</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {stats.popularButtons.slice(0, 15).map((button, index) => (
-                  <Table.Tr key={button.name}>
-                    <Table.Td>
-                      <Group gap="xs">
+                </Table.Thead>
+                <Table.Tbody>
+                  {stats.topUsers.map((user, index) => (
+                    <Table.Tr key={user.userId}>
+                      <Table.Td>
                         <Badge variant="dot" color={index < 3 ? 'green' : 'gray'}>
                           {index + 1}
                         </Badge>
-                        <Text size="sm">{button.name}</Text>
-                      </Group>
-                    </Table.Td>
-                    <Table.Td>
-                      <Badge variant="light" size="lg">
-                        {button.count}
-                      </Badge>
-                    </Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-          </ScrollArea>
-        </Paper>
-      </SimpleGrid>
+                      </Table.Td>
+                      <Table.Td>
+                        <Text size="sm">
+                          {user.firstName || user.lastName 
+                            ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+                            : user.username || `User ${user.userId}`
+                          }
+                          {user.username && <Text size="xs" c="dimmed" component="span"> @{user.username}</Text>}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Badge variant="light" size="lg">
+                          {user.actionsCount}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        <Text size="sm" c="dimmed">
+                          {user.registeredAt ? formatDate(user.registeredAt.toString()) : 'N/A'}
+                        </Text>
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </ScrollArea>
+          </Paper>
+        </Tabs.Panel>
 
-      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-        {/* Популярные поисковые запросы */}
-        <Paper withBorder p="md" radius="md">
-          <Title order={3} mb="md">Популярные поисковые запросы</Title>
+        <Tabs.Panel value="actions" pt="md">
+          <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+            <Paper withBorder p="md" radius="md">
+              <Title order={3} mb="md">Статистика по действиям</Title>
+              <ScrollArea h={300}>
+                <Table>
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>Действие</Table.Th>
+                      <Table.Th>Количество</Table.Th>
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {stats.actions.map((action) => (
+                      <Table.Tr key={action.action}>
+                        <Table.Td>{getActionLabel(action.action)}</Table.Td>
+                        <Table.Td>
+                          <Badge variant="light" size="lg">
+                            {action.count}
+                          </Badge>
+                        </Table.Td>
+                      </Table.Tr>
+                    ))}
+                  </Table.Tbody>
+                </Table>
+              </ScrollArea>
+            </Paper>
+
+            <Paper withBorder p="md" radius="md">
+              <Title order={3} mb="md">Популярные кнопки</Title>
+              <ScrollArea h={300}>
+                <Table>
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>Кнопка</Table.Th>
+                      <Table.Th>Нажатий</Table.Th>
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {stats.popularButtons.slice(0, 15).map((button, index) => (
+                      <Table.Tr key={button.name}>
+                        <Table.Td>
+                          <Group gap="xs">
+                            <Badge variant="dot" color={index < 3 ? 'green' : 'gray'}>
+                              {index + 1}
+                            </Badge>
+                            <Text size="sm">{button.name}</Text>
+                          </Group>
+                        </Table.Td>
+                        <Table.Td>
+                          <Badge variant="light" size="lg">
+                            {button.count}
+                          </Badge>
+                        </Table.Td>
+                      </Table.Tr>
+                    ))}
+                  </Table.Tbody>
+                </Table>
+              </ScrollArea>
+            </Paper>
+          </SimpleGrid>
+        </Tabs.Panel>
+
+        <Tabs.Panel value="search" pt="md">
+          <Paper withBorder p="md" radius="md">
+            <Title order={3} mb="md">Популярные поисковые запросы</Title>
           <ScrollArea h={300}>
             <Table>
               <Table.Thead>
@@ -544,179 +610,135 @@ function MerchStats() {
             </Table>
           </ScrollArea>
         </Paper>
+        </Tabs.Panel>
 
-        {/* Популярные категории */}
-        <Paper withBorder p="md" radius="md">
-          <Title order={3} mb="md">Популярные категории</Title>
-          <ScrollArea h={300}>
-            <Table>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Категория</Table.Th>
-                  <Table.Th>Переходов</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {stats.categoryClicks.length > 0 ? (
-                  stats.categoryClicks.map((category, index) => (
-                    <Table.Tr key={category.name}>
-                      <Table.Td>
-                        <Group gap="xs">
-                          <Badge variant="dot" color={index < 3 ? 'violet' : 'gray'}>
-                            {index + 1}
-                          </Badge>
-                          <Text size="sm">{category.name}</Text>
-                        </Group>
-                      </Table.Td>
-                      <Table.Td>
-                        <Badge variant="light" size="lg">
-                          {category.count}
-                        </Badge>
-                      </Table.Td>
-                    </Table.Tr>
-                  ))
-                ) : (
-                  <Table.Tr>
-                    <Table.Td colSpan={2}>
-                      <Text c="dimmed" size="sm" ta="center">
-                        Нет данных о категориях
-                      </Text>
-                    </Table.Td>
-                  </Table.Tr>
-                )}
-              </Table.Tbody>
-            </Table>
-          </ScrollArea>
-        </Paper>
-      </SimpleGrid>
-
-      {/* Статистика по дням */}
-      <Paper withBorder p="md" radius="md">
-        <Title order={3} mb="md">Статистика по дням</Title>
-        <ScrollArea h={400}>
-          <Table>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Дата</Table.Th>
-                <Table.Th>Действий</Table.Th>
-                <Table.Th>Уникальных пользователей</Table.Th>
-                <Table.Th>Детали</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {stats.dailyStats.map((day) => (
-                <Table.Tr key={day.date}>
-                  <Table.Td>
-                    <Text fw={500}>{formatDate(day.date)}</Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Badge variant="light" size="lg">
-                      {day.totalActions}
+        {stats.reactionStats && (
+          <Tabs.Panel value="reactions" pt="md">
+            <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md" mb="md">
+              <Paper withBorder p="md" radius="md">
+                <Title order={3} mb="md">Статистика реакций</Title>
+                <Stack gap="md">
+                  <Group justify="space-between">
+                    <Text size="sm" c="dimmed">Всего реакций</Text>
+                    <Badge size="lg" variant="light">
+                      {stats.reactionStats.total}
                     </Badge>
-                  </Table.Td>
-                  <Table.Td>
-                    <Badge variant="light" color="blue" size="lg">
-                      {day.uniqueUsers}
+                  </Group>
+                  <Group justify="space-between">
+                    <Text size="sm" c="dimmed">Уникальных эмодзи</Text>
+                    <Badge size="lg" variant="light">
+                      {stats.reactionStats.uniqueEmojis}
                     </Badge>
-                  </Table.Td>
-                  <Table.Td>
-                    <Group gap="xs">
-                      {Object.entries(day.actions).map(([action, count]) => (
-                        <Badge key={action} variant="dot" size="sm">
-                          {getActionLabel(action)}: {count}
-                        </Badge>
-                      ))}
+                  </Group>
+                  {stats.reactionStats.messagesWithReactions !== undefined && (
+                    <Group justify="space-between">
+                      <Text size="sm" c="dimmed">Сообщений с реакциями</Text>
+                      <Badge size="lg" variant="light">
+                        {stats.reactionStats.messagesWithReactions}
+                      </Badge>
                     </Group>
-                  </Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </ScrollArea>
-      </Paper>
+                  )}
+                </Stack>
+              </Paper>
 
-      {/* Статистика по часам */}
-      <Paper withBorder p="md" radius="md">
-        <Title order={3} mb="md">Активность по часам</Title>
-        <ScrollArea h={300}>
-          <Table>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Час</Table.Th>
-                <Table.Th>Количество действий</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {stats.hourlyStats.map((hour) => (
-                <Table.Tr key={hour.hour}>
-                  <Table.Td>
-                    <Text fw={500}>{formatHour(hour.hour)}</Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Badge variant="light" size="lg">
-                      {hour.count}
-                    </Badge>
-                  </Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </ScrollArea>
-      </Paper>
+              <Paper withBorder p="md" radius="md">
+                <Title order={3} mb="md">Популярные реакции</Title>
+                <ScrollArea h={300}>
+                  <Table>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>#</Table.Th>
+                        <Table.Th>Эмодзи</Table.Th>
+                        <Table.Th>Количество</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {stats.reactionStats.topReactions.map((reaction, index) => (
+                        <Table.Tr key={reaction.emoji}>
+                          <Table.Td>
+                            <Badge variant="dot" color={index < 3 ? 'green' : 'gray'}>
+                              {index + 1}
+                            </Badge>
+                          </Table.Td>
+                          <Table.Td>
+                            <Text size="xl">{reaction.emoji}</Text>
+                          </Table.Td>
+                          <Table.Td>
+                            <Badge variant="light" size="lg">
+                              {reaction.count}
+                            </Badge>
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                </ScrollArea>
+              </Paper>
+            </SimpleGrid>
 
-      {/* Топ активных пользователей */}
-      <Paper withBorder p="md" radius="md">
-        <Title order={3} mb="md">Топ активных пользователей</Title>
-        <ScrollArea h={400}>
-          <Table>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>#</Table.Th>
-                <Table.Th>Пользователь</Table.Th>
-                <Table.Th>Username</Table.Th>
-                <Table.Th>Действий</Table.Th>
-                <Table.Th>Регистрация</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {stats.topUsers.map((user, index) => (
-                <Table.Tr key={user.userId}>
-                  <Table.Td>
-                    <Badge variant="dot" color={index < 3 ? 'gold' : 'gray'}>
-                      {index + 1}
-                    </Badge>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="sm">
-                      {user.firstName || ''} {user.lastName || ''}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="sm" c="dimmed">
-                      @{user.username || 'нет'}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Badge variant="light" size="lg">
-                      {user.actionsCount}
-                    </Badge>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="sm" c="dimmed">
-                      {user.registeredAt
-                        ? new Date(user.registeredAt).toLocaleDateString('ru-RU')
-                        : '-'}
-                    </Text>
-                  </Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </ScrollArea>
-      </Paper>
+            {stats.reactionStats.topMessages && stats.reactionStats.topMessages.length > 0 && (
+              <Paper withBorder p="md" radius="md" mt="md">
+                <Title order={3} mb="md">Топ сообщений по реакциям</Title>
+                <ScrollArea h={400}>
+                  <Table>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>#</Table.Th>
+                        <Table.Th>ID сообщения</Table.Th>
+                        <Table.Th>ID чата</Table.Th>
+                        <Table.Th>Всего реакций</Table.Th>
+                        <Table.Th>Реакции</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {stats.reactionStats.topMessages.map((message, index) => (
+                        <Table.Tr key={`${message.chatId}_${message.messageId}`}>
+                          <Table.Td>
+                            <Badge variant="dot" color={index < 3 ? 'green' : 'gray'}>
+                              {index + 1}
+                            </Badge>
+                          </Table.Td>
+                          <Table.Td>
+                            <Text size="sm" ff="monospace">
+                              {message.messageId}
+                            </Text>
+                          </Table.Td>
+                          <Table.Td>
+                            <Text size="sm" ff="monospace" c="dimmed">
+                              {message.chatId}
+                            </Text>
+                          </Table.Td>
+                          <Table.Td>
+                            <Badge variant="light" size="lg">
+                              {message.totalReactions}
+                            </Badge>
+                          </Table.Td>
+                          <Table.Td>
+                            <Group gap="xs">
+                              {message.reactions.map((reaction) => (
+                                <Group key={reaction.emoji} gap={4}>
+                                  <Text size="lg">{reaction.emoji}</Text>
+                                  <Badge size="sm" variant="outline">
+                                    {reaction.count}
+                                  </Badge>
+                                </Group>
+                              ))}
+                            </Group>
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                </ScrollArea>
+              </Paper>
+            )}
+          </Tabs.Panel>
+        )}
+      </Tabs>
 
+      {/* Дополнительная статистика (всегда видна) */}
       {/* Статистика по дням недели */}
-      {stats.weekdayStats && stats.weekdayStats.length > 0 && (
+      {stats && stats.weekdayStats && stats.weekdayStats.length > 0 && (
         <Paper withBorder p="md" radius="md">
           <Title order={3} mb="md">Активность по дням недели</Title>
           <ScrollArea h={300}>
@@ -747,7 +769,7 @@ function MerchStats() {
       )}
 
       {/* Статистика по времени суток */}
-      {stats.timeOfDayStats && (
+      {stats && stats.timeOfDayStats && (
         <Paper withBorder p="md" radius="md">
           <Title order={3} mb="md">Активность по времени суток</Title>
           <SimpleGrid cols={4} spacing="md">
@@ -788,7 +810,7 @@ function MerchStats() {
       )}
 
       {/* Статистика по длине поисковых запросов */}
-      {stats.searchLengthStats && (
+      {stats && stats.searchLengthStats && (
         <Paper withBorder p="md" radius="md">
           <Title order={3} mb="md">Длина поисковых запросов</Title>
           <SimpleGrid cols={3} spacing="md">
@@ -821,7 +843,7 @@ function MerchStats() {
       )}
 
       {/* Воронка действий */}
-      {stats.funnelStats && (
+      {stats && stats.funnelStats && (
         <Paper withBorder p="md" radius="md">
           <Title order={3} mb="md">Воронка действий</Title>
           <Stack gap="md">
@@ -869,7 +891,7 @@ function MerchStats() {
       )}
 
       {/* Статистика по retention */}
-      {stats.retentionStats && (
+      {stats && stats.retentionStats && (
         <Paper withBorder p="md" radius="md">
           <Title order={3} mb="md">Retention (возвраты пользователей)</Title>
           <SimpleGrid cols={3} spacing="md">
@@ -902,7 +924,7 @@ function MerchStats() {
       )}
 
       {/* Популярные карточки */}
-      {stats.popularCards && stats.popularCards.length > 0 && (
+      {stats && stats.popularCards && stats.popularCards.length > 0 && (
         <Paper withBorder p="md" radius="md">
           <Title order={3} mb="md">Популярные карточки</Title>
           <ScrollArea h={300}>

@@ -368,6 +368,106 @@ export const addCardImages = async (id: string, images: File[]): Promise<CardIte
 };
 
 // Функция для удаления изображения карточки
+// Обновить порядок attachments карточки
+export const updateCardAttachmentsOrder = async (cardId: string, attachmentIds: string[]): Promise<void> => {
+  try {
+    const url = `${API_BASE}/attachments/${cardId}/order`;
+    console.log(`🔄 Обновляем порядок attachments для карточки ${cardId}:`, attachmentIds);
+    
+    const response = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        ...getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ attachmentIds }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP Error: ${response.status}`);
+    }
+    
+    console.log('✅ Порядок attachments обновлен');
+  } catch (error) {
+    console.error('❌ Ошибка при обновлении порядка attachments:', error);
+    throw error;
+  }
+};
+
+// Обновить порядок карточек в категории
+export const updateCardsOrder = async (categoryId: string, cardIds: string[]): Promise<void> => {
+  try {
+    const url = `${API_BASE}/cards/${categoryId}/order`;
+    console.log(`🔄 Обновляем порядок карточек в категории ${categoryId}:`, cardIds);
+    
+    const response = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        ...getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ cardIds }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP Error: ${response.status}`);
+    }
+    
+    console.log('✅ Порядок карточек обновлен');
+  } catch (error) {
+    console.error('❌ Ошибка при обновлении порядка карточек:', error);
+    throw error;
+  }
+};
+
+// Переместить карточку в другую категорию
+export const moveCardToCategory = async (cardId: string, newCategoryId: string): Promise<CardItem> => {
+  try {
+    const url = `${API_BASE}/cards/${cardId}/move`;
+    console.log(`🔄 Перемещаем карточку ${cardId} в категорию ${newCategoryId}`);
+    
+    const response = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        ...getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ newCategoryId }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP Error: ${response.status}`);
+    }
+    
+    const data = await handleResponse(response);
+    console.log('✅ Карточка перемещена:', data);
+    
+    // Преобразуем ответ в формат CardItem
+    const card: CardItem = {
+      id: data.card.id,
+      name: data.card.name,
+      description: data.card.description || '',
+      imageUrls: data.card.attachments?.map((att: any) => 
+        att.source.startsWith('http') ? att.source : `${API}/public/add/merch/${att.source}`
+      ) || [],
+      attachments: data.card.attachments || [],
+      isActive: data.card.isActive,
+      categoryId: data.card.parentId || '',
+      category: {
+        id: data.card.parentId || '',
+        name: 'Категория'
+      },
+      createdAt: data.card.createdAt,
+      updatedAt: data.card.updatedAt
+    };
+    
+    return card;
+  } catch (error) {
+    console.error('❌ Ошибка при перемещении карточки:', error);
+    throw error;
+  }
+};
+
 export const deleteCardImage = async (id: string, imageUrl: string): Promise<CardItem> => {
   try {
     const url = `${API_BASE}/cards/${id}/images`;

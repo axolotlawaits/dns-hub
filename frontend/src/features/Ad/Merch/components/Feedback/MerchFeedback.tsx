@@ -9,7 +9,6 @@ import {
   ScrollArea,
   Loader,
   Box,
-  Button,
   Modal,
   Image,
   SimpleGrid,
@@ -35,6 +34,7 @@ import {
   MerchFeedback,
   MerchFeedbackStats
 } from '../../data/MerchFeedbackData';
+import { API } from '../../../../../config/constants';
 import './MerchFeedback.css';
 
 function MerchFeedbackComponent() {
@@ -111,22 +111,37 @@ function MerchFeedbackComponent() {
   const getUserName = (feedback: MerchFeedback) => {
     const { dbName, tgName, username, userId } = feedback.user;
     
+    // Формируем части имени
+    const nameParts: string[] = [];
+    
     // Для мерча используем данные из Telegram, но если есть и ФИО из базы, показываем оба
     if (tgName) {
-      // Если есть и ФИО из базы, показываем оба
       if (dbName && dbName !== tgName) {
-        return `${dbName} (${tgName})`;
+        nameParts.push(`${dbName} (${tgName})`);
+      } else {
+        nameParts.push(tgName);
       }
-      return tgName;
+    } else if (dbName) {
+      // Если нет данных из Telegram, используем ФИО из базы
+      nameParts.push(dbName);
     }
     
-    // Если нет данных из Telegram, используем ФИО из базы
-    if (dbName) {
-      return dbName;
+    // Добавляем Telegram username, если есть
+    if (username) {
+      const usernamePart = `@${username}`;
+      if (nameParts.length > 0) {
+        nameParts.push(`(${usernamePart})`);
+      } else {
+        nameParts.push(usernamePart);
+      }
     }
     
-    // Fallback
-    return username ? `@${username}` : `ID: ${userId}`;
+    // Если ничего не найдено, используем ID
+    if (nameParts.length === 0) {
+      return `ID: ${userId}`;
+    }
+    
+    return nameParts.join(' ');
   };
 
   if (loading && !feedbacks.length) {
@@ -411,18 +426,12 @@ function MerchFeedbackComponent() {
                 <Text size="sm" c="dimmed" mb="xs">Фотографии ({selectedFeedback.photos.length}):</Text>
                 <SimpleGrid cols={2} spacing="md">
                   {selectedFeedback.photos.map((photo, index) => {
-                    // Для merch бота фото могут быть в разных местах
-                    // Если это путь к файлу (file_path от Telegram), используем его как есть
-                    // Если это имя файла, проверяем, откуда оно
+                    // Фотографии из обратной связи всегда сохраняются в public/feedback/
                     let photoPath: string;
                     if (photo.startsWith('http')) {
                       photoPath = photo;
-                    } else if (selectedFeedback.tool === 'merch') {
-                      // Для merch бота фото могут быть в public/add/merch или public/feedback
-                      // Проверяем, есть ли файл в public/add/merch, если нет - пробуем public/feedback
-                      photoPath = `${API}/public/add/merch/${photo}`;
                     } else {
-                      // Для остальных инструментов фото в public/feedback/
+                      // Для всех инструментов фото в public/feedback/
                       photoPath = `${API}/public/feedback/${photo}`;
                     }
                     
@@ -432,7 +441,6 @@ function MerchFeedbackComponent() {
                         src={photoPath}
                         alt={`Фото ${index + 1}`}
                         radius="md"
-                        fallback="https://via.placeholder.com/300?text=Изображение+не+найдено"
                       />
                     );
                   })}
