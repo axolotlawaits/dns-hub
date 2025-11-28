@@ -166,7 +166,7 @@ function MerchFeedbackComponent() {
   }
 
   return (
-    <Stack gap="md">
+    <Stack gap="md" className="merch-feedback-container">
       {/* Статистика */}
       {stats && (
         <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
@@ -180,7 +180,7 @@ function MerchFeedbackComponent() {
                   {stats.total}
                 </Text>
               </div>
-              <IconMail size={32} color="var(--mantine-color-blue-6)" />
+              <IconMail size={32} color="var(--color-accent-80)" />
             </Group>
           </Paper>
           <Paper withBorder p="md" radius="md">
@@ -417,8 +417,21 @@ function MerchFeedbackComponent() {
 
             <div>
               <Text size="sm" c="dimmed" mb="xs">Сообщение:</Text>
-              <Paper p="md" withBorder radius="md" style={{ backgroundColor: 'var(--mantine-color-gray-0)' }}>
-                <Text size="sm" style={{ whiteSpace: 'pre-wrap' }}>
+              <Paper 
+                p="md" 
+                withBorder 
+                radius="md" 
+                style={{ 
+                  backgroundColor: 'light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6))',
+                }}
+              >
+                <Text 
+                  size="sm" 
+                  style={{ 
+                    whiteSpace: 'pre-wrap',
+                    color: 'light-dark(var(--mantine-color-dark-9), var(--mantine-color-gray-0))'
+                  }}
+                >
                   {selectedFeedback.text}
                 </Text>
               </Paper>

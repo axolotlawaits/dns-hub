@@ -103,9 +103,10 @@ interface CardProps {
   onEdit?: (card: CardItem) => void;
   onDelete?: (cardId: string) => void;
   onToggleActive?: (cardId: string, isActive: boolean) => void;
+  searchQuery?: string;
 }
 
-function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
+function Card({ cardData, onEdit, onDelete, onToggleActive, searchQuery = '' }: CardProps) {
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [zoomModalOpened, setZoomModalOpened] = useState(false);
   const [isActiveLoading, setIsActiveLoading] = useState(false);
@@ -217,7 +218,26 @@ function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
       <Group justify="space-between" mb="md" align="center">
         <Group>
           <Title order={3} style={{ margin: 0 }}>
-            {truncateText(cardData.name, 50)}
+            {searchQuery.trim() ? (
+              (() => {
+                const regex = new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+                const parts = truncateText(cardData.name, 50).split(regex);
+                return parts.map((part, index) => 
+                  regex.test(part) ? (
+                    <mark key={index} style={{ 
+                      backgroundColor: 'var(--mantine-color-yellow-3)', 
+                      color: 'var(--mantine-color-dark-9)',
+                      padding: '0 2px',
+                      borderRadius: '2px'
+                    }}>
+                      {part}
+                    </mark>
+                  ) : part
+                );
+              })()
+            ) : (
+              truncateText(cardData.name, 50)
+            )}
           </Title>
           <Badge 
             color={cardData.isActive ? 'green' : 'gray'} 

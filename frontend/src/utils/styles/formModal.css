@@ -261,7 +261,7 @@
 [data-mantine-color-scheme="dark"] .form-modal .mantine-NumberInput-input:focus,
 [data-mantine-color-scheme="dark"] .form-modal .mantine-MultiSelect-input:focus {
   border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 3px var(--color-accent-10);
 }
 
 [data-mantine-color-scheme="dark"] .form-modal .mantine-TextInput-label,
@@ -404,16 +404,16 @@
 /* Темная тема */
 [data-mantine-color-scheme="dark"] .construction-card {
   background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(51, 65, 85, 0.6) 100%);
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  border: 1px solid var(--color-accent-20);
 }
 
 [data-mantine-color-scheme="dark"] .construction-card:hover {
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3), 0 0 0 1px var(--color-accent-30);
 }
 
 [data-mantine-color-scheme="dark"] .attachment-item:hover {
   border-color: var(--color-blue-400) !important;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 4px 12px var(--color-accent-20);
 }
 
 /* Стили для полей в карточках конструкций */
@@ -430,7 +430,7 @@
 .construction-card .mantine-Select-input:focus,
 .construction-card .mantine-NumberInput-input:focus {
   border-color: var(--color-blue-500) !important;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2), 0 4px 8px rgba(0, 0, 0, 0.15) !important;
+  box-shadow: 0 0 0 2px var(--color-accent-20), 0 4px 8px rgba(0, 0, 0, 0.15) !important;
   transform: translateY(-1px) !important;
 }
 
@@ -636,13 +636,13 @@
   background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600)) !important;
   color: white !important;
   font-weight: 600 !important;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3) !important;
+  box-shadow: 0 4px 12px var(--color-accent-30) !important;
 }
 
 .mantine-DatePicker-day[data-selected="true"]:hover {
   background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700)) !important;
   transform: scale(1.05) !important;
-  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4) !important;
+  box-shadow: 0 6px 16px var(--color-accent-40) !important;
 }
 
 .mantine-DatePicker-day[data-outside="true"] {
@@ -711,7 +711,7 @@
 .mantine-TextInput-input[type="date"]:focus,
 .mantine-TextInput-input[type="datetime-local"]:focus {
   border-color: var(--color-primary-500) !important;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
+  box-shadow: 0 0 0 2px var(--color-accent-20) !important;
   background: var(--theme-bg-elevated) !important;
   transform: translateY(-1px) !important;
 }
@@ -755,7 +755,7 @@
 [data-mantine-color-scheme="dark"] .mantine-TextInput-input[type="date"]:focus,
 [data-mantine-color-scheme="dark"] .mantine-TextInput-input[type="datetime-local"]:focus {
   border-color: var(--color-primary-400) !important;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3) !important;
+  box-shadow: 0 0 0 2px var(--color-accent-30) !important;
   background: var(--theme-bg-elevated) !important;
 }
 
@@ -867,13 +867,13 @@
   background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600)) !important;
   color: white !important;
   font-weight: 600 !important;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3) !important;
+  box-shadow: 0 4px 12px var(--color-accent-30) !important;
 }
 
 .mantine-DateInput-day[data-selected="true"]:hover {
   background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700)) !important;
   transform: scale(1.05) !important;
-  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4) !important;
+  box-shadow: 0 6px 16px var(--color-accent-40) !important;
 }
 
 .mantine-DateInput-day[data-outside="true"] {
@@ -1118,7 +1118,7 @@
 .construction-cards-slider {
   /* Webkit браузеры (Chrome, Safari, Edge) */
   scrollbar-width: thin;
-  scrollbar-color: rgba(59, 130, 246, 0.6) rgba(0, 0, 0, 0.1);
+  scrollbar-color: var(--color-accent-60) rgba(0, 0, 0, 0.1);
 }
 
 .construction-cards-slider::-webkit-scrollbar {
@@ -1132,13 +1132,13 @@
 }
 
 .construction-cards-slider::-webkit-scrollbar-thumb {
-  background: linear-gradient(90deg, rgba(59, 130, 246, 0.6), rgba(37, 99, 235, 0.8));
+  background: linear-gradient(90deg, var(--color-accent-60), var(--color-accent-dark-80));
   border-radius: 4px;
   transition: all 0.3s ease;
 }
 
 .construction-cards-slider::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(90deg, rgba(59, 130, 246, 0.8), rgba(37, 99, 235, 1));
+  background: linear-gradient(90deg, var(--color-accent-80), var(--color-accent-dark-100));
   transform: scaleY(1.2);
 }
 
@@ -1188,10 +1188,10 @@
 
 /* Стили для секции карточек конструкций в нижней части */
 .construction-cards-section {
-  border-top: 2px solid rgba(59, 130, 246, 0.1);
+  border-top: 2px solid var(--color-accent-10);
   padding-top: 24px;
   margin-top: 24px;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.02) 0%, rgba(37, 99, 235, 0.02) 100%);
+  background: linear-gradient(135deg, var(--color-accent-05) 0%, var(--color-accent-dark-02) 100%);
   border-radius: 12px;
   padding: 20px;
 }
@@ -1214,7 +1214,7 @@
 
 .construction-cards-slider > div:hover {
   transform: translateY(-4px) scale(1.02);
-  box-shadow: 0 12px 32px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 12px 32px var(--color-accent-15);
 }
 
 @media (max-width: 768px) {

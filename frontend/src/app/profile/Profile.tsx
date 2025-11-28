@@ -1,14 +1,10 @@
 import { 
   Tabs, 
-  Title, 
-  Text, 
   Stack, 
   Card,
-  Group,
-  ThemeIcon,
   Box
 } from "@mantine/core"
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ProfileInfo from "./ProfileInfo";
 import '../styles/Profile.css'
 import { useUserContext } from "../../hooks/useUserContext";
@@ -18,30 +14,28 @@ import {
   IconShield, 
   IconPhoto
 } from '@tabler/icons-react';
+import { usePageHeader } from "../../contexts/PageHeaderContext";
 
 function Profile() {
   const { user } = useUserContext()
   const [activeTab, setActiveTab] = useState<string | null>('first');
+  const { setHeader, clearHeader } = usePageHeader();
+
+  useEffect(() => {
+    setHeader({
+      title: 'Личный кабинет',
+      subtitle: 'Управление профилем и настройками',
+      icon: <IconUser size={24} />
+    });
+
+    return () => {
+      clearHeader();
+    };
+  }, [setHeader, clearHeader]);
 
   return (
     <Box className="profile-container" style={{ paddingRight: 'var(--mantine-spacing-md)' }}>
       <Stack gap="lg">
-        {/* Заголовок страницы */}
-        <Box className="profile-header">
-          <Group gap="md" align="center">
-            <ThemeIcon size="lg" color="blue" variant="light" radius="xl">
-              <IconUser size={24} />
-            </ThemeIcon>
-            <Box>
-              <Title order={2} c="var(--theme-text-primary)">
-                Личный кабинет
-              </Title>
-              <Text size="md" c="var(--theme-text-secondary)">
-                Управление профилем и настройками
-              </Text>
-            </Box>
-          </Group>
-        </Box>
 
         {/* Навигация по вкладкам */}
         <Card shadow="sm" radius="lg" p="md" className="profile-navigation">

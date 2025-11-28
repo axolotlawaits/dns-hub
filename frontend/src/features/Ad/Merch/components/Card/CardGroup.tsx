@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useState } from 'react';
 import { useDisclosure } from '@mantine/hooks';
-import { Button, Container, Alert, Center, Box, Pagination, Select, Group, Text, Stack, LoadingOverlay } from '@mantine/core';
-import { IconPlus, IconEdit, IconTrash } from '@tabler/icons-react';
+import { Button, Container, Alert, Center, Box, Pagination, Select, Group, Text, Stack, LoadingOverlay, TextInput, ActionIcon } from '@mantine/core';
+import { IconPlus, IconEdit, IconTrash, IconSearch, IconX } from '@tabler/icons-react';
 import Card from './Card';
 import { AddCardModal, EditCardModal, DeleteCardModal } from './CardModal';
 import { useApp } from '../../context/SelectedCategoryContext';
@@ -28,6 +28,7 @@ function CardGroup({ hasFullAccess = true, onCardsUpdate }: CardGroupProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [activeFilter, setActiveFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     if (selectedId) {
@@ -210,43 +211,56 @@ function CardGroup({ hasFullAccess = true, onCardsUpdate }: CardGroupProps) {
         </Center>
       ) : cards.length > 0 ? (
         <>
-          {/* Фильтры и пагинация */}
+          {/* Поиск, фильтры и пагинация */}
           <Box mb="md">
-            <Group justify="space-between" align="center">
-              <Group>
-                <Select
-                  label="Статус"
-                  placeholder="Все карточки"
-                  value={activeFilter}
-                  onChange={(value) => {
-                    setActiveFilter(value || 'all');
-                    setCurrentPage(1); // Сбрасываем на первую страницу при смене фильтра
-                  }}
-                  data={[
-                    { value: 'all', label: 'Все карточки' },
-                    { value: 'active', label: 'Только активные' },
-                    { value: 'inactive', label: 'Только неактивные' }
-                  ]}
-                  size="sm"
-                  w={150}
-                />
-                <Select
-                  label="На странице"
-                  value={pageSize.toString()}
-                  onChange={(value) => {
-                    setPageSize(parseInt(value || '20'));
-                    setCurrentPage(1); // Сбрасываем на первую страницу при смене размера
-                  }}
-                  data={[
-                    { value: '10', label: '10' },
-                    { value: '20', label: '20' },
-                    { value: '50', label: '50' },
-                    { value: '100', label: '100' }
-                  ]}
-                  size="sm"
-                  w={100}
-                />
-              </Group>
+            <Stack gap="sm">
+              <TextInput
+                placeholder="Поиск по карточкам..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.currentTarget.value)}
+                leftSection={<IconSearch size={16} />}
+                rightSection={searchQuery ? (
+                  <ActionIcon size="sm" onClick={() => setSearchQuery('')}>
+                    <IconX size={14} />
+                  </ActionIcon>
+                ) : null}
+                size="sm"
+              />
+              <Group justify="space-between" align="center">
+                <Group>
+                  <Select
+                    label="Статус"
+                    placeholder="Все карточки"
+                    value={activeFilter}
+                    onChange={(value) => {
+                      setActiveFilter(value || 'all');
+                      setCurrentPage(1); // Сбрасываем на первую страницу при смене фильтра
+                    }}
+                    data={[
+                      { value: 'all', label: 'Все карточки' },
+                      { value: 'active', label: 'Только активные' },
+                      { value: 'inactive', label: 'Только неактивные' }
+                    ]}
+                    size="sm"
+                    w={150}
+                  />
+                  <Select
+                    label="На странице"
+                    value={pageSize.toString()}
+                    onChange={(value) => {
+                      setPageSize(parseInt(value || '20'));
+                      setCurrentPage(1); // Сбрасываем на первую страницу при смене размера
+                    }}
+                    data={[
+                      { value: '10', label: '10' },
+                      { value: '20', label: '20' },
+                      { value: '50', label: '50' },
+                      { value: '100', label: '100' }
+                    ]}
+                    size="sm"
+                    w={100}
+                  />
+                </Group>
               <Group>
                 <Text size="sm" c="dimmed">
                   Показано {cards.length} из {pagination.total} карточек
@@ -264,6 +278,7 @@ function CardGroup({ hasFullAccess = true, onCardsUpdate }: CardGroupProps) {
                 )}
               </Group>
             </Group>
+            </Stack>
           </Box>
 
           {/* Карточки */}
@@ -275,6 +290,7 @@ function CardGroup({ hasFullAccess = true, onCardsUpdate }: CardGroupProps) {
                 onEdit={hasFullAccess ? handleEditCard : undefined}
                 onDelete={hasFullAccess ? handleDeleteCard : undefined}
                 onToggleActive={hasFullAccess ? handleToggleActive : undefined}
+                searchQuery={searchQuery}
               />
             ))}
           </Box>

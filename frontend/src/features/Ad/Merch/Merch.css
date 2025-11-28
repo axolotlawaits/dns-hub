@@ -52,6 +52,62 @@
   color: var(--theme-text-primary);
 }
 
+/* Навигация по вкладкам */
+.merch-navigation {
+  background: var(--theme-bg-elevated);
+  border: 1px solid var(--theme-border);
+}
+
+.merch-tabs-list {
+  background: transparent !important;
+  border: none !important;
+  border-bottom: none !important;
+  gap: var(--space-2);
+}
+
+/* Убираем нижнее подчеркивание у всех табов */
+.merch-tabs-list::after,
+.merch-tabs-list::before {
+  display: none !important;
+  content: none !important;
+}
+
+/* Убираем border-bottom у каждого таба */
+.merch-tab-item {
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  transition: var(--transition-all);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--theme-text-primary);
+  margin: 0 var(--space-1);
+  border-bottom: none !important;
+  border: none !important;
+  position: relative;
+}
+
+.merch-tab-item::after,
+.merch-tab-item::before {
+  display: none !important;
+  content: none !important;
+}
+
+.merch-tab-item:hover {
+  background: var(--theme-hover-bg);
+  transform: translateY(-1px);
+}
+
+.merch-tab-item[data-active="true"] {
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600));
+  color: white;
+  box-shadow: var(--theme-shadow-md);
+}
+
+.merch-tab-item[data-active="false"] {
+  color: var(--theme-text-secondary);
+  background: transparent;
+}
+
 /* Темная тема */
 [data-mantine-color-scheme="dark"] .merch-hierarchy-paper {
   background: var(--theme-bg-elevated);

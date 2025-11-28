@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import {Container,Title,Paper,Text,Button,Group,Stack,Modal,LoadingOverlay, Tabs, Box, Progress, Badge} from '@mantine/core';
 import { TimeInput } from '@mantine/dates';
-import {  IconUpload,  IconMusic,  IconClock,  IconDeviceMobile,  IconBuilding, IconEdit, IconCheck, IconRefresh, IconPower, IconBattery, IconWifi, IconCalendar, IconPlayerPlay, IconPlayerPause, IconWifiOff, IconX, IconRadio, IconDownload, IconAlertCircle, IconChevronDown, IconChevronRight, IconChevronsDown, IconChevronsUp, IconSearch, IconTrash, IconQrcode } from '@tabler/icons-react';
+import {  IconUpload,  IconMusic,  IconClock,  IconDeviceMobile,  IconBuilding, IconEdit, IconCheck, IconRefresh, IconPower, IconBattery, IconWifi, IconCalendar, IconPlayerPlay, IconPlayerPause, IconWifiOff, IconX, IconRadio, IconDownload, IconAlertCircle, IconChevronDown, IconChevronRight, IconChevronsDown, IconChevronsUp, IconSearch, IconTrash, IconQrcode, IconLayoutDashboard } from '@tabler/icons-react';
 import { notificationSystem } from '../../../utils/Push';
 import { API } from '../../../config/constants';
 import { DynamicFormModal, FormField } from '../../../utils/formModal';
@@ -14,6 +14,7 @@ import { useAccessContext } from '../../../hooks/useAccessContext';
 import { FilterGroup } from '../../../utils/filter';
 import WebRadioPlayer from './components/WebRadioPlayer';
 import QrProvisionModal from './components/QrProvisionModal';
+import RadioDashboard from './components/RadioDashboard';
 import './Radio.css';
 import '../../../app/styles/DesignSystem.css';
 
@@ -232,10 +233,16 @@ const RadioAdmin: React.FC = () => {
   // Состояние активной вкладки
   const [activeTab, setActiveTab] = useState<string>(() => {
     if (hasReadOnlyAccess) {
-      return "devices"; // Для пользователей с доступом только для чтения сразу показываем устройства
+      return "dashboard"; // Для пользователей с доступом только для чтения показываем дашборд
     }
-    return "music"; // Для остальных показываем музыку
+    return "dashboard"; // По умолчанию показываем дашборд
   });
+  
+  // Состояние для сохранения пресетов фильтров (будет использовано позже)
+  // const [filterPresets, setFilterPresets] = useState<Array<{id: string, name: string, filters: any[]}>>(() => {
+  //   const saved = localStorage.getItem('radio-filter-presets');
+  //   return saved ? JSON.parse(saved) : [];
+  // });
 
   // Функция для форматирования месяца (09-2025 -> Сентябрь 2025)
   const formatMonth = useCallback((monthStr: string) => {
@@ -1422,6 +1429,20 @@ const RadioAdmin: React.FC = () => {
                 }}
               >
               <Tabs.List grow>
+                <Tabs.Tab 
+                  value="dashboard" 
+                  leftSection={<IconLayoutDashboard size={20} />}
+                  className="radio-tab-item"
+                  style={{
+                    borderRadius: 'var(--radius-lg)',
+                    fontWeight: 'var(--font-weight-medium)',
+                    transition: 'var(--transition-all)',
+                    padding: 'var(--space-3) var(--space-4)',
+                    fontSize: 'var(--font-size-sm)'
+                  }}
+                >
+                  Дашборд
+                </Tabs.Tab>
                 {hasFullAccess && (
                 <Tabs.Tab 
                   value="music" 
@@ -1523,6 +1544,25 @@ const RadioAdmin: React.FC = () => {
                   background: 'linear-gradient(90deg, var(--color-primary-500), var(--color-primary-600), var(--color-primary-500))',
                   borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0'
                 }} />
+
+              {/* Дашборд */}
+              <Tabs.Panel value="dashboard">
+                <RadioDashboard
+                  stats={stats}
+                  radioStreams={radioStreams}
+                  branchesWithDevices={branchesWithDevices}
+                  statusMap={statusMap}
+                  expandedBranches={expandedBranches}
+                  onToggleBranch={toggleBranchExpansion}
+                  onExpandAll={expandAllBranches}
+                  onCollapseAll={collapseAllBranches}
+                  onCreateStream={handleCreateStream}
+                  onUploadMusic={() => setUploadModalOpen(true)}
+                  onDeviceClick={openDeviceModal}
+                  hasFullAccess={hasFullAccess}
+                  user={user}
+                />
+              </Tabs.Panel>
 
               {hasFullAccess && (
               <Tabs.Panel value="music">

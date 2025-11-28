@@ -16,10 +16,11 @@ interface HierarchyProps {
   group: DataItem;
   onDataUpdate: () => void;
   hasFullAccess?: boolean;
+  searchQuery?: string;
 }
 
 // Мемоизированный компонент для блоков иерархии
-const HierarchyBlock = React.memo(({ group, onDataUpdate, hasFullAccess = true }: HierarchyProps) => {
+const HierarchyBlock = React.memo(({ group, onDataUpdate, hasFullAccess = true, searchQuery = '' }: HierarchyProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [childCategories, setChildCategories] = useState<DataItem[]>([]);
   const [loadingChildren, setLoadingChildren] = useState(false);
@@ -61,6 +62,44 @@ const HierarchyBlock = React.memo(({ group, onDataUpdate, hasFullAccess = true }
     // Если еще не загружены, не показываем значок
     return false;
   }, [group.layer, childCategories.length, hasLoadedChildren]);
+
+  // Проверяем, содержит ли элемент или его дочерние элементы поисковый запрос
+  const matchesSearch = useMemo(() => {
+    if (!searchQuery.trim()) return false;
+    const query = searchQuery.toLowerCase();
+    // Проверяем сам элемент
+    if (group.name.toLowerCase().includes(query)) return true;
+    // Проверяем дочерние элементы
+    return childCategories.some(child => 
+      child.name.toLowerCase().includes(query)
+    );
+  }, [searchQuery, group.name, childCategories]);
+
+  // Автоматически разворачиваем, если поиск найден в дочерних элементах
+  useEffect(() => {
+    if (matchesSearch && hasChildren && !isExpanded) {
+      // Загружаем детей, если еще не загружены
+      if (!hasLoadedChildren || childCategories.length === 0) {
+        setLoadingChildren(true);
+        getHierarchyData(group.id, 1)
+          .then(children => {
+            setChildCategories(children);
+            setHasLoadedChildren(true);
+            setIsExpanded(true);
+          })
+          .catch(error => {
+            console.error('Ошибка загрузки дочерних категорий:', error);
+            setHasLoadedChildren(true);
+          })
+          .finally(() => {
+            setLoadingChildren(false);
+          });
+      } else {
+        // Если дети уже загружены, просто разворачиваем
+        setIsExpanded(true);
+      }
+    }
+  }, [matchesSearch, hasChildren, isExpanded, hasLoadedChildren, childCategories.length, group.id]);
   
   // Переменные для мониторинга открытия модалок
   const [openedEdit, setOpenedEdit] = useState(false);
@@ -127,7 +166,8 @@ const HierarchyBlock = React.memo(({ group, onDataUpdate, hasFullAccess = true }
         mb="sm"
         className={`hierarchy-block ${isSelected ? 'hierarchy-block-selected' : ''} ${isExpanded ? 'hierarchy-block-expanded' : ''}`}
         style={{ 
-          '--layer': group.layer
+          '--layer': group.layer,
+          backgroundColor: 'transparent'
         } as React.CSSProperties}
       > 
         <Group gap="xs" justify="space-between">
@@ -139,7 +179,7 @@ const HierarchyBlock = React.memo(({ group, onDataUpdate, hasFullAccess = true }
                 size="sm"
                 onClick={toggleExpanded}
                 style={{ 
-                  color: 'var(--color-primary-600)',
+                  color: 'light-dark(var(--color-primary-600), var(--color-accent-light-80))',
                   transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
                   transition: 'transform 0.2s ease'
                 }}
@@ -151,7 +191,7 @@ const HierarchyBlock = React.memo(({ group, onDataUpdate, hasFullAccess = true }
             <Button 
               onClick={handleSelect}
               variant="subtle"
-              leftSection={hasChildren ? (isExpanded ? <IconFolderOpen size={16} /> : <IconFolder size={16} />) : <IconFolder size={16} />}
+              leftSection={hasChildren ? (isExpanded ? <IconFolderOpen size={16} color="var(--color-accent-80)" /> : <IconFolder size={16} color="var(--color-accent-80)" />) : <IconFolder size={16} color="var(--color-accent-80)" />}
               size="sm"
               style={{ 
                 flex: 1,
@@ -160,7 +200,28 @@ const HierarchyBlock = React.memo(({ group, onDataUpdate, hasFullAccess = true }
                 fontWeight: 500
               }}
             > 
-              <Text size="sm" fw={500}>{group.name}</Text>
+              <Text size="sm" fw={500}>
+                {searchQuery.trim() ? (
+                  (() => {
+                    const regex = new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+                    const parts = group.name.split(regex);
+                    return parts.map((part, index) => 
+                      regex.test(part) ? (
+                        <mark key={index} style={{ 
+                          backgroundColor: 'var(--mantine-color-yellow-3)', 
+                          color: 'var(--mantine-color-dark-9)',
+                          padding: '0 2px',
+                          borderRadius: '2px'
+                        }}>
+                          {part}
+                        </mark>
+                      ) : part
+                    );
+                  })()
+                ) : (
+                  group.name
+                )}
+              </Text>
             </Button>
           </Group>
           
@@ -171,7 +232,7 @@ const HierarchyBlock = React.memo(({ group, onDataUpdate, hasFullAccess = true }
                 <ActionIcon 
                   variant="light" 
                   size="sm" 
-                  color="blue"
+                  style={{ color: 'var(--color-primary-500)' }}
                   onClick={handleAdd}
                 >
                   <IconPlus size={14} />
@@ -218,6 +279,7 @@ const HierarchyBlock = React.memo(({ group, onDataUpdate, hasFullAccess = true }
                     group={childGroup} 
                     onDataUpdate={onDataUpdate}
                     hasFullAccess={hasFullAccess}
+                    searchQuery={searchQuery}
                   />
                 ))}
               </Box>
@@ -390,8 +452,12 @@ function Hierarchy({ hasFullAccess = true, onDataUpdate }: HierarchyComponentPro
           <Button
             size="sm"
             variant="outline"
-            leftSection={<IconArrowsSort size={16} />}
+            leftSection={<IconArrowsSort size={16} color="var(--color-primary-500)" />}
             onClick={() => setOpenedSort(true)}
+            style={{ 
+              borderColor: 'var(--color-primary-500)',
+              color: 'var(--color-primary-500)'
+            }}
           >
             Сортировка
           </Button>
@@ -406,6 +472,7 @@ function Hierarchy({ hasFullAccess = true, onDataUpdate }: HierarchyComponentPro
             group={group} 
             onDataUpdate={handleDataUpdate}
             hasFullAccess={hasFullAccess}
+            searchQuery={searchQuery}
           />
         ))
       ) : (
@@ -422,7 +489,10 @@ function Hierarchy({ hasFullAccess = true, onDataUpdate }: HierarchyComponentPro
                         size="md"
                         leftSection={<IconPlus size={20} />}
                         variant="filled"
-                        color="blue"
+                        style={{ 
+                          background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
+                          color: 'white'
+                        }}
                       >
                         Добавить корневую категорию
                       </Button>
@@ -465,10 +535,12 @@ function Hierarchy({ hasFullAccess = true, onDataUpdate }: HierarchyComponentPro
             maxWidth: '100vw',
             maxHeight: '100vh',
             borderRadius: 0,
+            overflowY: 'hidden',
           },
           body: {
             height: '100vh',
             overflow: 'hidden',
+            overflowY: 'hidden',
             padding: 0,
           },
           header: {

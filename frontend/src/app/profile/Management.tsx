@@ -66,9 +66,19 @@ function Management() {
       const response = await fetch(`${API}/search/${entityType}/all`)
       const json = await response.json()
       if (response.ok) {
-        entityType === 'group' && (setGroups(json), setUsers([]), setPositions([]))
-        entityType === 'position' && (setPositions(json), setUsers([]), setGroups([]))
-        entityType === 'user' && (setUsers(json), setGroups([]), setPositions([]))
+        if (entityType === 'group') {
+          setGroups(json)
+          setUsers([])
+          setPositions([])
+        } else if (entityType === 'position') {
+          setPositions(json)
+          setUsers([])
+          // Не очищаем группы, они нужны для фильтрации
+        } else if (entityType === 'user') {
+          setUsers(json)
+          setGroups([])
+          setPositions([])
+        }
       }
     } catch (error) {
       console.error('Error fetching entities:', error)
@@ -77,17 +87,31 @@ function Management() {
     }
   }, [entityType])
 
+  // Загружаем группы для фильтрации должностей отдельно
+  const getGroups = useCallback(async () => {
+    try {
+      const response = await fetch(`${API}/search/group/all`)
+      const json = await response.json()
+      if (response.ok) {
+        setGroups(json)
+      }
+    } catch (error) {
+      console.error('Error fetching groups:', error)
+    }
+  }, [])
+
   useEffect(() => {
     getEntities()
     setCurEntity(null)
-    // Загружаем группы для фильтрации должностей
-    if (entityType === 'position') {
-      fetch(`${API}/search/group/all`)
-        .then(res => res.json())
-        .then(json => setGroups(json))
-        .catch(err => console.error('Error fetching groups:', err))
-    }
+    setSelectedGroupFilter(null) // Сбрасываем фильтр при смене типа сущности
   }, [getEntities, entityType])
+
+  // Загружаем группы для фильтрации должностей отдельно
+  useEffect(() => {
+    if (entityType === 'position') {
+      getGroups()
+    }
+  }, [entityType, getGroups])
 
   const getTools = useCallback(async (search?: string) => {
     try {
@@ -347,7 +371,7 @@ function Management() {
             {entityType === 'position' && (
               <Box style={{ flex: 1 }}>
                 <Text size="sm" fw={500} c="var(--theme-text-primary)" mb="xs">
-                  Группа должностей (фильтр)
+                  Группа должностей
                 </Text>
                 <Select 
                   data={groups.map((g: any) => ({value: g.uuid, label: g.name}))} 

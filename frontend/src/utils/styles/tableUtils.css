@@ -152,7 +152,7 @@
 
 .table-pagination .mantine-Select-input:focus {
   border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 3px var(--color-accent-10);
 }
 
 .table-pagination .mantine-Pagination-control {

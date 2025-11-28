@@ -36,12 +36,12 @@
 }
 
 .profile-tab-item:hover {
-  background: var(--theme-bg-hover);
+  background: var(--theme-hover-bg);
   transform: translateY(-1px);
 }
 
 .profile-tab-item[data-active="true"] {
-  background: linear-gradient(135deg, var(--color-blue-500), var(--color-blue-600));
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600));
   color: white;
   box-shadow: var(--theme-shadow-md);
 }
@@ -71,7 +71,7 @@
 }
 
 .profile-avatar {
-  border: 3px solid var(--color-blue-200);
+  border: 3px solid var(--color-primary-200);
   transition: var(--transition-all);
   box-shadow: var(--theme-shadow-sm);
   width: 120px;
@@ -79,7 +79,7 @@
 }
 
 .profile-avatar:hover {
-  border-color: var(--color-blue-400);
+  border-color: var(--color-primary-400);
   transform: scale(1.02);
 }
 
@@ -137,7 +137,7 @@
 }
 
 .notification-service-card:hover {
-  border-color: var(--color-blue-300);
+  border-color: var(--color-primary-300);
   box-shadow: var(--theme-shadow-sm);
 }
 
@@ -163,14 +163,14 @@
 
 /* Кнопки уведомлений */
 .connect-button {
-  background: linear-gradient(135deg, var(--color-blue-500), var(--color-blue-600));
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600));
   border: none;
   font-weight: 600;
   transition: var(--transition-all);
 }
 
 .connect-button:hover {
-  background: linear-gradient(135deg, var(--color-blue-600), var(--color-blue-700));
+  background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700));
   transform: translateY(-1px);
   box-shadow: var(--theme-shadow-md);
 }
@@ -202,21 +202,21 @@
 }
 
 .telegram-open-button {
-  background: linear-gradient(135deg, var(--color-blue-500), var(--color-blue-600));
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600));
   border: none;
   font-weight: 600;
   transition: var(--transition-all);
 }
 
 .telegram-open-button:hover {
-  background: linear-gradient(135deg, var(--color-blue-600), var(--color-blue-700));
+  background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700));
   transform: translateY(-1px);
   box-shadow: var(--theme-shadow-md);
 }
 
 .telegram-info-alert {
   border-radius: var(--radius-lg);
-  border: 1px solid var(--color-blue-200);
+  border: 1px solid var(--color-primary-200);
 }
 
 /* Модальное окно фото */
@@ -232,7 +232,7 @@
 }
 
 .photo-preview-card:hover {
-  border-color: var(--color-blue-300);
+  border-color: var(--color-primary-300);
   transform: translateY(-2px);
   box-shadow: var(--theme-shadow-sm);
 }
@@ -244,19 +244,19 @@
 }
 
 .photo-preview:hover {
-  border-color: var(--color-blue-300);
+  border-color: var(--color-primary-300);
   transform: scale(1.02);
 }
 
 .select-photo-button {
-  background: linear-gradient(135deg, var(--color-blue-500), var(--color-blue-600));
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600));
   border: none;
   font-weight: 600;
   transition: var(--transition-all);
 }
 
 .select-photo-button:hover {
-  background: linear-gradient(135deg, var(--color-blue-600), var(--color-blue-700));
+  background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700));
   transform: translateY(-1px);
   box-shadow: var(--theme-shadow-md);
 }
@@ -357,7 +357,7 @@
 }
 
 .access-select-block:hover {
-  border-color: var(--color-blue-300);
+  border-color: var(--color-primary-300);
   box-shadow: var(--theme-shadow-sm);
   transform: translateY(-1px);
 }
@@ -393,7 +393,7 @@
 }
 
 .tool-card:hover {
-  border-color: var(--color-blue-300);
+  border-color: var(--color-primary-300);
   box-shadow: var(--theme-shadow-sm);
   transform: translateY(-1px);
 }

@@ -225,7 +225,7 @@ function MerchStats() {
   };
 
   return (
-    <Stack gap="md">
+    <Stack gap="md" className="merch-stats-container">
       <Group justify="space-between" align="center">
         <Title order={2}>Статистика бота</Title>
         <Group>

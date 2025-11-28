@@ -9,7 +9,8 @@ import {
   Tabs,
   Modal,
   Image,
-  Group
+  Group,
+  Card
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconChevronLeft, IconChevronRight, IconChartBar, IconShoppingBag, IconMail, IconQrcode } from '@tabler/icons-react';
@@ -108,17 +109,31 @@ function Merch() {
             <Box p="xl">
               <Tabs defaultValue="management">
                 <Group justify="space-between" align="center" mb="md">
-                  <Tabs.List>
-                    <Tabs.Tab value="management" leftSection={<IconShoppingBag size={16} />}>
-                      Управление
-                    </Tabs.Tab>
-                    <Tabs.Tab value="stats" leftSection={<IconChartBar size={16} />}>
-                      Статистика
-                    </Tabs.Tab>
-                    <Tabs.Tab value="feedback" leftSection={<IconMail size={16} />}>
-                      Обратная связь
-                    </Tabs.Tab>
-                  </Tabs.List>
+                  <Card shadow="sm" radius="lg" p="md" className="merch-navigation" style={{ flex: 1 }}>
+                    <Tabs.List className="merch-tabs-list">
+                      <Tabs.Tab 
+                        value="management" 
+                        leftSection={<IconShoppingBag size={18} />}
+                        className="merch-tab-item"
+                      >
+                        Управление
+                      </Tabs.Tab>
+                      <Tabs.Tab 
+                        value="stats" 
+                        leftSection={<IconChartBar size={18} />}
+                        className="merch-tab-item"
+                      >
+                        Статистика
+                      </Tabs.Tab>
+                      <Tabs.Tab 
+                        value="feedback" 
+                        leftSection={<IconMail size={18} />}
+                        className="merch-tab-item"
+                      >
+                        Обратная связь
+                      </Tabs.Tab>
+                    </Tabs.List>
+                  </Card>
                   <ActionIcon 
                     variant="outline" 
                     size={35} 

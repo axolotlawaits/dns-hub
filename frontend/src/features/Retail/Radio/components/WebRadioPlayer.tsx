@@ -1994,6 +1994,7 @@ const WebRadioPlayer: React.FC<WebRadioPlayerProps> = ({
         p="xl" 
         radius="lg" 
         shadow="sm"
+        withBorder={false}
         className="web-radio-player-container"
       >
         {/* Заголовок с логотипом */}

@@ -2,6 +2,11 @@
   width: 100%;
 }
 
+/* Общие стили для всех Paper в контейнере */
+.merch-feedback-container .mantine-Paper-root {
+  transition: all 0.2s ease;
+}
+
 /* Фон для непрочитанных строк */
 .merch-feedback-container .feedback-unread-row {
   background-color: var(--mantine-color-blue-0) !important;
@@ -9,19 +14,37 @@
 
 /* Фон для непрочитанных строк в темной теме */
 [data-mantine-color-scheme="dark"] .merch-feedback-container .feedback-unread-row {
-  background-color: rgba(37, 99, 235, 0.15) !important;
+  background-color: var(--color-accent-15) !important;
 }
 
 /* Темная тема - синеватый оттенок как в карточках */
 [data-mantine-color-scheme="dark"] .merch-feedback-container .mantine-Paper-root {
-  background: linear-gradient(135deg, var(--theme-bg-elevated) 0%, rgba(59, 130, 246, 0.08) 100%);
-  border-color: var(--color-primary-700);
-  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.15), 0 1px 3px rgba(59, 130, 246, 0.1);
+  background: linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--color-accent-08) 100%);
+  border-color: var(--color-accent-30);
+  box-shadow: 0 4px 20px var(--color-accent-15), 0 1px 3px var(--color-accent-10);
 }
 
 [data-mantine-color-scheme="dark"] .merch-feedback-container .mantine-Paper-root:hover {
-  background: linear-gradient(135deg, var(--theme-bg-elevated) 0%, rgba(59, 130, 246, 0.12) 100%);
-  border-color: var(--color-primary-600);
-  box-shadow: 0 8px 25px rgba(59, 130, 246, 0.2), 0 4px 10px rgba(59, 130, 246, 0.15);
+  background: linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--color-accent-12) 100%);
+  border-color: var(--color-accent-50);
+  box-shadow: 0 8px 25px var(--color-accent-20), 0 4px 10px var(--color-accent-15);
+}
+
+/* Темная тема для Table */
+[data-mantine-color-scheme="dark"] .merch-feedback-container .mantine-Table-root {
+  background: linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--color-accent-05) 100%);
+}
+
+[data-mantine-color-scheme="dark"] .merch-feedback-container .mantine-Table-th {
+  border-color: var(--color-accent-20);
+  color: var(--color-accent-light-90);
+}
+
+[data-mantine-color-scheme="dark"] .merch-feedback-container .mantine-Table-td {
+  border-color: var(--color-accent-15);
+}
+
+[data-mantine-color-scheme="dark"] .merch-feedback-container .mantine-Table-tr:hover {
+  background: var(--color-accent-08);
 }
 

@@ -1095,28 +1095,31 @@ class MerchBotService {
       return;
     }
     
+    // Ограничение на количество фотографий (максимум 10)
+    const MAX_PHOTOS = 10;
+    if (!feedback.photos) {
+      feedback.photos = [];
+    }
+    
+    if (feedback.photos.length >= MAX_PHOTOS) {
+      await ctx.reply(`❌ Достигнуто максимальное количество фотографий (${MAX_PHOTOS}). Напишите "готово" для завершения.`);
+      return;
+    }
+    
+    const photo = ctx.message.photo[ctx.message.photo.length - 1];
+    
+    // Проверка размера файла (Telegram ограничение: 20MB для фото)
+    const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+    if (photo.file_size && photo.file_size > MAX_FILE_SIZE) {
+      await ctx.reply('❌ Фотография слишком большая (максимум 20MB). Пожалуйста, отправьте фотографию меньшего размера:');
+      return;
+    }
+    
+    let file;
+    let fileUrl: string | undefined;
+    
     try {
-      // Ограничение на количество фотографий (максимум 10)
-      const MAX_PHOTOS = 10;
-      if (!feedback.photos) {
-        feedback.photos = [];
-      }
-      
-      if (feedback.photos.length >= MAX_PHOTOS) {
-        await ctx.reply(`❌ Достигнуто максимальное количество фотографий (${MAX_PHOTOS}). Напишите "готово" для завершения.`);
-        return;
-      }
-      
-      const photo = ctx.message.photo[ctx.message.photo.length - 1];
-      
-      // Проверка размера файла (Telegram ограничение: 20MB для фото)
-      const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
-      if (photo.file_size && photo.file_size > MAX_FILE_SIZE) {
-        await ctx.reply('❌ Фотография слишком большая (максимум 20MB). Пожалуйста, отправьте фотографию меньшего размера:');
-        return;
-      }
-      
-      const file = await ctx.api.getFile(photo.file_id);
+      file = await ctx.api.getFile(photo.file_id);
       
       if (!file.file_path) {
         await ctx.reply('❌ Ошибка получения информации о фотографии.');
@@ -1124,8 +1127,7 @@ class MerchBotService {
       }
       
       // Скачиваем файл из Telegram
-      const fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
-      
+      fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
       let response;
       try {
         response = await axios.get(fileUrl, {
@@ -1150,9 +1152,17 @@ class MerchBotService {
       
       const buffer = Buffer.from(response.data);
       
+      // Проверяем, что buffer не пустой
+      if (!buffer || buffer.length === 0) {
+        throw new Error('Получен пустой буфер от Telegram API');
+      }
+      
+      console.log(`📥 Получен файл из Telegram: ${file.file_path}, размер: ${buffer.length} байт`);
+      
       // Создаем директорию для feedback фотографий, если её нет
       const feedbackDir = path.join(process.cwd(), 'public', 'feedback');
       if (!fs.existsSync(feedbackDir)) {
+        console.log(`📁 Создаем директорию для фотографий: ${feedbackDir}`);
         fs.mkdirSync(feedbackDir, { recursive: true });
       }
       
@@ -1163,10 +1173,29 @@ class MerchBotService {
       const filePath = path.join(feedbackDir, fileName);
       
       // Сохраняем файл
-      fs.writeFileSync(filePath, buffer);
+      try {
+        fs.writeFileSync(filePath, buffer);
+        console.log(`✅ Фотография успешно сохранена на сервер: ${filePath}`);
+        
+        // Проверяем, что файл действительно сохранен
+        if (!fs.existsSync(filePath)) {
+          throw new Error(`Файл не был сохранен: ${filePath}`);
+        }
+        
+        const stats = fs.statSync(filePath);
+        console.log(`📊 Размер сохраненного файла: ${stats.size} байт`);
+        
+        if (stats.size === 0) {
+          throw new Error(`Сохраненный файл пустой: ${filePath}`);
+        }
+      } catch (writeError: any) {
+        console.error(`❌ Ошибка записи файла на диск:`, writeError);
+        throw new Error(`Не удалось сохранить файл на сервер: ${writeError.message}`);
+      }
       
       // Сохраняем имя файла в сессии
       feedback.photos.push(fileName);
+      console.log(`💾 Фотография добавлена в сессию. Всего фотографий: ${feedback.photos.length}`);
       
       const remaining = MAX_PHOTOS - feedback.photos.length;
       if (remaining > 0) {
@@ -1176,9 +1205,12 @@ class MerchBotService {
       }
     } catch (error: any) {
       // Более детальная обработка ошибок
-      if (error.response?.status === 404) {
-        console.warn(`⚠️ Файл не найден в Telegram API: ${error.config?.url}`);
+      // Проверяем, является ли это ошибкой 404 (может попасть сюда, если не была обработана в первом catch)
+      const errorUrl = error.config?.url || fileUrl || 'unknown';
+      if (error.response?.status === 404 || error.status === 404 || (error.message && error.message.includes('404'))) {
+        console.warn(`⚠️ Файл не найден в Telegram API: ${errorUrl}. Файл мог быть удален или недоступен.`);
         await ctx.reply('❌ Фотография недоступна в Telegram (файл не найден). Пожалуйста, отправьте фотографию заново или напишите "готово":');
+        return; // Выходим, чтобы не логировать как ошибку
       } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
         console.error('⏱️ Таймаут при загрузке фотографии из Telegram:', error.message);
         await ctx.reply('❌ Превышено время ожидания при загрузке фотографии. Пожалуйста, попробуйте еще раз или напишите "готово":');
@@ -1186,6 +1218,7 @@ class MerchBotService {
         console.error('🔴 Ошибка сервера Telegram при загрузке фотографии:', error.response?.status, error.message);
         await ctx.reply('❌ Временная ошибка сервера Telegram. Пожалуйста, попробуйте еще раз позже или напишите "готово":');
       } else {
+        // Логируем только если это не 404
         console.error('❌ Ошибка обработки фотографии:', {
           message: error.message,
           status: error.response?.status,

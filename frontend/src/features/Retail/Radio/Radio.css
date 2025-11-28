@@ -56,6 +56,12 @@
   background: transparent;
   border: none;
   padding: var(--space-2);
+  gap: var(--space-2);
+}
+
+.radio-tabs-list::after,
+.radio-tabs-list::before {
+  display: none !important;
 }
 
 .radio-tab-item {
@@ -67,6 +73,13 @@
   color: var(--theme-text-primary);
   position: relative;
   overflow: hidden;
+  margin: 0 var(--space-1);
+  border-bottom: none !important;
+}
+
+.radio-tab-item::after,
+.radio-tab-item::before {
+  display: none !important;
 }
 
 .radio-tab-item::before {
@@ -88,27 +101,27 @@
   background: var(--theme-hover-bg);
   transform: translateY(-1px);
   box-shadow: var(--theme-shadow-sm);
-  border-color: var(--color-primary-200);
 }
 
 .radio-tab-item[data-active="true"] {
   background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600));
-  color: var(--theme-text-inverse);
-  box-shadow: var(--theme-shadow-md);
+  color: white;
+  box-shadow: 0 4px 12px var(--color-accent-30);
   font-weight: var(--font-weight-semibold);
-  border: 1px solid var(--color-primary-400);
+  border: none;
 }
 
 .radio-tab-item[data-active="true"]:hover {
   background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700));
   transform: translateY(-2px);
-  box-shadow: var(--theme-shadow-lg);
+  box-shadow: 0 6px 16px var(--color-accent-40);
 }
 
 .radio-tab-item[data-active="false"] {
   color: var(--theme-text-secondary);
   background: transparent;
-  border: 1px solid transparent;
+  border: none;
+  margin: 0 var(--space-1);
 }
 
 /* === КОНТЕНТ ВКЛАДОК === */

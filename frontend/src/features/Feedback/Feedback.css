@@ -38,6 +38,6 @@
 
 /* Фон для непрочитанных строк в темной теме */
 [data-mantine-color-scheme="dark"] .feedback-container .feedback-unread-row {
-  background-color: rgba(37, 99, 235, 0.15) !important;
+  background-color: var(--color-accent-dark-15) !important;
 }
 
