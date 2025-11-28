@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
-import {Container,Title,Paper,Text,Button,Group,Stack,Modal,LoadingOverlay, Tabs, Box, Progress, Badge} from '@mantine/core';
+import {Container,Title,Paper,Text,Button,Group,Stack,Modal,LoadingOverlay, Tabs, Box, Progress, Badge, TextInput, Select} from '@mantine/core';
 import { TimeInput } from '@mantine/dates';
-import {  IconUpload,  IconMusic,  IconClock,  IconDeviceMobile,  IconBuilding, IconEdit, IconCheck, IconRefresh, IconPower, IconBattery, IconWifi, IconCalendar, IconPlayerPlay, IconPlayerPause, IconWifiOff, IconX, IconRadio, IconDownload, IconAlertCircle, IconChevronDown, IconChevronRight, IconChevronsDown, IconChevronsUp, IconSearch, IconTrash, IconQrcode, IconLayoutDashboard } from '@tabler/icons-react';
+import {  IconUpload,  IconMusic,  IconClock,  IconDeviceMobile,  IconBuilding, IconEdit, IconCheck, IconRefresh, IconPower, IconBattery, IconWifi, IconCalendar, IconPlayerPlay, IconPlayerPause, IconWifiOff, IconX, IconRadio, IconDownload, IconAlertCircle, IconChevronDown, IconChevronRight, IconChevronsDown, IconChevronsUp, IconSearch, IconTrash, IconQrcode, IconLayoutDashboard, IconFilter, IconPlus } from '@tabler/icons-react';
 import { notificationSystem } from '../../../utils/Push';
 import { API } from '../../../config/constants';
 import { DynamicFormModal, FormField } from '../../../utils/formModal';
 import { DndProviderWrapper } from '../../../utils/dnd';
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
-import { decodeRussianFileName } from '../../../utils/format';
+import { decodeRussianFileName, formatMonthFolder } from '../../../utils/format';
 import { useUserContext } from '../../../hooks/useUserContext';
 import { useAccessContext } from '../../../hooks/useAccessContext';
 import { FilterGroup } from '../../../utils/filter';
@@ -72,6 +72,8 @@ interface Stats {
   totalDevices: number;
   activeDevices: number;
   totalBranches: number;
+  storesCount?: number;
+  discountCentersCount?: number;
   totalMusicFiles: number;
 }
 
@@ -138,6 +140,21 @@ const RadioAdmin: React.FC = () => {
 
   // Состояние для фильтров устройств (для FilterGroup)
   const [deviceColumnFilters, setDeviceColumnFilters] = useState<any[]>([]);
+
+  // Состояние для фильтров потоков
+  const [streamSearchQuery, setStreamSearchQuery] = useState<string>('');
+  const [streamFilterActive, setStreamFilterActive] = useState<string>('all'); // 'all', 'active', 'inactive'
+  const [streamFilterType, setStreamFilterType] = useState<string>('all'); // 'all' или конкретный тип
+
+  // Состояние для списка песен
+  const [musicFiles, setMusicFiles] = useState<Array<{
+    name: string;
+    size: number;
+    created: string;
+    modified: string;
+    path: string;
+  }>>([]);
+  const [loadingMusicFiles, setLoadingMusicFiles] = useState(false);
 
   
   // Device Management Modal
@@ -233,9 +250,12 @@ const RadioAdmin: React.FC = () => {
   // Состояние активной вкладки
   const [activeTab, setActiveTab] = useState<string>(() => {
     if (hasReadOnlyAccess) {
-      return "dashboard"; // Для пользователей с доступом только для чтения показываем дашборд
+      return "devices"; // Для пользователей с доступом только для чтения показываем устройства
     }
-    return "dashboard"; // По умолчанию показываем дашборд
+    if (hasFullAccess) {
+      return "dashboard"; // Для полного доступа показываем дашборд
+    }
+    return "devices"; // По умолчанию показываем устройства
   });
   
   // Состояние для сохранения пресетов фильтров (будет использовано позже)
@@ -378,9 +398,33 @@ const RadioAdmin: React.FC = () => {
     });
   }, [currentBranchDevices, deviceColumnFilters, statusMap, hasFullAccess]);
 
-  // Группировка потоков по типам филиалов
+  // Фильтрация и группировка потоков
   const streamsByType = useMemo(() => {
-    const grouped = radioStreams.reduce((acc, stream) => {
+    // Применяем фильтры
+    let filtered = radioStreams.filter(stream => {
+      // Поиск по названию
+      if (streamSearchQuery) {
+        const query = streamSearchQuery.toLowerCase();
+        if (!stream.name.toLowerCase().includes(query) && 
+            !stream.branchTypeOfDist.toLowerCase().includes(query)) {
+          return false;
+        }
+      }
+      
+      // Фильтр по активности
+      if (streamFilterActive === 'active' && !stream.isActive) return false;
+      if (streamFilterActive === 'inactive' && stream.isActive) return false;
+      
+      // Фильтр по типу филиала
+      if (streamFilterType !== 'all' && stream.branchTypeOfDist !== streamFilterType) {
+        return false;
+      }
+      
+      return true;
+    });
+
+    // Группируем по типам
+    const grouped = filtered.reduce((acc, stream) => {
       const type = stream.branchTypeOfDist || 'Неизвестный тип';
       if (!acc[type]) {
         acc[type] = [];
@@ -402,7 +446,23 @@ const RadioAdmin: React.FC = () => {
     });
 
     return grouped;
+  }, [radioStreams, streamSearchQuery, streamFilterActive, streamFilterType]);
+
+  // Уникальные типы филиалов для фильтра
+  const uniqueBranchTypes = useMemo(() => {
+    const types = new Set(radioStreams.map(s => s.branchTypeOfDist).filter(Boolean));
+    return Array.from(types).sort();
   }, [radioStreams]);
+
+  // Статистика потоков
+  const streamsStats = useMemo(() => {
+    const total = radioStreams.length;
+    const active = radioStreams.filter(s => s.isActive).length;
+    const inactive = total - active;
+    const filtered = Object.values(streamsByType).flat().length;
+    
+    return { total, active, inactive, filtered };
+  }, [radioStreams, streamsByType]);
 
   // Проверка состояния музыки
   const musicStatus = useMemo(() => {
@@ -437,6 +497,43 @@ const RadioAdmin: React.FC = () => {
       daysUntilNextMonth: shouldWarn ? daysUntilNextMonth : 0
     };
   }, [stats]);
+
+  // Загрузка списка песен текущего месяца
+  const loadMusicFiles = useCallback(async () => {
+    if (!musicStatus) return;
+    
+    const folderName = musicStatus.shouldWarn 
+      ? musicStatus.nextMonthFolder 
+      : musicStatus.currentMonthFolder;
+    
+    if (!folderName) return;
+    
+    setLoadingMusicFiles(true);
+    try {
+      const response = await axios.get(`${API_BASE}/folder/${folderName}/music`);
+      if (response.data.success) {
+        setMusicFiles(response.data.files || []);
+      } else {
+        setMusicFiles([]);
+      }
+    } catch (error: any) {
+      console.error('Ошибка загрузки списка песен:', error);
+      setMusicFiles([]);
+      // Если папка не найдена, это нормально - просто нет файлов
+      if (error.response?.status !== 404) {
+        notificationSystem.addNotification('Ошибка', 'Не удалось загрузить список песен', 'error');
+      }
+    } finally {
+      setLoadingMusicFiles(false);
+    }
+  }, [musicStatus, API_BASE]);
+
+  // Загружаем список песен при изменении месяца или открытии вкладки
+  useEffect(() => {
+    if (activeTab === 'music' && musicStatus) {
+      loadMusicFiles();
+    }
+  }, [activeTab, musicStatus, loadMusicFiles]);
 
 
 
@@ -625,7 +722,8 @@ const RadioAdmin: React.FC = () => {
   // Функция для удаления устройства
   const deleteDevice = useCallback(async (deviceId: string) => {
     try {
-      await axios.delete(`${API_BASE}/device/${deviceId}`);
+      // Используем общий API для устройств, а не /radio/device
+      await axios.delete(`${API}/device/${deviceId}`);
       notificationSystem.addNotification('Успешно', 'Устройство успешно удалено', 'success');
       // Перезагружаем данные - будет определена позже
       window.location.reload();
@@ -714,6 +812,8 @@ const RadioAdmin: React.FC = () => {
         totalDevices: sd.totalDevices ?? 0,
         activeDevices: sd.activeDevices ?? 0,
         totalBranches: sd.totalBranches ?? 0,
+        storesCount: sd.storesCount ?? 0,
+        discountCentersCount: sd.discountCentersCount ?? 0,
         totalMusicFiles: sd.totalMusicFiles ?? 0
       });
 
@@ -1040,15 +1140,8 @@ const RadioAdmin: React.FC = () => {
 
   // Устанавливаем заголовок страницы
   useEffect(() => {
-    let accessType = '';
-    if (hasFullAccess) {
-      accessType = ' (Полный доступ)';
-    } else if (hasReadOnlyAccess) {
-      accessType = ' (Только чтение)';
-    }
-    
-    setHeader({
-      title: `Админ панель DNS Radio${accessType}`,
+   setHeader({
+      title: `Админ панель DNS Radio`,
       subtitle: hasFullAccess 
         ? 'Управление радио потоками и устройствами' 
         : 'Просмотр устройств вашего филиала'
@@ -1429,6 +1522,7 @@ const RadioAdmin: React.FC = () => {
                 }}
               >
               <Tabs.List grow>
+                {hasFullAccess && (
                 <Tabs.Tab 
                   value="dashboard" 
                   leftSection={<IconLayoutDashboard size={20} />}
@@ -1443,6 +1537,7 @@ const RadioAdmin: React.FC = () => {
                 >
                   Дашборд
                 </Tabs.Tab>
+                )}
                 {hasFullAccess && (
                 <Tabs.Tab 
                   value="music" 
@@ -1545,7 +1640,8 @@ const RadioAdmin: React.FC = () => {
                   borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0'
                 }} />
 
-              {/* Дашборд */}
+              {/* Дашборд - только для полного доступа */}
+              {hasFullAccess && (
               <Tabs.Panel value="dashboard">
                 <RadioDashboard
                   stats={stats}
@@ -1559,152 +1655,17 @@ const RadioAdmin: React.FC = () => {
                   onCreateStream={handleCreateStream}
                   onUploadMusic={() => setUploadModalOpen(true)}
                   onDeviceClick={openDeviceModal}
+                  onAddDevice={() => setQrProvisionModalOpen(true)}
                   hasFullAccess={hasFullAccess}
                   user={user}
+                  musicStatus={musicStatus}
                 />
               </Tabs.Panel>
+              )}
 
               {hasFullAccess && (
               <Tabs.Panel value="music">
               <Stack gap="md">
-                {/* Статистика музыки */}
-            {stats && (
-                    <div style={{
-                    display: 'grid', 
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
-                    gap: 'var(--space-4)',
-                    marginBottom: 'var(--space-4)'
-                  }}>
-                    <Paper 
-                      p="md" 
-                      radius="lg" 
-                      shadow="sm"
-                      className="radio-stats-card"
-                      style={{
-                        background: 'var(--theme-bg-elevated)',
-                        border: '1px solid var(--theme-border)',
-                        backdropFilter: 'blur(8px)',
-                        WebkitBackdropFilter: 'blur(8px)',
-                        position: 'relative',
-                        overflow: 'hidden',
-                        transition: 'var(--transition-all)'
-                      }}
-                    >
-                      {/* Декоративная полоса */}
-                      <div style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        height: '3px',
-                        background: 'linear-gradient(90deg, var(--color-primary-500), var(--color-primary-600))',
-                        borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0'
-                      }} />
-                      
-                      <Group gap="lg">
-                        <div style={{
-                          width: '56px',
-                          height: '56px',
-                          borderRadius: 'var(--radius-lg)',
-                          background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
-                      display: 'flex',
-                      alignItems: 'center',
-                          justifyContent: 'center',
-                          boxShadow: 'var(--theme-shadow-md)'
-                    }}>
-                          <IconMusic size={28} color="white" />
-                    </div>
-                    <div>
-                          <Text 
-                            size="sm" 
-                            fw={500}
-                            style={{ 
-                              color: 'var(--theme-text-secondary)',
-                              marginBottom: 'var(--space-1)'
-                            }}
-                          >
-                            Музыкальных файлов
-                          </Text>
-                          <Text 
-                            size="xl" 
-                            fw={700}
-                            style={{ 
-                              color: 'var(--theme-text-primary)',
-                              fontSize: 'var(--font-size-xl)'
-                            }}
-                          >
-                            {stats.totalMusicFiles}
-                          </Text>
-                    </div>
-                  </Group>
-                    </Paper>
-                    
-                    <Paper 
-                      p="md" 
-                      radius="lg" 
-                      shadow="sm"
-                      className="radio-stats-card"
-                      style={{
-                        background: 'var(--theme-bg-elevated)',
-                        border: '1px solid var(--theme-border)',
-                        backdropFilter: 'blur(8px)',
-                        WebkitBackdropFilter: 'blur(8px)',
-                        position: 'relative',
-                        overflow: 'hidden',
-                        transition: 'var(--transition-all)'
-                      }}
-                    >
-                      {/* Декоративная полоса */}
-                    <div style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        height: '3px',
-                        background: 'linear-gradient(90deg, var(--color-warning), #f59e0b)',
-                        borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0'
-                      }} />
-                      
-                      <Group gap="lg">
-                        <div style={{
-                          width: '56px',
-                          height: '56px',
-                          borderRadius: 'var(--radius-lg)',
-                          background: 'linear-gradient(135deg, var(--color-warning), #f59e0b)',
-                      display: 'flex',
-                      alignItems: 'center',
-                          justifyContent: 'center',
-                          boxShadow: 'var(--theme-shadow-md)'
-                    }}>
-                          <IconBuilding size={28} color="white" />
-                    </div>
-                    <div>
-                          <Text 
-                            size="sm" 
-                            fw={500}
-                            style={{ 
-                              color: 'var(--theme-text-secondary)',
-                              marginBottom: 'var(--space-1)'
-                            }}
-                          >
-                            Филиалов
-                          </Text>
-                          <Text 
-                            size="xl" 
-                            fw={700}
-                            style={{ 
-                              color: 'var(--theme-text-primary)',
-                              fontSize: 'var(--font-size-xl)'
-                            }}
-                          >
-                            {stats.totalBranches}
-                          </Text>
-                    </div>
-                  </Group>
-                    </Paper>
-                </div>
-                )}
-
                 {/* Секция загрузки музыки */}
                 <Paper 
                   p="md" 
@@ -1781,6 +1742,133 @@ const RadioAdmin: React.FC = () => {
                   </Button>
                 </Group>
                 </Paper>
+
+                {/* Список песен текущего месяца */}
+                <Paper 
+                  p="md" 
+                  radius="lg" 
+                  shadow="sm"
+                  style={{
+                    background: 'var(--theme-bg-elevated)',
+                    border: '1px solid var(--theme-border)'
+                  }}
+                >
+                  <Group justify="space-between" mb="md">
+                    <div>
+                      <Title order={4} c="var(--theme-text-primary)">
+                        Список музыкальных файлов
+                      </Title>
+                      <Text size="sm" c="var(--theme-text-secondary)" mt="xs">
+                        {musicStatus && (
+                          <>Папка: {formatMonthFolder(musicStatus.shouldWarn ? (musicStatus.nextMonthFolder || '') : (musicStatus.currentMonthFolder || ''))}</>
+                        )}
+                      </Text>
+                    </div>
+                    <Button
+                      variant="subtle"
+                      size="sm"
+                      leftSection={<IconRefresh size={16} />}
+                      onClick={loadMusicFiles}
+                      loading={loadingMusicFiles}
+                    >
+                      Обновить
+                    </Button>
+                  </Group>
+
+                  {loadingMusicFiles ? (
+                    <Stack align="center" py="xl">
+                      <LoadingOverlay visible={true} />
+                      <Text size="sm" c="var(--theme-text-secondary)">
+                        Загрузка списка песен...
+                      </Text>
+                    </Stack>
+                  ) : musicFiles.length > 0 ? (
+                    <Stack gap="sm">
+                      {musicFiles.map((file, index) => {
+                        const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                        const createdDate = new Date(file.created).toLocaleDateString('ru-RU', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        });
+                        
+                        return (
+                          <Paper
+                            key={index}
+                            p="sm"
+                            radius="md"
+                            style={{
+                              background: 'var(--theme-bg-primary)',
+                              border: '1px solid var(--theme-border)',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.transform = 'translateX(4px)';
+                              e.currentTarget.style.boxShadow = 'var(--theme-shadow-sm)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = 'translateX(0)';
+                              e.currentTarget.style.boxShadow = 'none';
+                            }}
+                          >
+                            <Group justify="space-between" align="center">
+                              <Group gap="md" style={{ flex: 1 }}>
+                                <div style={{
+                                  width: '40px',
+                                  height: '40px',
+                                  borderRadius: 'var(--radius-md)',
+                                  background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center'
+                                }}>
+                                  <IconMusic size={20} color="white" />
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <Text 
+                                    fw={500} 
+                                    size="sm" 
+                                    c="var(--theme-text-primary)"
+                                    style={{
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap'
+                                    }}
+                                  >
+                                    {decodeRussianFileName(file.name)}
+                                  </Text>
+                                  <Group gap="md" mt={4}>
+                                    <Text size="xs" c="var(--theme-text-secondary)">
+                                      {fileSizeMB} МБ
+                                    </Text>
+                                    <Text size="xs" c="var(--theme-text-tertiary)">
+                                      Загружен: {createdDate}
+                                    </Text>
+                                  </Group>
+                                </div>
+                              </Group>
+                              <Badge variant="light" color="blue" size="sm">
+                                {file.name.split('.').pop()?.toUpperCase()}
+                              </Badge>
+                            </Group>
+                          </Paper>
+                        );
+                      })}
+                    </Stack>
+                  ) : (
+                    <Stack align="center" py="xl">
+                      <IconMusic size={48} style={{ color: 'var(--theme-text-tertiary)', opacity: 0.5 }} />
+                      <Text size="sm" c="var(--theme-text-secondary)" ta="center">
+                        В текущей папке нет музыкальных файлов
+                      </Text>
+                      <Text size="xs" c="var(--theme-text-tertiary)" ta="center" mt="xs">
+                        Загрузите MP3 файлы, чтобы они появились в списке
+                      </Text>
+                    </Stack>
+                  )}
+                </Paper>
               </Stack>
               </Tabs.Panel>
               )}
@@ -1788,6 +1876,7 @@ const RadioAdmin: React.FC = () => {
               {hasFullAccess && (
               <Tabs.Panel value="streams">
               <Stack gap="md">
+                {/* Заголовок и статистика */}
                 <Group justify="space-between" mb="md">
                   <div>
                   <Title 
@@ -1806,19 +1895,23 @@ const RadioAdmin: React.FC = () => {
                       <IconRadio size={24} />
                     Радио потоки
                     </Title>
-                    <Text 
-                      size="sm"
-                      style={{ 
-                        color: 'var(--theme-text-secondary)',
-                        fontWeight: 'var(--font-weight-medium)'
-                      }}
-                    >
-                      Управление радио потоками для различных типов филиалов
-                    </Text>
+                    <Group gap="md" mt="xs">
+                      <Badge size="lg" variant="light" color="blue">
+                        Всего: {streamsStats.total}
+                      </Badge>
+                      <Badge size="lg" variant="light" color="green">
+                        Активных: {streamsStats.active}
+                      </Badge>
+                      {streamsStats.filtered !== streamsStats.total && (
+                        <Badge size="lg" variant="light" color="gray">
+                          Найдено: {streamsStats.filtered}
+                        </Badge>
+                      )}
+                    </Group>
                   </div>
                   <Button 
                     onClick={handleCreateStream}
-                    leftSection={<IconMusic size={20} />}
+                    leftSection={<IconPlus size={20} />}
                     className="radio-action-button"
                     size="lg"
                     style={{
@@ -1833,8 +1926,68 @@ const RadioAdmin: React.FC = () => {
                     Добавить поток
                   </Button>
                 </Group>
+
+                {/* Поиск и фильтры */}
+                <Paper 
+                  p="md" 
+                  radius="lg" 
+                  shadow="sm"
+                  style={{
+                    background: 'var(--theme-bg-elevated)',
+                    border: '1px solid var(--theme-border)'
+                  }}
+                >
+                  <Group gap="md" align="flex-end">
+                    <TextInput
+                      placeholder="Поиск по названию или типу филиала..."
+                      leftSection={<IconSearch size={16} />}
+                      value={streamSearchQuery}
+                      onChange={(e) => setStreamSearchQuery(e.target.value)}
+                      style={{ flex: 1 }}
+                      size="md"
+                    />
+                    <Select
+                      placeholder="Статус"
+                      leftSection={<IconFilter size={16} />}
+                      value={streamFilterActive}
+                      onChange={(value) => setStreamFilterActive(value || 'all')}
+                      data={[
+                        { value: 'all', label: 'Все потоки' },
+                        { value: 'active', label: 'Только активные' },
+                        { value: 'inactive', label: 'Только неактивные' }
+                      ]}
+                      size="md"
+                      style={{ width: 200 }}
+                    />
+                    <Select
+                      placeholder="Тип филиала"
+                      leftSection={<IconBuilding size={16} />}
+                      value={streamFilterType}
+                      onChange={(value) => setStreamFilterType(value || 'all')}
+                      data={[
+                        { value: 'all', label: 'Все типы' },
+                        ...uniqueBranchTypes.map(type => ({ value: type, label: type }))
+                      ]}
+                      size="md"
+                      style={{ width: 200 }}
+                    />
+                    {(streamSearchQuery || streamFilterActive !== 'all' || streamFilterType !== 'all') && (
+                      <Button
+                        variant="subtle"
+                        size="md"
+                        onClick={() => {
+                          setStreamSearchQuery('');
+                          setStreamFilterActive('all');
+                          setStreamFilterType('all');
+                        }}
+                      >
+                        Сбросить
+                      </Button>
+                    )}
+                  </Group>
+                </Paper>
                 
-                {radioStreams.length > 0 ? (
+                {Object.keys(streamsByType).length > 0 ? (
                   <Stack gap="xl">
                     {Object.entries(streamsByType).map(([type, streams]) => (
                       <div key={type}>

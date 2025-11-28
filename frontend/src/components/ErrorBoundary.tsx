@@ -69,19 +69,25 @@ export class ErrorBoundary extends Component<Props, State> {
               color="red"
               variant="light"
             >
-              <Text size="sm" mb="md">
+              <Text size="sm" mb="md" c="var(--theme-text-primary)">
                 Что-то пошло не так. Попробуйте обновить страницу или обратитесь к администратору.
               </Text>
               
               {process.env.NODE_ENV === 'development' && this.state.error && (
                 <details style={{ marginTop: '1rem' }}>
-                  <summary style={{ cursor: 'pointer', fontWeight: 'bold' }}>
+                  <summary style={{ 
+                    cursor: 'pointer', 
+                    fontWeight: 'bold',
+                    color: 'var(--theme-text-primary)'
+                  }}>
                     Детали ошибки (только в разработке)
                   </summary>
                   <pre style={{ 
                     marginTop: '0.5rem', 
                     padding: '0.5rem', 
-                    backgroundColor: '#f5f5f5', 
+                    backgroundColor: 'var(--theme-bg-primary)', 
+                    color: 'var(--theme-text-primary)',
+                    border: '1px solid var(--theme-border)',
                     borderRadius: '4px',
                     fontSize: '12px',
                     overflow: 'auto'

@@ -611,16 +611,35 @@ export const getDevicesStats = async (req: Request, res: Response) => {
     }
 
     // Параллельные запросы к базе данных
-    const [totalDevices, totalBranches, topBranches] = await Promise.all([
+    const [totalDevices, totalBranches, storesCount, discountCentersCount, topBranches] = await Promise.all([
       prisma.devices.count(),
+      // Общее количество филиалов - только Магазин и Дисконт центр
       prisma.branch.count({
-        where: { status: { in: [0, 1] } } // Только филиалы со статусом 0 или 1
+        where: { 
+          status: { in: [0, 1] }, // Только филиалы со статусом 0 или 1
+          type: { in: ['Магазин', 'Дисконт центр'] } // Только нужные типы (используем поле type)
+        }
+      }),
+      // Количество магазинов
+      prisma.branch.count({
+        where: { 
+          status: { in: [0, 1] },
+          type: 'Магазин' // Используем поле type
+        }
+      }),
+      // Количество дисконт-центров
+      prisma.branch.count({
+        where: { 
+          status: { in: [0, 1] },
+          type: 'Дисконт центр' // Используем поле type
+        }
       }),
       prisma.branch.findMany({
-        select: { name: true, typeOfDist: true, _count: { select: { devices: true } } },
+        select: { name: true, type: true, _count: { select: { devices: true } } },
         where: { 
           devices: { some: {} },
-          status: { in: [0, 1] } // Только филиалы со статусом 0 или 1
+          status: { in: [0, 1] }, // Только филиалы со статусом 0 или 1
+          type: { in: ['Магазин', 'Дисконт центр'] } // Только нужные типы (используем поле type)
         },
         orderBy: { devices: { _count: 'desc' } },
         take: 5
@@ -642,7 +661,15 @@ export const getDevicesStats = async (req: Request, res: Response) => {
     // Асинхронный подсчет файлов
     const totalMusicFiles = await countMusicFilesAsync();
     
-    const data = { totalDevices, activeDevices, totalBranches, totalMusicFiles, topBranches };
+    const data = { 
+      totalDevices, 
+      activeDevices, 
+      totalBranches, // Только Магазин + Дисконт центр
+      storesCount, // Количество магазинов
+      discountCentersCount, // Количество дисконт-центров
+      totalMusicFiles, 
+      topBranches 
+    };
     
     // Кэшируем результат
     statsCache.set(cacheKey, { data, timestamp: Date.now() });

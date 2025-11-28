@@ -92,3 +92,28 @@ export const formatValue = (key: string, value: number): string => {
   }
   return value.toString();
 };
+
+/**
+ * Форматирует название папки месяца из формата "12-2025" в "Декабрь 2025"
+ * @param folderName - название папки в формате "MM-YYYY" или пустая строка
+ * @returns отформатированное название или "текущий месяц" если пусто
+ */
+export const formatMonthFolder = (folderName: string): string => {
+  if (!folderName) return 'текущий месяц';
+  const parts = folderName.split('-');
+  if (parts.length !== 2) return folderName;
+  
+  const month = parseInt(parts[0], 10);
+  const year = parts[1];
+  
+  const monthNames = [
+    'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+    'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+  ];
+  
+  if (month >= 1 && month <= 12) {
+    return `${monthNames[month - 1]} ${year}`;
+  }
+  
+  return folderName;
+};
