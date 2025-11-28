@@ -451,7 +451,30 @@ function Hierarchy({ hasFullAccess = true, onDataUpdate }: HierarchyComponentPro
         opened={openedSort}
         onClose={() => setOpenedSort(false)}
         title="Сортировка иерархии и карточек"
-        size="xl"
+        width="100vw"
+        height="100vh"
+        maxWidth="100vw"
+        maxHeight="100vh"
+        centered={false}
+        zIndex={10000}
+        styles={{
+          content: {
+            margin: 0,
+            width: '100vw',
+            height: '100vh',
+            maxWidth: '100vw',
+            maxHeight: '100vh',
+            borderRadius: 0,
+          },
+          body: {
+            height: '100vh',
+            overflow: 'hidden',
+            padding: 0,
+          },
+          header: {
+            borderRadius: 0,
+          }
+        }}
         icon={<IconArrowsSort size={20} />}
       >
         <HierarchySortModal

@@ -60,7 +60,9 @@ function MerchFeedbackComponent() {
       const data = await fetchMerchFeedback(page, limit, isReadFilter);
       setFeedbacks(data.feedbacks);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Неизвестная ошибка');
+      const errorMessage = err instanceof Error ? err.message : 'Неизвестная ошибка';
+      setError(errorMessage);
+      console.error('Ошибка загрузки обратной связи:', err);
     } finally {
       setLoading(false);
     }
@@ -71,7 +73,8 @@ function MerchFeedbackComponent() {
       const statsData = await fetchMerchFeedbackStats();
       setStats(statsData);
     } catch (err) {
-      console.error('Ошибка загрузки статистики:', err);
+      console.error('Ошибка загрузки статистики обратной связи:', err);
+      // Не устанавливаем error, чтобы не блокировать основной интерфейс
     }
   };
 

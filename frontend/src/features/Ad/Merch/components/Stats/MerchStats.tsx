@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Paper,
   Text,
@@ -44,7 +44,7 @@ function MerchStats() {
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [sendToAll, setSendToAll] = useState(false);
   const [users, setUsers] = useState<BotUser[]>([]);
-  const [, setLoadingUsers] = useState(false);
+  const [loadingUsers, setLoadingUsers] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<{ success: number; failed: number; errors: Array<{ userId: number; error: string }> } | null>(null);
 
@@ -143,11 +143,17 @@ function MerchStats() {
     } catch (err) {
       console.error('Ошибка отправки сообщения:', err);
       const totalUsers = sendToAll ? users.length : selectedUsers.length;
+      const errorUsers = sendToAll 
+        ? users 
+        : selectedUsers
+            .map(id => users.find(u => u.userId.toString() === id))
+            .filter((user): user is BotUser => user !== undefined);
+      
       setSendResult({
         success: 0,
         failed: totalUsers,
-        errors: (sendToAll ? users : selectedUsers.map(id => users.find(u => u.userId.toString() === id))).map(user => ({ 
-          userId: user?.userId || 0, 
+        errors: errorUsers.map(user => ({ 
+          userId: user.userId, 
           error: err instanceof Error ? err.message : 'Unknown error' 
         }))
       });
@@ -163,6 +169,23 @@ function MerchStats() {
     setSendToAll(false);
     setSendResult(null);
   };
+
+  // Хуки должны быть вызваны до всех условных возвратов
+  const userOptions = useMemo(() => {
+    return users.map(user => {
+      const nameParts: string[] = [];
+      if (user.firstName) nameParts.push(user.firstName);
+      if (user.lastName) nameParts.push(user.lastName);
+      const fullName = nameParts.join(' ').trim();
+      const displayName = fullName || (user.username ? `@${user.username}` : `User ${user.userId}`);
+      const usernamePart = user.username ? ` (@${user.username})` : '';
+      
+      return {
+        value: user.userId.toString(),
+        label: fullName ? `${fullName}${usernamePart}` : displayName
+      };
+    });
+  }, [users]);
 
   if (loading) {
     return (
@@ -191,7 +214,6 @@ function MerchStats() {
     return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
-
   const getActionLabel = (action: string) => {
     const labels: Record<string, string> = {
       'start': 'Запуск бота',
@@ -201,11 +223,6 @@ function MerchStats() {
     };
     return labels[action] || action;
   };
-
-  const userOptions = users.map(user => ({
-    value: user.userId.toString(),
-    label: `${user.firstName || ''} ${user.lastName || ''}${user.username ? ` (@${user.username})` : ''}`.trim() || `User ${user.userId}`
-  }));
 
   return (
     <Stack gap="md">
@@ -263,38 +280,46 @@ function MerchStats() {
         size="xl"
       >
         <Stack gap="md">
-          <Box>
-            <Text size="sm" fw={500} mb="xs">Сообщение</Text>
-            <TiptapEditor
-              content={message}
-              onChange={setMessage}
-              telegramMode={true}
-            />
-            <Text size="xs" c="dimmed" mt="xs">
-              Поддерживается HTML форматирование: <b>жирный</b>, <i>курсив</i>, <u>подчеркнутый</u>, <s>зачеркнутый</s>, <code>код</code>
-            </Text>
-          </Box>
-          <Checkbox
-            label={`Отправить всем пользователям (${users.length} чел.)`}
-            checked={sendToAll}
-            onChange={(e) => {
-              setSendToAll(e.currentTarget.checked);
-              if (e.currentTarget.checked) {
-                setSelectedUsers([]);
-              }
-            }}
-          />
-          <MultiSelect
-            label="Получатели"
-            placeholder={sendToAll ? "Выбрано: все пользователи" : "Выберите пользователей..."}
-            data={userOptions}
-            value={selectedUsers}
-            onChange={setSelectedUsers}
-            searchable
-            clearable
-            disabled={sendToAll}
-            required={!sendToAll}
-          />
+          {loadingUsers ? (
+            <Box style={{ display: 'flex', justifyContent: 'center', padding: '20px' }}>
+              <Loader size="sm" />
+            </Box>
+          ) : (
+            <>
+              <Box>
+                <Text size="sm" fw={500} mb="xs">Сообщение</Text>
+                <TiptapEditor
+                  content={message}
+                  onChange={setMessage}
+                  telegramMode={true}
+                />
+                <Text size="xs" c="dimmed" mt="xs">
+                  Поддерживается HTML форматирование: <b>жирный</b>, <i>курсив</i>, <u>подчеркнутый</u>, <s>зачеркнутый</s>, <code>код</code>
+                </Text>
+              </Box>
+              <Checkbox
+                label={`Отправить всем пользователям (${users.length} чел.)`}
+                checked={sendToAll}
+                onChange={(e) => {
+                  setSendToAll(e.currentTarget.checked);
+                  if (e.currentTarget.checked) {
+                    setSelectedUsers([]);
+                  }
+                }}
+              />
+              <MultiSelect
+                label="Получатели"
+                placeholder={sendToAll ? "Выбрано: все пользователи" : "Выберите пользователей..."}
+                data={userOptions}
+                value={selectedUsers}
+                onChange={setSelectedUsers}
+                searchable
+                clearable
+                disabled={sendToAll}
+                required={!sendToAll}
+              />
+            </>
+          )}
           {sendResult && (
             <Alert
               icon={sendResult.failed === 0 ? <IconCheck size={16} /> : <IconAlertCircle size={16} />}

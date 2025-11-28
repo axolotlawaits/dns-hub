@@ -275,10 +275,9 @@ function Card({ cardData, onEdit, onDelete, onToggleActive }: CardProps) {
           </Text>
           <div 
             dangerouslySetInnerHTML={{ 
-              __html: formattedDescription.replace(/\n/g, '<br>') 
+              __html: formattedDescription 
             }}
             className="card-description-content"
-            style={{ whiteSpace: 'pre-wrap' }}
           />
         </Box>
       )}

@@ -18,6 +18,7 @@ interface CustomModalProps {
   withCloseButton?: boolean;
   closeOnClickOutside?: boolean;
   closeOnEscape?: boolean;
+  zIndex?: number;
   overlayProps?: {
     backgroundOpacity?: number;
   };
@@ -45,6 +46,7 @@ const CustomModalComponent: React.FC<CustomModalProps> = ({
   withCloseButton = true,
   closeOnClickOutside = true,
   closeOnEscape = true,
+  zIndex,
   overlayProps = { backgroundOpacity: 0.5 },
   styles = {}
 }) => {
@@ -111,6 +113,7 @@ const CustomModalComponent: React.FC<CustomModalProps> = ({
       withCloseButton={withCloseButton}
       closeOnClickOutside={closeOnClickOutside}
       closeOnEscape={closeOnEscape}
+      zIndex={zIndex}
       overlayProps={overlayProps}
       styles={defaultStyles}
       className="custom-modal"

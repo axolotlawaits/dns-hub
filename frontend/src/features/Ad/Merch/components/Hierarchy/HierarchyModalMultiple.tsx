@@ -481,7 +481,7 @@ export function HierarchyEditModal({ item, onClose, onSuccess }: ItemModalProps)
 export function HierarchyDeleteModal({ item, onClose, onSuccess }: ItemModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [children, setChildren] = useState<any[]>([]);
+  const [children, setChildren] = useState<DataItem[]>([]);
   const [loadingChildren, setLoadingChildren] = useState(false);
 
   // Загружаем дочерние элементы при открытии модалки
@@ -522,7 +522,7 @@ export function HierarchyDeleteModal({ item, onClose, onSuccess }: ItemModalProp
   };
 
   // Рекурсивная функция для отображения дочерних элементов
-  const renderChildren = (childrenList: any[], depth: number = 0) => {
+  const renderChildren = (childrenList: DataItem[], depth: number = 0) => {
     if (childrenList.length === 0) return null;
 
     return (

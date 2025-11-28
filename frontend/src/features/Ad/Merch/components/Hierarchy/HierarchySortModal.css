@@ -1,38 +1,83 @@
 .hierarchy-sort-container {
   position: relative;
   min-height: 400px;
+  padding-left: 8px;
 }
 
 .hierarchy-sort-item {
+  display: flex;
+  align-items: center;
+  border-radius: var(--mantine-radius-md);
+  border: 1px solid light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-5));
+  padding: var(--mantine-spacing-sm) var(--mantine-spacing-lg);
+  padding-left: calc(var(--mantine-spacing-xl) - var(--mantine-spacing-md));
+  background-color: light-dark(var(--mantine-color-white), var(--mantine-color-dark-5));
+  margin-bottom: var(--mantine-spacing-sm);
+  gap: var(--mantine-spacing-sm);
+  cursor: pointer;
   transition: background-color 0.2s ease, border-color 0.2s ease;
-  user-select: none;
 }
 
-.hierarchy-sort-item.dragging {
-  opacity: 0.5;
-  cursor: grabbing !important;
+.hierarchy-sort-item-dragging {
+  box-shadow: var(--mantine-shadow-sm);
+  opacity: 0.8;
 }
 
-.hierarchy-sort-item.drag-over {
-  background-color: var(--theme-active-bg) !important;
-  border: 2px dashed var(--color-primary-500) !important;
+.hierarchy-sort-item-selected {
+  background-color: light-dark(var(--mantine-color-blue-0), rgba(59, 130, 246, 0.1)) !important;
+  border-color: light-dark(var(--mantine-color-blue-4), var(--color-primary-400)) !important;
 }
 
-.hierarchy-sort-item:hover:not(.dragging) {
-  background-color: var(--theme-bg-hover);
+.hierarchy-sort-item-changed {
+  border-left: 3px solid var(--mantine-color-orange-5);
+  background-color: light-dark(var(--mantine-color-orange-0), rgba(255, 107, 0, 0.1));
 }
 
-/* Темная тема */
-[data-mantine-color-scheme="dark"] .hierarchy-sort-item.drag-over {
-  background-color: var(--theme-active-bg) !important;
-  border-color: var(--color-primary-400) !important;
+.hierarchy-sort-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: light-dark(var(--mantine-color-gray-6), var(--mantine-color-dark-1));
+  margin-right: var(--mantine-spacing-lg);
+  cursor: grab;
 }
 
-[data-mantine-color-scheme="dark"] .hierarchy-sort-item:hover:not(.dragging) {
-  background-color: var(--theme-bg-hover);
+.hierarchy-sort-drag-handle:active {
+  cursor: grabbing;
 }
 
-[data-mantine-color-scheme="dark"] .drag-indicator {
-  background-color: var(--color-primary-400);
+.hierarchy-sort-item:hover {
+  background-color: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6));
 }
 
+.hierarchy-sort-item-changed:hover {
+  background-color: light-dark(var(--mantine-color-orange-1), rgba(255, 107, 0, 0.15));
+}
+
+/* Стили для карточек - визуальное отличие от категорий */
+.hierarchy-sort-item[data-type="card"] {
+  background-color: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6));
+  border-color: light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+  opacity: 0.95;
+  padding-left: calc(var(--mantine-spacing-xl) + 20px); /* Дополнительный отступ для карточек */
+}
+
+.hierarchy-sort-item[data-type="card"]:hover {
+  background-color: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-5));
+}
+
+/* Стили для выбранной категории */
+.hierarchy-sort-item-selected[data-type="category"] {
+  border: 2px solid var(--mantine-color-blue-6) !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* Стили для визуальной обратной связи при перетаскивании карточки на категорию */
+.hierarchy-sort-item-drag-over {
+  border: 2px solid var(--mantine-color-blue-6) !important;
+  background-color: light-dark(rgba(59, 130, 246, 0.1), rgba(59, 130, 246, 0.2)) !important;
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  transition: all 0.2s ease;
+}
