@@ -594,15 +594,8 @@ export function HierarchySortModal({ onClose, onSuccess }: HierarchySortModalPro
       return;
     }
 
-    console.log('Drag end:', { 
-      active: { id: activeItem.id, type: activeItem.type, name: activeItem.name },
-      over: { id: overItem.id, type: overItem.type, name: overItem.name },
-      overId: over.id
-    });
-
     // Если перетаскиваем карточку на категорию (между колонками)
     if (activeItem.type === 'card' && overItem.type === 'category') {
-      console.log('Moving card to category:', activeItem.name, '->', overItem.name);
       // Перемещаем карточку в новую категорию
       const newItems = allItems.map(item => {
         if (item.id === activeItem.id) {

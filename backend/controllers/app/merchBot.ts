@@ -78,11 +78,7 @@ class MerchBotService {
 
   // Инициализация бота
   private initializeBot(): void {
-    console.log('🔧 [MerchBot] Инициализация бота...');
-    console.log('🔍 [MerchBot] Проверка переменных окружения:');
-    
     const token = process.env.MERCH_BOT_TOKEN;
-    console.log('  - MERCH_BOT_TOKEN:', token ? `найден (длина: ${token.length})` : 'НЕ НАЙДЕН');
     
     if (!token) {
       console.error('❌ [MerchBot] MERCH_BOT_TOKEN not found');
@@ -98,7 +94,6 @@ class MerchBotService {
     }
     
     const botName = process.env.MERCH_BOT_NAME;
-    console.log('  - MERCH_BOT_NAME:', botName ? `найден (${botName})` : 'НЕ НАЙДЕН');
     
     if (!botName) {
       console.error('❌ [MerchBot] MERCH_BOT_NAME not found');
@@ -107,23 +102,13 @@ class MerchBotService {
     }
     
     try {
-      console.log('🤖 [MerchBot] Создаем экземпляр бота...');
       this.bot = new Bot<MerchContext>(token);
-      console.log('✅ [MerchBot] Экземпляр бота создан успешно');
-
-      // Настройка middleware
-      console.log('⚙️ [MerchBot] Настройка middleware...');
       this.bot.use(
         session({
           initial: (): MerchSessionData => ({}),
         })
       );
-      console.log('✅ [MerchBot] Middleware настроен');
-
-      console.log('⚙️ [MerchBot] Настройка обработчиков...');
       this.setupHandlers();
-      console.log('✅ [MerchBot] Обработчики настроены');
-      console.log('✅ [MerchBot] Инициализация завершена успешно');
     } catch (error) {
       console.error('❌ [MerchBot] Ошибка при создании экземпляра бота:', error);
       if (error instanceof Error) {

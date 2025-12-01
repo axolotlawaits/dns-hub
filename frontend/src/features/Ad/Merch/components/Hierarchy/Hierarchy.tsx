@@ -359,15 +359,7 @@ function Hierarchy({ hasFullAccess = true, onDataUpdate }: HierarchyComponentPro
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      console.log('🔄 [Hierarchy] Начинаем загрузку данных иерархии...');
       const hierarchyData = await getHierarchyData();
-      console.log('✅ [Hierarchy] Данные загружены:', hierarchyData.length, 'элементов');
-      console.log('📋 [Hierarchy] Структура данных:', hierarchyData);
-      // Проверяем структуру данных
-      if (hierarchyData.length > 0) {
-        console.log('📋 [Hierarchy] Первый элемент:', hierarchyData[0]);
-        console.log('📋 [Hierarchy] Layer первого элемента:', hierarchyData[0].layer);
-      }
       setData(hierarchyData);
       // Уведомляем родителя об обновлении данных
       if (onDataUpdate) {
@@ -383,16 +375,13 @@ function Hierarchy({ hasFullAccess = true, onDataUpdate }: HierarchyComponentPro
         'error'
       );
     } finally {
-      console.log('🏁 [Hierarchy] Завершение загрузки, устанавливаем loading = false');
       setLoading(false);
-      console.log('🏁 [Hierarchy] loading установлен в false');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Убираем onDataUpdate из зависимостей, чтобы избежать бесконечного цикла
 
   // Проверяем статус загрузки - загружаем только один раз при монтировании
   useEffect(() => {
-    console.log('🚀 [Hierarchy] Компонент смонтирован, запускаем загрузку данных');
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Загружаем только один раз при монтировании
@@ -403,24 +392,12 @@ function Hierarchy({ hasFullAccess = true, onDataUpdate }: HierarchyComponentPro
   }, [loadData]);
 
   // Мемоизируем корневые элементы (категории с layer = 1)
-  const rootElements = useMemo(() => {
-    const filtered = data.filter(item => {
-      // Фильтруем только корневые категории (layer = 1 и parentId = null или отсутствует)
-      // Но в данных может не быть parentId, поэтому проверяем только layer
-      return item.layer === 1;
-    });
-    console.log('🔍 [Hierarchy] Всего данных:', data.length);
-    console.log('🔍 [Hierarchy] Данные:', data);
-    console.log('🔍 [Hierarchy] Корневые элементы:', filtered.length);
-    console.log('🔍 [Hierarchy] Корневые элементы данные:', filtered);
-    return filtered;
-  }, [data]);
+  const rootElements = useMemo(
+    () => data.filter(item => item.layer === 1),
+    [data]
+  );
 
-  // Обработка на случай, если не были загружены данные 
-  console.log('🔍 [Hierarchy] Рендер компонента. loading:', loading, 'data.length:', data.length, 'rootElements.length:', rootElements.length);
-  
   if (loading) {
-    console.log('⏳ [Hierarchy] Показываем загрузку...');
     return (
       <Container style={{ 
         display: 'flex', 
