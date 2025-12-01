@@ -1148,7 +1148,13 @@ class MerchBotService {
       }
       
       // Скачиваем файл из Telegram с retry механизмом
-      fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
+      // ВАЖНО: используем тот же токен, что и для Merch бота (MERCH_BOT_TOKEN),
+      // иначе Telegram вернет 404 (чужой бот не имеет доступа к файлу)
+      const merchBotToken = process.env.MERCH_BOT_TOKEN;
+      if (!merchBotToken) {
+        throw new Error('MERCH_BOT_TOKEN is not defined in environment variables');
+      }
+      fileUrl = `https://api.telegram.org/file/bot${merchBotToken}/${file.file_path}`;
       let response;
       let downloadRetries = 3;
       let downloadError: any = null;
