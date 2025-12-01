@@ -30,7 +30,10 @@ import {
   IconWifiOff,
   IconCalendar,
   IconQrcode,
-  IconChartBar
+  IconChartBar,
+  IconArrowRight,
+  IconExclamationCircle,
+  IconExternalLink
 } from '@tabler/icons-react';
 
 interface RadioDashboardProps {
@@ -92,6 +95,7 @@ interface RadioDashboardProps {
   user?: {
     branch?: string;
   } | null;
+  onNavigateToTab?: (tab: string, filters?: Record<string, any>) => void;
 }
 
 const RadioDashboard: React.FC<RadioDashboardProps> = ({
@@ -109,7 +113,8 @@ const RadioDashboard: React.FC<RadioDashboardProps> = ({
   onAddDevice,
   hasFullAccess,
   user,
-  musicStatus
+  musicStatus,
+  onNavigateToTab
 }) => {
   // Активные потоки
   const activeStreams = useMemo(() => {
@@ -173,6 +178,7 @@ const RadioDashboard: React.FC<RadioDashboardProps> = ({
     return branchesWithDevices
       .map(branch => ({
         name: branch.branch.name,
+        uuid: branch.branch.uuid,
         type: branch.branch.typeOfDist,
         deviceCount: branch.devices.length,
         onlineCount: branch.devices.filter(d => statusMap[d.id]).length
@@ -180,6 +186,44 @@ const RadioDashboard: React.FC<RadioDashboardProps> = ({
       .sort((a, b) => b.deviceCount - a.deviceCount)
       .slice(0, 5);
   }, [branchesWithDevices, statusMap]);
+
+
+  // Филиалы без активных потоков
+  const branchesWithoutActiveStreams = useMemo(() => {
+    const branchesWithStreams = new Set(
+      activeStreams.map(stream => stream.branchTypeOfDist)
+    );
+    return branchesWithDevices
+      .filter(branch => !branchesWithStreams.has(branch.branch.typeOfDist))
+      .map(branch => ({
+        name: branch.branch.name,
+        uuid: branch.branch.uuid,
+        type: branch.branch.typeOfDist,
+        deviceCount: branch.devices.length
+      }));
+  }, [branchesWithDevices, activeStreams]);
+
+  // Филиалы где все устройства офлайн
+  const branchesWithAllOffline = useMemo(() => {
+    return branchesWithDevices
+      .filter(branch => {
+        const hasDevices = branch.devices.length > 0;
+        const allOffline = branch.devices.every(device => !statusMap[device.id]);
+        return hasDevices && allOffline;
+      })
+      .map(branch => ({
+        name: branch.branch.name,
+        uuid: branch.branch.uuid,
+        type: branch.branch.typeOfDist,
+        deviceCount: branch.devices.length
+      }));
+  }, [branchesWithDevices, statusMap]);
+
+  // Процент активных потоков от общего количества
+  const activeStreamsPercentage = useMemo(() => {
+    if (radioStreams.length === 0) return 0;
+    return Math.round((activeStreams.length / radioStreams.length) * 100);
+  }, [activeStreams.length, radioStreams.length]);
 
   // Форматирование даты
   const formatDate = (dateString: string) => {
@@ -265,49 +309,191 @@ const RadioDashboard: React.FC<RadioDashboardProps> = ({
 
   return (
     <Stack gap="lg">
-      {/* Предупреждения */}
-      {(offlineDevices.length > 0 || expiringStreams.length > 0) && (
-        <Stack gap="sm">
-          {offlineDevices.length > 0 && (
-            <Alert
-              icon={<IconWifiOff size={20} />}
-              title="Офлайн устройства"
-              color="orange"
-              variant="light"
-              style={{
-                background: 'var(--theme-bg-elevated)',
-                border: '1px solid var(--theme-border)'
-              }}
-            >
-              <Text size="sm" c="var(--theme-text-secondary)">
-                {offlineDevices.length} {offlineDevices.length === 1 ? 'устройство' : offlineDevices.length < 5 ? 'устройства' : 'устройств'} не в сети
-              </Text>
-            </Alert>
-          )}
-          {expiringStreams.length > 0 && (
-            <Alert
-              icon={<IconAlertTriangle size={20} />}
-              title="Истекающие потоки"
-              color="yellow"
-              variant="light"
-              style={{
-                background: 'var(--theme-bg-elevated)',
-                border: '1px solid var(--theme-border)'
-              }}
-            >
-              <Stack gap="xs">
-                <Text size="sm" c="var(--theme-text-secondary)">
-                  {expiringStreams.length} {expiringStreams.length === 1 ? 'поток' : expiringStreams.length < 5 ? 'потока' : 'потоков'} заканчивается в ближайшие 7 дней:
-                </Text>
-                {expiringStreams.slice(0, 3).map(stream => (
-                  <Text key={stream.id} size="xs" c="var(--theme-text-tertiary)">
-                    • {stream.name} — через {daysUntilExpiry(stream.endDate!)} {daysUntilExpiry(stream.endDate!) === 1 ? 'день' : daysUntilExpiry(stream.endDate!) < 5 ? 'дня' : 'дней'} ({formatDate(stream.endDate!)})
-                  </Text>
-                ))}
-              </Stack>
-            </Alert>
-          )}
-        </Stack>
+      {/* Улучшенный блок предупреждений */}
+      {(offlineDevices.length > 0 || expiringStreams.length > 0 || branchesWithAllOffline.length > 0 || branchesWithoutActiveStreams.length > 0) && (
+        <Paper 
+          p="md" 
+          radius="lg" 
+          shadow="sm"
+          style={{
+            background: 'var(--theme-bg-elevated)',
+            border: '1px solid var(--theme-border)'
+          }}
+        >
+          <Group justify="space-between" mb="md">
+            <Title order={4} c="var(--theme-text-primary)">
+              Предупреждения и проблемы
+            </Title>
+            <Badge color="orange" variant="light" size="lg">
+              {offlineDevices.length + expiringStreams.length + branchesWithAllOffline.length + branchesWithoutActiveStreams.length}
+            </Badge>
+          </Group>
+          <Stack gap="sm">
+            {offlineDevices.length > 0 && (
+              <Alert
+                icon={<IconWifiOff size={20} />}
+                title="Офлайн устройства"
+                color="orange"
+                variant="light"
+                style={{
+                  background: 'var(--theme-bg-primary)',
+                  border: '1px solid var(--theme-border)'
+                }}
+              >
+                <Group justify="space-between" align="flex-start">
+                  <div>
+                    <Text size="sm" c="var(--theme-text-secondary)" mb="xs">
+                      {offlineDevices.length} {offlineDevices.length === 1 ? 'устройство' : offlineDevices.length < 5 ? 'устройства' : 'устройств'} не в сети
+                    </Text>
+                    {offlineDevices.slice(0, 3).map(device => (
+                      <Text key={device.id} size="xs" c="var(--theme-text-tertiary)">
+                        • {device.name} ({device.branchName})
+                      </Text>
+                    ))}
+                    {offlineDevices.length > 3 && (
+                      <Text size="xs" c="var(--theme-text-tertiary)" mt={4}>
+                        и еще {offlineDevices.length - 3}...
+                      </Text>
+                    )}
+                  </div>
+                  {onNavigateToTab && (
+                    <Button
+                      size="xs"
+                      variant="light"
+                      rightSection={<IconArrowRight size={14} />}
+                      onClick={() => onNavigateToTab('devices', { status: 'offline' })}
+                    >
+                      Перейти
+                    </Button>
+                  )}
+                </Group>
+              </Alert>
+            )}
+            
+            {branchesWithAllOffline.length > 0 && (
+              <Alert
+                icon={<IconExclamationCircle size={20} />}
+                title="Филиалы с офлайн устройствами"
+                color="red"
+                variant="light"
+                style={{
+                  background: 'var(--theme-bg-primary)',
+                  border: '1px solid var(--theme-border)'
+                }}
+              >
+                <Group justify="space-between" align="flex-start">
+                  <div>
+                    <Text size="sm" c="var(--theme-text-secondary)" mb="xs">
+                      В {branchesWithAllOffline.length} {branchesWithAllOffline.length === 1 ? 'филиале' : branchesWithAllOffline.length < 5 ? 'филиалах' : 'филиалах'} все устройства офлайн:
+                    </Text>
+                    {branchesWithAllOffline.slice(0, 3).map(branch => (
+                      <Text key={branch.uuid} size="xs" c="var(--theme-text-tertiary)">
+                        • {branch.name} ({branch.deviceCount} {branch.deviceCount === 1 ? 'устройство' : 'устройств'})
+                      </Text>
+                    ))}
+                    {branchesWithAllOffline.length > 3 && (
+                      <Text size="xs" c="var(--theme-text-tertiary)" mt={4}>
+                        и еще {branchesWithAllOffline.length - 3}...
+                      </Text>
+                    )}
+                  </div>
+                  {onNavigateToTab && (
+                    <Button
+                      size="xs"
+                      variant="light"
+                      rightSection={<IconArrowRight size={14} />}
+                      onClick={() => onNavigateToTab('devices', { allOffline: true })}
+                    >
+                      Перейти
+                    </Button>
+                  )}
+                </Group>
+              </Alert>
+            )}
+
+            {branchesWithoutActiveStreams.length > 0 && (
+              <Alert
+                icon={<IconRadio size={20} />}
+                title="Филиалы без активных потоков"
+                color="yellow"
+                variant="light"
+                style={{
+                  background: 'var(--theme-bg-primary)',
+                  border: '1px solid var(--theme-border)'
+                }}
+              >
+                <Group justify="space-between" align="flex-start">
+                  <div>
+                    <Text size="sm" c="var(--theme-text-secondary)" mb="xs">
+                      {branchesWithoutActiveStreams.length} {branchesWithoutActiveStreams.length === 1 ? 'филиал' : branchesWithoutActiveStreams.length < 5 ? 'филиала' : 'филиалов'} без активных потоков:
+                    </Text>
+                    {branchesWithoutActiveStreams.slice(0, 3).map(branch => (
+                      <Text key={branch.uuid} size="xs" c="var(--theme-text-tertiary)">
+                        • {branch.name} ({branch.type})
+                      </Text>
+                    ))}
+                    {branchesWithoutActiveStreams.length > 3 && (
+                      <Text size="xs" c="var(--theme-text-tertiary)" mt={4}>
+                        и еще {branchesWithoutActiveStreams.length - 3}...
+                      </Text>
+                    )}
+                  </div>
+                  {onNavigateToTab && (
+                    <Button
+                      size="xs"
+                      variant="light"
+                      rightSection={<IconArrowRight size={14} />}
+                      onClick={() => onNavigateToTab('streams', { active: false })}
+                    >
+                      Перейти
+                    </Button>
+                  )}
+                </Group>
+              </Alert>
+            )}
+
+            {expiringStreams.length > 0 && (
+              <Alert
+                icon={<IconAlertTriangle size={20} />}
+                title="Истекающие потоки"
+                color="yellow"
+                variant="light"
+                style={{
+                  background: 'var(--theme-bg-primary)',
+                  border: '1px solid var(--theme-border)'
+                }}
+              >
+                <Group justify="space-between" align="flex-start">
+                  <Stack gap="xs" style={{ flex: 1 }}>
+                    <Text size="sm" c="var(--theme-text-secondary)">
+                      {expiringStreams.length} {expiringStreams.length === 1 ? 'поток' : expiringStreams.length < 5 ? 'потока' : 'потоков'} заканчивается в ближайшие 7 дней:
+                    </Text>
+                    {expiringStreams.slice(0, 3).map(stream => (
+                      <Text key={stream.id} size="xs" c="var(--theme-text-tertiary)">
+                        • {stream.name} — через {daysUntilExpiry(stream.endDate!)} {daysUntilExpiry(stream.endDate!) === 1 ? 'день' : daysUntilExpiry(stream.endDate!) < 5 ? 'дня' : 'дней'} ({formatDate(stream.endDate!)})
+                      </Text>
+                    ))}
+                    {expiringStreams.length > 3 && (
+                      <Text size="xs" c="var(--theme-text-tertiary)" mt={4}>
+                        и еще {expiringStreams.length - 3}...
+                      </Text>
+                    )}
+                  </Stack>
+                  {onNavigateToTab && (
+                    <Button
+                      size="xs"
+                      variant="light"
+                      rightSection={<IconArrowRight size={14} />}
+                      onClick={() => onNavigateToTab('streams', { expiring: true })}
+                    >
+                      Перейти
+                    </Button>
+                  )}
+                </Group>
+              </Alert>
+            )}
+          </Stack>
+        </Paper>
       )}
 
       {/* Статистика */}
@@ -322,7 +508,21 @@ const RadioDashboard: React.FC<RadioDashboardProps> = ({
               background: 'var(--theme-bg-elevated)',
               border: '1px solid var(--theme-border)',
               position: 'relative',
-              overflow: 'hidden'
+              overflow: 'hidden',
+              cursor: onNavigateToTab ? 'pointer' : 'default'
+            }}
+            onClick={() => onNavigateToTab && onNavigateToTab('devices')}
+            onMouseEnter={(e) => {
+              if (onNavigateToTab) {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = 'var(--theme-shadow-md)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (onNavigateToTab) {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
+              }
             }}
           >
             <div style={{
@@ -333,27 +533,32 @@ const RadioDashboard: React.FC<RadioDashboardProps> = ({
               height: '3px',
               background: 'linear-gradient(90deg, var(--color-primary-500), var(--color-primary-600))',
             }} />
-            <Group gap="md">
-              <div style={{
-                width: '48px',
-                height: '48px',
-                borderRadius: 'var(--radius-lg)',
-                background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: 'var(--theme-shadow-md)'
-              }}>
-                <IconDeviceMobile size={24} color="white" />
-              </div>
-              <div>
-                <Text size="sm" fw={500} c="var(--theme-text-tertiary)">
-                  Всего устройств
-                </Text>
-                <Text size="xl" fw={700} c="var(--theme-text-primary)">
-                  {stats.totalDevices}
-                </Text>
-              </div>
+            <Group gap="md" justify="space-between">
+              <Group gap="md">
+                <div style={{
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: 'var(--radius-lg)',
+                  background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: 'var(--theme-shadow-md)'
+                }}>
+                  <IconDeviceMobile size={24} color="white" />
+                </div>
+                <div>
+                  <Text size="sm" fw={500} c="var(--theme-text-tertiary)">
+                    Всего устройств
+                  </Text>
+                  <Text size="xl" fw={700} c="var(--theme-text-primary)">
+                    {stats.totalDevices}
+                  </Text>
+                </div>
+              </Group>
+              {onNavigateToTab && (
+                <IconExternalLink size={16} style={{ color: 'var(--theme-text-tertiary)', opacity: 0.6 }} />
+              )}
             </Group>
           </Card>
 
@@ -429,7 +634,21 @@ const RadioDashboard: React.FC<RadioDashboardProps> = ({
               background: 'var(--theme-bg-elevated)',
               border: '1px solid var(--theme-border)',
               position: 'relative',
-              overflow: 'hidden'
+              overflow: 'hidden',
+              cursor: onNavigateToTab ? 'pointer' : 'default'
+            }}
+            onClick={() => onNavigateToTab && onNavigateToTab('streams', { active: true })}
+            onMouseEnter={(e) => {
+              if (onNavigateToTab) {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = 'var(--theme-shadow-md)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (onNavigateToTab) {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
+              }
             }}
           >
             <div style={{
@@ -440,27 +659,49 @@ const RadioDashboard: React.FC<RadioDashboardProps> = ({
               height: '3px',
               background: 'linear-gradient(90deg, var(--color-warning), #f59e0b)',
             }} />
-            <Group gap="md">
-              <div style={{
-                width: '48px',
-                height: '48px',
-                borderRadius: 'var(--radius-lg)',
-                background: 'linear-gradient(135deg, var(--color-warning), #f59e0b)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: 'var(--theme-shadow-md)'
-              }}>
-                <IconRadio size={24} color="white" />
-              </div>
-              <div>
-                <Text size="sm" fw={500} c="var(--theme-text-tertiary)">
-                  Активных потоков
-                </Text>
-                <Text size="xl" fw={700} c="var(--theme-text-primary)">
-                  {activeStreams.length}
-                </Text>
-              </div>
+            <Group gap="md" justify="space-between">
+              <Group gap="md">
+                <div style={{
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: 'var(--radius-lg)',
+                  background: 'linear-gradient(135deg, var(--color-warning), #f59e0b)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: 'var(--theme-shadow-md)'
+                }}>
+                  <IconRadio size={24} color="white" />
+                </div>
+                <div>
+                  <Text size="sm" fw={500} c="var(--theme-text-tertiary)">
+                    Активных потоков
+                  </Text>
+                  <Text size="xl" fw={700} c="var(--theme-text-primary)">
+                    {activeStreams.length}
+                  </Text>
+                  {radioStreams.length > 0 && (
+                    <Text size="xs" c="var(--theme-text-tertiary)" mt={4}>
+                      {activeStreamsPercentage}% от всех
+                    </Text>
+                  )}
+                </div>
+              </Group>
+              {radioStreams.length > 0 && (
+                <RingProgress
+                  size={60}
+                  thickness={6}
+                  sections={[{ value: activeStreamsPercentage, color: 'var(--color-warning)' }]}
+                  label={
+                    <Text size="xs" ta="center" fw={700} c="var(--theme-text-primary)">
+                      {activeStreamsPercentage}%
+                    </Text>
+                  }
+                />
+              )}
+              {onNavigateToTab && (
+                <IconExternalLink size={16} style={{ color: 'var(--theme-text-tertiary)', opacity: 0.6 }} />
+              )}
             </Group>
           </Card>
 
@@ -473,7 +714,21 @@ const RadioDashboard: React.FC<RadioDashboardProps> = ({
               background: 'var(--theme-bg-elevated)',
               border: '1px solid var(--theme-border)',
               position: 'relative',
-              overflow: 'hidden'
+              overflow: 'hidden',
+              cursor: onNavigateToTab ? 'pointer' : 'default'
+            }}
+            onClick={() => onNavigateToTab && onNavigateToTab('music')}
+            onMouseEnter={(e) => {
+              if (onNavigateToTab) {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = 'var(--theme-shadow-md)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (onNavigateToTab) {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
+              }
             }}
           >
             <div style={{
@@ -484,32 +739,37 @@ const RadioDashboard: React.FC<RadioDashboardProps> = ({
               height: '3px',
               background: 'linear-gradient(90deg, var(--color-primary-500), var(--color-primary-600))',
             }} />
-            <Group gap="md">
-              <div style={{
-                width: '48px',
-                height: '48px',
-                borderRadius: 'var(--radius-lg)',
-                background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: 'var(--theme-shadow-md)'
-              }}>
-                <IconMusic size={24} color="white" />
-              </div>
-              <div>
-                <Text size="sm" fw={500} c="var(--theme-text-tertiary)">
-                  Музыкальных файлов
-                </Text>
-                <Text size="xl" fw={700} c="var(--theme-text-primary)">
-                  {stats.totalMusicFiles}
-                </Text>
-                {musicStatus && (
-                  <Text size="xs" c="var(--theme-text-tertiary)" mt={4}>
-                    Папка: {formatMonthFolder(musicStatus.shouldWarn ? (musicStatus.nextMonthFolder || '') : (musicStatus.currentMonthFolder || ''))}
+            <Group gap="md" justify="space-between">
+              <Group gap="md">
+                <div style={{
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: 'var(--radius-lg)',
+                  background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: 'var(--theme-shadow-md)'
+                }}>
+                  <IconMusic size={24} color="white" />
+                </div>
+                <div>
+                  <Text size="sm" fw={500} c="var(--theme-text-tertiary)">
+                    Музыкальных файлов
                   </Text>
-                )}
-              </div>
+                  <Text size="xl" fw={700} c="var(--theme-text-primary)">
+                    {stats.totalMusicFiles}
+                  </Text>
+                  {musicStatus && (
+                    <Text size="xs" c="var(--theme-text-tertiary)" mt={4}>
+                      Папка: {formatMonthFolder(musicStatus.shouldWarn ? (musicStatus.nextMonthFolder || '') : (musicStatus.currentMonthFolder || ''))}
+                    </Text>
+                  )}
+                </div>
+              </Group>
+              {onNavigateToTab && (
+                <IconExternalLink size={16} style={{ color: 'var(--theme-text-tertiary)', opacity: 0.6 }} />
+              )}
             </Group>
           </Card>
         </SimpleGrid>
@@ -641,6 +901,116 @@ const RadioDashboard: React.FC<RadioDashboardProps> = ({
         </Paper>
       )}
 
+      {/* Проблемные филиалы */}
+      {(branchesWithAllOffline.length > 0 || branchesWithoutActiveStreams.length > 0) && (
+        <Paper 
+          p="md" 
+          radius="lg" 
+          shadow="sm"
+          style={{
+            background: 'var(--theme-bg-elevated)',
+            border: '1px solid var(--theme-border)'
+          }}
+        >
+          <Group justify="space-between" mb="md">
+            <Title order={4} c="var(--theme-text-primary)">
+              Проблемные филиалы
+            </Title>
+            <Badge color="red" variant="light" size="lg">
+              {branchesWithAllOffline.length + branchesWithoutActiveStreams.length}
+            </Badge>
+          </Group>
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+            {branchesWithAllOffline.length > 0 && (
+              <Card p="md" radius="md" style={{
+                background: 'var(--theme-bg-primary)',
+                border: '1px solid var(--color-error)',
+                borderLeftWidth: '4px'
+              }}>
+                <Group gap="sm" mb="xs">
+                  <IconWifiOff size={20} style={{ color: 'var(--color-error)' }} />
+                  <Text fw={600} size="sm" c="var(--theme-text-primary)">
+                    Все устройства офлайн
+                  </Text>
+                </Group>
+                <Stack gap="xs">
+                  {branchesWithAllOffline.slice(0, 5).map(branch => (
+                    <Group key={branch.uuid} justify="space-between">
+                      <Text size="xs" c="var(--theme-text-secondary)">
+                        {branch.name}
+                      </Text>
+                      <Badge size="xs" color="red" variant="light">
+                        {branch.deviceCount} устройств
+                      </Badge>
+                    </Group>
+                  ))}
+                  {branchesWithAllOffline.length > 5 && (
+                    <Text size="xs" c="var(--theme-text-tertiary)" mt="xs">
+                      и еще {branchesWithAllOffline.length - 5}...
+                    </Text>
+                  )}
+                  {onNavigateToTab && (
+                    <Button
+                      size="xs"
+                      variant="light"
+                      color="red"
+                      rightSection={<IconArrowRight size={14} />}
+                      onClick={() => onNavigateToTab('devices', { allOffline: true })}
+                      mt="xs"
+                    >
+                      Показать все
+                    </Button>
+                  )}
+                </Stack>
+              </Card>
+            )}
+            {branchesWithoutActiveStreams.length > 0 && (
+              <Card p="md" radius="md" style={{
+                background: 'var(--theme-bg-primary)',
+                border: '1px solid var(--color-warning)',
+                borderLeftWidth: '4px'
+              }}>
+                <Group gap="sm" mb="xs">
+                  <IconRadio size={20} style={{ color: 'var(--color-warning)' }} />
+                  <Text fw={600} size="sm" c="var(--theme-text-primary)">
+                    Без активных потоков
+                  </Text>
+                </Group>
+                <Stack gap="xs">
+                  {branchesWithoutActiveStreams.slice(0, 5).map(branch => (
+                    <Group key={branch.uuid} justify="space-between">
+                      <Text size="xs" c="var(--theme-text-secondary)">
+                        {branch.name}
+                      </Text>
+                      <Badge size="xs" color="yellow" variant="light">
+                        {branch.type}
+                      </Badge>
+                    </Group>
+                  ))}
+                  {branchesWithoutActiveStreams.length > 5 && (
+                    <Text size="xs" c="var(--theme-text-tertiary)" mt="xs">
+                      и еще {branchesWithoutActiveStreams.length - 5}...
+                    </Text>
+                  )}
+                  {onNavigateToTab && (
+                    <Button
+                      size="xs"
+                      variant="light"
+                      color="yellow"
+                      rightSection={<IconArrowRight size={14} />}
+                      onClick={() => onNavigateToTab('streams', { active: false })}
+                      mt="xs"
+                    >
+                      Показать все
+                    </Button>
+                  )}
+                </Stack>
+              </Card>
+            )}
+          </SimpleGrid>
+        </Paper>
+      )}
+
       {/* Топ филиалов по устройствам */}
       {topBranchesByDevices.length > 0 && (
         <Paper 
@@ -659,35 +1029,81 @@ const RadioDashboard: React.FC<RadioDashboardProps> = ({
             <IconChartBar size={20} style={{ color: 'var(--theme-text-secondary)' }} />
           </Group>
           <Stack gap="sm">
-            {topBranchesByDevices.map((branch, index) => (
-              <Group key={branch.name} justify="space-between" p="sm" style={{
-                background: 'var(--theme-bg-primary)',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--theme-border)'
-              }}>
-                <Group gap="sm">
-                  <Badge size="lg" variant="light" color="blue">
-                    {index + 1}
-                  </Badge>
-                  <div>
-                    <Text fw={500} size="sm" c="var(--theme-text-primary)">
-                      {branch.name}
-                    </Text>
-                    <Text size="xs" c="var(--theme-text-secondary)">
-                      {branch.type}
-                    </Text>
-                  </div>
+            {topBranchesByDevices.map((branch, index) => {
+              const onlinePercentage = branch.deviceCount > 0 
+                ? Math.round((branch.onlineCount / branch.deviceCount) * 100)
+                : 0;
+              
+              return (
+                <Group 
+                  key={branch.uuid} 
+                  justify="space-between" 
+                  p="sm" 
+                  style={{
+                    background: 'var(--theme-bg-primary)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--theme-border)',
+                    cursor: onNavigateToTab ? 'pointer' : 'default',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onClick={() => onNavigateToTab && onNavigateToTab('devices', { branchId: branch.uuid })}
+                  onMouseEnter={(e) => {
+                    if (onNavigateToTab) {
+                      e.currentTarget.style.transform = 'translateX(4px)';
+                      e.currentTarget.style.boxShadow = 'var(--theme-shadow-sm)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (onNavigateToTab) {
+                      e.currentTarget.style.transform = 'translateX(0)';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }
+                  }}
+                >
+                  <Group gap="sm" style={{ flex: 1 }}>
+                    <Badge size="lg" variant="light" color="blue">
+                      {index + 1}
+                    </Badge>
+                    <div style={{ flex: 1 }}>
+                      <Text fw={500} size="sm" c="var(--theme-text-primary)">
+                        {branch.name}
+                      </Text>
+                      <Text size="xs" c="var(--theme-text-secondary)">
+                        {branch.type}
+                      </Text>
+                      {branch.deviceCount > 0 && (
+                        <Group gap={4} mt={4}>
+                          <RingProgress
+                            size={40}
+                            thickness={4}
+                            sections={[{ value: onlinePercentage, color: onlinePercentage >= 80 ? 'green' : onlinePercentage >= 50 ? 'yellow' : 'red' }]}
+                            label={
+                              <Text size="xs" ta="center" fw={700}>
+                                {onlinePercentage}%
+                              </Text>
+                            }
+                          />
+                          <Text size="xs" c="var(--theme-text-tertiary)">
+                            онлайн
+                          </Text>
+                        </Group>
+                      )}
+                    </div>
+                  </Group>
+                  <Group gap="xs">
+                    <Badge color="green" variant="light" size="sm">
+                      {branch.onlineCount} онлайн
+                    </Badge>
+                    <Badge color="gray" variant="light" size="sm">
+                      {branch.deviceCount} всего
+                    </Badge>
+                    {onNavigateToTab && (
+                      <IconExternalLink size={14} style={{ color: 'var(--theme-text-tertiary)', opacity: 0.6 }} />
+                    )}
+                  </Group>
                 </Group>
-                <Group gap="xs">
-                  <Badge color="green" variant="light" size="sm">
-                    {branch.onlineCount} онлайн
-                  </Badge>
-                  <Badge color="gray" variant="light" size="sm">
-                    {branch.deviceCount} всего
-                  </Badge>
-                </Group>
-              </Group>
-            ))}
+              );
+            })}
           </Stack>
         </Paper>
       )}
@@ -868,6 +1284,7 @@ const RadioDashboard: React.FC<RadioDashboardProps> = ({
                     e.currentTarget.style.transform = 'translateY(0)';
                     e.currentTarget.style.boxShadow = 'none';
                   }}
+                  onClick={() => onNavigateToTab && onNavigateToTab('streams', { streamId: stream.id })}
                 >
                   {isExpiring && (
                     <Badge
@@ -877,43 +1294,49 @@ const RadioDashboard: React.FC<RadioDashboardProps> = ({
                       style={{
                         position: 'absolute',
                         top: 8,
-                        right: 8
+                        right: 8,
+                        zIndex: 1
                       }}
                     >
                       <IconAlertTriangle size={12} style={{ marginRight: 4 }} />
                       {daysLeft} {daysLeft === 1 ? 'день' : daysLeft! < 5 ? 'дня' : 'дней'}
                     </Badge>
                   )}
-                  <Group gap="sm" align="flex-start">
-                    <div style={{
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: 'var(--radius-md)',
-                      background: isExpiring 
-                        ? 'linear-gradient(135deg, var(--color-warning), #f59e0b)'
-                        : 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}>
-                      <IconRadio size={20} color="white" />
-                    </div>
-                    <Stack gap="xs" style={{ flex: 1 }}>
-                      <Text fw={600} size="sm" c="var(--theme-text-primary)">
-                        {stream.name}
-                      </Text>
-                      <Text size="xs" c="var(--theme-text-secondary)">
-                        {stream.branchTypeOfDist}
-                      </Text>
-                      {stream.endDate && (
-                        <Group gap={4} align="center" mt={4}>
-                          <IconCalendar size={12} style={{ color: 'var(--theme-text-tertiary)' }} />
-                          <Text size="xs" c="var(--theme-text-tertiary)">
-                            До {formatDate(stream.endDate)}
-                          </Text>
-                        </Group>
-                      )}
-                    </Stack>
+                  <Group gap="sm" align="flex-start" justify="space-between">
+                    <Group gap="sm" align="flex-start" style={{ flex: 1 }}>
+                      <div style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: 'var(--radius-md)',
+                        background: isExpiring 
+                          ? 'linear-gradient(135deg, var(--color-warning), #f59e0b)'
+                          : 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        <IconRadio size={20} color="white" />
+                      </div>
+                      <Stack gap="xs" style={{ flex: 1 }}>
+                        <Text fw={600} size="sm" c="var(--theme-text-primary)">
+                          {stream.name}
+                        </Text>
+                        <Badge size="xs" variant="light" color="blue">
+                          {stream.branchTypeOfDist}
+                        </Badge>
+                        {stream.endDate && (
+                          <Group gap={4} align="center" mt={4}>
+                            <IconCalendar size={12} style={{ color: 'var(--theme-text-tertiary)' }} />
+                            <Text size="xs" c="var(--theme-text-tertiary)">
+                              До {formatDate(stream.endDate)}
+                            </Text>
+                          </Group>
+                        )}
+                      </Stack>
+                    </Group>
+                    {onNavigateToTab && (
+                      <IconExternalLink size={14} style={{ color: 'var(--theme-text-tertiary)', opacity: 0.6 }} />
+                    )}
                   </Group>
                 </Card>
               );

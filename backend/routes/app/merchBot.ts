@@ -884,7 +884,7 @@ router.get('/feedback', authenticateToken, async (req: any, res: any) => {
 
     // Форматируем ответ для совместимости с фронтендом
     // Получаем данные пользователей из базы по email
-    const emails = feedbacks.map((fb: any) => fb.email).filter(Boolean);
+    const emails = feedbacks.map((fb: any) => fb.email?.toLowerCase().trim()).filter(Boolean);
     const usersByEmail = new Map();
     const userDataByEmail = new Map();
 
@@ -964,15 +964,16 @@ router.patch('/feedback/:id/read', authenticateToken, async (req: any, res: any)
     // Получаем данные пользователя из базы по email
     let dbName = null;
     if (feedback.email) {
+      const emailLower = feedback.email.toLowerCase().trim();
       const user = await prisma.user.findUnique({
-        where: { email: feedback.email },
+        where: { email: emailLower },
         select: { name: true }
       });
       if (user?.name) {
         dbName = user.name;
       } else {
         const userData = await prisma.userData.findUnique({
-          where: { email: feedback.email },
+          where: { email: emailLower },
           select: { fio: true }
         });
         if (userData?.fio) {

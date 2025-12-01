@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
-import {Container,Title,Paper,Text,Button,Group,Stack,Modal,LoadingOverlay, Tabs, Box, Progress, Badge, TextInput, Select} from '@mantine/core';
+import {Container,Title,Paper,Text,Button,Group,Stack,Modal,LoadingOverlay, Tabs, Box, Progress, Badge, TextInput, Select, SimpleGrid} from '@mantine/core';
 import { TimeInput } from '@mantine/dates';
 import {  IconUpload,  IconMusic,  IconClock,  IconDeviceMobile,  IconBuilding, IconEdit, IconCheck, IconRefresh, IconPower, IconBattery, IconWifi, IconCalendar, IconPlayerPlay, IconPlayerPause, IconWifiOff, IconX, IconRadio, IconDownload, IconAlertCircle, IconChevronDown, IconChevronRight, IconChevronsDown, IconChevronsUp, IconSearch, IconTrash, IconQrcode, IconLayoutDashboard, IconFilter, IconPlus } from '@tabler/icons-react';
 import { notificationSystem } from '../../../utils/Push';
@@ -127,6 +127,7 @@ const RadioAdmin: React.FC = () => {
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
+  const [selectedUploadFolder, setSelectedUploadFolder] = useState<string | null>(null);
 
   const [statusMap, setStatusMap] = useState<Record<string, boolean>>({});
 
@@ -147,7 +148,14 @@ const RadioAdmin: React.FC = () => {
   const [streamFilterType, setStreamFilterType] = useState<string>('all'); // 'all' или конкретный тип
 
   // Состояние для списка песен
-  const [musicFiles, setMusicFiles] = useState<Array<{
+  const [musicFilesCurrent, setMusicFilesCurrent] = useState<Array<{
+    name: string;
+    size: number;
+    created: string;
+    modified: string;
+    path: string;
+  }>>([]);
+  const [musicFilesNext, setMusicFilesNext] = useState<Array<{
     name: string;
     size: number;
     created: string;
@@ -498,31 +506,42 @@ const RadioAdmin: React.FC = () => {
     };
   }, [stats]);
 
-  // Загрузка списка песен текущего месяца
+  // Загрузка списка песен для обоих месяцев
   const loadMusicFiles = useCallback(async () => {
     if (!musicStatus) return;
     
-    const folderName = musicStatus.shouldWarn 
-      ? musicStatus.nextMonthFolder 
-      : musicStatus.currentMonthFolder;
-    
-    if (!folderName) return;
-    
     setLoadingMusicFiles(true);
-    try {
-      const response = await axios.get(`${API_BASE}/folder/${folderName}/music`);
-      if (response.data.success) {
-        setMusicFiles(response.data.files || []);
-      } else {
-        setMusicFiles([]);
+    
+    // Загружаем оба месяца параллельно
+    const loadFolder = async (folderName: string | undefined) => {
+      if (!folderName) return [];
+      
+      try {
+        const response = await axios.get(`${API_BASE}/folder/${folderName}/music`);
+        if (response.data.success) {
+          return response.data.files || [];
+        }
+        return [];
+      } catch (error: any) {
+        // Если папка не найдена, это нормально - просто нет файлов
+        if (error.response?.status !== 404) {
+          console.error('Ошибка загрузки списка песен:', error);
+        }
+        return [];
       }
+    };
+
+    try {
+      const [currentFiles, nextFiles] = await Promise.all([
+        loadFolder(musicStatus.currentMonthFolder),
+        loadFolder(musicStatus.nextMonthFolder)
+      ]);
+      
+      setMusicFilesCurrent(currentFiles);
+      setMusicFilesNext(nextFiles);
     } catch (error: any) {
       console.error('Ошибка загрузки списка песен:', error);
-      setMusicFiles([]);
-      // Если папка не найдена, это нормально - просто нет файлов
-      if (error.response?.status !== 404) {
-        notificationSystem.addNotification('Ошибка', 'Не удалось загрузить список песен', 'error');
-      }
+      notificationSystem.addNotification('Ошибка', 'Не удалось загрузить список песен', 'error');
     } finally {
       setLoadingMusicFiles(false);
     }
@@ -1362,9 +1381,18 @@ const RadioAdmin: React.FC = () => {
 
     console.log('Uploading files:', validFiles);
     console.log('API_BASE:', API_BASE);
-    const uploadEndpoint = musicStatus?.shouldWarn 
-      ? `${API_BASE}/upload/next` 
-      : `${API_BASE}/upload`;
+    
+    // Определяем эндпоинт для загрузки
+    let uploadEndpoint: string;
+    if (selectedUploadFolder) {
+      // Загрузка в конкретную папку
+      uploadEndpoint = `${API_BASE}/folder/${selectedUploadFolder}/upload`;
+    } else {
+      // Старая логика для обратной совместимости
+      uploadEndpoint = musicStatus?.shouldWarn 
+        ? `${API_BASE}/upload/next` 
+        : `${API_BASE}/upload`;
+    }
 
     setIsUploading(true);
       setUploadProgress(0);
@@ -1452,7 +1480,13 @@ const RadioAdmin: React.FC = () => {
         notificationSystem.addNotification('Успех', `Все ${successCount} файлов загружены успешно`, 'success');
       setSelectedFiles([]);
       setUploadModalOpen(false);
-      setTimeout(loadData, 1000);
+      setSelectedUploadFolder(null);
+      setTimeout(() => {
+        loadData();
+        if (activeTab === 'music' && musicStatus) {
+          loadMusicFiles();
+        }
+      }, 1000);
       } else if (successCount > 0 && errorCount > 0) {
         notificationSystem.addNotification(
           'Частичный успех', 
@@ -1460,7 +1494,12 @@ const RadioAdmin: React.FC = () => {
           'warning'
         );
         console.error('Upload errors:', errors);
-        setTimeout(loadData, 1000);
+        setTimeout(() => {
+          loadData();
+          if (activeTab === 'music' && musicStatus) {
+            loadMusicFiles();
+          }
+        }, 1000);
       } else {
         notificationSystem.addNotification('Ошибка', `Не удалось загрузить ни одного файла. Ошибок: ${errorCount}`, 'error');
         console.error('All uploads failed:', errors);
@@ -1472,6 +1511,7 @@ const RadioAdmin: React.FC = () => {
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
+      // Не сбрасываем selectedUploadFolder здесь, так как это делается при закрытии модального окна
     }
   };
 
@@ -1659,6 +1699,38 @@ const RadioAdmin: React.FC = () => {
                   hasFullAccess={hasFullAccess}
                   user={user}
                   musicStatus={musicStatus}
+                  onNavigateToTab={(tab: string, filters?: Record<string, any>) => {
+                    setActiveTab(tab);
+                    // Применяем фильтры в зависимости от вкладки
+                    if (tab === 'devices' && filters) {
+                      const newFilters: any[] = [];
+                      if (filters.status === 'offline') {
+                        // Фильтр для офлайн устройств
+                        newFilters.push({ id: 'status', value: ['offline'] });
+                      } else if (filters.allOffline) {
+                        // Фильтр для филиалов где все офлайн - устанавливаем статус офлайн
+                        newFilters.push({ id: 'status', value: ['offline'] });
+                      } else if (filters.branchId) {
+                        // Фильтр по конкретному филиалу
+                        newFilters.push({ id: 'branchId', value: [filters.branchId] });
+                      }
+                      if (newFilters.length > 0) {
+                        setDeviceColumnFilters(newFilters);
+                      }
+                    } else if (tab === 'streams' && filters) {
+                      if (filters.active === true) {
+                        setStreamFilterActive('active');
+                      } else if (filters.active === false) {
+                        setStreamFilterActive('inactive');
+                      } else if (filters.expiring) {
+                        setStreamFilterActive('active');
+                        // Можно добавить дополнительный фильтр для истекающих
+                      } else if (filters.streamId) {
+                        // Можно добавить логику для выделения конкретного потока
+                        setStreamSearchQuery('');
+                      }
+                    }
+                  }}
                 />
               </Tabs.Panel>
               )}
@@ -1666,209 +1738,291 @@ const RadioAdmin: React.FC = () => {
               {hasFullAccess && (
               <Tabs.Panel value="music">
               <Stack gap="md">
-                {/* Секция загрузки музыки */}
-                <Paper 
-                  p="md" 
-                  radius="lg" 
-                  shadow="sm"
-                  className="radio-stats-card"
-                  style={{
-                    background: 'var(--theme-bg-elevated)',
-                    border: '1px solid var(--theme-border)',
-                    backdropFilter: 'blur(8px)',
-                    WebkitBackdropFilter: 'blur(8px)',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    transition: 'var(--transition-all)'
-                  }}
-                >
-                  {/* Декоративная полоса */}
-                  <div style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    height: '3px',
-                    background: 'linear-gradient(90deg, var(--color-primary-500), var(--color-primary-600))',
-                    borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0'
-                  }} />
-                  
-                <Group justify="space-between" mb="md">
-                    <div>
-                    <Title 
-                      order={3} 
-                      size="h4"
-                      style={{ 
-                        color: 'var(--theme-text-primary)',
-                          fontWeight: 'var(--font-weight-bold)',
-                          fontSize: 'var(--font-size-xl)',
-                          marginBottom: 'var(--space-2)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 'var(--space-2)'
-                        }}
-                      >
-                        <IconUpload size={24} />
-                      Загрузка музыкальных файлов
-                    </Title>
-                      <Text 
-                        size="sm"
-                        style={{ 
-                          color: 'var(--theme-text-secondary)',
-                          fontWeight: 'var(--font-weight-medium)'
-                        }}
-                      >
-                        Загружайте MP3 файлы для воспроизведения в филиалах. 
-                        Файлы автоматически сохраняются в папку retail/music/{
-                          musicStatus?.shouldWarn ? musicStatus?.nextMonthFolder : (musicStatus?.currentMonthFolder || 'текущий месяц')
-                        }.
-                      </Text>
-                    </div>
-                  <Button 
-                      onClick={() => setUploadModalOpen(true)}
-                      leftSection={<IconUpload size={20} />}
-                      className="radio-action-button"
-                      size="lg"
-                      style={{
-                        background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
-                        border: 'none',
-                        fontWeight: 'var(--font-weight-semibold)',
-                        borderRadius: 'var(--radius-lg)',
-                        boxShadow: 'var(--theme-shadow-md)',
-                        transition: 'var(--transition-all)'
-                      }}
-                    >
-                      Загрузить файлы
+                {/* Список песен - текущий и следующий месяц */}
+                <Group justify="space-between" mb="md" style={{ width: '100%' }}>
+                  <Title order={4} c="var(--theme-text-primary)">
+                    Список музыкальных файлов
+                  </Title>
+                  <Button
+                    variant="subtle"
+                    size="sm"
+                    leftSection={<IconRefresh size={16} />}
+                    onClick={loadMusicFiles}
+                    loading={loadingMusicFiles}
+                  >
+                    Обновить
                   </Button>
                 </Group>
-                </Paper>
 
-                {/* Список песен текущего месяца */}
-                <Paper 
-                  p="md" 
-                  radius="lg" 
-                  shadow="sm"
-                  style={{
-                    background: 'var(--theme-bg-elevated)',
-                    border: '1px solid var(--theme-border)'
-                  }}
-                >
-                  <Group justify="space-between" mb="md">
-                    <div>
-                      <Title order={4} c="var(--theme-text-primary)">
-                        Список музыкальных файлов
-                      </Title>
-                      <Text size="sm" c="var(--theme-text-secondary)" mt="xs">
-                        {musicStatus && (
-                          <>Папка: {formatMonthFolder(musicStatus.shouldWarn ? (musicStatus.nextMonthFolder || '') : (musicStatus.currentMonthFolder || ''))}</>
-                        )}
-                      </Text>
-                    </div>
-                    <Button
-                      variant="subtle"
-                      size="sm"
-                      leftSection={<IconRefresh size={16} />}
-                      onClick={loadMusicFiles}
-                      loading={loadingMusicFiles}
+                {loadingMusicFiles ? (
+                  <Stack align="center" py="xl">
+                    <LoadingOverlay visible={true} />
+                    <Text size="sm" c="var(--theme-text-secondary)">
+                      Загрузка списка песен...
+                    </Text>
+                  </Stack>
+                ) : (
+                  <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+                    {/* Текущий месяц */}
+                    <Paper 
+                      p="md" 
+                      radius="lg" 
+                      shadow="sm"
+                      style={{
+                        background: 'var(--theme-bg-elevated)',
+                        border: '1px solid var(--theme-border)'
+                      }}
                     >
-                      Обновить
-                    </Button>
-                  </Group>
-
-                  {loadingMusicFiles ? (
-                    <Stack align="center" py="xl">
-                      <LoadingOverlay visible={true} />
-                      <Text size="sm" c="var(--theme-text-secondary)">
-                        Загрузка списка песен...
-                      </Text>
-                    </Stack>
-                  ) : musicFiles.length > 0 ? (
-                    <Stack gap="sm">
-                      {musicFiles.map((file, index) => {
-                        const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
-                        const createdDate = new Date(file.created).toLocaleDateString('ru-RU', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        });
-                        
-                        return (
-                          <Paper
-                            key={index}
-                            p="sm"
-                            radius="md"
+                      <Group justify="space-between" mb="md">
+                        <div>
+                          <Title order={5} c="var(--theme-text-primary)">
+                            Текущий месяц
+                          </Title>
+                          <Text size="sm" c="var(--theme-text-secondary)" mt="xs">
+                            {musicStatus && formatMonthFolder(musicStatus.currentMonthFolder || '')}
+                          </Text>
+                        </div>
+                        <Group gap="xs">
+                          <Badge variant="light" color="blue" size="lg">
+                            {musicFilesCurrent.length}
+                          </Badge>
+                          <Button
+                            variant="light"
+                            size="sm"
+                            leftSection={<IconUpload size={16} />}
+                            onClick={() => {
+                              setSelectedUploadFolder(musicStatus?.currentMonthFolder || null);
+                              setUploadModalOpen(true);
+                            }}
                             style={{
-                              background: 'var(--theme-bg-primary)',
-                              border: '1px solid var(--theme-border)',
-                              transition: 'all 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.transform = 'translateX(4px)';
-                              e.currentTarget.style.boxShadow = 'var(--theme-shadow-sm)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.transform = 'translateX(0)';
-                              e.currentTarget.style.boxShadow = 'none';
+                              background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
+                              color: 'white',
+                              border: 'none'
                             }}
                           >
-                            <Group justify="space-between" align="center">
-                              <Group gap="md" style={{ flex: 1 }}>
-                                <div style={{
-                                  width: '40px',
-                                  height: '40px',
-                                  borderRadius: 'var(--radius-md)',
-                                  background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center'
-                                }}>
-                                  <IconMusic size={20} color="white" />
-                                </div>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <Text 
-                                    fw={500} 
-                                    size="sm" 
-                                    c="var(--theme-text-primary)"
-                                    style={{
-                                      overflow: 'hidden',
-                                      textOverflow: 'ellipsis',
-                                      whiteSpace: 'nowrap'
-                                    }}
-                                  >
-                                    {decodeRussianFileName(file.name)}
-                                  </Text>
-                                  <Group gap="md" mt={4}>
-                                    <Text size="xs" c="var(--theme-text-secondary)">
-                                      {fileSizeMB} МБ
-                                    </Text>
-                                    <Text size="xs" c="var(--theme-text-tertiary)">
-                                      Загружен: {createdDate}
-                                    </Text>
+                            {musicFilesCurrent.length > 0 ? 'Догрузить' : 'Загрузить'}
+                          </Button>
+                        </Group>
+                      </Group>
+
+                      {musicFilesCurrent.length > 0 ? (
+                        <Stack gap="sm">
+                          {musicFilesCurrent.map((file, index) => {
+                            const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                            const createdDate = new Date(file.created).toLocaleDateString('ru-RU', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            });
+                            
+                            return (
+                              <Paper
+                                key={index}
+                                p="sm"
+                                radius="md"
+                                style={{
+                                  background: 'var(--theme-bg-primary)',
+                                  border: '1px solid var(--theme-border)',
+                                  transition: 'all 0.2s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.transform = 'translateX(4px)';
+                                  e.currentTarget.style.boxShadow = 'var(--theme-shadow-sm)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.transform = 'translateX(0)';
+                                  e.currentTarget.style.boxShadow = 'none';
+                                }}
+                              >
+                                <Group justify="space-between" align="center">
+                                  <Group gap="md" style={{ flex: 1 }}>
+                                    <div style={{
+                                      width: '40px',
+                                      height: '40px',
+                                      borderRadius: 'var(--radius-md)',
+                                      background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center'
+                                    }}>
+                                      <IconMusic size={20} color="white" />
+                                    </div>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <Text 
+                                        fw={500} 
+                                        size="sm" 
+                                        c="var(--theme-text-primary)"
+                                        style={{
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis',
+                                          whiteSpace: 'nowrap'
+                                        }}
+                                      >
+                                        {decodeRussianFileName(file.name)}
+                                      </Text>
+                                      <Group gap="md" mt={4}>
+                                        <Text size="xs" c="var(--theme-text-secondary)">
+                                          {fileSizeMB} МБ
+                                        </Text>
+                                        <Text size="xs" c="var(--theme-text-tertiary)">
+                                          {createdDate}
+                                        </Text>
+                                      </Group>
+                                    </div>
                                   </Group>
-                                </div>
-                              </Group>
-                              <Badge variant="light" color="blue" size="sm">
-                                {file.name.split('.').pop()?.toUpperCase()}
-                              </Badge>
-                            </Group>
-                          </Paper>
-                        );
-                      })}
-                    </Stack>
-                  ) : (
-                    <Stack align="center" py="xl">
-                      <IconMusic size={48} style={{ color: 'var(--theme-text-tertiary)', opacity: 0.5 }} />
-                      <Text size="sm" c="var(--theme-text-secondary)" ta="center">
-                        В текущей папке нет музыкальных файлов
-                      </Text>
-                      <Text size="xs" c="var(--theme-text-tertiary)" ta="center" mt="xs">
-                        Загрузите MP3 файлы, чтобы они появились в списке
-                      </Text>
-                    </Stack>
-                  )}
-                </Paper>
+                                  <Badge variant="light" color="blue" size="sm">
+                                    {file.name.split('.').pop()?.toUpperCase()}
+                                  </Badge>
+                                </Group>
+                              </Paper>
+                            );
+                          })}
+                        </Stack>
+                      ) : (
+                        <Stack align="center" py="xl">
+                          <IconMusic size={32} style={{ color: 'var(--theme-text-tertiary)', opacity: 0.5 }} />
+                          <Text size="sm" c="var(--theme-text-secondary)" ta="center">
+                            Нет файлов
+                          </Text>
+                        </Stack>
+                      )}
+                    </Paper>
+
+                    {/* Следующий месяц */}
+                    <Paper 
+                      p="md" 
+                      radius="lg" 
+                      shadow="sm"
+                      style={{
+                        background: 'var(--theme-bg-elevated)',
+                        border: '1px solid var(--theme-border)'
+                      }}
+                    >
+                      <Group justify="space-between" mb="md">
+                        <div>
+                          <Title order={5} c="var(--theme-text-primary)">
+                            Следующий месяц
+                          </Title>
+                          <Text size="sm" c="var(--theme-text-secondary)" mt="xs">
+                            {musicStatus && formatMonthFolder(musicStatus.nextMonthFolder || '')}
+                          </Text>
+                        </div>
+                        <Group gap="xs">
+                          <Badge variant="light" color={musicFilesNext.length > 0 ? 'green' : 'gray'} size="lg">
+                            {musicFilesNext.length}
+                          </Badge>
+                          <Button
+                            variant="light"
+                            size="sm"
+                            leftSection={<IconUpload size={16} />}
+                            onClick={() => {
+                              setSelectedUploadFolder(musicStatus?.nextMonthFolder || null);
+                              setUploadModalOpen(true);
+                            }}
+                            style={{
+                              background: musicFilesNext.length > 0 
+                                ? 'linear-gradient(135deg, #059669, #047857)' 
+                                : 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))',
+                              color: 'white',
+                              border: 'none'
+                            }}
+                          >
+                            {musicFilesNext.length > 0 ? 'Догрузить' : 'Загрузить'}
+                          </Button>
+                        </Group>
+                      </Group>
+
+                      {musicFilesNext.length > 0 ? (
+                        <Stack gap="sm">
+                          {musicFilesNext.map((file, index) => {
+                            const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                            const createdDate = new Date(file.created).toLocaleDateString('ru-RU', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            });
+                            
+                            return (
+                              <Paper
+                                key={index}
+                                p="sm"
+                                radius="md"
+                                style={{
+                                  background: 'var(--theme-bg-primary)',
+                                  border: '1px solid var(--theme-border)',
+                                  transition: 'all 0.2s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.transform = 'translateX(4px)';
+                                  e.currentTarget.style.boxShadow = 'var(--theme-shadow-sm)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.transform = 'translateX(0)';
+                                  e.currentTarget.style.boxShadow = 'none';
+                                }}
+                              >
+                                <Group justify="space-between" align="center">
+                                  <Group gap="md" style={{ flex: 1 }}>
+                                    <div style={{
+                                      width: '40px',
+                                      height: '40px',
+                                      borderRadius: 'var(--radius-md)',
+                                      background: 'linear-gradient(135deg, var(--color-success), #059669)',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center'
+                                    }}>
+                                      <IconMusic size={20} color="white" />
+                                    </div>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <Text 
+                                        fw={500} 
+                                        size="sm" 
+                                        c="var(--theme-text-primary)"
+                                        style={{
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis',
+                                          whiteSpace: 'nowrap'
+                                        }}
+                                      >
+                                        {decodeRussianFileName(file.name)}
+                                      </Text>
+                                      <Group gap="md" mt={4}>
+                                        <Text size="xs" c="var(--theme-text-secondary)">
+                                          {fileSizeMB} МБ
+                                        </Text>
+                                        <Text size="xs" c="var(--theme-text-tertiary)">
+                                          {createdDate}
+                                        </Text>
+                                      </Group>
+                                    </div>
+                                  </Group>
+                                  <Badge variant="light" color="green" size="sm">
+                                    {file.name.split('.').pop()?.toUpperCase()}
+                                  </Badge>
+                                </Group>
+                              </Paper>
+                            );
+                          })}
+                        </Stack>
+                      ) : (
+                        <Stack align="center" py="xl">
+                          <IconMusic size={32} style={{ color: 'var(--theme-text-tertiary)', opacity: 0.5 }} />
+                          <Text size="sm" c="var(--theme-text-secondary)" ta="center">
+                            Нет файлов
+                          </Text>
+                          <Text size="xs" c="var(--theme-text-tertiary)" ta="center" mt="xs">
+                            Файлы для следующего месяца появятся здесь
+                          </Text>
+                        </Stack>
+                      )}
+                    </Paper>
+                  </SimpleGrid>
+                )}
               </Stack>
               </Tabs.Panel>
               )}
@@ -2724,8 +2878,14 @@ const RadioAdmin: React.FC = () => {
       {/* Upload Modal using DynamicFormModal */}
       <DynamicFormModal
         opened={uploadModalOpen} 
-        onClose={() => setUploadModalOpen(false)}
-        title="Загрузка музыкальных файлов"
+        onClose={() => {
+          setUploadModalOpen(false);
+          setSelectedUploadFolder(null);
+        }}
+        title={selectedUploadFolder 
+          ? `Загрузка музыкальных файлов - ${formatMonthFolder(selectedUploadFolder)}`
+          : "Загрузка музыкальных файлов"
+        }
         mode="create"
         fields={[
           {

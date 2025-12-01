@@ -1,12 +1,13 @@
 import { useEffect, useState, useMemo, useCallback } from "react"
 import { API } from "../../config/constants"
-import { ActionIcon, Select, TextInput, Tooltip, Box, Title, Text, Group, Card, Badge, LoadingOverlay } from "@mantine/core"
+import { ActionIcon, Select, MultiSelect, TextInput, Tooltip, Box, Title, Text, Group, Card, Badge, LoadingOverlay, Progress } from "@mantine/core"
 import { useDisclosure } from "@mantine/hooks"
 import { Tool } from "../../components/Tools"
 import { IconExternalLink, IconLockAccess, IconSearch, IconUsers, IconUser, IconBriefcase, IconShield } from "@tabler/icons-react"
 import { useNavigate } from "react-router"
 import { User, UserRole } from "../../contexts/UserContext"
 import { DynamicFormModal } from "../../utils/formModal"
+import { notificationSystem } from "../../utils/Push"
 
 export type AccessLevel = 'READONLY' | 'CONTRIBUTOR' | 'FULL'
 
@@ -17,10 +18,13 @@ type AccessLevelName = {
   name: string
 }
 
-type GroupAccess = {
+// Универсальный тип для доступа к инструменту (для всех типов сущностей)
+type EntityToolAccess = {
   id: string
   toolId: string
-  groupId: string
+  groupId?: string  // Опционально, так как используется не только для групп
+  positionId?: string
+  userId?: string
   accessLevel: AccessLevel
 }
 
@@ -47,8 +51,12 @@ function Management() {
   const [groups, setGroups] = useState([])
   const [positions, setPositions] = useState([])
   const [users, setUsers] = useState<User[]>([])
-  const [curEntity, setCurEntity] = useState<string | null>(null)
-  const [curAccess, setCurAccess] = useState<GroupAccess[]>([])
+  const [selectedEntities, setSelectedEntities] = useState<string[]>([])
+  const [entitiesAccess, setEntitiesAccess] = useState<Map<string, EntityToolAccess[]>>(new Map())
+  const [bulkOperationProgress, setBulkOperationProgress] = useState<number | null>(null)
+  
+  // Ограничение на максимальное количество выбранных сущностей для производительности
+  const MAX_SELECTED_ENTITIES = 50
   const [tools, setTools] = useState<Tool[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -102,7 +110,7 @@ function Management() {
 
   useEffect(() => {
     getEntities()
-    setCurEntity(null)
+    setSelectedEntities([])
     setSelectedGroupFilter(null) // Сбрасываем фильтр при смене типа сущности
   }, [getEntities, entityType])
 
@@ -129,70 +137,181 @@ function Management() {
     getTools()
   }, [getTools])
 
+  // Загружаем доступы для всех выбранных сущностей параллельно
   const getAccessedTools = useCallback(async () => {
-    if (!curEntity) return
+    if (selectedEntities.length === 0) {
+      setEntitiesAccess(new Map())
+      return
+    }
+
     try {
-      const response = await fetch(`${API}/access/${entityType}/${curEntity}`)
-      const json = await response.json()
-      if (response.ok) {
-        setCurAccess(json)
-      }
+      const accessPromises = selectedEntities.map(async (entityId) => {
+        try {
+          const response = await fetch(`${API}/access/${entityType}/${entityId}`)
+          const json = await response.json()
+          if (response.ok) {
+            return { entityId, access: json }
+          }
+          return { entityId, access: [] }
+        } catch (error) {
+          console.error(`Error fetching access for ${entityId}:`, error)
+          return { entityId, access: [] }
+        }
+      })
+
+      const results = await Promise.all(accessPromises)
+      const newAccessMap = new Map<string, EntityToolAccess[]>()
+      results.forEach(({ entityId, access }) => {
+        newAccessMap.set(entityId, access)
+      })
+      setEntitiesAccess(newAccessMap)
     } catch (error) {
       console.error('Error fetching accessed tools:', error)
     }
-  }, [entityType, curEntity])
+  }, [entityType, selectedEntities])
 
   useEffect(() => {
-    if (!curEntity) {
-      setCurAccess([])
-    } else {
-      getAccessedTools()
-    }
-  }, [curEntity, getAccessedTools])
+    getAccessedTools()
+  }, [getAccessedTools])
 
+  // Массовое обновление доступа для всех выбранных сущностей
   const updateGroupAccess = useCallback(async (toolId: string, accessLevel: AccessLevel) => {
-    if (!curEntity) return
-    try {
-      const response = await fetch(`${API}/access/${entityType}/${curEntity}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({toolId, accessLevel}),
-      })
-      const json = await response.json()
-      if (response.ok) {
-        setCurAccess(prevAccess => {
-          const exists = prevAccess.some(access => access.id === json.id);
-          return exists
-            ? prevAccess.map(access => access.id === json.id ? json : access)
-            : [...prevAccess, json];
-        })
-      }
-    } catch (error) {
-      console.error('Error updating access:', error)
-    }
-  }, [entityType, curEntity])
+    if (selectedEntities.length === 0) return
 
-  const deleteGroupAccess = useCallback(async (toolId: string) => {
-    if (!curEntity) return
+    setBulkOperationProgress(0)
+    const total = selectedEntities.length
+    let successCount = 0
+    let errorCount = 0
+
     try {
-      const response = await fetch(`${API}/access/${entityType}/${curEntity}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({toolId}),
+      const updatePromises = selectedEntities.map(async (entityId, index) => {
+        try {
+          const response = await fetch(`${API}/access/${entityType}/${entityId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({toolId, accessLevel}),
+          })
+          const json = await response.json()
+          if (response.ok) {
+            successCount++
+            // Обновляем доступ для конкретной сущности
+            setEntitiesAccess(prev => {
+              const newMap = new Map(prev)
+              const currentAccess = newMap.get(entityId) || []
+              const exists = currentAccess.some(access => access.id === json.id)
+              newMap.set(entityId, exists
+                ? currentAccess.map(access => access.id === json.id ? json : access)
+                : [...currentAccess, json]
+              )
+              return newMap
+            })
+            return { success: true, entityId }
+          } else {
+            errorCount++
+            return { success: false, entityId }
+          }
+        } catch (error) {
+          console.error(`Error updating access for ${entityId}:`, error)
+          errorCount++
+          return { success: false, entityId }
+        } finally {
+          setBulkOperationProgress(Math.round(((index + 1) / total) * 100))
+        }
       })
-      const json = await response.json()
-      if (response.ok) {
-        setCurAccess(prevAccess => prevAccess.filter(access => access.id !== json.id))
+
+      await Promise.all(updatePromises)
+      
+      // Показываем уведомление о результате операции
+      if (errorCount > 0) {
+        console.warn(`Updated ${successCount} of ${total} entities. ${errorCount} errors.`)
+        notificationSystem.addNotification(
+          'Частичный успех',
+          `Обновлено ${successCount} из ${total} сущностей. Ошибок: ${errorCount}`,
+          'warning'
+        )
+      } else if (successCount > 0) {
+        notificationSystem.addNotification(
+          'Успех',
+          `Доступ успешно обновлен для ${successCount} ${successCount === 1 ? 'сущности' : 'сущностей'}`,
+          'success'
+        )
       }
     } catch (error) {
-      console.error('Error deleting access:', error)
+      console.error('Error in bulk update:', error)
+    } finally {
+      setTimeout(() => setBulkOperationProgress(null), 1000)
     }
-  }, [entityType, curEntity])
+  }, [entityType, selectedEntities])
+
+  // Массовое удаление доступа для всех выбранных сущностей
+  const deleteGroupAccess = useCallback(async (toolId: string) => {
+    if (selectedEntities.length === 0) return
+
+    setBulkOperationProgress(0)
+    const total = selectedEntities.length
+    let successCount = 0
+    let errorCount = 0
+
+    try {
+      const deletePromises = selectedEntities.map(async (entityId, index) => {
+        try {
+          const response = await fetch(`${API}/access/${entityType}/${entityId}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({toolId}),
+          })
+          const json = await response.json()
+          if (response.ok) {
+            successCount++
+            // Удаляем доступ для конкретной сущности
+            setEntitiesAccess(prev => {
+              const newMap = new Map(prev)
+              const currentAccess = newMap.get(entityId) || []
+              newMap.set(entityId, currentAccess.filter(access => access.id !== json.id))
+              return newMap
+            })
+            return { success: true, entityId }
+          } else {
+            errorCount++
+            return { success: false, entityId }
+          }
+        } catch (error) {
+          console.error(`Error deleting access for ${entityId}:`, error)
+          errorCount++
+          return { success: false, entityId }
+        } finally {
+          setBulkOperationProgress(Math.round(((index + 1) / total) * 100))
+        }
+      })
+
+      await Promise.all(deletePromises)
+      
+      // Показываем уведомление о результате операции
+      if (errorCount > 0) {
+        console.warn(`Deleted access from ${successCount} of ${total} entities. ${errorCount} errors.`)
+        notificationSystem.addNotification(
+          'Частичный успех',
+          `Доступ удален для ${successCount} из ${total} сущностей. Ошибок: ${errorCount}`,
+          'warning'
+        )
+      } else if (successCount > 0) {
+        notificationSystem.addNotification(
+          'Успех',
+          `Доступ успешно удален для ${successCount} ${successCount === 1 ? 'сущности' : 'сущностей'}`,
+          'success'
+        )
+      }
+    } catch (error) {
+      console.error('Error in bulk delete:', error)
+    } finally {
+      setTimeout(() => setBulkOperationProgress(null), 1000)
+    }
+  }, [entityType, selectedEntities])
 
   const updateUserRole = useCallback(async (role: string | null) => {
-    if (role && entityType === 'user' && curEntity) {
+    if (role && entityType === 'user' && selectedEntities.length === 1) {
       try {
-        const response = await fetch(`${API}/user/${curEntity}`, {
+        const response = await fetch(`${API}/user/${selectedEntities[0]}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({role})
@@ -201,12 +320,28 @@ function Management() {
 
         if (response.ok) {
           setUsers(prevUsers => prevUsers.map(user => user.id === json.id ? {...user, role: json.role} : user))
+          notificationSystem.addNotification(
+            'Успех',
+            'Роль пользователя успешно обновлена',
+            'success'
+          )
+        } else {
+          notificationSystem.addNotification(
+            'Ошибка',
+            json.error || 'Не удалось обновить роль пользователя',
+            'error'
+          )
         }
       } catch (error) {
         console.error('Error updating user role:', error)
+        notificationSystem.addNotification(
+          'Ошибка',
+          'Ошибка при обновлении роли пользователя',
+          'error'
+        )
       }
     }
-  }, [entityType, curEntity])
+  }, [entityType, selectedEntities])
 
   // Мемоизированные данные
   const filteredTools = useMemo(() => {
@@ -216,13 +351,45 @@ function Management() {
     )
   }, [tools, searchQuery])
 
-  const currentEntity = useMemo(() => {
-    if (!curEntity) return null
-    if (entityType === 'group') return groups.find((g: any) => g.uuid === curEntity)
-    if (entityType === 'position') return positions.find((p: any) => p.uuid === curEntity)
-    if (entityType === 'user') return users.find((u: User) => u.id === curEntity)
-    return null
-  }, [curEntity, entityType, groups, positions, users])
+  // Получаем информацию о выбранных сущностях
+  const selectedEntitiesInfo = useMemo(() => {
+    return selectedEntities.map(entityId => {
+      if (entityType === 'group') return groups.find((g: any) => g.uuid === entityId)
+      if (entityType === 'position') return positions.find((p: any) => p.uuid === entityId)
+      if (entityType === 'user') return users.find((u: User) => u.id === entityId)
+      return null
+    }).filter(Boolean)
+  }, [selectedEntities, entityType, groups, positions, users])
+
+  // Агрегируем доступы для всех выбранных сущностей
+  const aggregatedAccess = useMemo(() => {
+    const toolAccessMap = new Map<string, {
+      toolId: string
+      accessLevels: AccessLevel[]
+      entityAccesses: Array<{ entityId: string, access: EntityToolAccess | null }>
+    }>()
+
+    selectedEntities.forEach(entityId => {
+      const accessList = entitiesAccess.get(entityId) || []
+      accessList.forEach(access => {
+        const existing = toolAccessMap.get(access.toolId)
+        if (existing) {
+          if (!existing.accessLevels.includes(access.accessLevel)) {
+            existing.accessLevels.push(access.accessLevel)
+          }
+          existing.entityAccesses.push({ entityId, access })
+        } else {
+          toolAccessMap.set(access.toolId, {
+            toolId: access.toolId,
+            accessLevels: [access.accessLevel],
+            entityAccesses: [{ entityId, access }]
+          })
+        }
+      })
+    })
+
+    return toolAccessMap
+  }, [selectedEntities, entitiesAccess])
 
   const entityOptions = useMemo(() => {
     if (entityType === 'group') return groups.map((g: any) => ({value: g.uuid, label: g.name}))
@@ -240,19 +407,31 @@ function Management() {
 
   const statistics = useMemo(() => {
     const totalTools = tools.length
-    const accessedTools = curAccess.length
-    const readonlyCount = curAccess.filter(access => access.accessLevel === 'READONLY').length
-    const contributorCount = curAccess.filter(access => access.accessLevel === 'CONTRIBUTOR').length
-    const fullCount = curAccess.filter(access => access.accessLevel === 'FULL').length
+    const accessedTools = aggregatedAccess.size
+    
+    // Подсчитываем уровни доступа (если у всех выбранных сущностей одинаковый уровень)
+    let readonlyCount = 0
+    let contributorCount = 0
+    let fullCount = 0
+
+    aggregatedAccess.forEach(({ accessLevels }) => {
+      if (accessLevels.length === 1) {
+        const level = accessLevels[0]
+        if (level === 'READONLY') readonlyCount++
+        else if (level === 'CONTRIBUTOR') contributorCount++
+        else if (level === 'FULL') fullCount++
+      }
+    })
 
     return {
       totalTools,
       accessedTools,
       readonlyCount,
       contributorCount,
-      fullCount
+      fullCount,
+      selectedCount: selectedEntities.length
     }
-  }, [tools.length, curAccess])
+  }, [tools.length, aggregatedAccess, selectedEntities.length])
 
   if (loading) return <LoadingOverlay visible />
 
@@ -291,6 +470,28 @@ function Management() {
 
         {/* Статистика */}
         <Group gap="lg" mb="md">
+          {statistics.selectedCount > 0 && (
+            <Box style={{
+              background: 'var(--theme-bg-primary)',
+              borderRadius: '12px',
+              padding: '16px',
+              border: '1px solid var(--theme-border-secondary)',
+              textAlign: 'center',
+              minWidth: '120px'
+            }}>
+              <Text size="xl" fw={700} c="var(--theme-text-primary)">
+                {statistics.selectedCount}
+              </Text>
+              <Text size="sm" c="var(--theme-text-secondary)">
+                {statistics.selectedCount === 1 
+                  ? entityType === 'group' ? 'Группа выбрана' :
+                    entityType === 'user' ? 'Сотрудник выбран' : 'Должность выбрана'
+                  : entityType === 'group' ? 'Групп выбрано' :
+                    entityType === 'user' ? 'Сотрудников выбрано' : 'Должностей выбрано'
+                }
+              </Text>
+            </Box>
+          )}
           <Box style={{
             background: 'var(--theme-bg-primary)',
             borderRadius: '12px',
@@ -306,36 +507,40 @@ function Management() {
               Всего инструментов
             </Text>
           </Box>
-          <Box style={{
-            background: 'var(--theme-bg-primary)',
-            borderRadius: '12px',
-            padding: '16px',
-            border: '1px solid var(--theme-border-secondary)',
-            textAlign: 'center',
-            minWidth: '120px'
-          }}>
-            <Text size="xl" fw={700} c="var(--theme-text-primary)">
-              {statistics.accessedTools}
-            </Text>
-            <Text size="sm" c="var(--theme-text-secondary)">
-              С доступом
-            </Text>
-          </Box>
-          <Box style={{
-            background: 'var(--theme-bg-primary)',
-            borderRadius: '12px',
-            padding: '16px',
-            border: '1px solid var(--theme-border-secondary)',
-            textAlign: 'center',
-            minWidth: '120px'
-          }}>
-            <Text size="xl" fw={700} c="var(--theme-text-primary)">
-              {statistics.fullCount}
-            </Text>
-            <Text size="sm" c="var(--theme-text-secondary)">
-              Полный доступ
-            </Text>
-          </Box>
+          {statistics.selectedCount > 0 && (
+            <Box style={{
+              background: 'var(--theme-bg-primary)',
+              borderRadius: '12px',
+              padding: '16px',
+              border: '1px solid var(--theme-border-secondary)',
+              textAlign: 'center',
+              minWidth: '120px'
+            }}>
+              <Text size="xl" fw={700} c="var(--theme-text-primary)">
+                {statistics.accessedTools}
+              </Text>
+              <Text size="sm" c="var(--theme-text-secondary)">
+                С доступом
+              </Text>
+            </Box>
+          )}
+          {statistics.selectedCount > 0 && (
+            <Box style={{
+              background: 'var(--theme-bg-primary)',
+              borderRadius: '12px',
+              padding: '16px',
+              border: '1px solid var(--theme-border-secondary)',
+              textAlign: 'center',
+              minWidth: '120px'
+            }}>
+              <Text size="xl" fw={700} c="var(--theme-text-primary)">
+                {statistics.fullCount}
+              </Text>
+              <Text size="sm" c="var(--theme-text-secondary)">
+                Полный доступ
+              </Text>
+            </Box>
+          )}
         </Group>
 
         {/* Выбор типа сущности */}
@@ -388,25 +593,43 @@ function Management() {
               <Text size="sm" fw={500} c="var(--theme-text-primary)" mb="xs">
                 {entityType === 'group' ? 'Группа должностей' : 
                  entityType === 'user' ? 'Сотрудник' : 'Должность'}
+                {selectedEntities.length > 0 && (
+                  <Badge size="sm" variant="light" color="blue" ml="xs">
+                    {selectedEntities.length}
+                  </Badge>
+                )}
               </Text>
-              <Select 
+              <MultiSelect 
                 data={entityOptions} 
-                value={curEntity} 
-                onChange={setCurEntity} 
-                placeholder={`Выбрать ${entityType === 'group' ? 'группу' : entityType === 'user' ? 'сотрудника' : 'должность'}`}
+                value={selectedEntities} 
+                onChange={(values) => {
+                  // Ограничиваем количество выбранных сущностей
+                  if (values.length > MAX_SELECTED_ENTITIES) {
+                    notificationSystem.addNotification(
+                      'Предупреждение',
+                      `Можно выбрать максимум ${MAX_SELECTED_ENTITIES} сущностей для оптимальной производительности`,
+                      'warning'
+                    )
+                    setSelectedEntities(values.slice(0, MAX_SELECTED_ENTITIES))
+                  } else {
+                    setSelectedEntities(values)
+                  }
+                }}
+                placeholder={`Выбрать ${entityType === 'group' ? 'группы' : entityType === 'user' ? 'сотрудников' : 'должности'} (макс. ${MAX_SELECTED_ENTITIES})`}
                 searchable
                 clearable
                 disabled={loading}
+                maxDropdownHeight={300}
               />
             </Box>
-            {entityType === 'user' && curEntity && (
+            {entityType === 'user' && selectedEntities.length === 1 && (
               <Box style={{ flex: 1 }}>
                 <Text size="sm" fw={500} c="var(--theme-text-primary)" mb="xs">
                   Роль
                 </Text>
                 <Select 
                   data={rolesData} 
-                  value={users.find((u: User) => u.id === curEntity)?.role} 
+                  value={users.find((u: User) => u.id === selectedEntities[0])?.role} 
                   onChange={updateUserRole} 
                   placeholder="Выберите роль" 
                   clearable
@@ -431,12 +654,24 @@ function Management() {
             <Text size="lg" fw={600} c="var(--theme-text-primary)">
               Инструменты
             </Text>
-            {currentEntity && (
-              <Badge color="blue" variant="light" size="lg">
-                {currentEntity.name}
-              </Badge>
+            {selectedEntitiesInfo.length > 0 && (
+              <Group gap="xs">
+                {selectedEntitiesInfo.slice(0, 3).map((entity: any, index: number) => (
+                  <Badge key={index} color="blue" variant="light" size="lg">
+                    {entity?.name || entity?.firstName || 'Unknown'}
+                  </Badge>
+                ))}
+                {selectedEntitiesInfo.length > 3 && (
+                  <Badge color="blue" variant="light" size="lg">
+                    +{selectedEntitiesInfo.length - 3} еще
+                  </Badge>
+                )}
+              </Group>
             )}
           </Group>
+          {bulkOperationProgress !== null && (
+            <Progress value={bulkOperationProgress} size="sm" radius="xl" />
+          )}
           <TextInput
             placeholder="Поиск инструментов..."
             leftSection={<IconSearch size={16} />}
@@ -453,8 +688,11 @@ function Management() {
           gap: '16px'
         }}>
           {filteredTools.map(tool => {
-            const accessLevel = curAccess.find(t => t.toolId === tool.id)?.accessLevel
-            const hasAccess = curAccess.some(t => t.toolId === tool.id)
+            const toolAccess = aggregatedAccess.get(tool.id)
+            const hasAccess = !!toolAccess
+            const accessLevelsArray = toolAccess?.accessLevels || [] // Массив строк AccessLevel[]
+            const isUniformAccess = accessLevelsArray.length === 1
+            const accessLevel = isUniformAccess ? accessLevelsArray[0] : null
             
             return (
               <Card
@@ -489,16 +727,32 @@ function Management() {
                       {tool.name}
                     </Text>
                     {hasAccess && (
-                      <Badge 
-                        color={
-                          accessLevel === 'READONLY' ? 'gray' :
-                          accessLevel === 'CONTRIBUTOR' ? 'blue' : 'green'
+                      <Tooltip
+                        label={isUniformAccess 
+                          ? (accessLevels.find(lvl => lvl.type === accessLevel)?.name || accessLevel)
+                          : `Разные права: ${accessLevelsArray.map(levelStr => {
+                            const found = accessLevels.find(a => a.type === levelStr)
+                            return found?.name || levelStr
+                          }).join(', ')}`
                         }
-                        variant="light"
-                        size="sm"
+                        withArrow
                       >
-                        {accessLevels.find(lvl => lvl.type === accessLevel)?.name}
-                      </Badge>
+                        <Badge 
+                          color={
+                            isUniformAccess
+                              ? accessLevel === 'READONLY' ? 'gray' :
+                                accessLevel === 'CONTRIBUTOR' ? 'blue' : 'green'
+                              : 'orange'
+                          }
+                          variant="light"
+                          size="sm"
+                        >
+                          {isUniformAccess
+                            ? (accessLevels.find(lvl => lvl.type === accessLevel)?.name || accessLevel)
+                            : `Разные права (${accessLevelsArray.length})`
+                          }
+                        </Badge>
+                      </Tooltip>
                     )}
                   </Box>
                   <Group gap="xs">
@@ -527,7 +781,7 @@ function Management() {
                         </Tooltip>
                       </>
                     )}
-                    {!hasAccess && curEntity && (
+                    {!hasAccess && selectedEntities.length > 0 && (
                       <Tooltip label="Добавить доступ">
                         <ActionIcon 
                           variant="light" 
@@ -570,7 +824,7 @@ function Management() {
               Инструменты не найдены
             </Text>
             <Text size="sm" c="var(--theme-text-secondary)">
-              {searchQuery ? 'Попробуйте изменить поисковый запрос' : 'Выберите сущность для просмотра доступов'}
+              {searchQuery ? 'Попробуйте изменить поисковый запрос' : selectedEntities.length === 0 ? 'Выберите сущности для просмотра доступов' : 'Инструменты не найдены'}
             </Text>
           </Box>
         )}
@@ -592,7 +846,13 @@ function Management() {
           }
         ]}
         initialValues={{ 
-          accessLevel: selectedTool ? curAccess.find(t => t.toolId === selectedTool.id)?.accessLevel || '' : ''
+          accessLevel: selectedTool ? (() => {
+            const toolAccess = aggregatedAccess.get(selectedTool.id)
+            if (toolAccess && toolAccess.accessLevels.length === 1) {
+              return toolAccess.accessLevels[0]
+            }
+            return ''
+          })() : ''
         }}
         onSubmit={(values) => {
           if (selectedTool) {
