@@ -43,40 +43,71 @@ const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: 
       let currentBlobUrl: string | null = null;
 
       if (src.startsWith('http') && !src.startsWith('blob:')) {
-        // Для внешних URL добавляем заголовки авторизации
-        const token = localStorage.getItem('token');
-        const headers: HeadersInit = {};
-        
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
-        }
+        // Для защищённых URL добавляем заголовки авторизации
+        const fetchWithAuthRetry = async () => {
+          const doFetch = async (token?: string | null) => {
+            const headers: HeadersInit = {};
+            if (token) {
+              headers['Authorization'] = `Bearer ${token}`;
+            }
 
-        fetch(src, { headers })
-          .then(response => {
+            const response = await fetch(src, { headers, credentials: 'include' });
+            if (response.status === 401) {
+              throw Object.assign(new Error('Unauthorized'), { status: 401 });
+            }
             if (!response.ok) {
               throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
             }
-            // Получаем MIME-тип из заголовков
-            const contentType = response.headers.get('content-type');
 
+            const contentType = response.headers.get('content-type');
             if (contentType && onMimeTypeDetected) {
               onMimeTypeDetected(contentType);
             }
             return response.blob();
-          })
-          .then(blob => {
+          };
+
+          try {
+            // Первая попытка с текущим токеном
+            const token = localStorage.getItem('token');
+            const blob = await doFetch(token);
             const newBlobUrl = URL.createObjectURL(blob);
             currentBlobUrl = newBlobUrl;
             setBlobUrl(newBlobUrl);
             setLoading(false);
             if (onLoad) onLoad();
-          })
-          .catch((error) => {
-            console.error('AuthFileLoader: Error loading file:', error);
+          } catch (err: any) {
+            // Если получили 401, пробуем обновить токен и повторить запрос
+            if (err?.status === 401) {
+              try {
+                const refreshResponse = await fetch(`${API}/refresh-token`, {
+                  method: 'POST',
+                  credentials: 'include',
+                });
+
+                if (refreshResponse.ok) {
+                  const newToken = await refreshResponse.json();
+                  localStorage.setItem('token', newToken);
+                  const blob = await doFetch(newToken);
+                  const newBlobUrl = URL.createObjectURL(blob);
+                  currentBlobUrl = newBlobUrl;
+                  setBlobUrl(newBlobUrl);
+                  setLoading(false);
+                  if (onLoad) onLoad();
+                  return;
+                }
+              } catch (refreshError) {
+                console.error('AuthFileLoader: token refresh failed', refreshError);
+              }
+            }
+
+            console.error('AuthFileLoader: Error loading file:', err);
             setError(true);
             setLoading(false);
             if (onError) onError();
-          });
+          }
+        };
+
+        void fetchWithAuthRetry();
       } else {
         // Для локальных URL и blob URL используем как есть
         setBlobUrl(null);
@@ -725,41 +756,62 @@ export const FilePreviewModal = ({
     if (!currentAttachment) return;
     
     try {
-      const token = localStorage.getItem('token');
-      if (!token && requireAuth) {
-        console.error('Токен авторизации не найден');
-        return;
-      }
+      const fetchWithAuthRetry = async () => {
+        const doFetch = async (token?: string | null) => {
+          const headers: Record<string, string> = {};
+          if (requireAuth && token) {
+            headers['Authorization'] = `Bearer ${token}`;
+          }
+          const response = await fetch(fileUrl, { headers, credentials: 'include' });
+          if (response.status === 401 && requireAuth) {
+            throw Object.assign(new Error('Unauthorized'), { status: 401 });
+          }
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          return response.blob();
+        };
 
-      // Для всех файлов скачиваем и создаем blob URL для лучшего UX
-      if (fileUrl.startsWith('http')) {
-        const headers: Record<string, string> = {};
-        
-        // Добавляем токен авторизации если требуется
-        if (requireAuth && token) {
-          headers['Authorization'] = `Bearer ${token}`;
+        const openBlob = (blob: Blob) => {
+          const blobUrl = URL.createObjectURL(blob);
+          window.open(blobUrl, '_blank');
+          setTimeout(() => {
+            URL.revokeObjectURL(blobUrl);
+          }, 60000);
+        };
+
+        if (fileUrl.startsWith('http')) {
+          try {
+            const token = localStorage.getItem('token');
+            const blob = await doFetch(token);
+            openBlob(blob);
+          } catch (err: any) {
+            if (requireAuth && err?.status === 401) {
+              try {
+                const refreshResponse = await fetch(`${API}/refresh-token`, {
+                  method: 'POST',
+                  credentials: 'include',
+                });
+                if (refreshResponse.ok) {
+                  const newToken = await refreshResponse.json();
+                  localStorage.setItem('token', newToken);
+                  const blob = await doFetch(newToken);
+                  openBlob(blob);
+                  return;
+                }
+              } catch (refreshError) {
+                console.error('openInNewTab: token refresh failed', refreshError);
+              }
+            }
+            throw err;
+          }
+        } else {
+          // Для локальных файлов или других протоколов открываем напрямую
+          window.open(fileUrl, '_blank');
         }
+      };
 
-        const response = await fetch(fileUrl, { headers });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const blob = await response.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        
-        // Открываем blob URL в новой вкладке
-        window.open(blobUrl, '_blank');
-        
-        // Очищаем blob URL через некоторое время для освобождения памяти
-        setTimeout(() => {
-          URL.revokeObjectURL(blobUrl);
-        }, 60000); // 1 минута
-      } else {
-        // Для локальных файлов или других протоколов открываем напрямую
-        window.open(fileUrl, '_blank');
-      }
+      await fetchWithAuthRetry();
     } catch (error) {
       console.error('Ошибка при открытии файла в новой вкладке:', error);
       // Fallback: пытаемся открыть напрямую
