@@ -701,6 +701,71 @@ function MerchStats() {
               </Paper>
             </SimpleGrid>
 
+            {stats.reactionStats.topCardsByReactions && stats.reactionStats.topCardsByReactions.length > 0 && (
+              <Paper withBorder p="md" radius="md" mt="md">
+                <Title order={3} mb="md">Топ карточек по реакциям</Title>
+                <ScrollArea h={400}>
+                  <Table>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>#</Table.Th>
+                        <Table.Th>Карточка/Категория</Table.Th>
+                        <Table.Th>Всего реакций</Table.Th>
+                        <Table.Th>Популярные реакции</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {stats.reactionStats.topCardsByReactions.map((card, index) => (
+                        <Table.Tr key={card.itemId}>
+                          <Table.Td>
+                            <Badge variant="dot" color={index < 3 ? 'green' : 'gray'}>
+                              {index + 1}
+                            </Badge>
+                          </Table.Td>
+                          <Table.Td>
+                            <Stack gap={4}>
+                              <Group gap="xs">
+                                <Badge 
+                                  variant="light" 
+                                  color={card.itemType === 'card' ? 'blue' : 'gray'}
+                                  size="sm"
+                                >
+                                  {card.itemType === 'card' ? 'Карточка' : 'Категория'}
+                                </Badge>
+                              </Group>
+                              <Text size="sm" fw={500}>
+                                {card.itemName}
+                              </Text>
+                              <Text size="xs" c="dimmed" ff="monospace">
+                                ID: {card.itemId.substring(0, 8)}...
+                              </Text>
+                            </Stack>
+                          </Table.Td>
+                          <Table.Td>
+                            <Badge variant="light" size="lg">
+                              {card.totalReactions}
+                            </Badge>
+                          </Table.Td>
+                          <Table.Td>
+                            <Group gap="xs">
+                              {card.topReactions.map((reaction) => (
+                                <Group key={reaction.emoji} gap={4}>
+                                  <Text size="lg">{reaction.emoji}</Text>
+                                  <Badge size="sm" variant="outline">
+                                    {reaction.count}
+                                  </Badge>
+                                </Group>
+                              ))}
+                            </Group>
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                </ScrollArea>
+              </Paper>
+            )}
+
             {stats.reactionStats.topMessages && stats.reactionStats.topMessages.length > 0 && (
               <Paper withBorder p="md" radius="md" mt="md">
                 <Title order={3} mb="md">Топ сообщений по реакциям</Title>
@@ -709,8 +774,7 @@ function MerchStats() {
                     <Table.Thead>
                       <Table.Tr>
                         <Table.Th>#</Table.Th>
-                        <Table.Th>ID сообщения</Table.Th>
-                        <Table.Th>ID чата</Table.Th>
+                        <Table.Th>Карточка/Категория</Table.Th>
                         <Table.Th>Всего реакций</Table.Th>
                         <Table.Th>Реакции</Table.Th>
                       </Table.Tr>
@@ -724,14 +788,34 @@ function MerchStats() {
                             </Badge>
                           </Table.Td>
                           <Table.Td>
-                            <Text size="sm" ff="monospace">
-                              {message.messageId}
-                            </Text>
-                          </Table.Td>
-                          <Table.Td>
-                            <Text size="sm" ff="monospace" c="dimmed">
-                              {message.chatId}
-                            </Text>
+                            {message.cardInfo ? (
+                              <Stack gap={4}>
+                                <Group gap="xs">
+                                  <Badge 
+                                    variant="light" 
+                                    color={message.cardInfo.itemType === 'card' ? 'blue' : 'gray'}
+                                    size="sm"
+                                  >
+                                    {message.cardInfo.itemType === 'card' ? 'Карточка' : 'Категория'}
+                                  </Badge>
+                                </Group>
+                                <Text size="sm" fw={500}>
+                                  {message.cardInfo.itemName}
+                                </Text>
+                                <Text size="xs" c="dimmed" ff="monospace">
+                                  ID: {message.cardInfo.itemId.substring(0, 8)}...
+                                </Text>
+                              </Stack>
+                            ) : (
+                              <Stack gap={4}>
+                                <Text size="sm" c="dimmed" ff="monospace">
+                                  Сообщение {message.messageId}
+                                </Text>
+                                <Text size="xs" c="dimmed" ff="monospace">
+                                  Чат: {message.chatId}
+                                </Text>
+                              </Stack>
+                            )}
                           </Table.Td>
                           <Table.Td>
                             <Badge variant="light" size="lg">

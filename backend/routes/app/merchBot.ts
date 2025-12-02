@@ -273,16 +273,108 @@ router.get('/stats', async (req: any, res: any) => {
       .sort((a, b) => b.count - a.count)
       .slice(0, 20);
 
-    // Топ сообщений по количеству реакций
-    const topMessages = Object.values(reactionsByMessage)
+    // Статистика по карточкам (какие карточки получили больше всего реакций)
+    const reactionsByCard: Record<string, {
+      itemId: string;
+      itemName: string;
+      itemType: 'card' | 'category';
+      totalReactions: number;
+      reactions: Record<string, number>;
+    }> = {};
+
+    reactions.forEach(reaction => {
+      if (reaction.details) {
+        try {
+          const parsed = JSON.parse(reaction.details);
+          if (parsed.itemId && parsed.itemName) {
+            const itemKey = parsed.itemId;
+            if (!reactionsByCard[itemKey]) {
+              reactionsByCard[itemKey] = {
+                itemId: parsed.itemId,
+                itemName: parsed.itemName,
+                itemType: parsed.itemType || 'card',
+                totalReactions: 0,
+                reactions: {}
+              };
+            }
+            reactionsByCard[itemKey].totalReactions++;
+            const emoji = parsed.emoji || 'unknown';
+            reactionsByCard[itemKey].reactions[emoji] = (reactionsByCard[itemKey].reactions[emoji] || 0) + 1;
+          }
+        } catch (e) {
+          // Игнорируем ошибки парсинга
+        }
+      }
+    });
+
+    const topCardsByReactions = Object.values(reactionsByCard)
       .sort((a, b) => b.totalReactions - a.totalReactions)
       .slice(0, 20)
-      .map(msg => ({
-        messageId: msg.messageId,
-        chatId: msg.chatId,
-        totalReactions: msg.totalReactions,
-        reactions: msg.reactions.sort((a, b) => b.count - a.count)
+      .map(card => ({
+        itemId: card.itemId,
+        itemName: card.itemName,
+        itemType: card.itemType,
+        totalReactions: card.totalReactions,
+        topReactions: Object.entries(card.reactions)
+          .map(([emoji, count]) => ({ emoji, count }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 5)
       }));
+
+    // Топ сообщений по количеству реакций с информацией о карточках
+    const topMessages = await Promise.all(
+      Object.values(reactionsByMessage)
+        .sort((a, b) => b.totalReactions - a.totalReactions)
+        .slice(0, 20)
+        .map(async (msg) => {
+          // Ищем информацию о карточке для этого сообщения
+          // Ищем событие card_sent с этим messageId и chatId
+          let cardInfo: { itemId: string; itemName: string; itemType: 'card' | 'category' } | null = null;
+          
+          try {
+            const cardSentEvent = await prisma.merchTgUserStats.findFirst({
+              where: {
+                action: 'card_sent',
+                details: {
+                  contains: `"messageId":${msg.messageId}`
+                }
+              },
+              orderBy: {
+                timestamp: 'desc'
+              }
+            });
+
+            if (cardSentEvent && cardSentEvent.details) {
+              try {
+                const parsed = JSON.parse(cardSentEvent.details);
+                if (parsed.chatId === msg.chatId && parsed.messageId === msg.messageId) {
+                  cardInfo = {
+                    itemId: parsed.itemId,
+                    itemName: parsed.itemName,
+                    itemType: parsed.itemType
+                  };
+                }
+              } catch (parseError) {
+                // Игнорируем ошибки парсинга
+              }
+            }
+          } catch (dbError) {
+            // Игнорируем ошибки БД
+          }
+
+          return {
+            messageId: msg.messageId,
+            chatId: msg.chatId,
+            totalReactions: msg.totalReactions,
+            reactions: msg.reactions.sort((a, b) => b.count - a.count),
+            cardInfo: cardInfo ? {
+              itemId: cardInfo.itemId,
+              itemName: cardInfo.itemName,
+              itemType: cardInfo.itemType
+            } : null
+          };
+        })
+    );
 
     // Популярные поисковые запросы
     const searches = await prisma.merchTgUserStats.findMany({
@@ -654,7 +746,8 @@ router.get('/stats', async (req: any, res: any) => {
         uniqueEmojis: Object.keys(reactionCounts).length,
         topReactions: popularReactions,
         topMessages: topMessages,
-        messagesWithReactions: Object.keys(reactionsByMessage).length
+        messagesWithReactions: Object.keys(reactionsByMessage).length,
+        topCardsByReactions: topCardsByReactions
       },
       popularCards,
       categoryClicks: categoryClicks.slice(0, 10),

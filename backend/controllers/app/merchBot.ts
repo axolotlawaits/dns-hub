@@ -20,6 +20,11 @@ interface MerchSessionData {
     photos?: string[];
   };
   lastMenuMessageId?: number; // ID последнего сообщения с меню для обновления
+  messageToCardMap?: Record<number, { // Связь между messageId и карточкой
+    itemId: string;
+    itemName: string;
+    itemType: 'card' | 'category';
+  }>;
 }
 
 type MerchContext = Context & SessionFlavor<MerchSessionData>;
@@ -225,18 +230,72 @@ class MerchBotService {
         const reactions = ctx.messageReaction?.new_reaction || [];
         if (reactions.length === 0) return;
 
+        const messageId = ctx.messageReaction?.message_id;
+        const chatId = ctx.messageReaction?.chat?.id;
+
+        // Ищем информацию о карточке в базе данных
+        // Ищем последнее событие card_sent для этого пользователя с этим messageId и chatId
+        let cardInfo: { itemId: string; itemName: string; itemType: 'card' | 'category' } | null = null;
+        
+        if (messageId && chatId) {
+          try {
+            // Ищем событие card_sent с этим messageId и chatId для этого пользователя
+            const cardSentEvent = await prisma.merchTgUserStats.findFirst({
+              where: {
+                userId: user.id,
+                action: 'card_sent',
+                details: {
+                  contains: `"messageId":${messageId}`
+                }
+              },
+              orderBy: {
+                timestamp: 'desc'
+              }
+            });
+
+            if (cardSentEvent && cardSentEvent.details) {
+              try {
+                const parsed = JSON.parse(cardSentEvent.details);
+                // Проверяем, что chatId совпадает
+                if (parsed.chatId === chatId && parsed.messageId === messageId) {
+                  cardInfo = {
+                    itemId: parsed.itemId,
+                    itemName: parsed.itemName,
+                    itemType: parsed.itemType
+                  };
+                  console.log(`📌 Найдена карточка для реакции: ${cardInfo.itemName} (${cardInfo.itemId})`);
+                }
+              } catch (parseError) {
+                console.error('Ошибка парсинга details для card_sent:', parseError);
+              }
+            }
+          } catch (dbError) {
+            console.error('Ошибка поиска карточки в базе данных:', dbError);
+          }
+        }
+
         // Сохраняем статистику для каждой реакции
         for (const reaction of reactions) {
           const emoji = reaction.type === 'emoji' ? reaction.emoji : 'unknown';
+          
+          const details: any = {
+            emoji,
+            messageId,
+            chatId
+          };
+
+          // Добавляем информацию о карточке, если она найдена
+          if (cardInfo) {
+            details.itemId = cardInfo.itemId;
+            details.itemName = cardInfo.itemName;
+            details.itemType = cardInfo.itemType;
+          }
+
           await prisma.merchTgUserStats.create({
             data: {
               userId: user.id,
               action: 'message_reaction',
-              details: JSON.stringify({
-                emoji,
-                messageId: ctx.messageReaction?.message_id,
-                chatId: ctx.messageReaction?.chat?.id
-              })
+              details: JSON.stringify(details)
             }
           });
         }
@@ -445,6 +504,34 @@ class MerchBotService {
         ctx.session.userChoiceHistory.push(foundButton.id);
       }
 
+      // Получаем элемент для определения типа и сохранения связи
+      const item = await this.findItemById(foundButton.id);
+      const isCard = item?.layer === 0;
+      const itemType: 'card' | 'category' = isCard ? 'card' : 'category';
+
+      // Получаем пользователя для сохранения связи в базе
+      let tgUser = null;
+      if (ctx.from) {
+        tgUser = await prisma.merchTgUser.findUnique({
+          where: { userId: ctx.from.id }
+        });
+        if (!tgUser) {
+          tgUser = await prisma.merchTgUser.create({
+            data: {
+              userId: ctx.from.id,
+              username: ctx.from.username || null,
+              firstName: ctx.from.first_name || null,
+              lastName: ctx.from.last_name || null
+            }
+          });
+        }
+      }
+
+      // Инициализируем мапу для связи сообщений с карточками в сессии
+      if (!ctx.session.messageToCardMap) {
+        ctx.session.messageToCardMap = {};
+      }
+
       // Отправляем связанные файлы (изображения и PDF)
       const photoPaths = await this.getPhotoPaths(foundButton.id);
       console.log(`📎 Найдено ${photoPaths.length} файлов для отправки`);
@@ -462,12 +549,43 @@ class MerchBotService {
           const lowerPath = photoPath.toLowerCase();
           const isPdf = lowerPath.endsWith('.pdf');
 
+          let sentMessage;
           if (isPdf) {
             // Для PDF используем отправку как документ, чтобы не конвертировался в фото
-            await ctx.replyWithDocument(new InputFile(photoPath));
+            sentMessage = await ctx.replyWithDocument(new InputFile(photoPath));
           } else {
             // Остальные считаем изображениями
-            await ctx.replyWithPhoto(new InputFile(photoPath));
+            sentMessage = await ctx.replyWithPhoto(new InputFile(photoPath));
+          }
+
+          // Сохраняем связь между messageId и карточкой
+          if (sentMessage && 'message_id' in sentMessage && tgUser && ctx.chat && item) {
+            const messageId = sentMessage.message_id as number;
+            const chatId = ctx.chat.id;
+            
+            // Сохраняем в сессию
+            ctx.session.messageToCardMap[messageId] = {
+              itemId: foundButton.id,
+              itemName: item.name,
+              itemType: itemType
+            };
+            
+            // Сохраняем в базу данных
+            await prisma.merchTgUserStats.create({
+              data: {
+                userId: tgUser.id,
+                action: 'card_sent',
+                details: JSON.stringify({
+                  messageId,
+                  chatId,
+                  itemId: foundButton.id,
+                  itemName: item.name,
+                  itemType
+                })
+              }
+            });
+            
+            console.log(`📌 Связали messageId ${messageId} с карточкой ${item.name} (${foundButton.id})`);
           }
 
           console.log(`✅ Файл отправлен успешно: ${photoPath}`);
@@ -482,7 +600,6 @@ class MerchBotService {
       }
 
       // Отправляем описание (получаем полный элемент из базы для получения description)
-      const item = await this.findItemById(foundButton.id);
       if (item && item.description) {
         const formattedText = this.formatDescription(item.description);
         console.log(`📝 [MerchBot] Отправляем описание (raw из БД):`, item.description);
@@ -496,9 +613,39 @@ class MerchBotService {
             return;
           }
           
-          await ctx.api.sendMessage(ctx.chat.id, formattedText, {
+          const sentMessage = await ctx.api.sendMessage(ctx.chat.id, formattedText, {
             parse_mode: 'HTML'
           } as any);
+          
+          // Сохраняем связь между messageId и карточкой
+          if (sentMessage && 'message_id' in sentMessage && tgUser && item) {
+            const messageId = sentMessage.message_id as number;
+            const chatId = ctx.chat.id;
+            
+            // Сохраняем в сессию
+            ctx.session.messageToCardMap[messageId] = {
+              itemId: foundButton.id,
+              itemName: item.name,
+              itemType: itemType
+            };
+            
+            // Сохраняем в базу данных
+            await prisma.merchTgUserStats.create({
+              data: {
+                userId: tgUser.id,
+                action: 'card_sent',
+                details: JSON.stringify({
+                  messageId,
+                  chatId,
+                  itemId: foundButton.id,
+                  itemName: item.name,
+                  itemType
+                })
+              }
+            });
+            
+            console.log(`📌 Связали messageId ${messageId} с карточкой ${item.name} (${foundButton.id})`);
+          }
           
           console.log(`✅ [MerchBot] Сообщение отправлено успешно`);
         } catch (error: any) {
@@ -513,7 +660,33 @@ class MerchBotService {
             .replace(/&quot;/g, '"')
             .replace(/\*\*/g, '') // Убираем Markdown
             .replace(/\*/g, '');
-          await ctx.reply(plainText);
+          const sentMessage = await ctx.reply(plainText);
+          
+          // Сохраняем связь даже для сообщения без форматирования
+          if (sentMessage && 'message_id' in sentMessage && tgUser && ctx.chat && item) {
+            const messageId = sentMessage.message_id as number;
+            const chatId = ctx.chat.id;
+            
+            ctx.session.messageToCardMap[messageId] = {
+              itemId: foundButton.id,
+              itemName: item.name,
+              itemType: itemType
+            };
+            
+            await prisma.merchTgUserStats.create({
+              data: {
+                userId: tgUser.id,
+                action: 'card_sent',
+                details: JSON.stringify({
+                  messageId,
+                  chatId,
+                  itemId: foundButton.id,
+                  itemName: item.name,
+                  itemType
+                })
+              }
+            });
+          }
         }
       } else if (foundButton.text) {
         // Fallback на старый способ, если description нет
@@ -637,6 +810,33 @@ class MerchBotService {
         await this.updateStats(ctx.from.id, 'button_click', item.name);
       }
 
+      // Инициализируем мапу для связи сообщений с карточками в сессии
+      if (!ctx.session.messageToCardMap) {
+        ctx.session.messageToCardMap = {};
+      }
+
+      // Определяем тип элемента (карточка или категория)
+      const isCard = item.layer === 0; // Карточки имеют layer = 0
+      const itemType: 'card' | 'category' = isCard ? 'card' : 'category';
+
+      // Получаем пользователя для сохранения связи в базе
+      let tgUser = null;
+      if (ctx.from) {
+        tgUser = await prisma.merchTgUser.findUnique({
+          where: { userId: ctx.from.id }
+        });
+        if (!tgUser) {
+          tgUser = await prisma.merchTgUser.create({
+            data: {
+              userId: ctx.from.id,
+              username: ctx.from.username || null,
+              firstName: ctx.from.first_name || null,
+              lastName: ctx.from.last_name || null
+            }
+          });
+        }
+      }
+
       // Получаем связанные файлы (изображения и PDF)
       const photoPaths = await this.getPhotoPaths(itemId);
       
@@ -655,10 +855,41 @@ class MerchBotService {
           const lowerPath = photoPath.toLowerCase();
           const isPdf = lowerPath.endsWith('.pdf');
 
+          let sentMessage;
           if (isPdf) {
-            await ctx.replyWithDocument(new InputFile(photoPath));
+            sentMessage = await ctx.replyWithDocument(new InputFile(photoPath));
           } else {
-            await ctx.replyWithPhoto(new InputFile(photoPath));
+            sentMessage = await ctx.replyWithPhoto(new InputFile(photoPath));
+          }
+
+          // Сохраняем связь между messageId и карточкой
+          if (sentMessage && 'message_id' in sentMessage && tgUser && ctx.chat) {
+            const messageId = sentMessage.message_id as number;
+            const chatId = ctx.chat.id;
+            
+            // Сохраняем в сессию
+            ctx.session.messageToCardMap[messageId] = {
+              itemId: itemId,
+              itemName: item.name,
+              itemType: itemType
+            };
+            
+            // Сохраняем в базу данных для доступа из обработчика реакций
+            await prisma.merchTgUserStats.create({
+              data: {
+                userId: tgUser.id,
+                action: 'card_sent',
+                details: JSON.stringify({
+                  messageId,
+                  chatId,
+                  itemId,
+                  itemName: item.name,
+                  itemType
+                })
+              }
+            });
+            
+            console.log(`📌 Связали messageId ${messageId} с карточкой ${item.name} (${itemId})`);
           }
 
           console.log(`✅ Файл отправлен успешно: ${photoPath}`);
@@ -686,9 +917,39 @@ class MerchBotService {
             return;
           }
           
-          await ctx.api.sendMessage(ctx.chat.id, formattedText, {
+          const sentMessage = await ctx.api.sendMessage(ctx.chat.id, formattedText, {
             parse_mode: 'HTML'
           } as any);
+          
+          // Сохраняем связь между messageId и карточкой
+          if (sentMessage && 'message_id' in sentMessage && tgUser) {
+            const messageId = sentMessage.message_id as number;
+            const chatId = ctx.chat.id;
+            
+            // Сохраняем в сессию
+            ctx.session.messageToCardMap[messageId] = {
+              itemId: itemId,
+              itemName: item.name,
+              itemType: itemType
+            };
+            
+            // Сохраняем в базу данных
+            await prisma.merchTgUserStats.create({
+              data: {
+                userId: tgUser.id,
+                action: 'card_sent',
+                details: JSON.stringify({
+                  messageId,
+                  chatId,
+                  itemId,
+                  itemName: item.name,
+                  itemType
+                })
+              }
+            });
+            
+            console.log(`📌 Связали messageId ${messageId} с карточкой ${item.name} (${itemId})`);
+          }
           
           console.log(`✅ [MerchBot] Сообщение отправлено успешно`);
         } catch (error: any) {
@@ -703,7 +964,33 @@ class MerchBotService {
             .replace(/&quot;/g, '"')
             .replace(/\*\*/g, '') // Убираем Markdown
             .replace(/\*/g, '');
-          await ctx.reply(plainText);
+          const sentMessage = await ctx.reply(plainText);
+          
+          // Сохраняем связь даже для сообщения без форматирования
+          if (sentMessage && 'message_id' in sentMessage && tgUser && ctx.chat) {
+            const messageId = sentMessage.message_id as number;
+            const chatId = ctx.chat.id;
+            
+            ctx.session.messageToCardMap[messageId] = {
+              itemId: itemId,
+              itemName: item.name,
+              itemType: itemType
+            };
+            
+            await prisma.merchTgUserStats.create({
+              data: {
+                userId: tgUser.id,
+                action: 'card_sent',
+                details: JSON.stringify({
+                  messageId,
+                  chatId,
+                  itemId,
+                  itemName: item.name,
+                  itemType
+                })
+              }
+            });
+          }
         }
       }
 
@@ -1551,7 +1838,7 @@ class MerchBotService {
   }
 
   // Поиск элемента по ID
-  private async findItemById(itemId: string): Promise<{id: string, name: string, description: string} | null> {
+  private async findItemById(itemId: string): Promise<{id: string, name: string, description: string, layer: number} | null> {
     try {
       console.log(`🔍 [findItemById] Ищем элемент с ID: ${itemId}`);
       const item = await prisma.merch.findUnique({
@@ -1587,7 +1874,8 @@ class MerchBotService {
       return {
         id: item.id,
         name: item.name,
-        description: item.description || ''
+        description: item.description || '',
+        layer: item.layer
       };
     } catch (error) {
       console.error('❌ [findItemById] Error finding item:', error);

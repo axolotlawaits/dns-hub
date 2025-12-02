@@ -44,8 +44,23 @@ export interface MerchStatsResponse {
         count: number;
         lastReaction: Date;
       }>;
+      cardInfo?: {
+        itemId: string;
+        itemName: string;
+        itemType: 'card' | 'category';
+      } | null;
     }>;
     messagesWithReactions?: number;
+    topCardsByReactions?: Array<{
+      itemId: string;
+      itemName: string;
+      itemType: 'card' | 'category';
+      totalReactions: number;
+      topReactions: Array<{
+        emoji: string;
+        count: number;
+      }>;
+    }>;
   };
   categoryClicks: Array<{
     name: string;
