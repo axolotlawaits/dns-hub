@@ -70,7 +70,10 @@ const ProfileInfo = () => {
   const [telegramUserName, setTelegramUserName] = useState('');
   const [telegramLoading, setTelegramLoading] = useState(true);
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(true);
+  const [notificationSoundEnabled, setNotificationSoundEnabled] = useState(true);
+  const [notificationSound, setNotificationSound] = useState<string>('default');
   const [bookmarksCardsPerRow, setBookmarksCardsPerRow] = useState<3 | 6 | 9>(6);
+  const [navMenuMode, setNavMenuMode] = useState<string>('auto'); // 'auto', 'always_open', 'always_closed'
   const [photoModalOpened, { open: openPhotoModal, close: closePhotoModal }] = useDisclosure(false);
   const [passwordModalOpened, { open: openPasswordModal, close: closePasswordModal }] = useDisclosure(false);
   const [telegramModalOpened, { open: openTelegramModal, close: closeTelegramModal }] = useDisclosure(false);
@@ -285,6 +288,131 @@ const ProfileInfo = () => {
       'success'
     );
   };
+
+  const handleNotificationSoundToggle = async (enabled: boolean) => {
+    setNotificationSoundEnabled(enabled);
+    await saveUserSetting('notificationSoundEnabled', enabled.toString());
+    localStorage.setItem('notificationSoundEnabled', enabled.toString());
+    notificationSystem.addNotification(
+      'Успех',
+      `Звук уведомлений ${enabled ? 'включен' : 'отключен'}`,
+      'success'
+    );
+  };
+
+  const handleNotificationSoundChange = async (sound: string) => {
+    setNotificationSound(sound);
+    await saveUserSetting('notificationSound', sound);
+    localStorage.setItem('notificationSound', sound);
+    notificationSystem.addNotification(
+      'Успех',
+      `Звук уведомлений изменен на: ${sound === 'default' ? 'По умолчанию' : sound === 'gentle' ? 'Мягкий' : sound === 'classic' ? 'Классический' : 'Современный'}`,
+      'success'
+    );
+    
+    // Воспроизводим звук для предпросмотра
+    if (notificationSoundEnabled) {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      switch (sound) {
+        case 'gentle':
+          oscillator.frequency.value = 800;
+          oscillator.type = 'sine';
+          gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+          oscillator.start(audioContext.currentTime);
+          oscillator.stop(audioContext.currentTime + 0.3);
+          break;
+        case 'classic':
+          oscillator.frequency.value = 1000;
+          oscillator.type = 'square';
+          gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+          oscillator.start(audioContext.currentTime);
+          oscillator.stop(audioContext.currentTime + 0.2);
+          break;
+        case 'modern':
+          const osc1 = audioContext.createOscillator();
+          const osc2 = audioContext.createOscillator();
+          const gain1 = audioContext.createGain();
+          const gain2 = audioContext.createGain();
+          
+          osc1.frequency.value = 800;
+          osc2.frequency.value = 1000;
+          osc1.type = 'sine';
+          osc2.type = 'sine';
+          
+          osc1.connect(gain1);
+          osc2.connect(gain2);
+          gain1.connect(audioContext.destination);
+          gain2.connect(audioContext.destination);
+          
+          gain1.gain.setValueAtTime(0.2, audioContext.currentTime);
+          gain2.gain.setValueAtTime(0.2, audioContext.currentTime);
+          gain1.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.4);
+          gain2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.4);
+          
+          osc1.start(audioContext.currentTime);
+          osc2.start(audioContext.currentTime);
+          osc1.stop(audioContext.currentTime + 0.4);
+          osc2.stop(audioContext.currentTime + 0.4);
+          return;
+        default:
+          oscillator.frequency.value = 600;
+          oscillator.type = 'sine';
+          gainNode.gain.setValueAtTime(0.4, audioContext.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.25);
+          oscillator.start(audioContext.currentTime);
+          oscillator.stop(audioContext.currentTime + 0.25);
+      }
+    }
+  };
+
+  const handleNavMenuModeChange = async (value: string) => {
+    setNavMenuMode(value);
+    await saveUserSetting('nav_menu_mode', value);
+    localStorage.setItem('nav_menu_mode', value);
+    // Уведомляем App.tsx об изменении настройки
+    window.dispatchEvent(new CustomEvent('nav-menu-mode-changed', { detail: value }));
+    notificationSystem.addNotification(
+      'Успех',
+      `Режим меню изменен: ${value === 'auto' ? 'Автоматически' : value === 'always_open' ? 'Всегда открыто' : 'Всегда скрыто'}`,
+      'success'
+    );
+  };
+
+  // Загрузка настроек звука уведомлений
+  useEffect(() => {
+    const loadSoundSettings = async () => {
+      if (!user?.id) return;
+      
+      const soundEnabled = await loadUserSetting('notificationSoundEnabled');
+      const soundType = await loadUserSetting('notificationSound');
+      
+      if (soundEnabled !== null) {
+        setNotificationSoundEnabled(soundEnabled === 'true');
+        localStorage.setItem('notificationSoundEnabled', soundEnabled);
+      } else {
+        localStorage.setItem('notificationSoundEnabled', 'true');
+      }
+      
+      if (soundType && ['default', 'gentle', 'classic', 'modern'].includes(soundType)) {
+        setNotificationSound(soundType);
+        localStorage.setItem('notificationSound', soundType);
+      } else {
+        localStorage.setItem('notificationSound', 'default');
+      }
+    };
+
+    if (user?.id) {
+      loadSoundSettings();
+    }
+  }, [user?.id]);
 
   // Загрузка сохраненной настройки количества карточек
   useEffect(() => {
@@ -839,6 +967,78 @@ const ProfileInfo = () => {
               </Group>
             </Card>
           </Grid.Col>
+          
+          {/* Настройка звука уведомлений */}
+          <Grid.Col span={12}>
+            <Card 
+              padding="md" 
+              radius="md"
+              style={{ 
+                background: 'var(--theme-bg-tertiary)',
+                border: '1px solid var(--theme-border-primary)'
+              }}
+            >
+              <Group justify="space-between" mb="sm">
+                <Group gap="sm">
+                  <ThemeIcon size="sm" color="blue" variant="light">
+                    <IconBell size={16} />
+                  </ThemeIcon>
+                  <Text 
+                    fw={600}
+                    style={{ color: 'var(--theme-text-primary)' }}
+                  >
+                    Звук уведомлений
+                  </Text>
+                </Group>
+                <Badge 
+                  color={notificationSoundEnabled ? "blue" : "gray"} 
+                  variant="light"
+                  size="sm"
+                >
+                  {notificationSoundEnabled ? "Включен" : "Отключен"}
+                </Badge>
+              </Group>
+              
+              <Group justify="space-between" align="center" mb="md">
+                <Text 
+                  size="sm"
+                  style={{ color: 'var(--theme-text-secondary)' }}
+                >
+                  Воспроизводить звук при получении уведомлений
+                </Text>
+                <Switch
+                  checked={notificationSoundEnabled}
+                  onChange={(event) => handleNotificationSoundToggle(event.currentTarget.checked)}
+                  color="blue"
+                  size="sm"
+                />
+              </Group>
+              
+              {notificationSoundEnabled && (
+                <Box>
+                  <Text 
+                    size="sm"
+                    fw={500}
+                    mb="xs"
+                    style={{ color: 'var(--theme-text-primary)' }}
+                  >
+                    Выберите звук:
+                  </Text>
+                  <SegmentedControl
+                    value={notificationSound}
+                    onChange={handleNotificationSoundChange}
+                    data={[
+                      { label: 'По умолчанию', value: 'default' },
+                      { label: 'Мягкий', value: 'gentle' },
+                      { label: 'Классический', value: 'classic' },
+                      { label: 'Современный', value: 'modern' }
+                    ]}
+                    fullWidth
+                  />
+                </Box>
+              )}
+            </Card>
+          </Grid.Col>
         </Grid>
       </Card>
 
@@ -894,6 +1094,35 @@ const ProfileInfo = () => {
                   size="sm"
                 />
               </Group>
+            </Card>
+          </Grid.Col>
+          <Grid.Col span={12}>
+            <Card 
+              padding="md" 
+              radius="md"
+              style={{ 
+                background: 'var(--theme-bg-tertiary)',
+                border: '1px solid var(--theme-border-primary)'
+              }}
+            >
+              <Box mb="xs">
+                <Text size="sm" fw={500} c="var(--theme-text-primary)" mb="xs">
+                  Режим бокового меню
+                </Text>
+                <Text size="xs" c="var(--theme-text-secondary)" mb="md">
+                  Выберите, как должно вести себя боковое меню навигации
+                </Text>
+                <SegmentedControl
+                  value={navMenuMode}
+                  onChange={handleNavMenuModeChange}
+                  data={[
+                    { label: 'Автоматически', value: 'auto' },
+                    { label: 'Всегда открыто', value: 'always_open' },
+                    { label: 'Всегда скрыто', value: 'always_closed' }
+                  ]}
+                  fullWidth
+                />
+              </Box>
             </Card>
           </Grid.Col>
         </Grid>

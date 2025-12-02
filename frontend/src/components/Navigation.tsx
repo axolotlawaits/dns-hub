@@ -26,6 +26,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useUserContext } from '../hooks/useUserContext';
 import './styles/Navigation.css';
 import { DynamicFormModal, type FormField } from '../utils/formModal';
+import { notificationSystem } from '../utils/Push';
 
 interface Tool {
   id: string;
@@ -227,18 +228,66 @@ const Navigation: React.FC<NavigationProps> = ({ navOpened, toggleNav }) => {
         }
       });
 
-      const response = await fetch(`${API}/merch-bot/feedback`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData
-      });
+      // Функция для retry с обновлением токена
+      const fetchWithAuthRetry = async (): Promise<Response> => {
+        let currentToken = localStorage.getItem('token');
+        const headers: HeadersInit = {};
+        if (currentToken) {
+          headers['Authorization'] = `Bearer ${currentToken}`;
+        }
+
+        let response = await fetch(`${API}/merch-bot/feedback`, {
+          method: 'POST',
+          headers,
+          body: formData
+        });
+
+        // Если получили 401, пробуем обновить токен и повторить запрос
+        if (response.status === 401) {
+          try {
+            const refreshResponse = await fetch(`${API}/refresh-token`, {
+              method: 'POST',
+              credentials: 'include',
+            });
+
+            if (refreshResponse.ok) {
+              const newToken = await refreshResponse.json();
+              localStorage.setItem('token', newToken);
+              
+              // Повторяем запрос с новым токеном
+              headers['Authorization'] = `Bearer ${newToken}`;
+              response = await fetch(`${API}/merch-bot/feedback`, {
+                method: 'POST',
+                headers,
+                body: formData
+              });
+            } else if (refreshResponse.status === 403) {
+              localStorage.removeItem('user');
+              localStorage.removeItem('token');
+              throw new Error('Сессия истекла. Пожалуйста, войдите снова.');
+            }
+          } catch (refreshError) {
+            console.error('Token refresh failed:', refreshError);
+            throw refreshError;
+          }
+        }
+
+        return response;
+      };
+
+      const response = await fetchWithAuthRetry();
 
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Ошибка HTTP: ${response.status} - ${errorText}`);
       }
+
+      // Показываем уведомление об успехе
+      notificationSystem.addNotification(
+        'Успешно',
+        'Обратная связь успешно отправлена',
+        'success'
+      );
 
       handleCloseFeedbackModal();
     } catch (error) {

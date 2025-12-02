@@ -268,18 +268,28 @@ export class SocketIOService {
   }
 
   public sendToUser(userId: string, message: any): boolean {
+    console.log(`[Socket.IO] sendToUser called for userId: ${userId}`);
     const conns = this.getUserConnections(userId);
-    if (conns.length === 0) return false;
+    console.log(`[Socket.IO] Found ${conns.length} connections for user ${userId}`);
+    
+    if (conns.length === 0) {
+      console.warn(`[Socket.IO] ⚠️ No active connections for user ${userId}`);
+      console.log(`[Socket.IO] Currently connected users:`, Array.from(this.userToSockets.keys()));
+      return false;
+    }
+    
     let success = true;
     conns.forEach(conn => {
       try {
+        console.log(`[Socket.IO] Sending notification to socket ${conn.socketId} for user ${userId}`);
         this.io?.to(conn.socketId).emit('notification', {
           ...message,
           sentAt: new Date().toISOString()
         });
         conn.lastActivity = new Date();
+        console.log(`[Socket.IO] ✅ Notification sent successfully to socket ${conn.socketId}`);
       } catch (err) {
-        console.error(`[Socket.IO] Error sending to user ${userId}:`, err);
+        console.error(`[Socket.IO] ❌ Error sending to user ${userId} socket ${conn.socketId}:`, err);
         success = false;
       }
     });

@@ -2292,20 +2292,72 @@ class MerchBotService {
 
     const hasPhoto = photoPath && fs.existsSync(photoPath);
 
+    // Для фото с caption лучше использовать plain text, так как Telegram часто имеет проблемы с HTML в caption
+    // Санитизация сообщения перед отправкой
+    let sanitizedMessage: string;
+    let finalParseMode: 'HTML' | 'Markdown' | undefined;
+    
+    if (hasPhoto) {
+      // Для фото всегда используем plain text в caption, чтобы избежать ошибок парсинга
+      sanitizedMessage = this.sanitizeMessage(message, 'Plain');
+      finalParseMode = undefined; // Не используем parse_mode для caption при отправке фото
+      console.log(`[MerchBot] Photo message sanitized (Plain mode): ${sanitizedMessage.substring(0, 50)}...`);
+    } else {
+      sanitizedMessage = this.sanitizeMessage(message, parseMode);
+      finalParseMode = parseMode;
+      console.log(`[MerchBot] Text message sanitized (${parseMode} mode): ${sanitizedMessage.substring(0, 50)}...`);
+    }
+    
+    // Дополнительная проверка: если после санитизации остались HTML теги, принудительно используем Plain
+    if (/<[^>]+>/.test(sanitizedMessage)) {
+      console.warn(`[MerchBot] HTML tags detected after sanitization, forcing Plain mode`);
+      sanitizedMessage = this.sanitizeMessage(message, 'Plain');
+      finalParseMode = undefined;
+    }
+
     for (const userId of activeIds) {
       try {
         if (hasPhoto) {
+          // Для фото НЕ используем parse_mode вообще - только plain text в caption
           await this.bot.api.sendPhoto(userId, new InputFile(photoPath as string), {
-            caption: message,
-            parse_mode: parseMode
-          } as any);
+            caption: sanitizedMessage
+          });
         } else {
-          await this.bot.api.sendMessage(userId, message, {
-            parse_mode: parseMode
-          } as any);
+          // Для текстовых сообщений используем parse_mode только если он указан
+          const options: any = {};
+          if (finalParseMode) {
+            options.parse_mode = finalParseMode;
+          }
+          await this.bot.api.sendMessage(userId, sanitizedMessage, options);
         }
         success++;
       } catch (error: any) {
+        console.error(`[MerchBot] Send error for user ${userId}:`, error.message);
+        
+        // Если ошибка парсинга, пытаемся отправить без форматирования
+        if (this.isParseError(error)) {
+          try {
+            console.log(`[MerchBot] Parse error detected, retrying with Plain mode for user ${userId}`);
+            const plainMessage = this.sanitizeMessage(message, 'Plain');
+            
+            // Убеждаемся, что plainMessage не содержит HTML тегов
+            const finalPlainMessage = plainMessage.replace(/<[^>]+>/g, '');
+            
+            if (hasPhoto) {
+              await this.bot.api.sendPhoto(userId, new InputFile(photoPath as string), {
+                caption: finalPlainMessage
+              });
+            } else {
+              await this.bot.api.sendMessage(userId, finalPlainMessage);
+            }
+            success++;
+            console.log(`[MerchBot] Successfully sent plain message to user ${userId}`);
+            continue; // Переходим к следующему пользователю
+          } catch (retryError: any) {
+            console.error(`[MerchBot] Retry send failed for user ${userId}:`, retryError.message);
+          }
+        }
+
         failed++;
         errors.push({ userId, error: error.message || 'Unknown error' });
         console.error(`[MerchBot] Failed to send message to user ${userId}:`, error.message);
@@ -2341,6 +2393,86 @@ class MerchBotService {
       text.includes('chat not found') ||
       text.includes('bot was kicked')
     );
+  }
+
+  // Определяем, что ошибка связана с парсингом сообщения
+  private isParseError(error: any): boolean {
+    const message: string = (error?.message || '').toString().toLowerCase();
+    const description: string = (error?.description || '').toString().toLowerCase();
+    const text = `${message} ${description}`;
+
+    return (
+      text.includes('can\'t parse entities') ||
+      text.includes('parse error') ||
+      text.includes('bad request') ||
+      text.includes('unsupported') ||
+      text.includes('invalid')
+    );
+  }
+
+  // Санитизация сообщения для Telegram
+  private sanitizeMessage(message: string, parseMode: 'HTML' | 'Markdown' | 'Plain'): string {
+    if (parseMode === 'Plain') {
+      // Убираем все HTML теги и заменяем на переносы строк
+      // Важно: сначала заменяем теги на переносы, потом удаляем остальные теги
+      let sanitized = message
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/p>/gi, '\n')
+        .replace(/<p[^>]*>/gi, '')
+        .replace(/<\/?div[^>]*>/gi, '\n')
+        .replace(/<\/?span[^>]*>/gi, '')
+        .replace(/<\/?[^>]+>/gi, '') // Удаляем все остальные HTML теги
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/gi, '&')
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/&quot;/gi, '"')
+        .replace(/&apos;/gi, "'")
+        .replace(/\n{3,}/g, '\n\n') // Убираем множественные переносы строк
+        .trim();
+      
+      // Убеждаемся, что не осталось никаких HTML тегов
+      if (/<[^>]+>/.test(sanitized)) {
+        console.warn('[MerchBot] Warning: HTML tags still present after sanitization:', sanitized);
+        sanitized = sanitized.replace(/<[^>]+>/g, '');
+      }
+      
+      return sanitized;
+    }
+
+    if (parseMode === 'HTML') {
+      // Убираем теги <p> (Telegram не поддерживает их)
+      let sanitized = message.replace(/<\/p>/gi, '<br>');
+      sanitized = sanitized.replace(/<p[^>]*>/gi, '');
+      // Убираем другие не поддерживаемые теги
+      sanitized = sanitized.replace(/<\/?div[^>]*>/gi, '');
+      sanitized = sanitized.replace(/<\/?span[^>]*>/gi, '');
+      // Нормализуем <br> (Telegram поддерживает только <br> без самозакрытия)
+      sanitized = sanitized.replace(/<br\s*\/?>/gi, '<br>');
+      // Убираем множественные <br> подряд (максимум 2 подряд)
+      sanitized = sanitized.replace(/(<br>\s*){3,}/gi, '<br><br>');
+      // Убираем HTML entities
+      sanitized = sanitized.replace(/&nbsp;/gi, ' ');
+      sanitized = sanitized.replace(/&amp;/gi, '&');
+      sanitized = sanitized.replace(/&lt;/gi, '<');
+      sanitized = sanitized.replace(/&gt;/gi, '>');
+      sanitized = sanitized.replace(/&quot;/gi, '"');
+      return sanitized.trim();
+    }
+
+    // Для Markdown/MarkdownV2
+    // Превращаем <br> в перенос строки и убираем остальные теги
+    let sanitized = message.replace(/<br\s*\/?>/gi, '\n');
+    sanitized = sanitized.replace(/<\/p>/gi, '\n');
+    sanitized = sanitized.replace(/<p[^>]*>/gi, '');
+    // Удаляем все прочие HTML-теги
+    sanitized = sanitized.replace(/<\/?[^>]+>/gi, '');
+    sanitized = sanitized.replace(/&nbsp;/gi, ' ');
+    sanitized = sanitized.replace(/&amp;/gi, '&');
+    sanitized = sanitized.replace(/&lt;/gi, '<');
+    sanitized = sanitized.replace(/&gt;/gi, '>');
+    sanitized = sanitized.replace(/&quot;/gi, '"');
+    return sanitized.trim();
   }
 }
 

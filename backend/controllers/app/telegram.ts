@@ -204,8 +204,20 @@ class TelegramService {
     notification: Notifications,
     chatId: string
   ): Promise<boolean> {
+    // Если бот не запущен, пытаемся запустить его
     if (!this.isRunning || !this.bot) {
-      console.error('[Telegram] Bot is not running');
+      console.warn('[Telegram] Bot is not running, attempting to start...');
+      const started = await this.launch();
+      if (!started || !this.bot) {
+        console.error('[Telegram] Failed to start bot for notification');
+        return false;
+      }
+      console.log('[Telegram] Bot started successfully for notification');
+    }
+
+    // Проверяем, что бот все еще существует после запуска
+    if (!this.bot) {
+      console.error('[Telegram] Bot is null after launch attempt');
       return false;
     }
 
@@ -250,7 +262,7 @@ class TelegramService {
               .replace(/_/g, '')
               .replace(/`/g, '')
               .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1'); // Убираем ссылки [text](url)
-            await this.bot.api.sendMessage(chatId, plainMessage);
+            await this.bot!.api.sendMessage(chatId, plainMessage);
             return true;
           } catch (retryError) {
             console.error('[Telegram] Retry send error:', retryError);

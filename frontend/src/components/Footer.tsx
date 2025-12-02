@@ -1,4 +1,4 @@
-import { AppShell, Group, Popover, Stack, Text, Divider, Box, Badge, ThemeIcon, ActionIcon, ScrollArea, Loader } from "@mantine/core";
+import { AppShell, Group, Popover, Stack, Text, Divider, Box, Badge, ThemeIcon, ActionIcon, ScrollArea, Loader, Button } from "@mantine/core";
 import { IconAlien, IconAppWindow, IconBasket, IconBrandRumble, IconBrandUnity, IconBriefcase, IconDashboard, IconNews, IconBell, IconAlertCircle, IconInfoCircle, IconCheck, IconX } from "@tabler/icons-react";
 import { useState, useEffect, useCallback, useContext, useRef } from "react";
 import dayjs from "dayjs";
@@ -101,6 +101,7 @@ function Footer() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
   const [notificationsOpened, setNotificationsOpened] = useState(false);
+  const [showAllNotifications, setShowAllNotifications] = useState(false);
   
   // Socket.IO для получения новых уведомлений
   const { lastNotification } = useSocketIO();
@@ -450,30 +451,39 @@ function Footer() {
                     <Text size="lg" fw={600}>
                       Уведомления
                     </Text>
-                    {unreadCount > 0 && (
-                      <Badge color="blue" variant="light">
-                        {unreadCount} новых
-                      </Badge>
-                    )}
+                    <Group gap="xs">
+                      {unreadCount > 0 && (
+                        <Badge color="blue" variant="light">
+                          {unreadCount} новых
+                        </Badge>
+                      )}
+                      <Button
+                        variant="subtle"
+                        size="xs"
+                        onClick={() => setShowAllNotifications(!showAllNotifications)}
+                      >
+                        {showAllNotifications ? 'Непрочитанные' : 'Все'}
+                      </Button>
+                    </Group>
                   </Group>
                   
                   {loading ? (
                     <Box style={{ display: 'flex', justifyContent: 'center', padding: '20px' }}>
                       <Loader size="sm" />
                     </Box>
-                  ) : notifications.length === 0 ? (
+                  ) : (showAllNotifications ? notifications : notifications.filter(n => !n.read)).length === 0 ? (
                     <Box style={{ textAlign: 'center', padding: '20px' }}>
                       <ThemeIcon size="xl" color="gray" variant="light" style={{ margin: '0 auto 12px' }}>
                         <IconBell size={32} />
                       </ThemeIcon>
                       <Text size="sm" c="var(--theme-text-secondary)">
-                        Нет уведомлений
+                        {showAllNotifications ? 'Нет уведомлений' : 'Нет непрочитанных уведомлений'}
                       </Text>
                     </Box>
                   ) : (
                     <ScrollArea.Autosize mah={400}>
                       <Stack gap="xs">
-                        {notifications.map((notification) => {
+                        {(showAllNotifications ? notifications : notifications.filter(n => !n.read)).map((notification) => {
                           const color = getNotificationColor(notification.type);
                           const isUnread = !notification.read;
                           

@@ -59,10 +59,89 @@ import AppStore from '../features/Retail/AppStore/AppStore';
 import FeedbackModule from '../features/Feedback/Feedback';
 import BugReports from '../features/Retail/BugReports/BugReports';
 import LogViewer from '../components/LogViewer';
+import { useNotifications } from '../hooks/useNotifications';
+import { useEffect, useState } from 'react';
+import { API } from '../config/constants';
 
 function App() {
   const { user } = useUserContext();
-  const [navOpened, { toggle: toggleNav }] = useDisclosure(true);
+  const [navMenuMode, setNavMenuMode] = useState<string>('auto'); // 'auto', 'always_open', 'always_closed'
+  const [navOpened, { toggle: toggleNav, open: openNav, close: closeNav }] = useDisclosure(true);
+  
+  // Инициализируем обработку уведомлений через WebSocket
+  useNotifications(user?.id || '');
+
+  // Загрузка настройки режима меню
+  useEffect(() => {
+    const loadNavMenuModeSetting = async () => {
+      if (!user?.id) return;
+      
+      try {
+        const savedSetting = localStorage.getItem('nav_menu_mode');
+        if (savedSetting && ['auto', 'always_open', 'always_closed'].includes(savedSetting)) {
+          setNavMenuMode(savedSetting);
+          // Устанавливаем начальное состояние меню
+          if (savedSetting === 'always_open') {
+            openNav();
+          } else if (savedSetting === 'always_closed') {
+            closeNav();
+          }
+        } else {
+          // Пытаемся загрузить из БД
+          const token = localStorage.getItem('token');
+          if (token) {
+            const response = await fetch(`${API}/user/settings/${user.id}/nav_menu_mode`, {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            });
+            if (response.ok) {
+              const data = await response.json();
+              if (data.value && ['auto', 'always_open', 'always_closed'].includes(data.value)) {
+                setNavMenuMode(data.value);
+                localStorage.setItem('nav_menu_mode', data.value);
+                if (data.value === 'always_open') {
+                  openNav();
+                } else if (data.value === 'always_closed') {
+                  closeNav();
+                }
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error loading nav menu mode setting:', error);
+      }
+    };
+
+    loadNavMenuModeSetting();
+  }, [user?.id, openNav, closeNav]);
+
+  // Слушаем изменения настройки меню
+  useEffect(() => {
+    const handleNavMenuModeChange = (event: CustomEvent) => {
+      const newMode = event.detail;
+      setNavMenuMode(newMode);
+      if (newMode === 'always_open') {
+        openNav();
+      } else if (newMode === 'always_closed') {
+        closeNav();
+      }
+    };
+
+    window.addEventListener('nav-menu-mode-changed', handleNavMenuModeChange as EventListener);
+    return () => {
+      window.removeEventListener('nav-menu-mode-changed', handleNavMenuModeChange as EventListener);
+    };
+  }, [openNav, closeNav]);
+
+  // Обработчик переключения меню с учетом настройки
+  const handleToggleNav = () => {
+    if (navMenuMode === 'auto') {
+      toggleNav();
+    }
+    // Если режим не 'auto', переключение блокируется
+  };
 
   return (
     <ErrorBoundary>
@@ -122,7 +201,7 @@ function App() {
             <Header navOpened={navOpened} />
             <Navigation 
               navOpened={navOpened} 
-              toggleNav={toggleNav} 
+              toggleNav={handleToggleNav} 
             />
             <AppShell.Main id='content' style={{ paddingBottom: '80px' }}>
               <Routes>
