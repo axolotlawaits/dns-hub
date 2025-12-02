@@ -602,12 +602,14 @@ export default function SafetyJournal() {
       console.log('Active files:', activeFiles);
       
       if (activeFiles.length > 0) {
-        // Используем прокси бэкенда, чтобы обойти CORS и ускорить типизацию
+        // Подготавливаем файлы для FilePreviewModal
+        // Передаём человекочитаемое имя и тип, а source оставляем относительным путём
         const files = activeFiles.map((file: JournalFile) => ({
           id: file.file_id,
-          name: file.original_filename,
+          name: file.original_filename || `Журнал-${file.file_id}`,
           mimeType: file.content_type,
-          source: `${API}/jurists/safety/files/${file.file_id}/view`
+          // Относительный путь, FilePreviewModal сам подставит API при необходимости
+          source: `jurists/safety/files/${file.file_id}/view`
         }));
         
         console.log('Setting journal files:', files);
