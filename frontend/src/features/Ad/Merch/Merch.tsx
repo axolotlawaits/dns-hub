@@ -189,8 +189,7 @@ function Merch() {
                     minWidth: 0,
                     // Даем кнопке раскрытия возможность выходить за пределы контейнера
                     overflow: 'visible',
-                    transition: 'flex 0.3s ease, max-width 0.3s ease',
-                    position: 'relative'
+                    transition: 'flex 0.3s ease, max-width 0.3s ease'
                   }}>
                     {/* Иерархия с анимацией */}
                     <Collapse in={isHierarchyVisible} transitionDuration={TRANSITION_DURATION}>
