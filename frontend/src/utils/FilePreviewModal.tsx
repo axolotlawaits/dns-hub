@@ -460,9 +460,21 @@ export const FilePreviewModal = ({
     const source = currentAttachment.source;
     const providedName = currentAttachment.name;
     const providedMime = currentAttachment.mimeType;
-    let ext = typeof source === 'string'
-      ? source.split('.').pop()?.toLowerCase() || ''
-      : source.name.split('.').pop()?.toLowerCase() || '';
+    
+    // Сначала пытаемся извлечь расширение из providedName (если оно есть)
+    let ext = '';
+    if (providedName) {
+      const nameParts = providedName.split(/[\\\/]/);
+      const fileNameOnly = nameParts[nameParts.length - 1];
+      ext = fileNameOnly.split('.').pop()?.toLowerCase() || '';
+    }
+    
+    // Если расширение не найдено в имени, пытаемся извлечь из source
+    if (!ext) {
+      ext = typeof source === 'string'
+        ? source.split('.').pop()?.toLowerCase() || ''
+        : source.name.split('.').pop()?.toLowerCase() || '';
+    }
 
     // Если расширение не найдено, попробуем определить по MIME-типу
     const effectiveMime = providedMime || fileMimeType;
@@ -496,11 +508,13 @@ export const FilePreviewModal = ({
         baseFileName = lastDotIndex > 0 ? fullFileName.slice(0, lastDotIndex) : fullFileName;
       }
     } else {
-      // Если имя предоставлено, тоже убираем расширение
-      const lastDotIndex = baseFileName.lastIndexOf('.');
-      if (lastDotIndex > 0) {
-        baseFileName = baseFileName.slice(0, lastDotIndex);
-      }
+      // Если имя предоставлено, извлекаем только имя файла (без пути)
+      // Обрабатываем случай, когда providedName может содержать путь
+      const pathParts = baseFileName.split(/[\\\/]/);
+      const fileNameOnly = pathParts[pathParts.length - 1];
+      // Убираем расширение из имени файла
+      const lastDotIndex = fileNameOnly.lastIndexOf('.');
+      baseFileName = lastDotIndex > 0 ? fileNameOnly.slice(0, lastDotIndex) : fileNameOnly;
     }
 
     return {

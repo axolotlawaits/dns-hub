@@ -63,6 +63,12 @@ function MerchStats() {
     setError(null);
     try {
       const data = await fetchMerchStats(parseInt(period, 10));
+      console.log('📊 [MerchStats] Загружена статистика:', {
+        hasReactionStats: !!data.reactionStats,
+        topMessagesCount: data.reactionStats?.topMessages?.length || 0,
+        topCardsCount: data.reactionStats?.topCardsByReactions?.length || 0,
+        reactionStats: data.reactionStats
+      });
       setStats(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Неизвестная ошибка');
@@ -266,11 +272,13 @@ function MerchStats() {
           <Tabs.Tab value="search" leftSection={<IconSearch size={16} />}>
             Поиск
           </Tabs.Tab>
-          {stats.reactionStats && (
-            <Tabs.Tab value="reactions" leftSection={<IconThumbUp size={16} />}>
-              Реакции
-            </Tabs.Tab>
-          )}
+          <Tabs.Tab value="reactions" leftSection={<IconThumbUp size={16} />}>
+            Реакции {stats.reactionStats && stats.reactionStats.total > 0 && (
+              <Badge size="sm" variant="light" ml={4}>
+                {stats.reactionStats.total}
+              </Badge>
+            )}
+          </Tabs.Tab>
         </Tabs.List>
 
       <Modal
@@ -637,8 +645,15 @@ function MerchStats() {
         </Paper>
         </Tabs.Panel>
 
-        {stats.reactionStats && (
-          <Tabs.Panel value="reactions" pt="md">
+        <Tabs.Panel value="reactions" pt="md">
+          {!stats.reactionStats ? (
+            <Paper withBorder p="md" radius="md">
+              <Text c="dimmed" ta="center">
+                Статистика по реакциям недоступна
+              </Text>
+            </Paper>
+          ) : (
+            <>
             <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md" mb="md">
               <Paper withBorder p="md" radius="md">
                 <Title order={3} mb="md">Статистика реакций</Title>
@@ -766,15 +781,16 @@ function MerchStats() {
               </Paper>
             )}
 
-            {stats.reactionStats.topMessages && stats.reactionStats.topMessages.length > 0 && (
-              <Paper withBorder p="md" radius="md" mt="md">
-                <Title order={3} mb="md">Топ сообщений по реакциям</Title>
+            <Paper withBorder p="md" radius="md" mt="md">
+              <Title order={3} mb="md">Топ сообщений по реакциям</Title>
+              {stats.reactionStats.topMessages && stats.reactionStats.topMessages.length > 0 ? (
                 <ScrollArea h={400}>
                   <Table>
                     <Table.Thead>
                       <Table.Tr>
                         <Table.Th>#</Table.Th>
                         <Table.Th>Карточка/Категория</Table.Th>
+                        <Table.Th>ID сообщения</Table.Th>
                         <Table.Th>Всего реакций</Table.Th>
                         <Table.Th>Реакции</Table.Th>
                       </Table.Tr>
@@ -818,6 +834,16 @@ function MerchStats() {
                             )}
                           </Table.Td>
                           <Table.Td>
+                            <Stack gap={4}>
+                              <Text size="sm" ff="monospace" c="dimmed">
+                                {message.messageId}
+                              </Text>
+                              <Text size="xs" c="dimmed" ff="monospace">
+                                Чат: {message.chatId}
+                              </Text>
+                            </Stack>
+                          </Table.Td>
+                          <Table.Td>
                             <Badge variant="light" size="lg">
                               {message.totalReactions}
                             </Badge>
@@ -839,10 +865,15 @@ function MerchStats() {
                     </Table.Tbody>
                   </Table>
                 </ScrollArea>
-              </Paper>
-            )}
-          </Tabs.Panel>
-        )}
+              ) : (
+                <Text c="dimmed" size="sm" ta="center" py="xl">
+                  Нет данных о сообщениях с реакциями
+                </Text>
+              )}
+            </Paper>
+            </>
+          )}
+        </Tabs.Panel>
       </Tabs>
 
       {/* Дополнительная статистика (всегда видна) */}

@@ -322,59 +322,61 @@ router.get('/stats', async (req: any, res: any) => {
       }));
 
     // Топ сообщений по количеству реакций с информацией о карточках
-    const topMessages = await Promise.all(
-      Object.values(reactionsByMessage)
-        .sort((a, b) => b.totalReactions - a.totalReactions)
-        .slice(0, 20)
-        .map(async (msg) => {
-          // Ищем информацию о карточке для этого сообщения
-          // Ищем событие card_sent с этим messageId и chatId
-          let cardInfo: { itemId: string; itemName: string; itemType: 'card' | 'category' } | null = null;
-          
-          try {
-            const cardSentEvent = await prisma.merchTgUserStats.findFirst({
-              where: {
-                action: 'card_sent',
-                details: {
-                  contains: `"messageId":${msg.messageId}`
-                }
-              },
-              orderBy: {
-                timestamp: 'desc'
-              }
-            });
-
-            if (cardSentEvent && cardSentEvent.details) {
+    const topMessages = Object.keys(reactionsByMessage).length > 0 
+      ? await Promise.all(
+          Object.values(reactionsByMessage)
+            .sort((a, b) => b.totalReactions - a.totalReactions)
+            .slice(0, 20)
+            .map(async (msg) => {
+              // Ищем информацию о карточке для этого сообщения
+              // Ищем событие card_sent с этим messageId и chatId
+              let cardInfo: { itemId: string; itemName: string; itemType: 'card' | 'category' } | null = null;
+              
               try {
-                const parsed = JSON.parse(cardSentEvent.details);
-                if (parsed.chatId === msg.chatId && parsed.messageId === msg.messageId) {
-                  cardInfo = {
-                    itemId: parsed.itemId,
-                    itemName: parsed.itemName,
-                    itemType: parsed.itemType
-                  };
-                }
-              } catch (parseError) {
-                // Игнорируем ошибки парсинга
-              }
-            }
-          } catch (dbError) {
-            // Игнорируем ошибки БД
-          }
+                const cardSentEvent = await prisma.merchTgUserStats.findFirst({
+                  where: {
+                    action: 'card_sent',
+                    details: {
+                      contains: `"messageId":${msg.messageId}`
+                    }
+                  },
+                  orderBy: {
+                    timestamp: 'desc'
+                  }
+                });
 
-          return {
-            messageId: msg.messageId,
-            chatId: msg.chatId,
-            totalReactions: msg.totalReactions,
-            reactions: msg.reactions.sort((a, b) => b.count - a.count),
-            cardInfo: cardInfo ? {
-              itemId: cardInfo.itemId,
-              itemName: cardInfo.itemName,
-              itemType: cardInfo.itemType
-            } : null
-          };
-        })
-    );
+                if (cardSentEvent && cardSentEvent.details) {
+                  try {
+                    const parsed = JSON.parse(cardSentEvent.details);
+                    if (parsed.chatId === msg.chatId && parsed.messageId === msg.messageId) {
+                      cardInfo = {
+                        itemId: parsed.itemId,
+                        itemName: parsed.itemName,
+                        itemType: parsed.itemType
+                      };
+                    }
+                  } catch (parseError) {
+                    // Игнорируем ошибки парсинга
+                  }
+                }
+              } catch (dbError) {
+                // Игнорируем ошибки БД
+              }
+
+              return {
+                messageId: msg.messageId,
+                chatId: msg.chatId,
+                totalReactions: msg.totalReactions,
+                reactions: msg.reactions.sort((a, b) => b.count - a.count),
+                cardInfo: cardInfo ? {
+                  itemId: cardInfo.itemId,
+                  itemName: cardInfo.itemName,
+                  itemType: cardInfo.itemType
+                } : null
+              };
+            })
+        )
+      : [];
 
     // Популярные поисковые запросы
     const searches = await prisma.merchTgUserStats.findMany({
