@@ -2,6 +2,7 @@ import express from 'express';
 import { prisma } from '../../server.js';
 import { authenticateToken } from '../../middleware/auth.js';
 import uploadFeedback from '../../middleware/uploaderFeedback.js';
+import { NotificationChannel } from '@prisma/client';
 
 const router = express.Router();
 
@@ -1193,6 +1194,167 @@ router.post('/feedback', authenticateToken, uploadFeedback.array('photos', 10), 
         }
       }
     });
+
+    // Отправляем уведомления пользователям с полным доступом и DEVELOPER
+    try {
+      const { NotificationController } = await import('../../controllers/app/notification.js');
+      const senderId = req.user?.id || userId;
+
+      if (senderId) {
+        // Находим инструмент Merch (по link "ad/merch")
+        const merchTool = await prisma.tool.findFirst({
+          where: {
+            link: 'ad/merch'
+          }
+        });
+
+        if (merchTool) {
+          // Находим всех пользователей с FULL доступом к Merch
+          // 1. Прямой доступ пользователя
+          const directAccessUsers = await prisma.user.findMany({
+            where: {
+              userToolAccesses: {
+                some: {
+                  toolId: merchTool.id,
+                  accessLevel: 'FULL'
+                }
+              }
+            },
+            select: { id: true, name: true, email: true }
+          });
+
+          // 2. Доступ через должность
+          const positionsWithAccess = await prisma.positionToolAccess.findMany({
+            where: {
+              toolId: merchTool.id,
+              accessLevel: 'FULL'
+            },
+            select: { positionId: true }
+          });
+
+          const positionIds = positionsWithAccess.map(p => p.positionId);
+          const usersByPosition = positionIds.length > 0
+            ? await prisma.userData.findMany({
+                where: {
+                  positionId: { in: positionIds }
+                },
+                select: { email: true }
+              }).then(userDataList => {
+                const emails = userDataList.map(ud => ud.email);
+                return prisma.user.findMany({
+                  where: {
+                    email: { in: emails }
+                  },
+                  select: { id: true, name: true, email: true }
+                });
+              })
+            : [];
+
+          // 3. Доступ через группу
+          const groupsWithAccess = await prisma.groupToolAccess.findMany({
+            where: {
+              toolId: merchTool.id,
+              accessLevel: 'FULL'
+            },
+            select: { groupId: true }
+          });
+
+          const groupIds = groupsWithAccess.map(g => g.groupId);
+          const usersByGroup = groupIds.length > 0
+            ? await prisma.position.findMany({
+                where: {
+                  groupUuid: { in: groupIds }
+                },
+                select: { uuid: true }
+              }).then(positions => {
+                const positionUuids = positions.map(p => p.uuid);
+                return prisma.userData.findMany({
+                  where: {
+                    positionId: { in: positionUuids }
+                  },
+                  select: { email: true }
+                }).then(userDataList => {
+                  const emails = userDataList.map(ud => ud.email);
+                  return prisma.user.findMany({
+                    where: {
+                      email: { in: emails }
+                    },
+                    select: { id: true, name: true, email: true }
+                  });
+                });
+              })
+            : [];
+
+          // Объединяем всех пользователей с доступом и убираем дубликаты
+          const fullAccessUserIds = new Set<string>();
+          const usersWithFullAccess: Array<{ id: string; name: string }> = [];
+          
+          [...directAccessUsers, ...usersByPosition, ...usersByGroup].forEach(user => {
+            if (!fullAccessUserIds.has(user.id)) {
+              fullAccessUserIds.add(user.id);
+              usersWithFullAccess.push({ id: user.id, name: user.name });
+            }
+          });
+
+          // Находим всех DEVELOPER
+          const developers = await prisma.user.findMany({
+            where: {
+              role: 'DEVELOPER'
+            },
+            select: { id: true, name: true }
+          });
+
+          // Объединяем списки (убираем дубликаты)
+          const uniqueUserIds = new Set<string>();
+          const allRecipients: Array<{ id: string; name: string }> = [];
+
+          [...usersWithFullAccess, ...developers].forEach(user => {
+            if (!uniqueUserIds.has(user.id)) {
+              uniqueUserIds.add(user.id);
+              allRecipients.push(user);
+            }
+          });
+
+          // Отправляем уведомления каждому получателю
+          const toolName = tool && tool !== 'general' ? tool.split(':').pop() || tool : 'Merch бот';
+          const notificationTitle = `Новая обратная связь: ${toolName}`;
+          const notificationMessage = text.length > 100 ? text.substring(0, 100) + '...' : text;
+
+          for (const recipient of allRecipients) {
+            if (recipient.id !== senderId) { // Не отправляем уведомление самому отправителю
+              try {
+                // Проверяем, есть ли у получателя привязанный Telegram аккаунт
+                const recipientUser = await prisma.user.findUnique({
+                  where: { id: recipient.id },
+                  select: { telegramChatId: true }
+                });
+
+                // Формируем каналы: всегда IN_APP, и TELEGRAM если есть привязка
+                const channels: NotificationChannel[] = ['IN_APP'];
+                if (recipientUser?.telegramChatId) {
+                  channels.push('TELEGRAM');
+                }
+
+                await NotificationController.create({
+                  type: 'INFO',
+                  channels: channels,
+                  title: notificationTitle,
+                  message: notificationMessage,
+                  senderId: senderId,
+                  receiverId: recipient.id,
+                  priority: 'MEDIUM'
+                });
+              } catch (notifError) {
+                console.error(`Failed to send notification to user ${recipient.id}:`, notifError);
+              }
+            }
+          }
+        }
+      }
+    } catch (notifError) {
+      console.error('Error sending notifications for feedback:', notifError);
+      // Не прерываем выполнение, если уведомления не отправились
+    }
 
     res.status(201).json(feedback);
   } catch (error) {

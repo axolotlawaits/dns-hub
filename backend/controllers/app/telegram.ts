@@ -70,7 +70,12 @@ class TelegramService {
 
     // 4. Обработка команды /start
     this.bot.command('start', async (ctx) => {
-      const token = ctx.match.trim();
+      const match = ctx.match;
+      if (!match || typeof match !== 'string') {
+        return ctx.reply('Для привязки аккаунта используйте ссылку из приложения');
+      }
+
+      const token = match.trim();
       if (!token) {
         return ctx.reply('Для привязки аккаунта используйте ссылку из приложения');
       }
@@ -217,7 +222,7 @@ class TelegramService {
       // Обрезаем сообщение до допустимого размера
       const truncatedMessage = message.substring(0, 4093) + '...';
       try {
-        await this.bot.api.sendMessage(chatId, truncatedMessage, { parse_mode: 'Markdown' });
+        await this.bot.api.sendMessage(chatId, truncatedMessage);
         return true;
       } catch (error) {
         console.error('[Telegram] Send error:', error);
@@ -226,26 +231,55 @@ class TelegramService {
     }
 
     try {
+      // Пытаемся отправить с Markdown форматированием
       await this.bot.api.sendMessage(chatId, message, { parse_mode: 'Markdown' });
       return true;
     } catch (error) {
       console.error('[Telegram] Send error:', error);
       if (error instanceof Error) {
-        if (error.message.includes('chat not found') || error.message.includes('chat_id is empty')) {
-          await this.handleInvalidChat(chatId);
-        } else if (error.message.includes('message is too long')) {
-          // Пытаемся отправить без форматирования
+        // Если ошибка парсинга Markdown, отправляем без форматирования
+        if (error.message.includes('can\'t parse entities') || 
+            error.message.includes('parse error') ||
+            error.message.includes('Bad Request')) {
           try {
-            const plainMessage = message.replace(/\*\*/g, '').replace(/__/g, '');
+            // Убираем Markdown форматирование
+            const plainMessage = message
+              .replace(/\*\*/g, '')
+              .replace(/__/g, '')
+              .replace(/\*/g, '')
+              .replace(/_/g, '')
+              .replace(/`/g, '')
+              .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1'); // Убираем ссылки [text](url)
             await this.bot.api.sendMessage(chatId, plainMessage);
             return true;
           } catch (retryError) {
             console.error('[Telegram] Retry send error:', retryError);
           }
         }
+        
+        // Обработка ошибок чата
+        if (this.isBlockedError(error)) {
+          await this.handleInvalidChat(chatId);
+        }
       }
       return false;
     }
+  }
+
+  // Определяем, что бот заблокирован пользователем или чат недоступен
+  private isBlockedError(error: any): boolean {
+    const message: string = (error?.message || '').toString().toLowerCase();
+    const description: string = (error?.description || '').toString().toLowerCase();
+    const text = `${message} ${description}`;
+
+    return (
+      text.includes('forbidden') ||
+      text.includes('bot was blocked') ||
+      text.includes('user is deactivated') ||
+      text.includes('chat not found') ||
+      text.includes('bot was kicked') ||
+      text.includes('chat_id is empty')
+    );
   }
 
   // 9. Вспомогательные методы
@@ -282,6 +316,8 @@ class TelegramService {
   // 11. Метод для принудительного перезапуска бота
   public async restart(): Promise<boolean> {
     await this.stop();
+    // Небольшая задержка для полной остановки бота перед переинициализацией
+    await new Promise(resolve => setTimeout(resolve, 500));
     this.retryCount = 0;
     this.initializeBot();
     return this.launch();
