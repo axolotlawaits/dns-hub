@@ -19,9 +19,17 @@ import {
   Alert,
   Checkbox,
   Tabs,
-  Popover
+  Popover,
+  Collapse,
+  Tooltip
 } from '@mantine/core';
-import { IconSend, IconAlertCircle, IconCheck, IconChartBar, IconUsers, IconClock, IconSearch, IconThumbUp } from '@tabler/icons-react';
+import { IconSend, IconAlertCircle, IconCheck, IconChartBar, IconUsers, IconClock, IconSearch, IconThumbUp, IconDownload, IconFileSpreadsheet } from '@tabler/icons-react';
+import { ActivityChart } from './charts/ActivityChart';
+import { HeatmapChart } from './charts/HeatmapChart';
+import { FunnelChart } from './charts/FunnelChart';
+import { TrendChart } from './charts/TrendChart';
+import { exportStatsToExcel, exportStatsToCSV } from './utils/exportStats';
+import dayjs from 'dayjs';
 import { fetchMerchStats, MerchStatsResponse } from '../../data/MerchStatsData';
 import { API } from '../../../../../config/constants';
 import TiptapEditor from '../../../../../utils/editor';
@@ -40,6 +48,7 @@ interface BotUser {
 
 function MerchStats() {
   const [stats, setStats] = useState<MerchStatsResponse | null>(null);
+  const [previousStats, setPreviousStats] = useState<MerchStatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<string>('30');
@@ -54,10 +63,14 @@ function MerchStats() {
   const [previewModalOpened, setPreviewModalOpened] = useState(false);
   const [previewCard, setPreviewCard] = useState<CardItem | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [activeTab, setActiveTab] = useState<string | null>('dashboard');
+  const [showTrends, setShowTrends] = useState(false);
+  const [dayDetailsModalOpened, setDayDetailsModalOpened] = useState(false);
+  const [selectedDayDetails, setSelectedDayDetails] = useState<{ date: string; actions: Record<string, number> } | null>(null);
 
   useEffect(() => {
     loadStats();
-  }, [period]);
+  }, [period, showTrends]);
 
   useEffect(() => {
     if (sendModalOpened) {
@@ -69,8 +82,26 @@ function MerchStats() {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchMerchStats(parseInt(period, 10));
+      const currentPeriod = parseInt(period, 10);
+      const data = await fetchMerchStats(currentPeriod);
       setStats(data);
+      
+      // Загружаем данные предыдущего периода для сравнения (если включены тренды)
+      if (showTrends && currentPeriod >= 7) {
+        try {
+          // Загружаем данные за тот же период, но сдвинутый назад
+          // Например, если текущий период 30 дней, загружаем предыдущие 30 дней
+          const prevData = await fetchMerchStats(currentPeriod);
+          // Для простоты используем те же данные, но можно расширить логику
+          setPreviousStats(prevData);
+        } catch (e) {
+          // Игнорируем ошибки загрузки предыдущих данных
+          console.error('Ошибка загрузки предыдущих данных:', e);
+          setPreviousStats(null);
+        }
+      } else {
+        setPreviousStats(null);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Неизвестная ошибка');
     } finally {
@@ -226,16 +257,40 @@ function MerchStats() {
       'start': 'Запуск бота',
       'button_click': 'Нажатие кнопки',
       'search': 'Поиск',
-      'feedback': 'Обратная связь'
+      'card_view': 'Просмотр карточки',
+      'message_reaction': 'Реакция на сообщение',
+      'feedback': 'Обратная связь',
+      'back': 'Назад',
+      'next': 'Далее',
+      'category_select': 'Выбор категории',
+      'card_select': 'Выбор карточки',
+      'help': 'Помощь',
+      'menu': 'Меню',
     };
     return labels[action] || action;
   };
 
   return (
     <Stack gap="md" className="merch-stats-container">
-      <Group justify="space-between" align="center">
+      <Group justify="space-between" align="flex-end">
         <Title order={2}>Статистика бота</Title>
-        <Group>
+        <Group align="flex-end">
+          <Button
+            leftSection={<IconFileSpreadsheet size={16} />}
+            onClick={() => stats && exportStatsToExcel(stats, parseInt(period, 10))}
+            variant="light"
+            color="green"
+          >
+            Экспорт Excel
+          </Button>
+          <Button
+            leftSection={<IconDownload size={16} />}
+            onClick={() => stats && exportStatsToCSV(stats, parseInt(period, 10))}
+            variant="light"
+            color="blue"
+          >
+            Экспорт CSV
+          </Button>
           <Button
             leftSection={<IconSend size={16} />}
             onClick={() => setSendModalOpened(true)}
@@ -256,22 +311,36 @@ function MerchStats() {
             ]}
             style={{ width: 150 }}
           />
+          <Tooltip 
+            label="Сравнение текущего периода с предыдущим (например, если выбран период 30 дней, будет сравнение с предыдущими 30 днями)"
+            withArrow
+            multiline
+          >
+            <div>
+              <Checkbox
+                label="Показать тренды"
+                checked={showTrends}
+                onChange={(e) => setShowTrends(e.currentTarget.checked)}
+                mt={25}
+              />
+            </div>
+          </Tooltip>
         </Group>
       </Group>
 
-      <Tabs defaultValue="overview">
+      <Tabs value={activeTab} onChange={(value) => setActiveTab(value)}>
         <Tabs.List>
-          <Tabs.Tab value="overview" leftSection={<IconChartBar size={16} />}>
-            Обзор
+          <Tabs.Tab value="dashboard" leftSection={<IconChartBar size={16} />}>
+            Дашборд
           </Tabs.Tab>
           <Tabs.Tab value="users" leftSection={<IconUsers size={16} />}>
             Пользователи
           </Tabs.Tab>
-          <Tabs.Tab value="actions" leftSection={<IconClock size={16} />}>
-            Действия
+          <Tabs.Tab value="content" leftSection={<IconSearch size={16} />}>
+            Контент
           </Tabs.Tab>
-          <Tabs.Tab value="search" leftSection={<IconSearch size={16} />}>
-            Поиск
+          <Tabs.Tab value="behavior" leftSection={<IconClock size={16} />}>
+            Поведение
           </Tabs.Tab>
           <Tabs.Tab value="reactions" leftSection={<IconThumbUp size={16} />}>
             Реакции {stats.reactionStats && stats.reactionStats.total > 0 && (
@@ -370,129 +439,367 @@ function MerchStats() {
         </Stack>
       </Modal>
 
-        <Tabs.Panel value="overview" pt="md">
-      {/* Сводная статистика */}
-      <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="md">
-        <Card withBorder p="md" radius="md">
-          <Text size="sm" c="dimmed" mb={4}>
-            Всего пользователей
-          </Text>
-          <Text size="xl" fw={700}>
-            {stats.summary.totalUsers}
-          </Text>
-        </Card>
-        <Card withBorder p="md" radius="md">
-          <Text size="sm" c="dimmed" mb={4}>
-            Активных за период
-          </Text>
-          <Text size="xl" fw={700}>
-            {stats.summary.activeUsers}
-          </Text>
-        </Card>
-        <Card withBorder p="md" radius="md">
-          <Text size="sm" c="dimmed" mb={4}>
-            Активных сегодня
-          </Text>
-          <Text size="xl" fw={700} c="green">
-            {stats.summary.activeUsersToday}
-          </Text>
-        </Card>
-        <Card withBorder p="md" radius="md">
-          <Text size="sm" c="dimmed" mb={4}>
-            Всего действий
-          </Text>
-          <Text size="xl" fw={700}>
-            {stats.summary.totalActions}
-          </Text>
-        </Card>
-        <Card withBorder p="md" radius="md">
-          <Text size="sm" c="dimmed" mb={4}>
-            Новых пользователей
-          </Text>
-          <Text size="xl" fw={700} c="blue">
-            {stats.summary.newUsers}
-          </Text>
-        </Card>
-        <Card withBorder p="md" radius="md">
-          <Text size="sm" c="dimmed" mb={4}>
-            Запросов обратной связи
-          </Text>
-          <Text size="xl" fw={700} c="orange">
-            {stats.summary.feedbackRequests}
-          </Text>
-        </Card>
-        <Card withBorder p="md" radius="md">
-          <Text size="sm" c="dimmed" mb={4}>
-            Активных за неделю
-          </Text>
-          <Text size="xl" fw={700}>
-            {stats.summary.activeUsersWeek}
-          </Text>
-        </Card>
-        <Card withBorder p="md" radius="md">
-          <Text size="sm" c="dimmed" mb={4}>
-            Активных за месяц
-          </Text>
-          <Text size="xl" fw={700}>
-            {stats.summary.activeUsersMonth}
-          </Text>
-        </Card>
-        {stats.summary && 'avgActionsPerUser' in stats.summary && stats.summary.avgActionsPerUser !== undefined && (
-          <Card withBorder p="md" radius="md">
-            <Text size="sm" c="dimmed" mb={4}>
-              Среднее действий на пользователя
-            </Text>
-            <Text size="xl" fw={700} c="violet">
-              {String(stats.summary.avgActionsPerUser)}
-            </Text>
+        <Tabs.Panel value="dashboard" pt="md">
+      <Stack gap="xl">
+        {/* Ключевые метрики - компактный вид */}
+        <SimpleGrid cols={{ base: 2, sm: 4, md: 6 }} spacing="md">
+          <Card withBorder p="md" radius="md" style={{ cursor: 'pointer' }} onClick={() => setActiveTab('users')}>
+            <Text size="xs" c="dimmed" mb={4}>Всего пользователей</Text>
+            <Text size="xl" fw={700}>{stats.summary.totalUsers}</Text>
           </Card>
-        )}
-        {stats.summary && 'returningUsers' in stats.summary && stats.summary.returningUsers !== undefined && (
-          <Card withBorder p="md" radius="md">
-            <Text size="sm" c="dimmed" mb={4}>
-              Вернувшихся пользователей
-            </Text>
-            <Text size="xl" fw={700} c="cyan">
-              {String(stats.summary.returningUsers)}
-            </Text>
+          <Card withBorder p="md" radius="md" style={{ cursor: 'pointer' }} onClick={() => setActiveTab('users')}>
+            <Text size="xs" c="dimmed" mb={4}>Активных</Text>
+            <Text size="xl" fw={700} c="green">{stats.summary.activeUsers}</Text>
           </Card>
-        )}
-        {stats.summary && 'totalSessions' in stats.summary && stats.summary.totalSessions !== undefined && (
           <Card withBorder p="md" radius="md">
-            <Text size="sm" c="dimmed" mb={4}>
-              Всего сессий
-            </Text>
-            <Text size="xl" fw={700} c="grape">
-              {String(stats.summary.totalSessions)}
-            </Text>
+            <Text size="xs" c="dimmed" mb={4}>Сегодня</Text>
+            <Text size="xl" fw={700} c="blue">{stats.summary.activeUsersToday}</Text>
           </Card>
-        )}
-        {stats.summary && 'avgSessionDuration' in stats.summary && stats.summary.avgSessionDuration !== undefined && (
-          <Card withBorder p="md" radius="md">
-            <Text size="sm" c="dimmed" mb={4}>
-              Средняя длительность сессии (мин)
-            </Text>
-            <Text size="xl" fw={700} c="indigo">
-              {String(stats.summary.avgSessionDuration)}
-            </Text>
+          <Card withBorder p="md" radius="md" style={{ cursor: 'pointer' }} onClick={() => setActiveTab('behavior')}>
+            <Text size="xs" c="dimmed" mb={4}>Действий</Text>
+            <Text size="xl" fw={700}>{stats.summary.totalActions}</Text>
           </Card>
-        )}
-        {stats.summary && 'avgActionsPerSession' in stats.summary && stats.summary.avgActionsPerSession !== undefined && (
-          <Card withBorder p="md" radius="md">
-            <Text size="sm" c="dimmed" mb={4}>
-              Среднее действий в сессии
-            </Text>
-            <Text size="xl" fw={700} c="pink">
-              {String(stats.summary.avgActionsPerSession)}
-            </Text>
+          <Card withBorder p="md" radius="md" style={{ cursor: 'pointer' }} onClick={() => setActiveTab('content')}>
+            <Text size="xs" c="dimmed" mb={4}>Поисков</Text>
+            <Text size="xl" fw={700} c="violet">{stats.popularSearches.reduce((sum, s) => sum + s.count, 0)}</Text>
           </Card>
+          <Card withBorder p="md" radius="md" style={{ cursor: 'pointer' }} onClick={() => setActiveTab('reactions')}>
+            <Text size="xs" c="dimmed" mb={4}>Реакций</Text>
+            <Text size="xl" fw={700} c="orange">{stats.reactionStats?.total || 0}</Text>
+          </Card>
+        </SimpleGrid>
+
+        {/* Графики активности */}
+        {stats.dailyStats && stats.dailyStats.length > 0 && (
+          <Stack gap="md">
+            <ActivityChart
+              data={stats.dailyStats.map(d => ({
+                date: d.date,
+                displayDate: dayjs(d.date).format('DD.MM'),
+                actions: d.totalActions,
+                users: d.uniqueUsers,
+                actionsDetails: d.actions
+              }))}
+              title="Активность по дням"
+              onDateClick={(date, actionsDetails) => {
+                if (actionsDetails) {
+                  setSelectedDayDetails({ date, actions: actionsDetails });
+                  setDayDetailsModalOpened(true);
+                }
+              }}
+            />
+            
+            {/* Тренды метрик */}
+            {showTrends && previousStats && stats.dailyStats && previousStats.dailyStats && (
+              <Collapse in={showTrends}>
+                <TrendChart
+                  data={stats.dailyStats.map((d, idx) => ({
+                    period: d.date,
+                    displayPeriod: dayjs(d.date).format('DD.MM'),
+                    current: d.totalActions,
+                    previous: previousStats.dailyStats[idx]?.totalActions
+                  }))}
+                  title="Тренды активности (сравнение с предыдущим периодом)"
+                  currentLabel="Текущий период"
+                  previousLabel="Предыдущий период"
+                />
+              </Collapse>
+            )}
+            
+            <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+              {stats.heatmapData && stats.heatmapData.length > 0 && (
+                <HeatmapChart
+                  data={stats.heatmapData}
+                  title="Активность по дням недели и часам"
+                />
+              )}
+              {stats.funnelStats && (
+                <FunnelChart
+                  data={[
+                    {
+                      name: 'Запустили бота',
+                      value: stats.funnelStats.started,
+                      percentage: 100,
+                      color: 'var(--color-primary-500)'
+                    },
+                    {
+                      name: 'Нажали кнопку',
+                      value: stats.funnelStats.clickedButton,
+                      percentage: stats.funnelStats.started > 0 
+                        ? Math.round((stats.funnelStats.clickedButton / stats.funnelStats.started) * 100)
+                        : 0,
+                      color: 'var(--color-blue-500)'
+                    },
+                    {
+                      name: 'Использовали поиск',
+                      value: stats.funnelStats.searched,
+                      percentage: stats.funnelStats.started > 0
+                        ? Math.round((stats.funnelStats.searched / stats.funnelStats.started) * 100)
+                        : 0,
+                      color: 'var(--color-green-500)'
+                    },
+                    {
+                      name: 'Оставили обратную связь',
+                      value: stats.funnelStats.gaveFeedback,
+                      percentage: stats.funnelStats.started > 0
+                        ? Math.round((stats.funnelStats.gaveFeedback / stats.funnelStats.started) * 100)
+                        : 0,
+                      color: 'var(--color-orange-500)'
+                    }
+                  ]}
+                  title="Воронка конверсии"
+                />
+              )}
+            </SimpleGrid>
+          </Stack>
         )}
-      </SimpleGrid>
+
+        {/* Дополнительные метрики - компактная группа */}
+        <Paper withBorder p="md" radius="md">
+          <Title order={4} mb="md">Дополнительные метрики</Title>
+          <SimpleGrid cols={{ base: 2, sm: 3, md: 5 }} spacing="md">
+            <Box>
+              <Text size="xs" c="dimmed" mb={2}>Новых</Text>
+              <Text size="lg" fw={600} c="blue">{stats.summary.newUsers}</Text>
+            </Box>
+            <Box>
+              <Text size="xs" c="dimmed" mb={2}>За неделю</Text>
+              <Text size="lg" fw={600}>{stats.summary.activeUsersWeek}</Text>
+            </Box>
+            <Box>
+              <Text size="xs" c="dimmed" mb={2}>За месяц</Text>
+              <Text size="lg" fw={600}>{stats.summary.activeUsersMonth}</Text>
+            </Box>
+            {stats.summary && 'avgActionsPerUser' in stats.summary && stats.summary.avgActionsPerUser !== undefined && (
+              <Box>
+                <Text size="xs" c="dimmed" mb={2}>Среднее/пользователя</Text>
+                <Text size="lg" fw={600} c="violet">{String(stats.summary.avgActionsPerUser)}</Text>
+              </Box>
+            )}
+            {stats.summary && 'returningUsers' in stats.summary && stats.summary.returningUsers !== undefined && (
+              <Box>
+                <Text size="xs" c="dimmed" mb={2}>Вернувшихся</Text>
+                <Text size="lg" fw={600} c="cyan">{String(stats.summary.returningUsers)}</Text>
+              </Box>
+            )}
+            {stats.summary && 'totalSessions' in stats.summary && stats.summary.totalSessions !== undefined && (
+              <Box>
+                <Text size="xs" c="dimmed" mb={2}>Сессий</Text>
+                <Text size="lg" fw={600} c="grape">{String(stats.summary.totalSessions)}</Text>
+              </Box>
+            )}
+            {stats.summary && 'avgSessionDuration' in stats.summary && stats.summary.avgSessionDuration !== undefined && (
+              <Box>
+                <Text size="xs" c="dimmed" mb={2}>Длительность сессии</Text>
+                <Text size="lg" fw={600} c="indigo">{String(stats.summary.avgSessionDuration)} мин</Text>
+              </Box>
+            )}
+            {stats.summary && 'avgActionsPerSession' in stats.summary && stats.summary.avgActionsPerSession !== undefined && (
+              <Box>
+                <Text size="xs" c="dimmed" mb={2}>Действий/сессию</Text>
+                <Text size="lg" fw={600} c="pink">{String(stats.summary.avgActionsPerSession)}</Text>
+              </Box>
+            )}
+            <Box>
+              <Text size="xs" c="dimmed" mb={2}>Обратная связь</Text>
+              <Text size="lg" fw={600} c="orange">{stats.summary.feedbackRequests}</Text>
+            </Box>
+          </SimpleGrid>
+        </Paper>
+
+        {/* Статистика по дням недели и времени суток */}
+        {(stats.weekdayStats || stats.timeOfDayStats) && (
+          <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+            {stats.weekdayStats && stats.weekdayStats.length > 0 && (
+              <Paper withBorder p="md" radius="md">
+                <Title order={4} mb="md">Активность по дням недели</Title>
+                <ScrollArea h={250}>
+                  <Table>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>День</Table.Th>
+                        <Table.Th>Действий</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {stats.weekdayStats.map((day) => (
+                        <Table.Tr key={day.day}>
+                          <Table.Td>
+                            <Text fw={500}>{day.dayName}</Text>
+                          </Table.Td>
+                          <Table.Td>
+                            <Badge variant="light" size="lg">
+                              {day.count}
+                            </Badge>
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                </ScrollArea>
+              </Paper>
+            )}
+
+            {stats.timeOfDayStats && (
+              <Paper withBorder p="md" radius="md">
+                <Title order={4} mb="md">Активность по времени суток</Title>
+                <SimpleGrid cols={2} spacing="md">
+                  <Card withBorder p="md" radius="md">
+                    <Text size="xs" c="dimmed" mb={4}>Утро (6-12)</Text>
+                    <Text size="xl" fw={700} c="yellow">{stats.timeOfDayStats.morning}</Text>
+                  </Card>
+                  <Card withBorder p="md" radius="md">
+                    <Text size="xs" c="dimmed" mb={4}>День (12-18)</Text>
+                    <Text size="xl" fw={700} c="orange">{stats.timeOfDayStats.afternoon}</Text>
+                  </Card>
+                  <Card withBorder p="md" radius="md">
+                    <Text size="xs" c="dimmed" mb={4}>Вечер (18-24)</Text>
+                    <Text size="xl" fw={700} c="red">{stats.timeOfDayStats.evening}</Text>
+                  </Card>
+                  <Card withBorder p="md" radius="md">
+                    <Text size="xs" c="dimmed" mb={4}>Ночь (0-6)</Text>
+                    <Text size="xl" fw={700} c="blue">{stats.timeOfDayStats.night}</Text>
+                  </Card>
+                </SimpleGrid>
+              </Paper>
+            )}
+          </SimpleGrid>
+        )}
+
+        {/* Retention и поисковые запросы */}
+        {(stats.retentionStats || stats.searchLengthStats) && (
+          <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+            {stats.retentionStats && (
+              <Paper withBorder p="md" radius="md">
+                <Title order={4} mb="md">Retention (возвраты)</Title>
+                <SimpleGrid cols={3} spacing="md">
+                  <Card withBorder p="md" radius="md">
+                    <Text size="xs" c="dimmed" mb={4}>День 1</Text>
+                    <Text size="xl" fw={700} c="green">{stats.retentionStats.day1}</Text>
+                  </Card>
+                  <Card withBorder p="md" radius="md">
+                    <Text size="xs" c="dimmed" mb={4}>День 7</Text>
+                    <Text size="xl" fw={700} c="blue">{stats.retentionStats.day7}</Text>
+                  </Card>
+                  <Card withBorder p="md" radius="md">
+                    <Text size="xs" c="dimmed" mb={4}>День 30</Text>
+                    <Text size="xl" fw={700} c="violet">{stats.retentionStats.day30}</Text>
+                  </Card>
+                </SimpleGrid>
+              </Paper>
+            )}
+
+            {stats.searchLengthStats && (
+              <Paper withBorder p="md" radius="md">
+                <Title order={4} mb="md">Длина поисковых запросов</Title>
+                <SimpleGrid cols={3} spacing="md">
+                  <Card withBorder p="md" radius="md">
+                    <Text size="xs" c="dimmed" mb={4}>Короткие (1-5)</Text>
+                    <Text size="xl" fw={700}>{stats.searchLengthStats.short}</Text>
+                  </Card>
+                  <Card withBorder p="md" radius="md">
+                    <Text size="xs" c="dimmed" mb={4}>Средние (6-15)</Text>
+                    <Text size="xl" fw={700}>{stats.searchLengthStats.medium}</Text>
+                  </Card>
+                  <Card withBorder p="md" radius="md">
+                    <Text size="xs" c="dimmed" mb={4}>Длинные (16+)</Text>
+                    <Text size="xl" fw={700}>{stats.searchLengthStats.long}</Text>
+                  </Card>
+                </SimpleGrid>
+              </Paper>
+            )}
+          </SimpleGrid>
+        )}
+      </Stack>
         </Tabs.Panel>
 
         <Tabs.Panel value="users" pt="md">
-          <Paper withBorder p="md" radius="md">
-            <Title order={3} mb="md">Топ активных пользователей</Title>
+          <Stack gap="md">
+            {/* Сегментация пользователей */}
+            {stats.userSegments && (
+              <Paper withBorder p="md" radius="md">
+                <Title order={3} mb="md">Сегментация пользователей по активности</Title>
+                <SimpleGrid cols={{ base: 2, md: 4 }} spacing="md">
+                  <Card withBorder p="md" radius="md">
+                    <Text size="sm" c="dimmed" mb={4}>Высокая активность</Text>
+                    <Text size="xl" fw={700} c="green">
+                      {stats.userSegments.high}
+                    </Text>
+                  </Card>
+                  <Card withBorder p="md" radius="md">
+                    <Text size="sm" c="dimmed" mb={4}>Средняя активность</Text>
+                    <Text size="xl" fw={700} c="blue">
+                      {stats.userSegments.medium}
+                    </Text>
+                  </Card>
+                  <Card withBorder p="md" radius="md">
+                    <Text size="sm" c="dimmed" mb={4}>Низкая активность</Text>
+                    <Text size="xl" fw={700} c="orange">
+                      {stats.userSegments.low}
+                    </Text>
+                  </Card>
+                  <Card withBorder p="md" radius="md">
+                    <Text size="sm" c="dimmed" mb={4}>Неактивные</Text>
+                    <Text size="xl" fw={700} c="gray">
+                      {stats.userSegments.inactive}
+                    </Text>
+                  </Card>
+                </SimpleGrid>
+              </Paper>
+            )}
+
+            {/* Когортный анализ */}
+            {stats.cohortAnalysis && stats.cohortAnalysis.length > 0 && (
+              <Paper withBorder p="md" radius="md">
+                <Title order={3} mb="md">Когортный анализ</Title>
+                <ScrollArea h={400}>
+                  <Table>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>Когорта</Table.Th>
+                        <Table.Th>Пользователей</Table.Th>
+                        <Table.Th>Retention день 1</Table.Th>
+                        <Table.Th>Retention день 7</Table.Th>
+                        <Table.Th>Retention день 30</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {stats.cohortAnalysis.map((cohort) => (
+                        <Table.Tr key={cohort.cohort}>
+                          <Table.Td>
+                            <Text fw={500}>{cohort.cohort}</Text>
+                          </Table.Td>
+                          <Table.Td>
+                            <Badge variant="light" size="lg">
+                              {cohort.users}
+                            </Badge>
+                          </Table.Td>
+                          <Table.Td>
+                            <Badge variant="light" color="green" size="lg">
+                              {cohort.retention.day1}
+                            </Badge>
+                          </Table.Td>
+                          <Table.Td>
+                            <Badge variant="light" color="blue" size="lg">
+                              {cohort.retention.day7}
+                            </Badge>
+                          </Table.Td>
+                          <Table.Td>
+                            <Badge variant="light" color="violet" size="lg">
+                              {cohort.retention.day30}
+                            </Badge>
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                </ScrollArea>
+              </Paper>
+            )}
+
+            {/* Топ активных пользователей */}
+            <Paper withBorder p="md" radius="md">
+              <Title order={3} mb="md">Топ активных пользователей</Title>
             <ScrollArea h={400}>
               <Table>
                 <Table.Thead>
@@ -536,12 +843,211 @@ function MerchStats() {
               </Table>
             </ScrollArea>
           </Paper>
+          </Stack>
         </Tabs.Panel>
 
-        <Tabs.Panel value="actions" pt="md">
-          <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+        <Tabs.Panel value="content" pt="md">
+          <Stack gap="md">
+            {/* Популярные поисковые запросы */}
             <Paper withBorder p="md" radius="md">
-              <Title order={3} mb="md">Статистика по действиям</Title>
+              <Title order={3} mb="md">Популярные поисковые запросы</Title>
+              <ScrollArea h={300}>
+                <Table>
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>Запрос</Table.Th>
+                      <Table.Th>Количество</Table.Th>
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {stats.popularSearches.length > 0 ? (
+                      stats.popularSearches.map((search, index) => (
+                        <Table.Tr key={search.query}>
+                          <Table.Td>
+                            <Group gap="xs">
+                              <Badge variant="dot" color={index < 3 ? 'blue' : 'gray'}>
+                                {index + 1}
+                              </Badge>
+                              <Text size="sm">{search.query}</Text>
+                            </Group>
+                          </Table.Td>
+                          <Table.Td>
+                            <Badge variant="light" size="lg">
+                              {search.count}
+                            </Badge>
+                          </Table.Td>
+                        </Table.Tr>
+                      ))
+                    ) : (
+                      <Table.Tr>
+                        <Table.Td colSpan={2}>
+                          <Text c="dimmed" size="sm" ta="center">
+                            Нет данных о поисковых запросах
+                          </Text>
+                        </Table.Td>
+                      </Table.Tr>
+                    )}
+                  </Table.Tbody>
+                </Table>
+              </ScrollArea>
+            </Paper>
+
+            {/* Аналитика контента */}
+            {stats.contentAnalytics && (
+              <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+                <Paper withBorder p="md" radius="md">
+                  <Title order={3} mb="md">Конверсия карточек</Title>
+                  <ScrollArea h={300}>
+                    <Table>
+                      <Table.Thead>
+                        <Table.Tr>
+                          <Table.Th>Карточка</Table.Th>
+                          <Table.Th>Просмотров</Table.Th>
+                          <Table.Th>Реакций</Table.Th>
+                          <Table.Th>Конверсия</Table.Th>
+                        </Table.Tr>
+                      </Table.Thead>
+                      <Table.Tbody>
+                        {stats.contentAnalytics.conversionRate.slice(0, 10).map((card) => (
+                          <Table.Tr key={card.cardId}>
+                            <Table.Td>
+                              <Text size="sm" lineClamp={1}>{card.cardName}</Text>
+                            </Table.Td>
+                            <Table.Td>
+                              <Badge variant="light">{card.views}</Badge>
+                            </Table.Td>
+                            <Table.Td>
+                              <Badge variant="light" color="green">{card.reactions}</Badge>
+                            </Table.Td>
+                            <Table.Td>
+                              <Badge 
+                                variant="light" 
+                                color={card.conversionRate > 10 ? 'green' : card.conversionRate > 5 ? 'yellow' : 'red'}
+                              >
+                                {card.conversionRate.toFixed(1)}%
+                              </Badge>
+                            </Table.Td>
+                          </Table.Tr>
+                        ))}
+                      </Table.Tbody>
+                    </Table>
+                  </ScrollArea>
+                </Paper>
+
+                <Paper withBorder p="md" radius="md">
+                  <Title order={3} mb="md">Непопулярные карточки</Title>
+                  <ScrollArea h={300}>
+                    <Table>
+                      <Table.Thead>
+                        <Table.Tr>
+                          <Table.Th>Карточка</Table.Th>
+                          <Table.Th>Просмотров</Table.Th>
+                        </Table.Tr>
+                      </Table.Thead>
+                      <Table.Tbody>
+                        {stats.contentAnalytics.unpopularCards.length > 0 ? (
+                          stats.contentAnalytics.unpopularCards.map((card) => (
+                            <Table.Tr key={card.cardId}>
+                              <Table.Td>
+                                <Text size="sm" lineClamp={1}>{card.cardName}</Text>
+                              </Table.Td>
+                              <Table.Td>
+                                <Badge variant="light" color="red">{card.views}</Badge>
+                              </Table.Td>
+                            </Table.Tr>
+                          ))
+                        ) : (
+                          <Table.Tr>
+                            <Table.Td colSpan={2}>
+                              <Text c="dimmed" size="sm" ta="center">
+                                Все карточки популярны
+                              </Text>
+                            </Table.Td>
+                          </Table.Tr>
+                        )}
+                      </Table.Tbody>
+                    </Table>
+                  </ScrollArea>
+                </Paper>
+              </SimpleGrid>
+            )}
+
+            {/* Популярные карточки */}
+            {stats.popularCards && stats.popularCards.length > 0 && (
+              <Paper withBorder p="md" radius="md">
+                <Title order={3} mb="md">Популярные карточки</Title>
+                <ScrollArea h={300}>
+                  <Table>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>Карточка</Table.Th>
+                        <Table.Th>Просмотров</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {stats.popularCards.map((card, index) => (
+                        <Table.Tr key={card.name}>
+                          <Table.Td>
+                            <Group gap="xs">
+                              <Badge variant="dot" color={index < 3 ? 'violet' : 'gray'}>
+                                {index + 1}
+                              </Badge>
+                              <Text size="sm">{card.name}</Text>
+                            </Group>
+                          </Table.Td>
+                          <Table.Td>
+                            <Badge variant="light" size="lg">
+                              {card.count}
+                            </Badge>
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                </ScrollArea>
+              </Paper>
+            )}
+          </Stack>
+        </Tabs.Panel>
+
+        <Tabs.Panel value="behavior" pt="md">
+          <Stack gap="md">
+            {/* Поведенческая аналитика */}
+            {stats.behaviorAnalytics && (
+              <Paper withBorder p="md" radius="md">
+                <Title order={3} mb="md">Поведенческие метрики</Title>
+                <SimpleGrid cols={{ base: 1, md: 3 }} spacing="md">
+                  <Card withBorder p="md" radius="md">
+                    <Text size="sm" c="dimmed" mb={4}>Средняя глубина просмотра</Text>
+                    <Text size="xl" fw={700}>
+                      {stats.behaviorAnalytics.avgViewDepth.toFixed(1)}
+                    </Text>
+                    <Text size="xs" c="dimmed" mt={4}>карточек за сессию</Text>
+                  </Card>
+                  <Card withBorder p="md" radius="md">
+                    <Text size="sm" c="dimmed" mb={4}>Коэффициент оттока</Text>
+                    <Text size="xl" fw={700} c={stats.behaviorAnalytics.bounceRate > 50 ? 'red' : 'green'}>
+                      {stats.behaviorAnalytics.bounceRate.toFixed(1)}%
+                    </Text>
+                    <Text size="xs" c="dimmed" mt={4}>пользователей ушли сразу</Text>
+                  </Card>
+                  {stats.avgSessionDuration && (
+                    <Card withBorder p="md" radius="md">
+                      <Text size="sm" c="dimmed" mb={4}>Средняя длительность сессии</Text>
+                      <Text size="xl" fw={700}>
+                        {stats.avgSessionDuration.toFixed(1)}
+                      </Text>
+                      <Text size="xs" c="dimmed" mt={4}>минут</Text>
+                    </Card>
+                  )}
+                </SimpleGrid>
+              </Paper>
+            )}
+
+            {/* Статистика по действиям */}
+            <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+              <Paper withBorder p="md" radius="md">
+                <Title order={3} mb="md">Статистика по действиям</Title>
               <ScrollArea h={300}>
                 <Table>
                   <Table.Thead>
@@ -599,52 +1105,9 @@ function MerchStats() {
               </ScrollArea>
             </Paper>
           </SimpleGrid>
+          </Stack>
         </Tabs.Panel>
 
-        <Tabs.Panel value="search" pt="md">
-          <Paper withBorder p="md" radius="md">
-            <Title order={3} mb="md">Популярные поисковые запросы</Title>
-          <ScrollArea h={300}>
-            <Table>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Запрос</Table.Th>
-                  <Table.Th>Количество</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {stats.popularSearches.length > 0 ? (
-                  stats.popularSearches.map((search, index) => (
-                    <Table.Tr key={search.query}>
-                      <Table.Td>
-                        <Group gap="xs">
-                          <Badge variant="dot" color={index < 3 ? 'blue' : 'gray'}>
-                            {index + 1}
-                          </Badge>
-                          <Text size="sm">{search.query}</Text>
-                        </Group>
-                      </Table.Td>
-                      <Table.Td>
-                        <Badge variant="light" size="lg">
-                          {search.count}
-                        </Badge>
-                      </Table.Td>
-                    </Table.Tr>
-                  ))
-                ) : (
-                  <Table.Tr>
-                    <Table.Td colSpan={2}>
-                      <Text c="dimmed" size="sm" ta="center">
-                        Нет данных о поисковых запросах
-                      </Text>
-                    </Table.Td>
-                  </Table.Tr>
-                )}
-              </Table.Tbody>
-            </Table>
-          </ScrollArea>
-        </Paper>
-        </Tabs.Panel>
 
         <Tabs.Panel value="reactions" pt="md">
           {!stats.reactionStats ? (
@@ -930,6 +1393,7 @@ function MerchStats() {
             </>
           )}
         </Tabs.Panel>
+
       </Tabs>
 
       {/* Модальное окно превью карточки */}
@@ -959,228 +1423,53 @@ function MerchStats() {
         )}
       </CustomModal>
 
-      {/* Дополнительная статистика (всегда видна) */}
-      {/* Статистика по дням недели */}
-      {stats && stats.weekdayStats && stats.weekdayStats.length > 0 && (
-        <Paper withBorder p="md" radius="md">
-          <Title order={3} mb="md">Активность по дням недели</Title>
-          <ScrollArea h={300}>
-            <Table>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>День недели</Table.Th>
-                  <Table.Th>Количество действий</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {stats.weekdayStats.map((day) => (
-                  <Table.Tr key={day.day}>
-                    <Table.Td>
-                      <Text fw={500}>{day.dayName}</Text>
-                    </Table.Td>
-                    <Table.Td>
-                      <Badge variant="light" size="lg">
-                        {day.count}
-                      </Badge>
-                    </Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-          </ScrollArea>
-        </Paper>
-      )}
-
-      {/* Статистика по времени суток */}
-      {stats && stats.timeOfDayStats && (
-        <Paper withBorder p="md" radius="md">
-          <Title order={3} mb="md">Активность по времени суток</Title>
-          <SimpleGrid cols={4} spacing="md">
-            <Card withBorder p="md" radius="md">
-              <Text size="sm" c="dimmed" mb={4}>
-                Утро (6-12)
-              </Text>
-              <Text size="xl" fw={700} c="yellow">
-                {stats.timeOfDayStats.morning}
-              </Text>
-            </Card>
-            <Card withBorder p="md" radius="md">
-              <Text size="sm" c="dimmed" mb={4}>
-                День (12-18)
-              </Text>
-              <Text size="xl" fw={700} c="orange">
-                {stats.timeOfDayStats.afternoon}
-              </Text>
-            </Card>
-            <Card withBorder p="md" radius="md">
-              <Text size="sm" c="dimmed" mb={4}>
-                Вечер (18-24)
-              </Text>
-              <Text size="xl" fw={700} c="red">
-                {stats.timeOfDayStats.evening}
-              </Text>
-            </Card>
-            <Card withBorder p="md" radius="md">
-              <Text size="sm" c="dimmed" mb={4}>
-                Ночь (0-6)
-              </Text>
-              <Text size="xl" fw={700} c="blue">
-                {stats.timeOfDayStats.night}
-              </Text>
-            </Card>
-          </SimpleGrid>
-        </Paper>
-      )}
-
-      {/* Статистика по длине поисковых запросов */}
-      {stats && stats.searchLengthStats && (
-        <Paper withBorder p="md" radius="md">
-          <Title order={3} mb="md">Длина поисковых запросов</Title>
-          <SimpleGrid cols={3} spacing="md">
-            <Card withBorder p="md" radius="md">
-              <Text size="sm" c="dimmed" mb={4}>
-                Короткие (1-5 символов)
-              </Text>
-              <Text size="xl" fw={700}>
-                {stats.searchLengthStats.short}
-              </Text>
-            </Card>
-            <Card withBorder p="md" radius="md">
-              <Text size="sm" c="dimmed" mb={4}>
-                Средние (6-15 символов)
-              </Text>
-              <Text size="xl" fw={700}>
-                {stats.searchLengthStats.medium}
-              </Text>
-            </Card>
-            <Card withBorder p="md" radius="md">
-              <Text size="sm" c="dimmed" mb={4}>
-                Длинные (16+ символов)
-              </Text>
-              <Text size="xl" fw={700}>
-                {stats.searchLengthStats.long}
-              </Text>
-            </Card>
-          </SimpleGrid>
-        </Paper>
-      )}
-
-      {/* Воронка действий */}
-      {stats && stats.funnelStats && (
-        <Paper withBorder p="md" radius="md">
-          <Title order={3} mb="md">Воронка действий</Title>
+      {/* Модальное окно деталей дня */}
+      <Modal
+        opened={dayDetailsModalOpened}
+        onClose={() => {
+          setDayDetailsModalOpened(false);
+          setSelectedDayDetails(null);
+        }}
+        title={`Детали действий за ${selectedDayDetails ? dayjs(selectedDayDetails.date).format('DD.MM.YYYY') : ''}`}
+        size="lg"
+      >
+        {selectedDayDetails && (
           <Stack gap="md">
-            <Group justify="space-between">
-              <Text>Запустили бота</Text>
-              <Badge size="lg" variant="light">
-                {stats.funnelStats.started}
-              </Badge>
-            </Group>
-            <Group justify="space-between">
-              <Text>Нажали кнопку</Text>
-              <Badge size="lg" variant="light" color="blue">
-                {stats.funnelStats.clickedButton}
-                {stats.funnelStats.started > 0 && (
-                  <Text size="xs" c="dimmed" ml="xs" component="span">
-                    ({Math.round((stats.funnelStats.clickedButton / stats.funnelStats.started) * 100)}%)
-                  </Text>
-                )}
-              </Badge>
-            </Group>
-            <Group justify="space-between">
-              <Text>Использовали поиск</Text>
-              <Badge size="lg" variant="light" color="green">
-                {stats.funnelStats.searched}
-                {stats.funnelStats.started > 0 && (
-                  <Text size="xs" c="dimmed" ml="xs" component="span">
-                    ({Math.round((stats.funnelStats.searched / stats.funnelStats.started) * 100)}%)
-                  </Text>
-                )}
-              </Badge>
-            </Group>
-            <Group justify="space-between">
-              <Text>Оставили обратную связь</Text>
-              <Badge size="lg" variant="light" color="orange">
-                {stats.funnelStats.gaveFeedback}
-                {stats.funnelStats.started > 0 && (
-                  <Text size="xs" c="dimmed" ml="xs" component="span">
-                    ({Math.round((stats.funnelStats.gaveFeedback / stats.funnelStats.started) * 100)}%)
-                  </Text>
-                )}
-              </Badge>
-            </Group>
-          </Stack>
-        </Paper>
-      )}
-
-      {/* Статистика по retention */}
-      {stats && stats.retentionStats && (
-        <Paper withBorder p="md" radius="md">
-          <Title order={3} mb="md">Retention (возвраты пользователей)</Title>
-          <SimpleGrid cols={3} spacing="md">
-            <Card withBorder p="md" radius="md">
-              <Text size="sm" c="dimmed" mb={4}>
-                Вернулись через 1 день
+            <Text size="sm" c="dimmed">
+              Всего действий: <Text component="span" fw={600} c="var(--theme-text-primary)">
+                {Object.values(selectedDayDetails.actions).reduce((sum, count) => sum + count, 0)}
               </Text>
-              <Text size="xl" fw={700} c="green">
-                {stats.retentionStats.day1}
-              </Text>
-            </Card>
-            <Card withBorder p="md" radius="md">
-              <Text size="sm" c="dimmed" mb={4}>
-                Вернулись через 7 дней
-              </Text>
-              <Text size="xl" fw={700} c="blue">
-                {stats.retentionStats.day7}
-              </Text>
-            </Card>
-            <Card withBorder p="md" radius="md">
-              <Text size="sm" c="dimmed" mb={4}>
-                Вернулись через 30 дней
-              </Text>
-              <Text size="xl" fw={700} c="violet">
-                {stats.retentionStats.day30}
-              </Text>
-            </Card>
-          </SimpleGrid>
-        </Paper>
-      )}
-
-      {/* Популярные карточки */}
-      {stats && stats.popularCards && stats.popularCards.length > 0 && (
-        <Paper withBorder p="md" radius="md">
-          <Title order={3} mb="md">Популярные карточки</Title>
-          <ScrollArea h={300}>
-            <Table>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Карточка</Table.Th>
-                  <Table.Th>Просмотров</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {stats.popularCards.map((card, index) => (
-                  <Table.Tr key={card.name}>
-                    <Table.Td>
-                      <Group gap="xs">
-                        <Badge variant="dot" color={index < 3 ? 'violet' : 'gray'}>
-                          {index + 1}
-                        </Badge>
-                        <Text size="sm">{card.name}</Text>
-                      </Group>
-                    </Table.Td>
-                    <Table.Td>
-                      <Badge variant="light" size="lg">
-                        {card.count}
-                      </Badge>
-                    </Table.Td>
+            </Text>
+            <ScrollArea h={400}>
+              <Table>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>Действие</Table.Th>
+                    <Table.Th>Количество</Table.Th>
                   </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-          </ScrollArea>
-        </Paper>
-      )}
+                </Table.Thead>
+                <Table.Tbody>
+                  {Object.entries(selectedDayDetails.actions)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([action, count]) => (
+                      <Table.Tr key={action}>
+                        <Table.Td>
+                          <Text size="sm">{getActionLabel(action)}</Text>
+                        </Table.Td>
+                        <Table.Td>
+                          <Badge variant="light" size="lg">
+                            {count}
+                          </Badge>
+                        </Table.Td>
+                      </Table.Tr>
+                    ))}
+                </Table.Tbody>
+              </Table>
+            </ScrollArea>
+          </Stack>
+        )}
+      </Modal>
+
     </Stack>
   );
 }

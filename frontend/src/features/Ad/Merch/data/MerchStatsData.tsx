@@ -127,6 +127,76 @@ export interface MerchStatsResponse {
   totalSessions?: number;
   avgSessionDuration?: number;
   avgActionsPerSession?: number;
+  // Новые данные для графиков
+  heatmapData?: Array<{
+    day: number;
+    hour: number;
+    count: number;
+  }>;
+  trendData?: Array<{
+    period: string;
+    displayPeriod: string;
+    current: number;
+    previous?: number;
+  }>;
+  // Детальная аналитика пользователей
+  userSegments?: {
+    high: number;
+    medium: number;
+    low: number;
+    inactive: number;
+  };
+  cohortAnalysis?: Array<{
+    cohort: string;
+    users: number;
+    retention: {
+      day1: number;
+      day7: number;
+      day30: number;
+    };
+  }>;
+  // Аналитика контента
+  contentAnalytics?: {
+    conversionRate: Array<{
+      cardId: string;
+      cardName: string;
+      views: number;
+      reactions: number;
+      conversionRate: number;
+    }>;
+    unpopularCards: Array<{
+      cardId: string;
+      cardName: string;
+      views: number;
+    }>;
+    categoryPerformance: Array<{
+      categoryId: string;
+      categoryName: string;
+      views: number;
+      conversions: number;
+      conversionRate: number;
+    }>;
+  };
+  // Поведенческая аналитика
+  behaviorAnalytics?: {
+    avgViewDepth: number;
+    searchToCardPath: Array<{
+      searchQuery: string;
+      cardName: string;
+      count: number;
+    }>;
+    bounceRate: number;
+    repeatViews: Array<{
+      cardId: string;
+      cardName: string;
+      repeatViewCount: number;
+    }>;
+    categoryTransitions: Array<{
+      fromCategory: string;
+      toCategory: string;
+      count: number;
+    }>;
+  };
 }
 
 export const fetchMerchStats = async (period: number = 30): Promise<MerchStatsResponse> => {

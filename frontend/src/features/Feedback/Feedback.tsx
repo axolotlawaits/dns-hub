@@ -108,7 +108,12 @@ function FeedbackModule() {
     setError(null);
     try {
       const tool = activeTab === 'all' ? undefined : activeTab;
-      const data = await fetchFeedback(page, limit, isReadFilter, tool);
+      const data = await fetchFeedback({
+        page,
+        limit,
+        isRead: isReadFilter,
+        tool
+      });
       setFeedbacks(data.feedbacks);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Неизвестная ошибка');

@@ -6,19 +6,10 @@ import {
   Text, 
   Badge,
   Transition,
-  Divider,
   ScrollArea,
   Loader,
   Alert,
-  Modal,
-  Button,
-  Textarea,
-  TextInput,
-  Stack,
-  Group,
-  FileButton,
-  Image,
-  Box
+  Button
 } from '@mantine/core';
 import { 
   IconLayoutSidebarLeftExpand, 
@@ -26,17 +17,15 @@ import {
   IconHome,
   IconChevronRight,
   IconAlertCircle,
-  IconMessageCircle,
-  IconX,
-  IconPhoto
+  IconMessageCircle
 } from '@tabler/icons-react';
-import { Select } from '@mantine/core';
 import * as TablerIcons from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
 import { API } from '../config/constants';
 import { useTheme } from '../contexts/ThemeContext';
 import { useUserContext } from '../hooks/useUserContext';
 import './styles/Navigation.css';
+import { DynamicFormModal, type FormField } from '../utils/formModal';
 
 interface Tool {
   id: string;
@@ -61,14 +50,11 @@ const Navigation: React.FC<NavigationProps> = ({ navOpened, toggleNav }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [feedbackModalOpened, setFeedbackModalOpened] = useState(false);
-  const [feedbackText, setFeedbackText] = useState('');
   const [feedbackParentTool, setFeedbackParentTool] = useState<string>('general');
   const [feedbackChildTool, setFeedbackChildTool] = useState<string>('');
   const [feedbackParentTools, setFeedbackParentTools] = useState<Array<{ value: string; label: string }>>([]);
   const [feedbackChildTools, setFeedbackChildTools] = useState<Array<{ value: string; label: string }>>([]);
   const [toolsData, setToolsData] = useState<any>(null);
-  const [feedbackPhotos, setFeedbackPhotos] = useState<File[]>([]);
-  const [feedbackPhotoUrls, setFeedbackPhotoUrls] = useState<string[]>([]);
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const { } = useTheme();
@@ -200,26 +186,9 @@ const Navigation: React.FC<NavigationProps> = ({ navOpened, toggleNav }) => {
     navigate(link, { state: { id } });
   };
 
-  const handleFeedbackPhotoChange = (file: File | null) => {
-    if (file) {
-      const newPhotos = [...feedbackPhotos, file];
-      setFeedbackPhotos(newPhotos);
-      const newUrls = newPhotos.map(f => URL.createObjectURL(f));
-      setFeedbackPhotoUrls(newUrls);
-    }
-  };
-
-  const removeFeedbackPhoto = (index: number) => {
-    const newPhotos = feedbackPhotos.filter((_, i) => i !== index);
-    const newUrls = feedbackPhotoUrls.filter((_, i) => i !== index);
-    setFeedbackPhotos(newPhotos);
-    setFeedbackPhotoUrls(newUrls);
-    // Освобождаем память
-    URL.revokeObjectURL(feedbackPhotoUrls[index]);
-  };
-
-  const handleSubmitFeedback = async () => {
-    if (!feedbackText.trim()) {
+  const handleSubmitFeedback = async (values: Record<string, any>) => {
+    const text = (values.text || '').trim();
+    if (!text) {
       setFeedbackError('Пожалуйста, введите текст обратной связи');
       return;
     }
@@ -233,23 +202,29 @@ const Navigation: React.FC<NavigationProps> = ({ navOpened, toggleNav }) => {
         throw new Error('Токен не найден');
       }
 
+      const parentTool = values.parentTool || feedbackParentTool || 'general';
+      const childTool = values.childTool || feedbackChildTool || '';
+
       // Определяем финальный инструмент: если выбран дочерний, используем его, иначе родительский
       // Формат: parentTool:childTool или просто parentTool
-      const finalTool = feedbackChildTool 
-        ? `${feedbackParentTool}:${feedbackChildTool}` 
-        : feedbackParentTool;
+      const finalTool = childTool 
+        ? `${parentTool}:${childTool}` 
+        : parentTool;
 
-      // Конвертируем файлы в base64 или отправляем как FormData
+      // Собираем данные формы
       const formData = new FormData();
       formData.append('tool', finalTool);
-      formData.append('text', feedbackText.trim());
+      formData.append('text', text);
       if (user?.email) {
         formData.append('email', user.email);
       }
 
       // Добавляем фотографии
-      feedbackPhotos.forEach((photo) => {
-        formData.append('photos', photo);
+      const photos = (values.photos || []) as Array<{ source: File | string }>;
+      photos.forEach((attachment) => {
+        if (attachment && attachment.source && typeof attachment.source !== 'string') {
+          formData.append('photos', attachment.source as File);
+        }
       });
 
       const response = await fetch(`${API}/merch-bot/feedback`, {
@@ -265,16 +240,7 @@ const Navigation: React.FC<NavigationProps> = ({ navOpened, toggleNav }) => {
         throw new Error(`Ошибка HTTP: ${response.status} - ${errorText}`);
       }
 
-      // Очищаем форму
-      setFeedbackText('');
-      setFeedbackParentTool('general');
-      setFeedbackChildTool('');
-      setFeedbackChildTools([]);
-      setFeedbackPhotos([]);
-      feedbackPhotoUrls.forEach(url => URL.revokeObjectURL(url));
-      setFeedbackPhotoUrls([]);
-      setFeedbackModalOpened(false);
-      setFeedbackError(null);
+      handleCloseFeedbackModal();
     } catch (error) {
       console.error('Ошибка при отправке обратной связи:', error);
       setFeedbackError(error instanceof Error ? error.message : 'Не удалось отправить обратную связь');
@@ -285,13 +251,9 @@ const Navigation: React.FC<NavigationProps> = ({ navOpened, toggleNav }) => {
 
   const handleCloseFeedbackModal = () => {
     setFeedbackModalOpened(false);
-    setFeedbackText('');
     setFeedbackParentTool('general');
     setFeedbackChildTool('');
     setFeedbackChildTools([]);
-    setFeedbackPhotos([]);
-    feedbackPhotoUrls.forEach(url => URL.revokeObjectURL(url));
-    setFeedbackPhotoUrls([]);
     setFeedbackError(null);
   };
 
@@ -474,137 +436,77 @@ const Navigation: React.FC<NavigationProps> = ({ navOpened, toggleNav }) => {
       </div>
 
       {/* Модальное окно обратной связи */}
-      <Modal
+      <DynamicFormModal
         opened={feedbackModalOpened}
         onClose={handleCloseFeedbackModal}
         title="Обратная связь"
+        mode="create"
         size="md"
-        centered
-        overlayProps={{
-          backgroundOpacity: 0.5,
-        }}
-        withCloseButton
-        closeOnClickOutside
-        closeOnEscape
-      >
-        <Stack gap="md">
-          <Select
-            label="Родительский инструмент"
-            placeholder="Выберите родительский инструмент"
-            value={feedbackParentTool}
-            onChange={(value) => setFeedbackParentTool(value || 'general')}
-            data={feedbackParentTools.length > 0 ? feedbackParentTools : [
+        fields={((): FormField[] => {
+          const parentOptions = feedbackParentTools.length > 0
+            ? feedbackParentTools
+            : [
               { value: 'general', label: 'Общая обратная связь' },
               { value: 'other', label: 'Другое' }
-            ]}
-            required
-            searchable
-          />
+              ];
 
-          <Select
-            label="Дочерний инструмент"
-            placeholder={feedbackChildTools.length > 0 ? "Выберите дочерний инструмент" : "Нет дочерних инструментов"}
-            value={feedbackChildTool}
-            onChange={(value) => setFeedbackChildTool(value || '')}
-            data={feedbackChildTools}
-            searchable
-            clearable
-            disabled={feedbackChildTools.length === 0}
-            required={feedbackChildTools.length > 0}
-          />
-          
-          {user?.email && (
-            <TextInput
-              label="Email"
-              value={user.email}
-              disabled
-              readOnly
-            />
-          )}
-          
-          <Textarea
-            label="Текст обратной связи"
-            placeholder="Опишите вашу проблему или предложение..."
-            value={feedbackText}
-            onChange={(e) => setFeedbackText(e.target.value)}
-            minRows={5}
-            required
-          />
-
-          <Box>
-            <Text size="sm" fw={500} mb="xs">Фотографии (необязательно)</Text>
-            <Group gap="sm">
-              <FileButton
-                onChange={handleFeedbackPhotoChange}
-                accept="image/*"
-                multiple={false}
-              >
-                {(props) => (
-                  <Button
-                    {...props}
-                    leftSection={<IconPhoto size={16} />}
-                    variant="outline"
-                    size="sm"
-                  >
-                    Добавить фото
-                  </Button>
-                )}
-              </FileButton>
-            </Group>
-            {feedbackPhotoUrls.length > 0 && (
-              <Group gap="sm" mt="md">
-                {feedbackPhotoUrls.map((url, index) => (
-                  <Box key={index} pos="relative" style={{ position: 'relative' }}>
-                    <Image
-                      src={url}
-                      alt={`Фото ${index + 1}`}
-                      width={100}
-                      height={100}
-                      fit="cover"
-                      radius="md"
-                    />
-                    <ActionIcon
-                      color="red"
-                      variant="filled"
-                      size="sm"
-                      radius="xl"
-                      pos="absolute"
-                      top={-8}
-                      right={-8}
-                      onClick={() => removeFeedbackPhoto(index)}
-                      style={{ zIndex: 1 }}
-                    >
-                      <IconX size={14} />
-                    </ActionIcon>
-                  </Box>
-                ))}
-              </Group>
-            )}
-          </Box>
-
-          {feedbackError && (
-            <Alert color="red" title="Ошибка">
-              {feedbackError}
-            </Alert>
-          )}
-
-          <Group justify="flex-end" mt="md">
-            <Button variant="outline" onClick={handleCloseFeedbackModal}>
-              Отмена
-            </Button>
-            <Button
-              onClick={handleSubmitFeedback}
-              loading={isSubmittingFeedback}
-              color="orange"
-              style={{
-                background: 'linear-gradient(135deg, #ff6b35, #f7931e)'
-              }}
-            >
-              Отправить
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
+          return [
+            {
+              name: 'parentTool',
+              label: 'Инструмент',
+              type: 'select',
+              required: true,
+              options: parentOptions,
+              searchable: true,
+              groupWith: ['childTool'],
+              groupSize: 2,
+              onChange: (value, setFieldValue) => {
+                const selected = value || 'general';
+                setFeedbackParentTool(selected);
+                if (setFieldValue) {
+                  setFieldValue('parentTool', selected);
+                  setFieldValue('childTool', '');
+                }
+              }
+            },
+            {
+              name: 'childTool',
+              label: 'Дочерний инструмент',
+              type: 'select',
+              options: feedbackChildTools,
+              searchable: true,
+              disabled: feedbackChildTools.length === 0,
+              groupSize: 2
+            },
+            {
+              name: 'text',
+              label: 'Текст обратной связи',
+              type: 'textarea',
+              required: true,
+              placeholder: 'Опишите вашу проблему или предложение...'
+            },
+            {
+              name: 'photos',
+              label: 'Фотографии (необязательно)',
+              type: 'file',
+              withDnd: false,
+              multiple: true,
+              accept: 'image/*'
+            }
+          ];
+        })()}
+        initialValues={{
+          parentTool: feedbackParentTool,
+          childTool: feedbackChildTool,
+          text: '',
+          photos: []
+        }}
+        onSubmit={handleSubmitFeedback}
+        loading={isSubmittingFeedback}
+        error={feedbackError}
+        submitButtonText="Отправить"
+        cancelButtonText="Отмена"
+      />
     </AppShell.Navbar>
   );
 };

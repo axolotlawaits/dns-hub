@@ -194,6 +194,7 @@ model User {
   email                  String                     @unique
   position               String
   branch                 String
+  feedbackResponses      FeedbackResponse[]
   image                  String?
   login                  String                     @unique
   updatedAt              DateTime                   @updatedAt
@@ -817,23 +818,66 @@ model MerchTgUserStats {
 }
 
 // Универсальная таблица обратной связи
-model Feedback {
-  id        String   @id @default(uuid())
-  tool      String   // Инструмент/модуль (merch, radio, и т.д.)
-  userId    String?  // ID пользователя (может быть из разных источников)
-  email     String
-  text      String
-  photos    String[] @default([]) // Массив путей к фотографиям
-  metadata  Json?    // Дополнительные данные (имя пользователя, username и т.д.)
-  createdAt DateTime @default(now())
-  isRead    Boolean  @default(false)
-  readAt    DateTime?
-  readBy    String?  // ID пользователя системы, который прочитал
+enum FeedbackStatus {
+  NEW         // Новое
+  IN_PROGRESS // В работе
+  RESOLVED    // Решено
+  REJECTED    // Отклонено
+}
 
+enum FeedbackPriority {
+  LOW      // Низкий
+  MEDIUM   // Средний
+  HIGH     // Высокий
+  CRITICAL // Критический
+}
+
+model Feedback {
+  id          String          @id @default(uuid())
+  tool        String          // Инструмент/модуль (merch, radio, и т.д.)
+  userId      String?         // ID пользователя (может быть из разных источников)
+  email       String
+  text        String
+  photos      String[]        @default([]) // Массив путей к фотографиям
+  metadata    Json?           // Дополнительные данные (имя пользователя, username и т.д.)
+  createdAt   DateTime        @default(now())
+  isRead      Boolean         @default(false)
+  readAt      DateTime?
+  readBy      String?         // ID пользователя системы, который прочитал
+  
+  // Новые поля для улучшений
+  status      FeedbackStatus  @default(NEW)
+  priority    FeedbackPriority @default(MEDIUM)
+  tags        String[]        @default([]) // Теги/категории
+  assignedTo  String?         // ID пользователя системы, назначенного для обработки
+  pinned      Boolean         @default(false) // Закреплено ли сообщение
+  responses   FeedbackResponse[] // Ответы на обратную связь
+  
   @@index([tool])
   @@index([createdAt])
   @@index([isRead])
   @@index([tool, isRead])
+  @@index([status])
+  @@index([priority])
+  @@index([assignedTo])
+  @@index([pinned])
+  @@index([email])
+}
+
+model FeedbackResponse {
+  id          String   @id @default(uuid())
+  feedbackId  String
+  feedback    Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  userId      String   // ID пользователя системы, который ответил
+  user        User     @relation(fields: [userId], references: [id])
+  text        String   // Текст ответа
+  createdAt   DateTime @default(now())
+  sentAt      DateTime? // Когда был отправлен ответ (если отправлен по email)
+  sentEmail   Boolean  @default(false) // Отправлен ли ответ по email
+  
+  @@index([feedbackId])
+  @@index([createdAt])
+  @@index([userId])
 }
 
 // ========================================

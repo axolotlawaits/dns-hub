@@ -61,7 +61,11 @@ function MerchFeedbackComponent() {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchMerchFeedback(page, limit, isReadFilter);
+      const data = await fetchMerchFeedback({
+        page,
+        limit,
+        isRead: isReadFilter
+      });
       setFeedbacks(data.feedbacks);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Неизвестная ошибка';

@@ -454,7 +454,7 @@ export default function NewsList() {
         closeOnEscape
       >
         {selectedNews && (
-          <Stack gap="md">
+          <Stack gap="md" p="md">
             <Title order={3}>{selectedNews.name}</Title>
             <div dangerouslySetInnerHTML={{ __html: selectedNews.description }} />
             <Divider />
@@ -505,7 +505,7 @@ export default function NewsList() {
         closeOnClickOutside
         closeOnEscape
       >
-        <Stack gap="md">
+        <Stack gap="md" p="md">
           <TextInput
             label="Заголовок"
             value={newsForm.name}
@@ -544,7 +544,7 @@ export default function NewsList() {
         closeOnClickOutside
         closeOnEscape
       >
-        <Stack gap="md">
+        <Stack gap="md" p="md">
           <TextInput
             label="Заголовок"
             value={newsForm.name}
@@ -583,7 +583,7 @@ export default function NewsList() {
         closeOnClickOutside
         closeOnEscape
       >
-        <Stack gap="md">
+        <Stack gap="md" p="md">
           <Text>Вы уверены, что хотите удалить эту новость?</Text>
           <Group justify="flex-end">
             <Button variant="outline" onClick={closeDeleteModal}>
@@ -610,7 +610,7 @@ export default function NewsList() {
         closeOnClickOutside
         closeOnEscape
       >
-        <Stack gap="md">
+        <Stack gap="md" p="md">
           {news.map((newsItem) => (
             <Card key={newsItem.id} shadow="sm" radius="md" padding="md">
               <Group justify="space-between" align="flex-start">
