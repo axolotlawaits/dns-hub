@@ -34,7 +34,11 @@ import {
   markFeedbackAsRead,
   fetchFeedbackStats,
   Feedback,
-  FeedbackStats
+  FeedbackStats,
+  FeedbackPriority,
+  FeedbackStatus,
+  updateFeedbackPriority,
+  updateFeedbackStatus
 } from './data/FeedbackData';
 import { API } from '../../config/constants';
 import './Feedback.css';
@@ -52,6 +56,7 @@ function FeedbackModule() {
   const [modalOpened, setModalOpened] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('all');
   const [toolsMap, setToolsMap] = useState<Record<string, string>>({});
+  const [updatingFeedbackId, setUpdatingFeedbackId] = useState<string | null>(null);
 
   useEffect(() => {
     loadFeedbacks();
@@ -249,6 +254,80 @@ function FeedbackModule() {
     return labels[tool] || tool;
   };
 
+  const getPriorityLabel = (priority?: FeedbackPriority) => {
+    const p = priority || 'MEDIUM';
+    const map: Record<FeedbackPriority, string> = {
+      LOW: 'Низкий',
+      MEDIUM: 'Средний',
+      HIGH: 'Высокий',
+      CRITICAL: 'Критический'
+    };
+    return map[p];
+  };
+
+  const getPriorityColor = (priority?: FeedbackPriority) => {
+    const p = priority || 'MEDIUM';
+    const map: Record<FeedbackPriority, string> = {
+      LOW: 'gray',
+      MEDIUM: 'blue',
+      HIGH: 'orange',
+      CRITICAL: 'red'
+    };
+    return map[p];
+  };
+
+  const getStatusLabel = (status?: FeedbackStatus) => {
+    const s = status || 'NEW';
+    const map: Record<FeedbackStatus, string> = {
+      NEW: 'Новое',
+      IN_PROGRESS: 'В работе',
+      RESOLVED: 'Решено',
+      REJECTED: 'Отклонено'
+    };
+    return map[s];
+  };
+
+  const getStatusColor = (status?: FeedbackStatus) => {
+    const s = status || 'NEW';
+    const map: Record<FeedbackStatus, string> = {
+      NEW: 'blue',
+      IN_PROGRESS: 'yellow',
+      RESOLVED: 'green',
+      REJECTED: 'red'
+    };
+    return map[s];
+  };
+
+  const handleChangePriority = async (feedback: Feedback, value: string | null) => {
+    if (!value) return;
+    const priority = value as FeedbackPriority;
+    try {
+      setUpdatingFeedbackId(feedback.id);
+      const updated = await updateFeedbackPriority(feedback.id, priority);
+      setFeedbacks(prev => prev.map(f => f.id === feedback.id ? updated : f));
+      setSelectedFeedback(prev => (prev && prev.id === feedback.id ? updated : prev));
+    } catch (err) {
+      console.error('Ошибка при обновлении приоритета:', err);
+    } finally {
+      setUpdatingFeedbackId(null);
+    }
+  };
+
+  const handleChangeStatus = async (feedback: Feedback, value: string | null) => {
+    if (!value) return;
+    const status = value as FeedbackStatus;
+    try {
+      setUpdatingFeedbackId(feedback.id);
+      const updated = await updateFeedbackStatus(feedback.id, status);
+      setFeedbacks(prev => prev.map(f => f.id === feedback.id ? updated : f));
+      setSelectedFeedback(prev => (prev && prev.id === feedback.id ? updated : prev));
+    } catch (err) {
+      console.error('Ошибка при обновлении статуса:', err);
+    } finally {
+      setUpdatingFeedbackId(null);
+    }
+  };
+
   if (loading && !feedbacks.length) {
     return (
       <Box style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
@@ -384,6 +463,7 @@ function FeedbackModule() {
                 <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Сообщение</Table.Th>
                 <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Фото</Table.Th>
                 <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Дата</Table.Th>
+                <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Приоритет</Table.Th>
                 <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Статус</Table.Th>
                 <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Действия</Table.Th>
               </Table.Tr>
@@ -446,15 +526,20 @@ function FeedbackModule() {
                       </Group>
                     </Table.Td>
                     <Table.Td>
-                      {feedback.isRead ? (
-                        <Badge color="green" variant="filled" leftSection={<IconCheck size={12} />}>
-                          Прочитано
-                        </Badge>
-                      ) : (
-                        <Badge color="red" variant="filled" leftSection={<IconX size={12} />}>
-                          Непрочитано
-                        </Badge>
-                      )}
+                      <Badge
+                        color={getPriorityColor(feedback.priority)}
+                        variant="light"
+                      >
+                        {getPriorityLabel(feedback.priority)}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      <Badge
+                        color={getStatusColor(feedback.status)}
+                        variant="light"
+                      >
+                        {getStatusLabel(feedback.status)}
+                      </Badge>
                     </Table.Td>
                     <Table.Td>
                       <Group gap="xs">
@@ -521,15 +606,67 @@ function FeedbackModule() {
                 <IconUser size={20} />
                 <Text fw={600}>{getUserName(selectedFeedback)}</Text>
               </Group>
-              {selectedFeedback.isRead ? (
-                <Badge color="green" variant="filled">
-                  Прочитано
+              <Group gap="xs">
+                <Badge
+                  color={getPriorityColor(selectedFeedback.priority)}
+                  variant="filled"
+                >
+                  {getPriorityLabel(selectedFeedback.priority)}
                 </Badge>
-              ) : (
-                <Badge color="red" variant="filled">
-                  Непрочитано
+                <Badge
+                  color={getStatusColor(selectedFeedback.status)}
+                  variant="filled"
+                >
+                  {getStatusLabel(selectedFeedback.status)}
                 </Badge>
-              )}
+                {selectedFeedback.isRead ? (
+                  <Badge color="green" variant="light" leftSection={<IconCheck size={12} />}
+                  >
+                    Прочитано
+                  </Badge>
+                ) : (
+                  <Badge color="red" variant="light" leftSection={<IconX size={12} />}
+                  >
+                    Не прочитано
+                  </Badge>
+                )}
+              </Group>
+            </Group>
+
+            <Divider />
+
+            <Group gap="xs" align="center">
+              <Text size="sm" c="dimmed">Приоритет:</Text>
+              <Select
+                size="xs"
+                w={180}
+                data={[
+                  { value: 'LOW', label: 'Низкий' },
+                  { value: 'MEDIUM', label: 'Средний' },
+                  { value: 'HIGH', label: 'Высокий' },
+                  { value: 'CRITICAL', label: 'Критический' }
+                ]}
+                value={(selectedFeedback.priority || 'MEDIUM') as string}
+                onChange={(value) => handleChangePriority(selectedFeedback, value)}
+                disabled={updatingFeedbackId === selectedFeedback.id}
+              />
+            </Group>
+
+            <Group gap="xs" align="center">
+              <Text size="sm" c="dimmed">Статус:</Text>
+              <Select
+                size="xs"
+                w={200}
+                data={[
+                  { value: 'NEW', label: 'Новое' },
+                  { value: 'IN_PROGRESS', label: 'В работе' },
+                  { value: 'RESOLVED', label: 'Решено' },
+                  { value: 'REJECTED', label: 'Отклонено' }
+                ]}
+                value={(selectedFeedback.status || 'NEW') as string}
+                onChange={(value) => handleChangeStatus(selectedFeedback, value)}
+                disabled={updatingFeedbackId === selectedFeedback.id}
+              />
             </Group>
 
             <Divider />
