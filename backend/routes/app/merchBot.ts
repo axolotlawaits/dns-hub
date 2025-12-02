@@ -211,7 +211,15 @@ router.get('/stats', async (req: any, res: any) => {
       },
       select: {
         details: true,
-        timestamp: true
+        timestamp: true,
+        user: {
+          select: {
+            userId: true,
+            username: true,
+            firstName: true,
+            lastName: true
+          }
+        }
       }
     });
 
@@ -219,7 +227,17 @@ router.get('/stats', async (req: any, res: any) => {
     const reactionsByMessage: Record<string, {
       messageId: number;
       chatId: number;
-      reactions: Array<{ emoji: string; count: number; lastReaction: Date }>;
+      reactions: Array<{ 
+        emoji: string; 
+        count: number; 
+        lastReaction: Date;
+        users: Array<{
+          userId: number;
+          username: string | null;
+          firstName: string | null;
+          lastName: string | null;
+        }>;
+      }>;
       totalReactions: number;
     }> = {};
 
@@ -248,16 +266,30 @@ router.get('/stats', async (req: any, res: any) => {
             
             const messageReactions = reactionsByMessage[messageKey].reactions;
             const existingReaction = messageReactions.find(r => r.emoji === emoji);
+            
+            const userInfo = {
+              userId: reaction.user?.userId || parsed.userId || 0,
+              username: reaction.user?.username || parsed.username || null,
+              firstName: reaction.user?.firstName || parsed.firstName || null,
+              lastName: reaction.user?.lastName || parsed.lastName || null
+            };
+            
             if (existingReaction) {
               existingReaction.count++;
               if (reaction.timestamp > existingReaction.lastReaction) {
                 existingReaction.lastReaction = reaction.timestamp;
               }
+              // Добавляем пользователя, если его еще нет
+              const userExists = existingReaction.users.some(u => u.userId === userInfo.userId);
+              if (!userExists) {
+                existingReaction.users.push(userInfo);
+              }
             } else {
               messageReactions.push({
                 emoji,
                 count: 1,
-                lastReaction: reaction.timestamp
+                lastReaction: reaction.timestamp,
+                users: [userInfo]
               });
             }
             reactionsByMessage[messageKey].totalReactions++;
@@ -332,6 +364,8 @@ router.get('/stats', async (req: any, res: any) => {
               // Ищем событие card_sent с этим messageId и chatId
               let cardInfo: { itemId: string; itemName: string; itemType: 'card' | 'category' } | null = null;
               
+              let messageText = '';
+              
               try {
                 const cardSentEvent = await prisma.merchTgUserStats.findFirst({
                   where: {
@@ -354,6 +388,7 @@ router.get('/stats', async (req: any, res: any) => {
                         itemName: parsed.itemName,
                         itemType: parsed.itemType
                       };
+                      messageText = parsed.messageText || '';
                     }
                   } catch (parseError) {
                     // Игнорируем ошибки парсинга
@@ -368,6 +403,7 @@ router.get('/stats', async (req: any, res: any) => {
                 chatId: msg.chatId,
                 totalReactions: msg.totalReactions,
                 reactions: msg.reactions.sort((a, b) => b.count - a.count),
+                messageText: messageText,
                 cardInfo: cardInfo ? {
                   itemId: cardInfo.itemId,
                   itemName: cardInfo.itemName,
@@ -1263,7 +1299,7 @@ router.get('/users', authenticateToken, async (req: any, res: any) => {
 // Маршрут для отправки сообщения пользователям
 router.post('/send-message', authenticateToken, async (req: any, res: any) => {
   try {
-    const { message, userIds, parseMode = 'HTML' } = req.body;
+    let { message, userIds, parseMode = 'HTML' } = req.body;
 
     if (!message || !message.trim()) {
       return res.status(400).json({ error: 'Message is required' });
@@ -1271,6 +1307,20 @@ router.post('/send-message', authenticateToken, async (req: any, res: any) => {
 
     if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
       return res.status(400).json({ error: 'User IDs array is required' });
+    }
+
+    // Форматируем HTML для Telegram (убираем не поддерживаемые теги)
+    if (parseMode === 'HTML') {
+      // Убираем теги <p> (Telegram не поддерживает их)
+      message = message.replace(/<\/p>/gi, '<br>');
+      message = message.replace(/<p[^>]*>/gi, '');
+      // Убираем другие не поддерживаемые теги
+      message = message.replace(/<\/?div[^>]*>/gi, '');
+      message = message.replace(/<\/?span[^>]*>/gi, '');
+      // Нормализуем <br>
+      message = message.replace(/<br\s*\/?>/gi, '<br>');
+      // Убираем множественные <br> подряд (максимум 2 подряд)
+      message = message.replace(/(<br>\s*){3,}/gi, '<br><br>');
     }
 
     const { merchBotService } = await import('../../controllers/app/merchBot.js');

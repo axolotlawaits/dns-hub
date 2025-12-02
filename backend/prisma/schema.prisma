@@ -761,6 +761,14 @@ model Merch {
   updatedAt   DateTime @updatedAt
   layer       Int
   attachments MerchAttachment[]   // Связи с attachments
+
+  // Индексы для оптимизации запросов
+  @@index([parentId])
+  @@index([layer])
+  @@index([isActive])
+  @@index([parentId, layer])
+  @@index([sortOrder])
+  @@index([parentId, sortOrder])
 }
 
 model MerchAttachment {
@@ -773,6 +781,11 @@ model MerchAttachment {
   sortOrder Int      @default(0)    // ← порядок сортировки
   merch     Merch    @relation(fields: [recordId], references: [id], onDelete: Cascade)
   userAdd   User     @relation(fields: [userAddId], references: [id])
+
+  // Индексы для оптимизации запросов
+  @@index([recordId])
+  @@index([recordId, sortOrder])
+  @@index([type])
 }
 
 // Telegram бот для мерча
@@ -794,6 +807,13 @@ model MerchTgUserStats {
   details   String?
   timestamp DateTime     @default(now())
   user      MerchTgUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Индексы для оптимизации запросов статистики
+  @@index([userId])
+  @@index([action])
+  @@index([timestamp])
+  @@index([userId, action])
+  @@index([action, timestamp])
 }
 
 // Универсальная таблица обратной связи

@@ -43,7 +43,14 @@ export interface MerchStatsResponse {
         emoji: string;
         count: number;
         lastReaction: Date;
+        users: Array<{
+          userId: number;
+          username: string | null;
+          firstName: string | null;
+          lastName: string | null;
+        }>;
       }>;
+      messageText?: string;
       cardInfo?: {
         itemId: string;
         itemName: string;
@@ -130,8 +137,6 @@ export const fetchMerchStats = async (period: number = 30): Promise<MerchStatsRe
     }
 
     const url = `${API}/merch-bot/stats?period=${period}`;
-    console.log('📊 [MerchStats] Запрос статистики:', url);
-    console.log('📊 [MerchStats] API base:', API);
     
     const response = await fetch(url, {
       method: 'GET',

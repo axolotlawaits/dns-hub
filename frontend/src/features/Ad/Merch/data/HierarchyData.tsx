@@ -54,7 +54,6 @@ export const getHierarchyData = async (parentId?: string, layer?: number): Promi
     }
     
     const url = `${API_BASE}/categories?${params.toString()}`;
-    console.log('📡 Запрос иерархии:', url);
     
     const response = await fetch(url, {
       headers: getAuthHeaders()
@@ -67,7 +66,6 @@ export const getHierarchyData = async (parentId?: string, layer?: number): Promi
     }
     
     const data = await response.json();
-    console.log('✅ Данные загружены:', data.length, 'элементов');
     return data;
   } catch (error) {
     console.error('❌ Ошибка при загрузке иерархии:', error);
@@ -79,7 +77,6 @@ let globalDataList: DataItem[] = [];
 (async () => {
   try {
     globalDataList = await getHierarchyData();
-    console.log('✅ globalDataList инициализирован:', globalDataList.length, 'элементов');
   } catch (error) {
     console.error('❌ Ошибка инициализации globalDataList:', error);
     globalDataList = []; // Оставляем пустым при ошибке
@@ -94,7 +91,6 @@ export const getGlobalDataList = (): DataItem[] => {
 // Функция для обновления глобального списка
 export const setGlobalDataList = (newDataList: DataItem[]): void => {
   globalDataList = newDataList;
-  console.log('💾 globalDataList обновлен:', globalDataList.length, 'элементов');
 };
 
 //-------------------------------------Функции--------------------------------------------------
@@ -143,7 +139,6 @@ export const addCategory = async (categoryData: {
       );
     }
     
-    console.log('✅ Категория добавлена с изображением:', data.imageUrl ? 'да' : 'нет');
     return data;
   } catch (error) {
     console.error('❌ Ошибка при добавлении категории:', error);
@@ -186,7 +181,6 @@ export const updateCategory = async (id: string, categoryData: {
       item.id === id ? data : item
     );
     
-    console.log('✅ Категория обновлена, изображений:', data.imageUrls?.length || 0);
     return data;
   } catch (error) {
     console.error('❌ Ошибка при обновлении категории:', error);
@@ -197,8 +191,6 @@ export const updateCategory = async (id: string, categoryData: {
 // Функция для удаления категории
 export const deleteCategory = async (id: string): Promise<void> => {
   try {
-    console.log(`🗑️ Удаляем категорию ${id}...`);
-    
     const response = await fetch(`${API_BASE}/categories/${id}`, {
       method: 'DELETE',
       headers: getAuthHeaders(),
@@ -220,9 +212,6 @@ export const deleteCategory = async (id: string): Promise<void> => {
         child: item.child.filter(childId => childId !== id)
       }));
     }
-    
-    console.log('💾 Категория удалена из globalDataList, ID:', id);
-    console.log('✅ Категория удалена');
   } catch (error) {
     console.error('❌ Ошибка при удалении категории:', error);
     throw error;
@@ -232,8 +221,6 @@ export const deleteCategory = async (id: string): Promise<void> => {
 // Функция для удаления изображения категории
 export const deleteCategoryImage = async (id: string): Promise<DataItem> => {
   try {
-    console.log(`🗑️ Удаляем изображение категории ${id}...`);
-    
     const response = await fetch(`${API_BASE}/categories/${id}/image`, {
       method: 'DELETE',
       headers: getAuthHeaders(),
@@ -251,7 +238,6 @@ export const deleteCategoryImage = async (id: string): Promise<DataItem> => {
       item.id === id ? data : item
     );
     
-    console.log('✅ Изображение категории удалено');
     return data;
   } catch (error) {
     console.error('❌ Ошибка при удалении изображения категории:', error);
@@ -295,7 +281,6 @@ export const updateCategoriesOrder = async (parentId: string | null, categoryIds
     const url = parentId 
       ? `${API_BASE}/categories/${parentId}/order`
       : `${API_BASE}/categories/order`;
-    console.log(`🔄 Обновляем порядок категорий для parentId ${parentId}:`, categoryIds);
     
     const response = await fetch(url, {
       method: 'PATCH',
@@ -309,8 +294,6 @@ export const updateCategoriesOrder = async (parentId: string | null, categoryIds
     if (!response.ok) {
       throw new Error(`HTTP Error: ${response.status}`);
     }
-    
-    console.log('✅ Порядок категорий обновлен');
   } catch (error) {
     console.error('❌ Ошибка при обновлении порядка категорий:', error);
     throw error;

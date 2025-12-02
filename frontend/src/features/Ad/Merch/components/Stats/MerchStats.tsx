@@ -18,12 +18,16 @@ import {
   MultiSelect,
   Alert,
   Checkbox,
-  Tabs
+  Tabs,
+  Popover
 } from '@mantine/core';
 import { IconSend, IconAlertCircle, IconCheck, IconChartBar, IconUsers, IconClock, IconSearch, IconThumbUp } from '@tabler/icons-react';
 import { fetchMerchStats, MerchStatsResponse } from '../../data/MerchStatsData';
 import { API } from '../../../../../config/constants';
 import TiptapEditor from '../../../../../utils/editor';
+import { TelegramPreview } from '../Card/TelegramPreview';
+import { CustomModal } from '../../../../../utils/CustomModal';
+import { fetchAllCards, CardItem } from '../../data/CardData';
 import './MerchStats.css';
 
 interface BotUser {
@@ -47,6 +51,9 @@ function MerchStats() {
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<{ success: number; failed: number; errors: Array<{ userId: number; error: string }> } | null>(null);
+  const [previewModalOpened, setPreviewModalOpened] = useState(false);
+  const [previewCard, setPreviewCard] = useState<CardItem | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
 
   useEffect(() => {
     loadStats();
@@ -63,12 +70,6 @@ function MerchStats() {
     setError(null);
     try {
       const data = await fetchMerchStats(parseInt(period, 10));
-      console.log('📊 [MerchStats] Загружена статистика:', {
-        hasReactionStats: !!data.reactionStats,
-        topMessagesCount: data.reactionStats?.topMessages?.length || 0,
-        topCardsCount: data.reactionStats?.topCardsByReactions?.length || 0,
-        reactionStats: data.reactionStats
-      });
       setStats(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Неизвестная ошибка');
@@ -790,6 +791,7 @@ function MerchStats() {
                       <Table.Tr>
                         <Table.Th>#</Table.Th>
                         <Table.Th>Карточка/Категория</Table.Th>
+                        <Table.Th>Сообщение</Table.Th>
                         <Table.Th>ID сообщения</Table.Th>
                         <Table.Th>Всего реакций</Table.Th>
                         <Table.Th>Реакции</Table.Th>
@@ -797,7 +799,31 @@ function MerchStats() {
                     </Table.Thead>
                     <Table.Tbody>
                       {stats.reactionStats.topMessages.map((message, index) => (
-                        <Table.Tr key={`${message.chatId}_${message.messageId}`}>
+                        <Table.Tr 
+                          key={`${message.chatId}_${message.messageId}`}
+                          style={{ cursor: message.cardInfo ? 'pointer' : 'default' }}
+                          onClick={async () => {
+                            if (message.cardInfo && message.cardInfo.itemType === 'card') {
+                              setLoadingPreview(true);
+                              setPreviewModalOpened(true);
+                              try {
+                                // Загружаем все карточки и ищем нужную
+                                const allCards = await fetchAllCards();
+                                const card = allCards.find((c: CardItem) => c.id === message.cardInfo!.itemId);
+                                if (card) {
+                                  setPreviewCard(card);
+                                } else {
+                                  setPreviewCard(null);
+                                }
+                              } catch (error) {
+                                console.error('Ошибка загрузки карточки:', error);
+                                setPreviewCard(null);
+                              } finally {
+                                setLoadingPreview(false);
+                              }
+                            }
+                          }}
+                        >
                           <Table.Td>
                             <Badge variant="dot" color={index < 3 ? 'green' : 'gray'}>
                               {index + 1}
@@ -834,6 +860,18 @@ function MerchStats() {
                             )}
                           </Table.Td>
                           <Table.Td>
+                            {message.messageText ? (
+                              <Text size="sm" style={{ maxWidth: 300, wordBreak: 'break-word' }}>
+                                {message.messageText.replace(/<[^>]+>/g, '').substring(0, 100)}
+                                {message.messageText.replace(/<[^>]+>/g, '').length > 100 ? '...' : ''}
+                              </Text>
+                            ) : (
+                              <Text size="sm" c="dimmed" fs="italic">
+                                Нет текста
+                              </Text>
+                            )}
+                          </Table.Td>
+                          <Table.Td>
                             <Stack gap={4}>
                               <Text size="sm" ff="monospace" c="dimmed">
                                 {message.messageId}
@@ -851,12 +889,30 @@ function MerchStats() {
                           <Table.Td>
                             <Group gap="xs">
                               {message.reactions.map((reaction) => (
-                                <Group key={reaction.emoji} gap={4}>
-                                  <Text size="lg">{reaction.emoji}</Text>
-                                  <Badge size="sm" variant="outline">
-                                    {reaction.count}
-                                  </Badge>
-                                </Group>
+                                <Popover key={reaction.emoji} width={250} position="top" withArrow shadow="md">
+                                  <Popover.Target>
+                                    <Group gap={4} style={{ cursor: 'pointer' }}>
+                                      <Text size="lg">{reaction.emoji}</Text>
+                                      <Badge size="sm" variant="outline">
+                                        {reaction.count}
+                                      </Badge>
+                                    </Group>
+                                  </Popover.Target>
+                                  <Popover.Dropdown>
+                                    <Stack gap="xs">
+                                      <Text size="sm" fw={500}>Пользователи ({reaction.users.length}):</Text>
+                                      {reaction.users.map((user, idx) => (
+                                        <Text key={idx} size="xs">
+                                          {user.firstName || user.lastName 
+                                            ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+                                            : user.username 
+                                              ? `@${user.username}`
+                                              : `User ${user.userId}`}
+                                        </Text>
+                                      ))}
+                                    </Stack>
+                                  </Popover.Dropdown>
+                                </Popover>
                               ))}
                             </Group>
                           </Table.Td>
@@ -875,6 +931,33 @@ function MerchStats() {
           )}
         </Tabs.Panel>
       </Tabs>
+
+      {/* Модальное окно превью карточки */}
+      <CustomModal
+        opened={previewModalOpened}
+        onClose={() => {
+          setPreviewModalOpened(false);
+          setPreviewCard(null);
+        }}
+        title="Превью карточки в Telegram"
+        size="xl"
+      >
+        {loadingPreview ? (
+          <Box style={{ display: 'flex', justifyContent: 'center', padding: '40px' }}>
+            <Loader size="md" />
+          </Box>
+        ) : previewCard ? (
+          <TelegramPreview
+            name={previewCard.name}
+            description={previewCard.description}
+            images={previewCard.imageUrls}
+          />
+        ) : (
+          <Text c="dimmed" ta="center" py="xl">
+            Карточка не найдена
+          </Text>
+        )}
+      </CustomModal>
 
       {/* Дополнительная статистика (всегда видна) */}
       {/* Статистика по дням недели */}

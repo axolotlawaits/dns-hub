@@ -110,7 +110,6 @@ export const fetchCardsByCategory = async (
     params.append('layer', '0');
     
     const url = `${API_BASE}/categories?${params.toString()}`;
-    console.log(`🔄 Запрашиваем карточки: ${url}`);
     
     const response = await fetch(url);
     
@@ -145,7 +144,6 @@ export const fetchCardsByCategory = async (
         };
       });
       
-      console.log(`✅ Получено ${cards.length} карточек для категории ${categoryId} (страница ${page})`);
       return { 
         cards, 
         pagination: { 
@@ -156,7 +154,6 @@ export const fetchCardsByCategory = async (
         } 
       };
     } else {
-      console.log('📭 Сервер вернул неожиданный формат:', data);
       return { cards: [], pagination: { page: 1, limit, total: 0, totalPages: 0 } };
     }
   } catch (error) {
@@ -169,7 +166,6 @@ export const fetchCardsByCategory = async (
 export const fetchAllCards = async (): Promise<CardItem[]> => {
   try {
     const url = `${API_BASE}/cards`;
-    console.log(`🔄 Запрашиваем все карточки: ${url}`);
     
     const response = await fetchWithAuthRetry(url, {
       method: 'GET',
@@ -182,10 +178,8 @@ export const fetchAllCards = async (): Promise<CardItem[]> => {
     const data = await handleResponse(response);
     
     if (Array.isArray(data)) {
-      console.log(`✅ Получено ${data.length} карточек всего`);
       return data;
     } else {
-      console.log('📭 Сервер вернул не массив:', data);
       return [];
     }
   } catch (error) {
@@ -198,7 +192,6 @@ export const fetchAllCards = async (): Promise<CardItem[]> => {
 export const fetchActiveCards = async (): Promise<CardItem[]> => {
   try {
     const url = `${API_BASE}/cards/active`;
-    console.log(`🔄 Запрашиваем активные карточки для бота: ${url}`);
     
     const response = await fetch(url);
     
@@ -209,10 +202,8 @@ export const fetchActiveCards = async (): Promise<CardItem[]> => {
     const data = await handleResponse(response);
     
     if (Array.isArray(data)) {
-      console.log(`✅ Получено ${data.length} активных карточек для бота`);
       return data;
     } else {
-      console.log('📭 Сервер вернул не массив:', data);
       return [];
     }
   } catch (error) {
@@ -231,7 +222,6 @@ export const createCard = async (cardData: {
 }): Promise<CardItem> => {
   try {
     const url = `${API_BASE}/cards`;
-    console.log('📝 Создаем карточку с изображениями...');
 
     const formData = new FormData();
     formData.append('name', cardData.name);
@@ -244,7 +234,6 @@ export const createCard = async (cardData: {
       cardData.images.forEach(image => {
         formData.append('images', image);
       });
-      console.log(`📁 Добавлено ${cardData.images.length} изображений`);
     }
 
     const response = await fetchWithAuthRetry(url, {
@@ -257,7 +246,6 @@ export const createCard = async (cardData: {
     }
 
     const data = await handleResponse(response);
-    console.log('✅ Карточка создана:', data);
     
     // Преобразуем ответ в формат CardItem
     const card: CardItem = {
@@ -294,7 +282,6 @@ export const updateCard = async (id: string, cardData: Partial<{
 }>): Promise<CardItem> => {
   try {
     const url = `${API_BASE}/cards/${id}`;
-    console.log(`📝 Обновляем карточку ${id}:`, cardData);
     
     const formData = new FormData();
     if (cardData.name) formData.append('name', cardData.name);
@@ -311,7 +298,6 @@ export const updateCard = async (id: string, cardData: Partial<{
     }
     
     const data = await handleResponse(response);
-    console.log('✅ Карточка обновлена:', data);
     
     // Преобразуем ответ в формат CardItem
     // Используем imageUrls если они есть (полные URL), иначе формируем из attachments
@@ -346,7 +332,6 @@ export const updateCard = async (id: string, cardData: Partial<{
 export const updateCardImages = async (id: string, imageUrls: string[]): Promise<CardItem> => {
   try {
     const url = `${API_BASE}/cards/${id}/images/order`;
-    console.log(`🖼️ Обновляем порядок изображений карточки ${id}:`, imageUrls);
     
     const response = await fetchWithAuthRetry(url, {
       method: 'PUT',
@@ -361,7 +346,6 @@ export const updateCardImages = async (id: string, imageUrls: string[]): Promise
     }
     
     const data = await handleResponse(response);
-    console.log('✅ Порядок изображений обновлен:', data);
 
     return data;
   } catch (error) {
@@ -374,7 +358,6 @@ export const updateCardImages = async (id: string, imageUrls: string[]): Promise
 export const addCardImages = async (id: string, images: File[]): Promise<CardItem> => {
   try {
     const url = `${API_BASE}/cards/${id}/images`;
-    console.log(`📤 Добавляем ${images.length} изображений к карточке ${id}`);
 
     const formData = new FormData();
     images.forEach((image) => {
@@ -391,7 +374,6 @@ export const addCardImages = async (id: string, images: File[]): Promise<CardIte
     }
 
     const data = await handleResponse(response);
-    console.log('✅ Изображения добавлены:', data);
     return data;
   } catch (error) {
     console.error('❌ Ошибка при добавлении изображений:', error);
@@ -404,7 +386,6 @@ export const addCardImages = async (id: string, images: File[]): Promise<CardIte
 export const updateCardAttachmentsOrder = async (cardId: string, attachmentIds: string[]): Promise<void> => {
   try {
     const url = `${API_BASE}/attachments/${cardId}/order`;
-    console.log(`🔄 Обновляем порядок attachments для карточки ${cardId}:`, attachmentIds);
     
     const response = await fetchWithAuthRetry(url, {
       method: 'PATCH',
@@ -417,8 +398,6 @@ export const updateCardAttachmentsOrder = async (cardId: string, attachmentIds: 
     if (!response.ok) {
       throw new Error(`HTTP Error: ${response.status}`);
     }
-    
-    console.log('✅ Порядок attachments обновлен');
   } catch (error) {
     console.error('❌ Ошибка при обновлении порядка attachments:', error);
     throw error;
@@ -429,7 +408,6 @@ export const updateCardAttachmentsOrder = async (cardId: string, attachmentIds: 
 export const updateCardsOrder = async (categoryId: string, cardIds: string[]): Promise<void> => {
   try {
     const url = `${API_BASE}/cards/${categoryId}/order`;
-    console.log(`🔄 Обновляем порядок карточек в категории ${categoryId}:`, cardIds);
     
     const response = await fetchWithAuthRetry(url, {
       method: 'PATCH',
@@ -442,8 +420,6 @@ export const updateCardsOrder = async (categoryId: string, cardIds: string[]): P
     if (!response.ok) {
       throw new Error(`HTTP Error: ${response.status}`);
     }
-    
-    console.log('✅ Порядок карточек обновлен');
   } catch (error) {
     console.error('❌ Ошибка при обновлении порядка карточек:', error);
     throw error;
@@ -454,7 +430,6 @@ export const updateCardsOrder = async (categoryId: string, cardIds: string[]): P
 export const moveCardToCategory = async (cardId: string, newCategoryId: string): Promise<CardItem> => {
   try {
     const url = `${API_BASE}/cards/${cardId}/move`;
-    console.log(`🔄 Перемещаем карточку ${cardId} в категорию ${newCategoryId}`);
     
     const response = await fetchWithAuthRetry(url, {
       method: 'PATCH',
@@ -469,7 +444,6 @@ export const moveCardToCategory = async (cardId: string, newCategoryId: string):
     }
     
     const data = await handleResponse(response);
-    console.log('✅ Карточка перемещена:', data);
     
     // Преобразуем ответ в формат CardItem
     const card: CardItem = {
@@ -500,7 +474,6 @@ export const moveCardToCategory = async (cardId: string, newCategoryId: string):
 export const deleteCardImage = async (id: string, imageUrl: string): Promise<CardItem> => {
   try {
     const url = `${API_BASE}/cards/${id}/images`;
-    console.log(`🗑️ Удаляем изображение карточки ${id}:`, imageUrl);
     
     const response = await fetchWithAuthRetry(url, {
       method: 'DELETE',
@@ -515,7 +488,6 @@ export const deleteCardImage = async (id: string, imageUrl: string): Promise<Car
     }
     
     const data = await handleResponse(response);
-    console.log('✅ Изображение удалено, ответ сервера:', data);
 
     // Преобразуем ответ в формат CardItem
     const card: CardItem = {
@@ -533,7 +505,6 @@ export const deleteCardImage = async (id: string, imageUrl: string): Promise<Car
       updatedAt: data.updatedAt
     };
 
-    console.log('✅ Преобразовано в CardItem:', card);
     return card;
   } catch (error) {
     console.error('❌ Ошибка при удалении изображения:', error);
@@ -559,7 +530,6 @@ export const toggleCardActive = async (id: string, isActive: boolean): Promise<C
     }
     
     const data = await handleResponse(response);
-    console.log('✅ Активность карточки обновлена:', data);
     
     // Преобразуем ответ в формат CardItem
     // Используем imageUrls если они есть (полные URL), иначе формируем из attachments
@@ -594,7 +564,6 @@ export const toggleCardActive = async (id: string, isActive: boolean): Promise<C
 export const deleteCard = async (id: string): Promise<void> => {
   try {
     const url = `${API_BASE}/cards/${id}`;
-    console.log(`🗑️ Удаляем карточку ${id}...`);
     
     const response = await fetchWithAuthRetry(url, {
       method: 'DELETE',
@@ -605,7 +574,6 @@ export const deleteCard = async (id: string): Promise<void> => {
     }
     
     await handleResponse(response);
-    console.log('✅ Карточка удалена');
   } catch (error) {
     console.error('❌ Ошибка при удалении карточки:', error);
     throw error;
@@ -633,13 +601,10 @@ export function useCardStore() {
     try {
       setLoading(true);
       setError(null);
-      console.log(`🎯 Начинаем загрузку карточек для категории ${categoryId} (страница ${page})`);
       
       const data = await fetchCardsByCategory(categoryId, page, limit, active);
       setCards(data.cards);
       setPagination(data.pagination);
-      
-      console.log(`🎉 Успешно загружено ${data.cards.length} карточек из ${data.pagination.total}`);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Неизвестная ошибка';
       setError(errorMessage);
@@ -653,12 +618,9 @@ export function useCardStore() {
     try {
       setLoading(true);
       setError(null);
-      console.log('🎯 Начинаем загрузку всех карточек');
       
       const data = await fetchAllCards();
       setCards(data);
-      
-      console.log(`🎉 Успешно загружено ${data.length} карточек`);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Неизвестная ошибка';
       setError(errorMessage);
@@ -672,12 +634,9 @@ export function useCardStore() {
     try {
       setLoading(true);
       setError(null);
-      console.log('🎯 Начинаем загрузку активных карточек для бота');
       
       const data = await fetchActiveCards();
       setCards(data);
-      
-      console.log(`🎉 Успешно загружено ${data.length} активных карточек`);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Неизвестная ошибка';
       setError(errorMessage);
@@ -697,14 +656,12 @@ export function useCardStore() {
     try {
       setLoading(true);
       setError(null);
-      console.log('🎯 Добавляем новую карточку...');
       
       const newCard = await createCard(cardData);
       
       // Добавляем новую карточку в начало списка
       setCards(prev => [newCard, ...prev]);
       
-      console.log('🎉 Карточка добавлена в состояние');
       return newCard;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Неизвестная ошибка';
@@ -726,7 +683,6 @@ export function useCardStore() {
     try {
       setLoading(true);
       setError(null);
-      console.log(`🎯 Обновляем карточку ${id}...`);
       
       const updatedCard = await updateCard(id, cardData);
       
@@ -735,7 +691,6 @@ export function useCardStore() {
         card.id === id ? updatedCard : card
       ));
       
-      console.log('🎉 Карточка обновлена в состоянии');
       return updatedCard;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Неизвестная ошибка';
@@ -751,7 +706,6 @@ export function useCardStore() {
     try {
       setLoading(true);
       setError(null);
-      console.log(`🎯 Обновляем изображения карточки ${id}...`);
       
       const updatedCard = await updateCardImages(id, imageUrls);
       
@@ -760,7 +714,6 @@ export function useCardStore() {
         card.id === id ? updatedCard : card
       ));
       
-      console.log('🎉 Изображения карточки обновлены в состоянии');
       return updatedCard;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Неизвестная ошибка';
@@ -776,7 +729,6 @@ export function useCardStore() {
     try {
       setLoading(true);
       setError(null);
-      console.log(`🎯 Добавляем изображения к карточке ${id}...`);
       
       const updatedCard = await addCardImages(id, images);
       
@@ -785,7 +737,6 @@ export function useCardStore() {
         card.id === id ? updatedCard : card
       ));
       
-      console.log('🎉 Изображения добавлены к карточке в состоянии');
       return updatedCard;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Неизвестная ошибка';
@@ -801,7 +752,6 @@ export function useCardStore() {
     try {
       setLoading(true);
       setError(null);
-      console.log(`🎯 Удаляем изображение карточки ${id}...`);
       
       const updatedCard = await deleteCardImage(id, imageUrl);
       
@@ -810,7 +760,6 @@ export function useCardStore() {
         card.id === id ? updatedCard : card
       ));
       
-      console.log('🎉 Изображение удалено из карточки в состоянии');
       return updatedCard;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Неизвестная ошибка';
@@ -826,7 +775,6 @@ export function useCardStore() {
     try {
       setLoading(true);
       setError(null);
-      console.log(`🎯 Переключаем активность карточки ${id}...`);
       
       const updatedCard = await toggleCardActive(id, isActive);
       
@@ -835,7 +783,6 @@ export function useCardStore() {
         card.id === id ? updatedCard : card
       ));
       
-      console.log('🎉 Активность карточки обновлена в состоянии');
       return updatedCard;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Неизвестная ошибка';
@@ -851,14 +798,11 @@ export function useCardStore() {
     try {
       setLoading(true);
       setError(null);
-      console.log(`🎯 Удаляем карточку ${id}...`);
       
       await deleteCard(id);
       
       // Удаляем карточку из состояния
       setCards(prev => prev.filter(card => card.id !== id));
-      
-      console.log('🎉 Карточка удалена из состояния');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Неизвестная ошибка';
       setError(errorMessage);

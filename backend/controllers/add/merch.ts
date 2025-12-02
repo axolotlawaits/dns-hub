@@ -28,8 +28,6 @@ export const getMerchHierarchy = async (req: Request, res: Response, next: NextF
   try {
     const { parentId, layer } = req.query;
     
-    console.log('📥 [getMerchHierarchy] Запрос:', { parentId, layer });
-    
     let whereClause: any = {};
     
     // Логика по принципу старого MerchBot:
@@ -46,8 +44,6 @@ export const getMerchHierarchy = async (req: Request, res: Response, next: NextF
       whereClause.parentId = null;
       whereClause.layer = 1;
     }
-
-    console.log('🔍 [getMerchHierarchy] Условие поиска:', whereClause);
 
     const categories = await prisma.merch.findMany({
       where: whereClause,
@@ -74,8 +70,6 @@ export const getMerchHierarchy = async (req: Request, res: Response, next: NextF
       }
     });
 
-    console.log('✅ [getMerchHierarchy] Найдено категорий:', categories.length);
-
     const formattedData = categories.map((category: any) => {
       // Формируем imageUrls из attachments
       const imageUrls = category.attachments
@@ -96,7 +90,6 @@ export const getMerchHierarchy = async (req: Request, res: Response, next: NextF
       };
     });
 
-    console.log('📤 [getMerchHierarchy] Отправляем данных:', formattedData.length);
     return res.json(formattedData);
   } catch (error) {
     console.error('❌ Ошибка при получении иерархии мерч-категорий:', error);
@@ -362,9 +355,9 @@ export const deleteMerchCategory = async (req: Request, res: Response, next: Nex
       return res.status(404).json({ error: 'Категория не найдена' });
     }
 
-    // Рекурсивная функция для удаления всех дочерних элементов
-    const deleteChildrenRecursively = async (parentId: string) => {
-      const children = await prisma.merch.findMany({
+    // Рекурсивная функция для удаления всех дочерних элементов в транзакции
+    const deleteChildrenRecursively = async (parentId: string, tx: any) => {
+      const children = await tx.merch.findMany({
         where: { parentId },
         include: {
           attachments: true,
@@ -377,7 +370,7 @@ export const deleteMerchCategory = async (req: Request, res: Response, next: Nex
       for (const child of children) {
         // Рекурсивно удаляем детей этой категории
         if (child.layer === 1 && child.children && child.children.length > 0) {
-          await deleteChildrenRecursively(child.id);
+          await deleteChildrenRecursively(child.id, tx);
         }
 
         // Удаляем attachments дочернего элемента
@@ -387,64 +380,53 @@ export const deleteMerchCategory = async (req: Request, res: Response, next: Nex
               const filePath = path.join(process.cwd(), 'public', 'add', 'merch', attachment.source);
               if (fs.existsSync(filePath)) {
                 fs.unlinkSync(filePath);
-                console.log(`✅ [deleteMerchCategory] Удален файл дочернего элемента: ${attachment.source}`);
               }
             } catch (fileError) {
               console.error(`⚠️ Ошибка при удалении файла ${attachment.source}:`, fileError);
             }
           }
-          await prisma.merchAttachment.deleteMany({
+          await tx.merchAttachment.deleteMany({
             where: { recordId: child.id }
           });
         }
 
         // Удаляем дочерний элемент
-        await prisma.merch.delete({
+        await tx.merch.delete({
           where: { id: child.id }
         });
-        console.log(`✅ [deleteMerchCategory] Удален дочерний элемент: ${child.id} (${child.name}, layer: ${child.layer})`);
       }
     };
 
-    // Удаляем все дочерние элементы рекурсивно
-    if (category.children && category.children.length > 0) {
-      console.log(`🗑️ [deleteMerchCategory] Удаляем ${category.children.length} дочерних элементов рекурсивно`);
-      await deleteChildrenRecursively(categoryId);
-    }
-
-    console.log(`🗑️ [deleteMerchCategory] Удаляем категорию ${categoryId}, attachments: ${category.attachments?.length || 0}`);
-
-    // Удаляем все attachments категории перед удалением самой категории
-    if (category.attachments && category.attachments.length > 0) {
-      console.log(`🗑️ [deleteMerchCategory] Удаляем ${category.attachments.length} attachments`);
-      
-      for (const attachment of category.attachments) {
-        try {
-          const filePath = path.join(process.cwd(), 'public', 'add', 'merch', attachment.source);
-          if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-            console.log(`✅ [deleteMerchCategory] Файл удален: ${attachment.source}`);
-          } else {
-            console.log(`⚠️ [deleteMerchCategory] Файл не найден: ${filePath}`);
-          }
-        } catch (fileError) {
-          console.error(`⚠️ [deleteMerchCategory] Ошибка при удалении файла ${attachment.source}:`, fileError);
-        }
+    // Используем транзакцию для атомарного удаления
+    await prisma.$transaction(async (tx) => {
+      // Удаляем все дочерние элементы рекурсивно
+      if (category.children && category.children.length > 0) {
+        await deleteChildrenRecursively(categoryId, tx);
       }
-      
-      // Удаляем attachments из базы данных
-      const deletedCount = await prisma.merchAttachment.deleteMany({
-        where: { recordId: categoryId }
+
+      // Удаляем все attachments категории перед удалением самой категории
+      if (category.attachments && category.attachments.length > 0) {
+        for (const attachment of category.attachments) {
+          try {
+            const filePath = path.join(process.cwd(), 'public', 'add', 'merch', attachment.source);
+            if (fs.existsSync(filePath)) {
+              fs.unlinkSync(filePath);
+            }
+          } catch (fileError) {
+            console.error(`⚠️ Ошибка при удалении файла ${attachment.source}:`, fileError);
+          }
+        }
+        
+        // Удаляем attachments из базы данных
+        await tx.merchAttachment.deleteMany({
+          where: { recordId: categoryId }
+        });
+      }
+
+      // Удаляем саму категорию
+      await tx.merch.delete({
+        where: { id: categoryId }
       });
-      
-      console.log(`✅ [deleteMerchCategory] Удалено ${deletedCount.count} attachments из БД`);
-    }
-
-    // Изображения теперь хранятся в attachments, удаление происходит автоматически через каскад
-
-    // Удаляем саму категорию
-    await prisma.merch.delete({
-      where: { id: categoryId }
     });
 
     // При использовании parentId каскадное удаление происходит автоматически
@@ -557,7 +539,6 @@ export const createMerchCard = [
       try {
         const { merchBotService } = await import('../app/merchBot.js');
         await merchBotService.refreshCache();
-        console.log('✅ [createMerchCard] Кэш бота обновлен после создания карточки');
       } catch (cacheError) {
         console.warn('⚠️ [createMerchCard] Не удалось обновить кэш бота:', cacheError);
         // Не прерываем выполнение, если не удалось обновить кэш
@@ -589,8 +570,6 @@ export const createMerchCard = [
 // Получить все карточки (layer = 0)
 export const getAllMerchCards = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    console.log('📋 [getAllMerchCards] Запрос всех карточек');
-
     // Получаем все карточки (layer = 0)
     const cards = await prisma.merch.findMany({
       where: {
@@ -654,7 +633,6 @@ export const getAllMerchCards = async (req: Request, res: Response, next: NextFu
       })
     );
 
-    console.log(`✅ [getAllMerchCards] Найдено ${cardsWithCategories.length} карточек`);
     res.json(cardsWithCategories);
   } catch (error) {
     console.error('❌ Ошибка при получении всех карточек:', error);
@@ -670,9 +648,6 @@ export const updateMerchCard = [
       const { id } = req.params;
       const { name, description, isActive } = req.body;
 
-      console.log(`🔍 [updateMerchCard] Обновляем карточку с ID: ${id}`);
-      console.log(`📝 [updateMerchCard] Данные: name="${name}", description="${description}", isActive="${isActive}"`);
-
       const cardId = id;
 
       // Получаем текущую карточку
@@ -681,11 +656,9 @@ export const updateMerchCard = [
       });
 
       if (!existingCard) {
-        console.log(`❌ [updateMerchCard] Карточка с ID ${cardId} не найдена`);
         return res.status(404).json({ error: 'Карточка не найдена' });
       }
 
-      console.log(`✅ [updateMerchCard] Карточка найдена: ${existingCard.name} (layer: ${existingCard.layer})`);
 
       // Формируем данные для обновления
       const updateData: any = {};
@@ -693,7 +666,6 @@ export const updateMerchCard = [
       // Обновляем name только если он передан
       if (name !== undefined) {
         if (!name || name.trim() === '') {
-          console.log(`❌ [updateMerchCard] Название карточки не может быть пустым`);
           return res.status(400).json({ error: 'Название карточки не может быть пустым' });
         }
         updateData.name = name;
@@ -711,7 +683,6 @@ export const updateMerchCard = [
 
       // Если нет данных для обновления, возвращаем текущую карточку
       if (Object.keys(updateData).length === 0) {
-        console.log(`⚠️ [updateMerchCard] Нет данных для обновления`);
         // Возвращаем текущую карточку
         const currentCard = await prisma.merch.findUnique({
           where: { id: cardId },
@@ -788,7 +759,6 @@ export const updateMerchCard = [
         try {
           const { merchBotService } = await import('../app/merchBot.js');
           await merchBotService.refreshCache();
-          console.log('✅ [updateMerchCard] Кэш бота обновлен после обновления карточки');
         } catch (cacheError) {
           console.warn('⚠️ [updateMerchCard] Не удалось обновить кэш бота:', cacheError);
           // Не прерываем выполнение, если не удалось обновить кэш
@@ -826,7 +796,6 @@ export const addCardImages = [
       const { id } = req.params;
       const cardId = id;
 
-      console.log(`🔍 [addCardImages] Ищем карточку с ID: ${cardId}`);
 
       // Проверяем, что карточка существует
       const existingCard = await prisma.merch.findUnique({
@@ -834,18 +803,15 @@ export const addCardImages = [
       });
 
       if (!existingCard) {
-        console.log(`❌ [addCardImages] Карточка с ID ${cardId} не найдена`);
         return res.status(404).json({ error: 'Карточка не найдена' });
       }
 
-      console.log(`✅ [addCardImages] Карточка найдена: ${existingCard.name} (layer: ${existingCard.layer})`);
       
       // Получаем userId из токена (должен быть после authenticateToken middleware)
       const userId = (req as any).token?.userId;
       if (!userId) {
         return res.status(401).json({ error: 'User ID не найден в токене' });
       }
-      console.log(`👤 [addCardImages] Используем userAddId: ${userId}`);
 
       // Получаем текущий максимальный sortOrder для attachments этой карточки
       const lastAttachment = await prisma.merchAttachment.findFirst({
@@ -858,11 +824,7 @@ export const addCardImages = [
       // Добавляем новые изображения
       if (req.files && Array.isArray(req.files) && req.files.length > 0) {
         const files = req.files as Express.Multer.File[];
-        console.log(`📁 [addCardImages] Получено ${files.length} файлов для добавления`);
-        
         for (const file of files) {
-          console.log(`📄 [addCardImages] Добавляем файл: ${file.originalname} -> ${file.filename} с sortOrder: ${nextSortOrder}`);
-          console.log(`📁 [addCardImages] Путь к файлу: ${file.path}`);
           
           try {
             await prisma.merchAttachment.create({
@@ -874,14 +836,12 @@ export const addCardImages = [
                 sortOrder: nextSortOrder++
               }
             });
-            console.log(`✅ [addCardImages] Файл ${file.originalname} успешно добавлен`);
           } catch (error) {
             console.error(`❌ [addCardImages] Ошибка при добавлении файла ${file.originalname}:`, error);
             throw error;
           }
         }
       } else {
-        console.log(`⚠️ [addCardImages] Файлы не получены или пустой массив`);
       }
 
       // Получаем обновленную карточку с attachments
@@ -906,7 +866,6 @@ export const addCardImages = [
         try {
           const { merchBotService } = await import('../app/merchBot.js');
           await merchBotService.refreshCache();
-          console.log('✅ [addCardImages] Кэш бота обновлен после добавления изображений');
         } catch (cacheError) {
           console.warn('⚠️ [addCardImages] Не удалось обновить кэш бота:', cacheError);
           // Не прерываем выполнение, если не удалось обновить кэш
@@ -1256,7 +1215,6 @@ const deleteCategoryIfEmpty = async (categoryId: string) => {
     if (category) {
       // Проверяем, есть ли attachments в этой категории
       if (category.attachments && category.attachments.length > 0) {
-        console.log(`⚠️ Категория ${categoryId} содержит attachments, пропускаем удаление`);
         return;
       }
 
@@ -1292,7 +1250,6 @@ const deleteCategoryIfEmpty = async (categoryId: string) => {
         await prisma.merch.delete({
           where: { id: categoryId }
         });
-        console.log(`✅ Удалена пустая категория: ${categoryId}`);
       }
     }
   } catch (error) {
@@ -1308,7 +1265,6 @@ export const deleteMerchCard = async (req: Request, res: Response, next: NextFun
     const { id } = req.params;
     const cardId = id;
 
-    console.log(`🔍 [deleteMerchCard] Удаляем карточку с ID: ${cardId}`);
 
     // Проверяем, что карточка существует
     const existingCard = await prisma.merch.findUnique({
@@ -1319,46 +1275,40 @@ export const deleteMerchCard = async (req: Request, res: Response, next: NextFun
     });
 
     if (!existingCard) {
-      console.log(`❌ [deleteMerchCard] Карточка с ID ${cardId} не найдена`);
       return res.status(404).json({ error: 'Карточка не найдена' });
     }
 
     if (existingCard.layer !== 0) {
-      console.log(`❌ [deleteMerchCard] Элемент с ID ${cardId} не является карточкой (layer: ${existingCard.layer})`);
       return res.status(400).json({ error: 'Указанный элемент не является карточкой' });
     }
 
-    console.log(`✅ [deleteMerchCard] Карточка найдена: ${existingCard.name} (layer: ${existingCard.layer})`);
 
-    // Удаляем файлы attachments (если есть)
-    if (existingCard.attachments && existingCard.attachments.length > 0) {
-      console.log(`🗑️ [deleteMerchCard] Удаляем ${existingCard.attachments.length} attachments`);
-      
-      for (const attachment of existingCard.attachments) {
-        try {
-          const filePath = path.join(process.cwd(), 'public', 'add', 'merch', attachment.source);
-          if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-            console.log(`🗑️ [deleteMerchCard] Удален файл: ${attachment.source}`);
+    // Используем транзакцию для атомарного удаления
+    await prisma.$transaction(async (tx) => {
+      // Удаляем файлы attachments (если есть)
+      if (existingCard.attachments && existingCard.attachments.length > 0) {
+        for (const attachment of existingCard.attachments) {
+          try {
+            const filePath = path.join(process.cwd(), 'public', 'add', 'merch', attachment.source);
+            if (fs.existsSync(filePath)) {
+              fs.unlinkSync(filePath);
+            }
+          } catch (fileError) {
+            console.error(`⚠️ [deleteMerchCard] Ошибка при удалении файла ${attachment.source}:`, fileError);
           }
-        } catch (fileError) {
-          console.error(`⚠️ [deleteMerchCard] Ошибка при удалении файла ${attachment.source}:`, fileError);
         }
+
+        // Удаляем attachments из базы данных
+        await tx.merchAttachment.deleteMany({
+          where: { recordId: cardId }
+        });
       }
 
-      // Удаляем attachments из базы данных
-      await prisma.merchAttachment.deleteMany({
-        where: { recordId: cardId }
+      // Удаляем карточку
+      await tx.merch.delete({
+        where: { id: cardId }
       });
-      console.log(`🗑️ [deleteMerchCard] Удалены attachments из базы данных`);
-    }
-
-    // Удаляем карточку
-    await prisma.merch.delete({
-      where: { id: cardId }
     });
-
-    console.log(`✅ [deleteMerchCard] Карточка ${existingCard.name} успешно удалена`);
 
     return res.json({ 
       message: 'Карточка успешно удалена',

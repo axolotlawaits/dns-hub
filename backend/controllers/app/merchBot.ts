@@ -281,7 +281,11 @@ class MerchBotService {
           const details: any = {
             emoji,
             messageId,
-            chatId
+            chatId,
+            userId: user.userId, // Telegram user ID
+            username: user.username,
+            firstName: user.firstName,
+            lastName: user.lastName
           };
 
           // Добавляем информацию о карточке, если она найдена
@@ -570,7 +574,7 @@ class MerchBotService {
               itemType: itemType
             };
             
-            // Сохраняем в базу данных
+            // Сохраняем в базу данных (для фото сохраняем без текста, текст будет в следующем сообщении)
             await prisma.merchTgUserStats.create({
               data: {
                 userId: tgUser.id,
@@ -580,15 +584,12 @@ class MerchBotService {
                   chatId,
                   itemId: foundButton.id,
                   itemName: item.name,
-                  itemType
+                  itemType,
+                  messageText: '' // Для фото сообщения текст пустой
                 })
               }
             });
-            
-            console.log(`📌 Связали messageId ${messageId} с карточкой ${item.name} (${foundButton.id})`);
           }
-
-          console.log(`✅ Файл отправлен успешно: ${photoPath}`);
           await new Promise(resolve => setTimeout(resolve, 500)); // Задержка между фото
         } catch (error) {
           console.error(`❌ Ошибка отправки изображения ${photoPath}:`, error);
@@ -629,7 +630,7 @@ class MerchBotService {
               itemType: itemType
             };
             
-            // Сохраняем в базу данных
+            // Сохраняем в базу данных с текстом сообщения
             await prisma.merchTgUserStats.create({
               data: {
                 userId: tgUser.id,
@@ -639,15 +640,12 @@ class MerchBotService {
                   chatId,
                   itemId: foundButton.id,
                   itemName: item.name,
-                  itemType
+                  itemType,
+                  messageText: formattedText
                 })
               }
             });
-            
-            console.log(`📌 Связали messageId ${messageId} с карточкой ${item.name} (${foundButton.id})`);
           }
-          
-          console.log(`✅ [MerchBot] Сообщение отправлено успешно`);
         } catch (error: any) {
           console.error(`❌ [MerchBot] Ошибка отправки сообщения с форматированием:`, error.message);
           console.error(`❌ [MerchBot] Текст который вызвал ошибку:`, formattedText);
@@ -682,7 +680,8 @@ class MerchBotService {
                   chatId,
                   itemId: foundButton.id,
                   itemName: item.name,
-                  itemType
+                  itemType,
+                  messageText: foundButton.text || ''
                 })
               }
             });
@@ -884,15 +883,12 @@ class MerchBotService {
                   chatId,
                   itemId,
                   itemName: item.name,
-                  itemType
+                  itemType,
+                  messageText: '' // Для фото сообщения текст пустой
                 })
               }
             });
-            
-            console.log(`📌 Связали messageId ${messageId} с карточкой ${item.name} (${itemId})`);
           }
-
-          console.log(`✅ Файл отправлен успешно: ${photoPath}`);
           await new Promise(resolve => setTimeout(resolve, 500)); // Задержка между фото
         } catch (error) {
           console.error(`❌ Ошибка отправки изображения ${photoPath}:`, error);
@@ -933,7 +929,7 @@ class MerchBotService {
               itemType: itemType
             };
             
-            // Сохраняем в базу данных
+            // Сохраняем в базу данных с текстом сообщения
             await prisma.merchTgUserStats.create({
               data: {
                 userId: tgUser.id,
@@ -943,15 +939,12 @@ class MerchBotService {
                   chatId,
                   itemId,
                   itemName: item.name,
-                  itemType
+                  itemType,
+                  messageText: formattedText
                 })
               }
             });
-            
-            console.log(`📌 Связали messageId ${messageId} с карточкой ${item.name} (${itemId})`);
           }
-          
-          console.log(`✅ [MerchBot] Сообщение отправлено успешно`);
         } catch (error: any) {
           console.error(`❌ [MerchBot] Ошибка отправки сообщения с форматированием:`, error.message);
           console.error(`❌ [MerchBot] Текст который вызвал ошибку:`, formattedText);
@@ -986,7 +979,8 @@ class MerchBotService {
                   chatId,
                   itemId,
                   itemName: item.name,
-                  itemType
+                  itemType,
+                  messageText: '' // Для фото сообщения текст пустой
                 })
               }
             });

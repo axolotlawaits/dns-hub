@@ -37,17 +37,57 @@ export interface MerchFeedbackStats {
   read: number;
 }
 
+// Функция для выполнения запросов с автоматическим обновлением токена при 401
+const fetchWithAuthRetry = async (url: string, options: RequestInit = {}): Promise<Response> => {
+  const token = localStorage.getItem('token');
+  const headers = new Headers(options.headers);
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  
+  let response = await fetch(url, {
+    ...options,
+    headers,
+  });
+
+  // Если получили 401, пробуем обновить токен и повторить запрос
+  if (response.status === 401) {
+    try {
+      const refreshResponse = await fetch(`${API}/refresh-token`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      if (refreshResponse.ok) {
+        const newToken = await refreshResponse.json();
+        localStorage.setItem('token', newToken);
+        
+        // Повторяем запрос с новым токеном
+        headers.set('Authorization', `Bearer ${newToken}`);
+        response = await fetch(url, {
+          ...options,
+          headers,
+        });
+      } else if (refreshResponse.status === 403) {
+        localStorage.removeItem('user');
+        localStorage.removeItem('token');
+        throw new Error('Session expired. Please login again.');
+      }
+    } catch (refreshError) {
+      console.error('Token refresh failed:', refreshError);
+      throw refreshError;
+    }
+  }
+
+  return response;
+};
+
 export const fetchMerchFeedback = async (
   page: number = 1,
   limit: number = 50,
   isRead?: boolean
 ): Promise<MerchFeedbackResponse> => {
   try {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      throw new Error('Токен не найден');
-    }
-
     const params = new URLSearchParams({
       page: page.toString(),
       limit: limit.toString(),
@@ -60,11 +100,10 @@ export const fetchMerchFeedback = async (
 
     const url = `${API}/merch-bot/feedback?${params.toString()}`;
     
-    const response = await fetch(url, {
+    const response = await fetchWithAuthRetry(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
       }
     });
 
@@ -83,18 +122,12 @@ export const fetchMerchFeedback = async (
 
 export const markFeedbackAsRead = async (feedbackId: string): Promise<MerchFeedback> => {
   try {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      throw new Error('Токен не найден');
-    }
-
     const url = `${API}/merch-bot/feedback/${feedbackId}/read`;
     
-    const response = await fetch(url, {
+    const response = await fetchWithAuthRetry(url, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
       }
     });
 
@@ -113,18 +146,12 @@ export const markFeedbackAsRead = async (feedbackId: string): Promise<MerchFeedb
 
 export const fetchMerchFeedbackStats = async (): Promise<MerchFeedbackStats> => {
   try {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      throw new Error('Токен не найден');
-    }
-
     const url = `${API}/merch-bot/feedback/stats?tool=merch`;
     
-    const response = await fetch(url, {
+    const response = await fetchWithAuthRetry(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
       }
     });
 
