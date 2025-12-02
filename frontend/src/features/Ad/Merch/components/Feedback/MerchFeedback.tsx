@@ -25,8 +25,11 @@ import {
   IconPhoto,
   IconUser,
   IconCalendar,
-  IconMailOpened
+  IconMailOpened,
+  IconBrandTelegram,
+  IconExternalLink
 } from '@tabler/icons-react';
+import { useNavigate } from 'react-router-dom';
 import {
   fetchMerchFeedback,
   markFeedbackAsRead,
@@ -38,6 +41,7 @@ import { API } from '../../../../../config/constants';
 import './MerchFeedback.css';
 
 function MerchFeedbackComponent() {
+  const navigate = useNavigate();
   const [feedbacks, setFeedbacks] = useState<MerchFeedback[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -145,6 +149,59 @@ function MerchFeedbackComponent() {
     }
     
     return nameParts.join(' ');
+  };
+
+  const handleOpenTelegram = (e: React.MouseEvent, feedback: MerchFeedback) => {
+    e.stopPropagation();
+    const { username, userId } = feedback.user;
+    
+    if (username) {
+      // Если есть username, открываем профиль в Telegram
+      window.open(`https://t.me/${username}`, '_blank');
+    } else if (userId) {
+      // Если нет username, но есть userId, пробуем открыть через tg://
+      // Это работает только если пользователь уже в контактах
+      window.open(`tg://user?id=${userId}`, '_blank');
+    }
+  };
+
+  const handleOpenProfile = async (e: React.MouseEvent, feedback: MerchFeedback) => {
+    e.stopPropagation();
+    const { email } = feedback;
+    
+    if (!email) return;
+    
+    try {
+      // Получаем uuid пользователя по email
+      const response = await fetch(`${API}/profile/user-data-by-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ email })
+      });
+      
+      if (response.ok) {
+        const userData = await response.json();
+        if (userData.uuid) {
+          navigate(`/employee/${userData.uuid}`);
+        } else {
+          console.error('UUID не найден для пользователя');
+        }
+      } else {
+        console.error('Ошибка при получении данных пользователя');
+      }
+    } catch (error) {
+      console.error('Ошибка при переходе к профилю:', error);
+    }
+  };
+
+  const handleSendEmail = (e: React.MouseEvent, email: string) => {
+    e.stopPropagation();
+    if (email) {
+      window.location.href = `mailto:${email}`;
+    }
   };
 
   if (loading && !feedbacks.length) {
@@ -339,6 +396,39 @@ function MerchFeedbackComponent() {
                             <IconMail size={16} />
                           </ActionIcon>
                         </Tooltip>
+                        {(feedback.user.username || feedback.user.userId) && (
+                          <Tooltip label="Открыть в Telegram">
+                            <ActionIcon
+                              variant="light"
+                              color="blue"
+                              onClick={(e) => handleOpenTelegram(e, feedback)}
+                            >
+                              <IconBrandTelegram size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                        )}
+                        {feedback.email && (
+                          <Tooltip label="Написать на email">
+                            <ActionIcon
+                              variant="light"
+                              color="grape"
+                              onClick={(e) => handleSendEmail(e, feedback.email)}
+                            >
+                              <IconMail size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                        )}
+                        {feedback.email && feedback.user.userId && (
+                          <Tooltip label="Открыть профиль">
+                            <ActionIcon
+                              variant="light"
+                              color="green"
+                              onClick={(e) => handleOpenProfile(e, feedback)}
+                            >
+                              <IconExternalLink size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                        )}
                         {!feedback.isRead && (
                           <Tooltip label="Отметить как прочитанное">
                             <ActionIcon
@@ -396,6 +486,45 @@ function MerchFeedbackComponent() {
                 <Badge color="red" variant="filled">
                   Непрочитано
                 </Badge>
+              )}
+            </Group>
+
+            <Divider />
+
+            {/* Действия с пользователем */}
+            <Group gap="xs" wrap="wrap">
+              {(selectedFeedback.user.username || selectedFeedback.user.userId) && (
+                <Tooltip label="Открыть в Telegram">
+                  <ActionIcon
+                    variant="light"
+                    color="blue"
+                    onClick={(e) => handleOpenTelegram(e, selectedFeedback)}
+                  >
+                    <IconBrandTelegram size={18} />
+                  </ActionIcon>
+                </Tooltip>
+              )}
+              {selectedFeedback.email && (
+                <Tooltip label="Написать на email">
+                  <ActionIcon
+                    variant="light"
+                    color="grape"
+                    onClick={(e) => handleSendEmail(e, selectedFeedback.email)}
+                  >
+                    <IconMail size={18} />
+                  </ActionIcon>
+                </Tooltip>
+              )}
+              {selectedFeedback.email && selectedFeedback.user.userId && (
+                <Tooltip label="Открыть профиль">
+                  <ActionIcon
+                    variant="light"
+                    color="green"
+                    onClick={(e) => handleOpenProfile(e, selectedFeedback)}
+                  >
+                    <IconExternalLink size={18} />
+                  </ActionIcon>
+                </Tooltip>
               )}
             </Group>
 
