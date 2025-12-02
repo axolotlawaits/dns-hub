@@ -321,14 +321,37 @@ export const FilePreviewModal = ({
       const providedName = attachment.name;
       const providedMime = attachment.mimeType;
 
-      let ext = typeof source === 'string'
-        ? source.split('.').pop()?.toLowerCase() || ''
-        : source.name.split('.').pop()?.toLowerCase() || '';
+      // Сначала пытаемся извлечь расширение из providedName (если есть)
+      let ext = '';
+      if (providedName) {
+        const nameExt = providedName.split('.').pop()?.toLowerCase();
+        if (nameExt && nameExt.length <= 5) { // Расширения обычно короткие
+          ext = nameExt;
+        }
+      }
+      
+      // Если не получилось из providedName, пробуем из source
+      if (!ext) {
+        if (typeof source === 'string') {
+          // Для путей типа "jurists/safety/files/{id}/view" расширение не извлечется из пути
+          // Но можем попробовать из query параметров или просто использовать mimeType
+          const pathExt = source.split('.').pop()?.toLowerCase();
+          if (pathExt && pathExt.length <= 5 && !pathExt.includes('/')) {
+            ext = pathExt;
+          }
+        } else {
+          ext = source.name.split('.').pop()?.toLowerCase() || '';
+        }
+      }
 
+      // Если всё ещё нет расширения, используем mimeType
       if (!ext && providedMime) {
         if (providedMime.startsWith('image/')) ext = 'jpg';
         else if (providedMime === 'application/pdf') ext = 'pdf';
         else if (providedMime.startsWith('video/')) ext = 'mp4';
+        else if (providedMime.startsWith('audio/')) ext = 'mp3';
+        else if (providedMime.includes('word')) ext = 'docx';
+        else if (providedMime.includes('excel') || providedMime.includes('spreadsheet')) ext = 'xlsx';
       }
 
       const isImage = SUPPORTED_IMAGE_EXTS.includes(ext) || (providedMime || '').startsWith('image/');
@@ -339,13 +362,15 @@ export const FilePreviewModal = ({
         ? (source.startsWith('http') || source.startsWith('blob:') ? source : `${API}/${source}`)
         : URL.createObjectURL(source);
 
+      // Используем providedName если есть, иначе извлекаем из source
       let inferredName = providedName;
       if (!inferredName) {
         if (typeof source === 'string') {
           const cleanPath = source.split('?')[0];
           const pathParts = cleanPath.split(/[\\\/]/);
           let fileName = pathParts[pathParts.length - 1];
-          if (!fileName || fileName.length < 3 || /^[a-f0-9-]+$/i.test(fileName)) {
+          // Если последняя часть пути это "view" или похоже на UUID/ID, ищем дальше
+          if (!fileName || fileName.length < 3 || fileName === 'view' || /^[a-f0-9-]+$/i.test(fileName)) {
             fileName = pathParts[pathParts.length - 2] || 'Файл';
           }
           inferredName = decodeURIComponent(fileName);
