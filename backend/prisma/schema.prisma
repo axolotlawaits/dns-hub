@@ -798,7 +798,10 @@ model MerchTgUser {
   lastName  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  isActive  Boolean  @default(true)
   stats     MerchTgUserStats[]
+
+  @@index([isActive])
 }
 
 model MerchTgUserStats {

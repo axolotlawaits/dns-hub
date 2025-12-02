@@ -211,7 +211,7 @@ class MerchBotService {
         const userId = ctx.from?.id;
         if (!userId) return;
 
-        // Получаем или создаем пользователя
+        // Получаем или создаем пользователя и помечаем его как активного
         let user = await prisma.merchTgUser.findUnique({
           where: { userId }
         });
@@ -222,7 +222,18 @@ class MerchBotService {
               userId,
               username: ctx.from?.username || null,
               firstName: ctx.from?.first_name || null,
-              lastName: ctx.from?.last_name || null
+              lastName: ctx.from?.last_name || null,
+              isActive: true
+            }
+          });
+        } else {
+          user = await prisma.merchTgUser.update({
+            where: { userId },
+            data: {
+              username: ctx.from?.username || user.username,
+              firstName: ctx.from?.first_name || user.firstName,
+              lastName: ctx.from?.last_name || user.lastName,
+              isActive: true
             }
           });
         }
@@ -513,7 +524,7 @@ class MerchBotService {
       const isCard = item?.layer === 0;
       const itemType: 'card' | 'category' = isCard ? 'card' : 'category';
 
-      // Получаем пользователя для сохранения связи в базе
+      // Получаем пользователя для сохранения связи в базе и помечаем его как активного
       let tgUser = null;
       if (ctx.from) {
         tgUser = await prisma.merchTgUser.findUnique({
@@ -525,7 +536,18 @@ class MerchBotService {
               userId: ctx.from.id,
               username: ctx.from.username || null,
               firstName: ctx.from.first_name || null,
-              lastName: ctx.from.last_name || null
+              lastName: ctx.from.last_name || null,
+              isActive: true
+            }
+          });
+        } else {
+          tgUser = await prisma.merchTgUser.update({
+            where: { userId: ctx.from.id },
+            data: {
+              username: ctx.from.username || tgUser.username,
+              firstName: ctx.from.first_name || tgUser.firstName,
+              lastName: ctx.from.last_name || tgUser.lastName,
+              isActive: true
             }
           });
         }
@@ -1606,18 +1628,30 @@ class MerchBotService {
     }
     
     try {
-      // Получаем или создаем пользователя
+      // Получаем или создаем пользователя и помечаем его как активного
+      const fromId = ctx.from?.id || 0;
       let tgUser = await prisma.merchTgUser.findUnique({
-        where: { userId: ctx.from?.id || 0 }
+        where: { userId: fromId }
       });
 
       if (!tgUser) {
         tgUser = await prisma.merchTgUser.create({
           data: {
-            userId: ctx.from?.id || 0,
+            userId: fromId,
             username: ctx.from?.username || null,
             firstName: ctx.from?.first_name || null,
-            lastName: ctx.from?.last_name || null
+            lastName: ctx.from?.last_name || null,
+            isActive: true
+          }
+        });
+      } else {
+        tgUser = await prisma.merchTgUser.update({
+          where: { userId: fromId },
+          data: {
+            username: ctx.from?.username || tgUser.username,
+            firstName: ctx.from?.first_name || tgUser.firstName,
+            lastName: ctx.from?.last_name || tgUser.lastName,
+            isActive: true
           }
         });
       }
@@ -2211,6 +2245,20 @@ class MerchBotService {
       return true;
     } catch (error: any) {
       console.error(`[MerchBot] Error sending message to user ${userId}:`, error.message);
+
+      // Если бот заблокирован или чат недоступен — помечаем пользователя как неактивного
+      if (this.isBlockedError(error)) {
+        try {
+          await prisma.merchTgUser.updateMany({
+            where: { userId },
+            data: { isActive: false }
+          });
+          console.warn(`[MerchBot] User ${userId} marked as inactive due to blocked chat.`);
+        } catch (updateError) {
+          console.error(`[MerchBot] Failed to mark user ${userId} as inactive:`, (updateError as any)?.message);
+        }
+      }
+
       return false;
     }
   }
@@ -2226,7 +2274,18 @@ class MerchBotService {
     let failed = 0;
     const errors: Array<{ userId: number; error: string }> = [];
 
-    for (const userId of userIds) {
+    // Оставляем только активных пользователей
+    const activeUsers = await prisma.merchTgUser.findMany({
+      where: {
+        userId: { in: userIds },
+        isActive: true
+      },
+      select: { userId: true }
+    });
+
+    const activeIds = activeUsers.map(u => u.userId);
+
+    for (const userId of activeIds) {
       try {
         await this.bot.api.sendMessage(userId, message, {
           parse_mode: parseMode
@@ -2236,10 +2295,38 @@ class MerchBotService {
         failed++;
         errors.push({ userId, error: error.message || 'Unknown error' });
         console.error(`[MerchBot] Failed to send message to user ${userId}:`, error.message);
+
+        // Если бот заблокирован или чат недоступен — помечаем пользователя как неактивного
+        if (this.isBlockedError(error)) {
+          try {
+            await prisma.merchTgUser.updateMany({
+              where: { userId },
+              data: { isActive: false }
+            });
+            console.warn(`[MerchBot] User ${userId} marked as inactive due to blocked chat (broadcast).`);
+          } catch (updateError) {
+            console.error(`[MerchBot] Failed to mark user ${userId} as inactive (broadcast):`, (updateError as any)?.message);
+          }
+        }
       }
     }
 
     return { success, failed, errors };
+  }
+
+  // Определяем, что бот заблокирован пользователем или чат недоступен
+  private isBlockedError(error: any): boolean {
+    const message: string = (error?.message || '').toString().toLowerCase();
+    const description: string = (error?.description || '').toString().toLowerCase();
+    const text = `${message} ${description}`;
+
+    return (
+      text.includes('forbidden') ||
+      text.includes('bot was blocked') ||
+      text.includes('user is deactivated') ||
+      text.includes('chat not found') ||
+      text.includes('bot was kicked')
+    );
   }
 }
 

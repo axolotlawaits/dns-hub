@@ -45,8 +45,8 @@
 }
 
 .merch-toggle-button--hidden {
-  left: -15px;
-  right: auto;
+  left: auto;
+  right: -12px;
 }
 
 .merch-title {
