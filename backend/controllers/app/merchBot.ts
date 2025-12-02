@@ -2263,8 +2263,13 @@ class MerchBotService {
     }
   }
 
-  // Массовая отправка сообщений пользователям
-  public async broadcastMessage(userIds: number[], message: string, parseMode: 'HTML' | 'Markdown' = 'HTML'): Promise<{ success: number; failed: number; errors: Array<{ userId: number; error: string }> }> {
+  // Массовая отправка сообщений пользователям (с поддержкой фото)
+  public async broadcastMessage(
+    userIds: number[],
+    message: string,
+    parseMode: 'HTML' | 'Markdown' = 'HTML',
+    photoPath: string | null = null
+  ): Promise<{ success: number; failed: number; errors: Array<{ userId: number; error: string }> }> {
     if (!this.bot) {
       console.error('[MerchBot] Bot not initialized');
       return { success: 0, failed: userIds.length, errors: userIds.map(id => ({ userId: id, error: 'Bot not initialized' })) };
@@ -2285,11 +2290,20 @@ class MerchBotService {
 
     const activeIds = activeUsers.map(u => u.userId);
 
+    const hasPhoto = photoPath && fs.existsSync(photoPath);
+
     for (const userId of activeIds) {
       try {
-        await this.bot.api.sendMessage(userId, message, {
-          parse_mode: parseMode
-        } as any);
+        if (hasPhoto) {
+          await this.bot.api.sendPhoto(userId, new InputFile(photoPath as string), {
+            caption: message,
+            parse_mode: parseMode
+          } as any);
+        } else {
+          await this.bot.api.sendMessage(userId, message, {
+            parse_mode: parseMode
+          } as any);
+        }
         success++;
       } catch (error: any) {
         failed++;

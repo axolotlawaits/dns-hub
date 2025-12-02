@@ -1899,8 +1899,8 @@ router.get('/users', authenticateToken, async (req: any, res: any) => {
   }
 });
 
-// Маршрут для отправки сообщения пользователям
-router.post('/send-message', authenticateToken, async (req: any, res: any) => {
+// Маршрут для отправки сообщения пользователям (с поддержкой фото)
+router.post('/send-message', authenticateToken, uploadFeedback.array('photos', 10), async (req: any, res: any) => {
   try {
     let { message, userIds, parseMode = 'HTML' } = req.body;
 
@@ -1908,11 +1908,27 @@ router.post('/send-message', authenticateToken, async (req: any, res: any) => {
       return res.status(400).json({ error: 'Message is required' });
     }
 
-    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+    if (!userIds) {
       return res.status(400).json({ error: 'User IDs array is required' });
     }
 
-    // Форматируем HTML для Telegram (убираем не поддерживаемые теги)
+    // userIds может прийти как массив или как несколько полей формы
+    if (!Array.isArray(userIds)) {
+      userIds = Array.isArray(req.body.userIds)
+        ? req.body.userIds
+        : [req.body.userIds];
+    }
+
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ error: 'User IDs array is required' });
+    }
+
+    // Преобразуем в числа
+    userIds = (userIds as Array<string | number>)
+      .map((rawId: string | number) => parseInt(String(rawId), 10))
+      .filter((numericId: number) => !Number.isNaN(numericId));
+
+    // Безопасное форматирование для Telegram
     if (parseMode === 'HTML') {
       // Убираем теги <p> (Telegram не поддерживает их)
       message = message.replace(/<\/p>/gi, '<br>');
@@ -1924,11 +1940,26 @@ router.post('/send-message', authenticateToken, async (req: any, res: any) => {
       message = message.replace(/<br\s*\/?>/gi, '<br>');
       // Убираем множественные <br> подряд (максимум 2 подряд)
       message = message.replace(/(<br>\s*){3,}/gi, '<br><br>');
+    } else {
+      // Для Markdown/MarkdownV2 и других режимов Telegram не понимает HTML-теги
+      // Превращаем <br> в перенос строки и убираем остальные теги
+      message = message.replace(/<br\s*\/?>/gi, '\n');
+      message = message.replace(/<\/p>/gi, '\n');
+      message = message.replace(/<p[^>]*>/gi, '');
+      // Удаляем все прочие HTML-теги
+      message = message.replace(/<\/?[^>]+>/gi, '');
+    }
+
+    // Получаем путь к первому загруженному фото (если есть)
+    let photoPath: string | null = null;
+    if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+      const file = req.files[0] as Express.Multer.File;
+      photoPath = file.path;
     }
 
     const { merchBotService } = await import('../../controllers/app/merchBot.js');
     
-    const result = await merchBotService.broadcastMessage(userIds, message, parseMode);
+    const result = await merchBotService.broadcastMessage(userIds, message, parseMode, photoPath);
 
     // Отправляем in_app уведомления для всех пользователей
     try {
@@ -1943,7 +1974,7 @@ router.post('/send-message', authenticateToken, async (req: any, res: any) => {
         const users = await prisma.user.findMany({
           where: {
             telegramChatId: {
-              in: userIds.map(id => id.toString())
+              in: (userIds as number[]).map((id: number) => id.toString())
             }
           },
           select: { id: true, telegramChatId: true }
