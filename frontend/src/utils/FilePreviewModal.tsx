@@ -480,6 +480,29 @@ export const FilePreviewModal = ({
     const isAudio = SUPPORTED_AUDIO_EXTS.includes(ext) || (effectiveMime || '').startsWith('audio/');
     const isVideo = SUPPORTED_VIDEO_EXTS.includes(ext) || (effectiveMime || '').startsWith('video/');
 
+    // Извлекаем имя файла без пути и расширения
+    let baseFileName = providedName;
+    if (!baseFileName) {
+      if (typeof source === 'string') {
+        const cleanPath = source.split('?')[0];
+        const pathParts = cleanPath.split(/[\\\/]/);
+        const fullFileName = decodeURIComponent(pathParts[pathParts.length - 1] || 'Файл');
+        // Убираем расширение из имени файла
+        const lastDotIndex = fullFileName.lastIndexOf('.');
+        baseFileName = lastDotIndex > 0 ? fullFileName.slice(0, lastDotIndex) : fullFileName;
+      } else {
+        const fullFileName = source.name;
+        const lastDotIndex = fullFileName.lastIndexOf('.');
+        baseFileName = lastDotIndex > 0 ? fullFileName.slice(0, lastDotIndex) : fullFileName;
+      }
+    } else {
+      // Если имя предоставлено, тоже убираем расширение
+      const lastDotIndex = baseFileName.lastIndexOf('.');
+      if (lastDotIndex > 0) {
+        baseFileName = baseFileName.slice(0, lastDotIndex);
+      }
+    }
+
     return {
       ext,
       isImage,
@@ -487,10 +510,7 @@ export const FilePreviewModal = ({
       isText,
       isAudio,
       isVideo,
-      fileName: providedName
-        || (typeof source === 'string'
-          ? decodeURIComponent(source.split('\\').pop() || source.split('/').pop() || 'Файл')
-          : source.name),
+      fileName: baseFileName,
       fileUrl: typeof source === 'string'
         ? source.startsWith('http') || source.startsWith('blob:') ? source : `${API}/${source}`
         : URL.createObjectURL(source),
@@ -1599,6 +1619,11 @@ export const FilePreviewModal = ({
                 <Text className="file-preview-modal__file-title">
                   {fileName}
                 </Text>
+                {fileExt && (
+                  <Text size="xs" c="dimmed" className="file-preview-modal__file-extension">
+                    {fileExt.toUpperCase()}
+                  </Text>
+                )}
               </Box>
             </Group>
             

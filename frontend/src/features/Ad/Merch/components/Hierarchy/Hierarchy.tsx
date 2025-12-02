@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Button, Container, Group, Alert, ActionIcon, Tooltip, Box, Stack, Paper, Text, TextInput } from '@mantine/core';
+import { Button, Group, Alert, ActionIcon, Tooltip, Box, Stack, Paper, Text, TextInput, UnstyledButton } from '@mantine/core';
 import { useApp } from '../../context/SelectedCategoryContext';
-import { IconPlus, IconEdit, IconTrash, IconFolder, IconFolderOpen, IconChevronRight, IconSearch, IconArrowsSort } from '@tabler/icons-react';
+import { IconPlus, IconEdit, IconTrash, IconChevronRight, IconSearch } from '@tabler/icons-react';
 //Импорт Data
 import type { DataItem } from '../../data/HierarchyData';
 import { getHierarchyData } from '../../data/HierarchyData';
 //Импорт Модалок
 import { HierarchyAddModal, HierarchyDeleteModal, HierarchyEditModal } from './HierarchyModalMultiple';
-import { HierarchySortModal } from './HierarchySortModal';
 import { CustomModal } from '../../../../../utils/CustomModal';
 import { notificationSystem } from '../../../../../utils/Push';
+import './Hierarchy.css';
 
 
 interface HierarchyProps {
@@ -138,6 +138,8 @@ const HierarchyBlock = React.memo(({ group, onDataUpdate, hasFullAccess = true, 
   }, [isExpanded, childCategories.length, group.id]);
 
   const handleSelect = useCallback(() => {
+    // Старое поведение: клик по строке только выбирает категорию,
+    // раскрытие происходит по клику на стрелку
     setSelectedId(group.id);
   }, [group.id, setSelectedId]);
 
@@ -162,45 +164,39 @@ const HierarchyBlock = React.memo(({ group, onDataUpdate, hasFullAccess = true, 
         key={group.id} 
         shadow="xs"
         radius="md"
-        p="md"
-        mb="sm"
+        p="xs"
+        mb={4}
         className={`hierarchy-block ${isSelected ? 'hierarchy-block-selected' : ''} ${isExpanded ? 'hierarchy-block-expanded' : ''}`}
         style={{ 
           '--layer': group.layer,
           backgroundColor: 'transparent'
         } as React.CSSProperties}
       > 
-        <Group gap="xs" justify="space-between">
-          <Group gap="xs" style={{ flex: 1 }}>
-            {/* Стрелка раскрытия/сворачивания */}
-            {hasChildren && (
-              <ActionIcon
-                variant="subtle"
-                size="sm"
-                onClick={toggleExpanded}
-                style={{ 
-                  color: 'light-dark(var(--color-primary-600), var(--color-accent-light-80))',
-                  transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
-                  transition: 'transform 0.2s ease'
-                }}
-              >
-                <IconChevronRight size={14} />
-              </ActionIcon>
-            )}
+        <Group gap={4} justify="space-between" style={{ width: '100%' }}>
+          <Group gap={4} style={{ flex: 1, minWidth: 0, justifyContent: 'flex-start' }}>
+            {/* Стрелка раскрытия/сворачивания (placeholder для выравнивания текста) */}
+            <Box className="hierarchy-chevron-wrapper">
+              {hasChildren && (
+                <ActionIcon
+                  variant="subtle"
+                  size="xs"
+                  onClick={toggleExpanded}
+                  style={{ 
+                    color: 'light-dark(var(--color-primary-600), var(--color-accent-light-80))',
+                    transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.2s ease'
+                  }}
+                >
+                  <IconChevronRight size={12} />
+                </ActionIcon>
+              )}
+            </Box>
             
-            <Button 
+            <UnstyledButton 
               onClick={handleSelect}
-              variant="subtle"
-              leftSection={hasChildren ? (isExpanded ? <IconFolderOpen size={16} color="var(--color-accent-80)" /> : <IconFolder size={16} color="var(--color-accent-80)" />) : <IconFolder size={16} color="var(--color-accent-80)" />}
-              size="sm"
-              style={{ 
-                flex: 1,
-                justifyContent: 'flex-start',
-                color: 'var(--theme-text-primary)',
-                fontWeight: 500
-              }}
+              className="hierarchy-title-button"
             > 
-              <Text size="sm" fw={500}>
+              <Text size="xs" fw={500} ta="left" className="hierarchy-title-text">
                 {searchQuery.trim() ? (
                   (() => {
                     const regex = new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
@@ -222,71 +218,71 @@ const HierarchyBlock = React.memo(({ group, onDataUpdate, hasFullAccess = true, 
                   group.name
                 )}
               </Text>
-            </Button>
+            </UnstyledButton>
           </Group>
           
           {/* Кнопки действий с иконками - только для пользователей с полным доступом */}
           {hasFullAccess && (
-            <Group gap="xs">
+            <Group gap={4} style={{ flexShrink: 0 }}>
               <Tooltip label="Добавить подкатегорию" withArrow>
                 <ActionIcon 
                   variant="light" 
-                  size="sm" 
+                  size="xs" 
                   style={{ color: 'var(--color-primary-500)' }}
                   onClick={handleAdd}
                 >
-                  <IconPlus size={14} />
+                  <IconPlus size={12} />
                 </ActionIcon>
               </Tooltip>
 
               <Tooltip label="Редактировать категорию" withArrow>
                 <ActionIcon 
                   variant="light" 
-                  size="sm" 
+                  size="xs" 
                   color="orange"
                   onClick={handleEdit}
                 >
-                  <IconEdit size={14} />
+                  <IconEdit size={12} />
                 </ActionIcon>
               </Tooltip>
 
               <Tooltip label="Удалить категорию" withArrow>
                 <ActionIcon 
                   variant="light" 
-                  size="sm" 
+                  size="xs" 
                   color="red"
                   onClick={handleDelete}
                 >
-                  <IconTrash size={14} />
+                  <IconTrash size={12} />
                 </ActionIcon>
               </Tooltip>
             </Group>
           )}
         </Group>
-
-        {/* Дочерние элементы - рендерим только если раскрыто */}
-        {isExpanded && hasChildren && (
-          <Box className="hierarchy-children-container">
-            {loadingChildren ? (
-              <Box className="hierarchy-loading-container">
-                <Text size="sm" c="dimmed">Загрузка подкатегорий...</Text>
-              </Box>
-            ) : (
-              <Box>
-                {childCategories.map((childGroup) => (
-                  <HierarchyBlock 
-                    key={childGroup.id}
-                    group={childGroup} 
-                    onDataUpdate={onDataUpdate}
-                    hasFullAccess={hasFullAccess}
-                    searchQuery={searchQuery}
-                  />
-                ))}
-              </Box>
-            )}
-          </Box>
-        )}
       </Paper>
+
+      {/* Дочерние элементы - рендерим только если раскрыто (ниже родителя) */}
+      {isExpanded && hasChildren && (
+        <Box className="hierarchy-children-container">
+          {loadingChildren ? (
+            <Box className="hierarchy-loading-container">
+              <Text size="xs" c="dimmed">Загрузка подкатегорий...</Text>
+            </Box>
+          ) : (
+            <Box>
+              {childCategories.map((childGroup) => (
+                <HierarchyBlock 
+                  key={childGroup.id}
+                  group={childGroup} 
+                  onDataUpdate={onDataUpdate}
+                  hasFullAccess={hasFullAccess}
+                  searchQuery={searchQuery}
+                />
+              ))}
+            </Box>
+          )}
+        </Box>
+      )}
 
       {/* Модалки */}
       <CustomModal
@@ -352,7 +348,6 @@ function Hierarchy({ hasFullAccess = true, onDataUpdate }: HierarchyComponentPro
   const [data, setData] = useState<DataItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [openedAdd, setOpenedAdd] = useState(false);
-  const [openedSort, setOpenedSort] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Функция для загрузки данных
@@ -399,24 +394,16 @@ function Hierarchy({ hasFullAccess = true, onDataUpdate }: HierarchyComponentPro
 
   if (loading) {
     return (
-      <Container style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center',
-        height: 100,
-        marginTop: 10
-      }}>
-        Загрузка...
-      </Container>
+      <Box className="hierarchy-loading-container">
+        Загрузка иерархии...
+      </Box>
     );
   }
-  
-  console.log('✅ [Hierarchy] Загрузка завершена, рендерим контент');
 
   return (
-    <Stack gap="md">
+    <Stack gap="xs" className="hierarchy-sort-container">
       {/* Поиск и кнопка сортировки */}
-      <Group gap="xs">
+      <Group gap="xs" className="hierarchy-header">
         <TextInput
           placeholder="Поиск по категориям..."
           value={searchQuery}
@@ -425,20 +412,6 @@ function Hierarchy({ hasFullAccess = true, onDataUpdate }: HierarchyComponentPro
           size="sm"
           style={{ flex: 1 }}
         />
-        {hasFullAccess && (
-          <Button
-            size="sm"
-            variant="outline"
-            leftSection={<IconArrowsSort size={16} color="var(--color-primary-500)" />}
-            onClick={() => setOpenedSort(true)}
-            style={{ 
-              borderColor: 'var(--color-primary-500)',
-              color: 'var(--color-primary-500)'
-            }}
-          >
-            Сортировка
-          </Button>
-        )}
       </Group>
       
       {/* Основная иерархия */}
@@ -471,7 +444,7 @@ function Hierarchy({ hasFullAccess = true, onDataUpdate }: HierarchyComponentPro
                           color: 'white'
                         }}
                       >
-                        Добавить корневую категорию
+                        Добавить категорию
                       </Button>
                     </Paper>
                   )}
@@ -493,47 +466,6 @@ function Hierarchy({ hasFullAccess = true, onDataUpdate }: HierarchyComponentPro
         />
       </CustomModal>
 
-      {/* Модалка сортировки */}
-      <CustomModal
-        opened={openedSort}
-        onClose={() => setOpenedSort(false)}
-        title="Сортировка иерархии и карточек"
-        width="100vw"
-        height="100vh"
-        maxWidth="100vw"
-        maxHeight="100vh"
-        centered={false}
-        zIndex={10000}
-        styles={{
-          content: {
-            margin: 0,
-            width: '100vw',
-            height: '100vh',
-            maxWidth: '100vw',
-            maxHeight: '100vh',
-            borderRadius: 0,
-            overflowY: 'hidden',
-          },
-          body: {
-            height: '100vh',
-            overflow: 'hidden',
-            overflowY: 'hidden',
-            padding: 0,
-          },
-          header: {
-            borderRadius: 0,
-          }
-        }}
-        icon={<IconArrowsSort size={20} />}
-      >
-        <HierarchySortModal
-          onClose={() => setOpenedSort(false)}
-          onSuccess={() => {
-            handleDataUpdate();
-            setOpenedSort(false);
-          }}
-        />
-      </CustomModal>
     </Stack> 
   );
 }

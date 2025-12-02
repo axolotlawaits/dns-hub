@@ -445,9 +445,9 @@ class MerchBotService {
         ctx.session.userChoiceHistory.push(foundButton.id);
       }
 
-      // Отправляем изображения
+      // Отправляем связанные файлы (изображения и PDF)
       const photoPaths = await this.getPhotoPaths(foundButton.id);
-      console.log(`📸 Найдено ${photoPaths.length} изображений для отправки`);
+      console.log(`📎 Найдено ${photoPaths.length} файлов для отправки`);
       
       for (const photoPath of photoPaths) {
         try {
@@ -457,11 +457,20 @@ class MerchBotService {
             continue;
           }
           
-          console.log(`📤 Отправляем изображение: ${photoPath}`);
+          console.log(`📤 Отправляем файл: ${photoPath}`);
           
-          // Отправляем изображение как файл напрямую с диска
-          await ctx.replyWithPhoto(new InputFile(photoPath));
-          console.log(`✅ Изображение отправлено успешно: ${photoPath}`);
+          const lowerPath = photoPath.toLowerCase();
+          const isPdf = lowerPath.endsWith('.pdf');
+
+          if (isPdf) {
+            // Для PDF используем отправку как документ, чтобы не конвертировался в фото
+            await ctx.replyWithDocument(new InputFile(photoPath));
+          } else {
+            // Остальные считаем изображениями
+            await ctx.replyWithPhoto(new InputFile(photoPath));
+          }
+
+          console.log(`✅ Файл отправлен успешно: ${photoPath}`);
           await new Promise(resolve => setTimeout(resolve, 500)); // Задержка между фото
         } catch (error) {
           console.error(`❌ Ошибка отправки изображения ${photoPath}:`, error);
@@ -519,8 +528,12 @@ class MerchBotService {
         // У кнопки есть дочерние элементы, показываем подменю
         await this.showSubMenu(ctx, children);
       } else {
-        // Это конечный элемент, показываем меню навигации
-        await this.showNavigationMenu(ctx);
+        // Это конечный элемент (карточка без дочерних пунктов).
+        // Оставляем пользователю ту же иерархию, из которой он пришёл,
+        // чтобы не терять контекст и не заставлять его возвращаться назад вручную.
+        const parentChildren =
+          (foundParentId && buttonsHierarchy[foundParentId]) || buttonsHierarchy['0'] || [];
+        await this.showSubMenu(ctx, parentChildren);
       }
 
     } catch (error) {
@@ -624,11 +637,11 @@ class MerchBotService {
         await this.updateStats(ctx.from.id, 'button_click', item.name);
       }
 
-      // Получаем изображения
+      // Получаем связанные файлы (изображения и PDF)
       const photoPaths = await this.getPhotoPaths(itemId);
       
-      // Отправляем изображения
-      console.log(`📸 Отправляем ${photoPaths.length} изображений для элемента ${itemId}`);
+      // Отправляем файлы
+      console.log(`📎 Отправляем ${photoPaths.length} файлов для элемента ${itemId}`);
       for (const photoPath of photoPaths) {
         try {
           // Проверяем, что файл существует
@@ -637,11 +650,18 @@ class MerchBotService {
             continue;
           }
           
-          console.log(`📤 Отправляем изображение: ${photoPath}`);
+          console.log(`📤 Отправляем файл: ${photoPath}`);
           
-          // Отправляем изображение как файл напрямую с диска
-          await ctx.replyWithPhoto(new InputFile(photoPath));
-          console.log(`✅ Изображение отправлено успешно: ${photoPath}`);
+          const lowerPath = photoPath.toLowerCase();
+          const isPdf = lowerPath.endsWith('.pdf');
+
+          if (isPdf) {
+            await ctx.replyWithDocument(new InputFile(photoPath));
+          } else {
+            await ctx.replyWithPhoto(new InputFile(photoPath));
+          }
+
+          console.log(`✅ Файл отправлен успешно: ${photoPath}`);
           await new Promise(resolve => setTimeout(resolve, 500)); // Задержка между фото
         } catch (error) {
           console.error(`❌ Ошибка отправки изображения ${photoPath}:`, error);

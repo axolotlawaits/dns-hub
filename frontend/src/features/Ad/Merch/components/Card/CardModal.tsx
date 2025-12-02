@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { 
+import {
   Button, 
   TextInput, 
   Container, 
@@ -17,12 +17,99 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconUpload, IconX, IconEye, IconGripVertical } from '@tabler/icons-react';
-import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
+import {
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+  type DragEndEvent
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  arrayMove,
+  horizontalListSortingStrategy
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { createCard, updateCard, addCardImages, deleteCard, deleteCardImage, updateCardAttachmentsOrder, type CardItem } from '../../data/CardData';
 import { API } from '../../../../../config/constants';
 import TiptapEditor from '../../../../../utils/editor';
 import { TelegramPreview } from './TelegramPreview';
+import { formatDescriptionForTelegram } from '../../../../../utils/telegramFormatter';
 import './CardModal.css';
+
+interface SortableAttachmentProps {
+  attachment: { id: string; url: string };
+  onRemove: () => void;
+}
+
+const SortableAttachment = ({ attachment, onRemove }: SortableAttachmentProps) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: attachment.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    position: 'relative' as const,
+    width: '120px',
+    height: '120px',
+    opacity: isDragging ? 0.8 : 1,
+    cursor: isDragging ? 'grabbing' : 'grab'
+  };
+
+  return (
+    <Box ref={setNodeRef} style={style}>
+      <Image
+        src={attachment.url}
+        alt="Attachment"
+        style={{ 
+          width: '100%', 
+          height: '100%',
+          objectFit: 'cover',
+          borderRadius: 8,
+          border: '1px solid var(--theme-border-primary)'
+        }}
+      />
+      <ActionIcon
+        size="sm"
+        color="gray"
+        variant="filled"
+        style={{
+          position: 'absolute',
+          top: 4,
+          left: 4
+        }}
+        {...attributes}
+        {...listeners}
+      >
+        <IconGripVertical size={12} />
+      </ActionIcon>
+      <ActionIcon
+        size="sm"
+        color="red"
+        variant="filled"
+        style={{
+          position: 'absolute',
+          top: 4,
+          right: 4
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove();
+        }}
+      >
+        <IconX size={12} />
+      </ActionIcon>
+    </Box>
+  );
+};
 
 // Props для добавления
 interface AddCardModalProps {
@@ -283,7 +370,9 @@ export function AddCardModal({ categoryId, onSuccess, onClose }: AddCardModalPro
 // Модалка редактирования карточки
 export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) {
   const [name, setName] = useState(card.name);
-  const [description, setDescription] = useState(card.description);
+  // Для редактирования сразу приводим описание к виду с явными переносами (<br>),
+  // чтобы оно визуально совпадало с тем, как отображается в боте
+  const [description, setDescription] = useState(formatDescriptionForTelegram(card.description || ''));
   const [isActive, setIsActive] = useState(card.isActive);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
@@ -295,10 +384,23 @@ export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) 
       url: att.source.startsWith('http') ? att.source : `${API}/public/add/merch/${att.source}`
     }))
   );
+  // Какие вложения пользователь пометил на удаление (по URL)
+  const [attachmentsToDelete, setAttachmentsToDelete] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewDrawerOpened, previewDrawerHandlers] = useDisclosure(false);
   const previewUrlsRef = useRef<string[]>([]);
+  const initialAttachmentIdsRef = useRef<string[]>(
+    (card.attachments || []).map(att => att.id)
+  );
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 4
+      }
+    })
+  );
 
   // Обновляем ref при изменении previewUrls
   useEffect(() => {
@@ -316,17 +418,18 @@ export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) 
     });
 
     setName(card.name);
-    setDescription(card.description);
+    setDescription(formatDescriptionForTelegram(card.description || ''));
     setIsActive(card.isActive);
     setImageFiles([]);
     setPreviewUrls([]);
     setCurrentImages(card.imageUrls || []);
-    setCurrentAttachments(
-      (card.attachments || []).map(att => ({
-        id: att.id,
-        url: att.source.startsWith('http') ? att.source : `${API}/public/add/merch/${att.source}`
-      }))
-    );
+    const normalizedAttachments = (card.attachments || []).map(att => ({
+      id: att.id,
+      url: att.source.startsWith('http') ? att.source : `${API}/public/add/merch/${att.source}`
+    }));
+    setCurrentAttachments(normalizedAttachments);
+    initialAttachmentIdsRef.current = normalizedAttachments.map(att => att.id);
+    setAttachmentsToDelete([]);
     setError(null);
 
     // Cleanup: освобождаем blob URLs при размонтировании или изменении карточки
@@ -368,66 +471,36 @@ export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) 
     setPreviewUrls(newPreviews);
   };
 
-  const removeCurrentImage = async (index: number) => {
+  const removeCurrentImage = (index: number) => {
     const attachmentToRemove = currentAttachments[index];
     if (!attachmentToRemove) {
-      console.log('❌ [removeCurrentImage] attachment не найден для индекса:', index);
       return;
     }
 
-    console.log(`🗑️ [removeCurrentImage] Удаляем изображение с индексом ${index}, ID: ${attachmentToRemove.id}`);
-
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // Удаляем изображение из базы данных
-      console.log(`🔄 [removeCurrentImage] Вызываем deleteCardImage для карточки ${card.id}`);
-      const updatedCard = await deleteCardImage(card.id, attachmentToRemove.url);
-      console.log(`✅ [removeCurrentImage] Изображение удалено, обновленная карточка:`, updatedCard);
-      
-      // Обновляем локальное состояние
-      const newImageUrls = updatedCard.imageUrls || [];
-      const newAttachments = (updatedCard.attachments || []).map(att => ({
-        id: att.id,
-        url: att.source.startsWith('http') ? att.source : `${API}/public/add/merch/${att.source}`
-      }));
-      console.log(`🔄 [removeCurrentImage] Обновляем currentImages с ${currentImages.length} на ${newImageUrls.length} изображений`);
-      setCurrentImages(newImageUrls);
-      setCurrentAttachments(newAttachments);
-    } catch (err) {
-      console.error('❌ [removeCurrentImage] Ошибка при удалении изображения:', err);
-      setError(err instanceof Error ? err.message : 'Ошибка при удалении изображения');
-    } finally {
-      setLoading(false);
-    }
+    // Обновляем локальное состояние, но реальные удаления сделаем при сохранении
+    const newAttachments = currentAttachments.filter((_, i) => i !== index);
+    const newImages = currentImages.filter((_, i) => i !== index);
+    setCurrentAttachments(newAttachments);
+    setCurrentImages(newImages);
+    setAttachmentsToDelete((prev) =>
+      prev.includes(attachmentToRemove.url) ? prev : [...prev, attachmentToRemove.url]
+    );
   };
 
   // Обработчик drag and drop для фотографий
-  const handleImageDragEnd = async (result: DropResult) => {
-    if (!result.destination) return;
+  const handleImageDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
 
-    const sourceIndex = result.source.index;
-    const destIndex = result.destination.index;
+    const oldIndex = currentAttachments.findIndex((att) => att.id === active.id);
+    const newIndex = currentAttachments.findIndex((att) => att.id === over.id);
 
-    if (sourceIndex === destIndex) return;
+    if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
 
-    // Обновляем локальное состояние сразу для отзывчивости UI
-    const newAttachments = Array.from(currentAttachments);
-    const [removed] = newAttachments.splice(sourceIndex, 1);
-    newAttachments.splice(destIndex, 0, removed);
+    const newAttachments = arrayMove(currentAttachments, oldIndex, newIndex);
     setCurrentAttachments(newAttachments);
-
-    // Обновляем порядок на сервере
-    try {
-      const attachmentIds = newAttachments.map(att => att.id);
-      await updateCardAttachmentsOrder(card.id, attachmentIds);
-    } catch (err) {
-      console.error('❌ Ошибка при обновлении порядка фотографий:', err);
-      // Откатываем изменения при ошибке
-      setCurrentAttachments(currentAttachments);
-      setError('Не удалось обновить порядок фотографий');
-    }
+    // Синхронизируем порядок currentImages для корректного предпросмотра
+    setCurrentImages((prev) => arrayMove(prev, oldIndex, newIndex));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -442,7 +515,6 @@ export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) 
       setLoading(true);
       setError(null);
 
-      // Обновляем основные данные карточки (imageUrls уже обновлены через removeCurrentImage)
       await updateCard(card.id, {
         name: name.trim(),
         description: description.trim(),
@@ -452,6 +524,24 @@ export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) 
       // Добавляем новые изображения, если есть
       if (imageFiles.length > 0) {
         await addCardImages(card.id, imageFiles);
+      }
+
+      // Удаляем помеченные изображения
+      if (attachmentsToDelete.length > 0) {
+        for (const url of attachmentsToDelete) {
+          await deleteCardImage(card.id, url);
+        }
+      }
+
+      // Обновляем порядок attachments, если он изменился
+      const currentOrderIds = currentAttachments.map((att) => att.id);
+      const initialOrderIds = initialAttachmentIdsRef.current;
+      const isOrderChanged =
+        currentOrderIds.length !== initialOrderIds.length ||
+        currentOrderIds.some((id, idx) => id !== initialOrderIds[idx]);
+
+      if (currentOrderIds.length > 0 && isOrderChanged) {
+        await updateCardAttachmentsOrder(card.id, currentOrderIds);
       }
 
       // Очищаем новые файлы
@@ -518,79 +608,32 @@ export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) 
             style={{ marginBottom: 15 }}
           />
 
-          {/* Текущие изображения с drag and drop */}
+          {/* Текущие изображения с drag and drop (dnd-kit) */}
           {currentAttachments.length > 0 && (
             <Box style={{ marginBottom: 15 }}>
-              <Text size="sm" style={{ marginBottom: 10 }}>Текущие изображения (перетащите для изменения порядка):</Text>
-              <DragDropContext onDragEnd={handleImageDragEnd}>
-                <Droppable droppableId="current-images" direction="horizontal">
-                  {(provided) => (
-                    <div
-                      {...provided.droppableProps}
-                      ref={provided.innerRef}
-                      style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}
-                    >
-                      {currentAttachments.map((attachment, index) => (
-                        <Draggable key={attachment.id} draggableId={attachment.id} index={index}>
-                          {(provided, snapshot) => (
-                            <Box
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              style={{
-                                position: 'relative',
-                                width: '120px',
-                                height: '120px',
-                                opacity: snapshot.isDragging ? 0.5 : 1,
-                                ...provided.draggableProps.style
-                              }}
-                            >
-                              <Image
-                                src={attachment.url}
-                                alt={`Current ${index + 1}`}
-                                style={{ 
-                                  width: '100%', 
-                                  height: '100%', 
-                                  objectFit: 'cover',
-                                  borderRadius: 8,
-                                  border: '1px solid var(--theme-border-primary)'
-                                }}
-                              />
-                              <ActionIcon
-                                {...provided.dragHandleProps}
-                                size="sm"
-                                color="gray"
-                                variant="filled"
-                                style={{
-                                  position: 'absolute',
-                                  top: 4,
-                                  left: 4,
-                                  cursor: 'grab'
-                                }}
-                              >
-                                <IconGripVertical size={12} />
-                              </ActionIcon>
-                              <ActionIcon
-                                size="sm"
-                                color="red"
-                                variant="filled"
-                                style={{
-                                  position: 'absolute',
-                                  top: 4,
-                                  right: 4
-                                }}
-                                onClick={() => removeCurrentImage(index)}
-                              >
-                                <IconX size={12} />
-                              </ActionIcon>
-                            </Box>
-                          )}
-                        </Draggable>
-                      ))}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-              </DragDropContext>
+              <Text size="sm" style={{ marginBottom: 10 }}>
+                Текущие изображения (перетащите для изменения порядка):
+              </Text>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleImageDragEnd}
+              >
+                <SortableContext
+                  items={currentAttachments.map((att) => att.id)}
+                  strategy={horizontalListSortingStrategy}
+                >
+                  <Box style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                    {currentAttachments.map((attachment, index) => (
+                      <SortableAttachment
+                        key={attachment.id}
+                        attachment={attachment}
+                        onRemove={() => removeCurrentImage(index)}
+                      />
+                    ))}
+                  </Box>
+                </SortableContext>
+              </DndContext>
             </Box>
           )}
 

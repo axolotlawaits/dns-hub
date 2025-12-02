@@ -13,13 +13,25 @@ import {
   Card
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconChevronLeft, IconChevronRight, IconChartBar, IconShoppingBag, IconMail, IconQrcode } from '@tabler/icons-react';
+import { 
+  IconChevronLeft, 
+  IconChevronRight, 
+  IconChartBar, 
+  IconShoppingBag, 
+  IconMail, 
+  IconQrcode,
+  IconArrowsSort,
+  IconSearch
+} from '@tabler/icons-react';
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { useAccessContext } from '../../../hooks/useAccessContext';
 import { useUserContext } from '../../../hooks/useUserContext';
 import { AppProvider } from './context/SelectedCategoryContext';
 import Hierarchy from './components/Hierarchy/Hierarchy';
 import CardGroup from './components/Card/CardGroup';
+import { GlobalCardSearchModal } from './components/Card/GlobalCardSearchModal';
+import { CustomModal } from '../../../utils/CustomModal';
+import { HierarchySortModal } from './components/Hierarchy/HierarchySortModal';
 import MerchStats from './components/Stats/MerchStats';
 import MerchFeedback from './components/Feedback/MerchFeedback';
 import './Merch.css';
@@ -34,6 +46,8 @@ function Merch() {
   const { user } = useUserContext();
   const [isHierarchyVisible, setIsHierarchyVisible] = useState<boolean>(true);
   const [qrOpened, { open: qrOpen, close: qrClose }] = useDisclosure(false);
+  const [sortOpened, { open: sortOpen, close: sortClose }] = useDisclosure(false);
+  const [globalSearchOpened, { open: globalSearchOpen, close: globalSearchClose }] = useDisclosure(false);
   
   // Ссылка на бота
   const botLink = 'https://t.me/merchzs_bot';
@@ -134,22 +148,44 @@ function Merch() {
                       </Tabs.Tab>
                     </Tabs.List>
                   </Card>
-                  <ActionIcon 
-                    variant="outline" 
-                    size={35} 
-                    aria-label="QR код бота" 
-                    onClick={qrOpen}
-                  >
-                    <IconQrcode style={{ width: '80%', height: '80%' }} stroke={1.5} />
-                  </ActionIcon>
+                  <Group gap="xs">
+                    {hasFullAccess && (
+                      <>
+                        <ActionIcon
+                          variant="outline"
+                          size={35}
+                          aria-label="Сортировка категорий и карточек"
+                          onClick={sortOpen}
+                        >
+                          <IconArrowsSort style={{ width: '70%', height: '70%' }} stroke={1.6} />
+                        </ActionIcon>
+                        <ActionIcon
+                          variant="outline"
+                          size={35}
+                          aria-label="Поиск по всем карточкам"
+                          onClick={globalSearchOpen}
+                        >
+                          <IconSearch style={{ width: '70%', height: '70%' }} stroke={1.6} />
+                        </ActionIcon>
+                      </>
+                    )}
+                    <ActionIcon 
+                      variant="outline" 
+                      size={35} 
+                      aria-label="QR код бота" 
+                      onClick={qrOpen}
+                    >
+                      <IconQrcode style={{ width: '80%', height: '80%' }} stroke={1.5} />
+                    </ActionIcon>
+                  </Group>
                 </Group>
 
                 <Tabs.Panel value="management" pt="md">
                 <Box style={{ display: 'flex', gap: 'var(--mantine-spacing-md)', width: '100%', alignItems: 'flex-start', flexWrap: 'nowrap' }}>
                   {/* Контейнер для иерархии и кнопки */}
                   <Box className="merch-hierarchy-container" style={{ 
-                    flex: isHierarchyVisible ? '0 0 40%' : '0 0 0', 
-                    maxWidth: isHierarchyVisible ? '40%' : '0', 
+                    flex: isHierarchyVisible ? '0 0 30%' : '0 0 0', 
+                    maxWidth: isHierarchyVisible ? '30%' : '0', 
                     minWidth: 0,
                     overflow: 'hidden',
                     transition: 'flex 0.3s ease, max-width 0.3s ease'
@@ -159,19 +195,33 @@ function Merch() {
                       <Paper 
                         withBorder
                         radius="md" 
-                        p="lg" 
+                        p={0} 
                         className="merch-hierarchy-paper"
                       >
-                        <Stack gap="md">
-                          <Group justify="space-between" align="center">
+                        <Stack gap="md" style={{ height: '100%' }}>
+                          <Group
+                            justify="space-between"
+                            align="center"
+                          >
+
+                          </Group>
+                          <Box
+                            style={{
+                              flex: 1,
+                              minHeight: 0,
+                              maxHeight: 'calc(100vh - 200px)',
+                              overflowY: 'auto',
+                             padding:10,
+                            }}
+                          >
                             <Text size="lg" fw={600} className="merch-title">
                               Категории товаров
                             </Text>
-                          </Group>
-                          <Hierarchy 
-                            hasFullAccess={hasFullAccess}
-                            onDataUpdate={() => {}}
-                          />
+                            <Hierarchy 
+                              hasFullAccess={hasFullAccess}
+                              onDataUpdate={() => {}}
+                            />
+                          </Box>
                         </Stack>
                       </Paper>
                     </Collapse>
@@ -197,14 +247,14 @@ function Merch() {
                     p="lg" 
                     className="merch-cards-paper"
                     style={{ 
-                      flex: isHierarchyVisible ? '1 1 60%' : '1 1 100%', 
+                      flex: isHierarchyVisible ? '1 1 70%' : '1 1 100%', 
                       minWidth: 0,
                       transition: 'flex 0.3s ease'
                     }}
                   >
                     <Stack gap="md">
                       <Group justify="space-between" align="center">
-                        <Text size="lg" fw={600} className="merch-title">
+                        <Text size="lg" fw={600} className="merch-title" style={{ paddingLeft: 10 }}>
                           Карточки товаров
                         </Text>
                       </Group>
@@ -253,6 +303,61 @@ function Merch() {
                 </Text>
               </Stack>
             </Modal>
+
+            {/* Модальное окно сортировки (fullscreen) */}
+            {hasFullAccess && (
+              <CustomModal
+                opened={sortOpened}
+                onClose={sortClose}
+                title="Сортировка иерархии и карточек"
+                width="100vw"
+                height="100vh"
+                maxWidth="100vw"
+                maxHeight="100vh"
+                centered={false}
+                zIndex={10000}
+                styles={{
+                  content: {
+                    margin: 0,
+                    width: '100vw',
+                    height: '100vh',
+                    maxWidth: '100vw',
+                    maxHeight: '100vh',
+                    borderRadius: 0,
+                    overflowY: 'hidden',
+                  },
+                  body: {
+                    height: '100vh',
+                    overflow: 'hidden',
+                    overflowY: 'hidden',
+                    padding: 0,
+                  },
+                  header: {
+                    borderRadius: 0,
+                  },
+                }}
+              >
+                <HierarchySortModal
+                  onClose={sortClose}
+                  onSuccess={() => {
+                    sortClose();
+                  }}
+                />
+              </CustomModal>
+            )}
+
+            {/* Модальное окно глобального поиска по карточкам */}
+            {hasFullAccess && (
+              <CustomModal
+                opened={globalSearchOpened}
+                onClose={globalSearchClose}
+                title="Поиск по всем карточкам"
+                size="xl"
+                icon={<IconSearch size={20} />}
+              >
+                <GlobalCardSearchModal onClose={globalSearchClose} />
+              </CustomModal>
+            )}
           </Box>
         </Box>
       </AppProvider>

@@ -30,6 +30,7 @@ import { toggleCardActive } from '../../data/CardData';
 import { FilePreviewModal } from '../../../../../utils/FilePreviewModal';
 import { API } from '../../../../../config/constants';
 import { truncateText } from '../../../../../utils/format';
+import { formatDescriptionForTelegram } from '../../../../../utils/telegramFormatter';
 import './Card.css';
 
 // Настройка worker для PDF.js - используем локальный worker из node_modules
@@ -203,8 +204,11 @@ function Card({ cardData, onEdit, onDelete, onToggleActive, searchQuery = '' }: 
     });
   };
 
-  // Описание уже в формате HTML - отображаем как есть
-  const formattedDescription = cardData.description || '';
+  // Описание форматируем так же, как в Telegram-превью (переносы сохраняются)
+  const formattedDescription = useMemo(
+    () => formatDescriptionForTelegram(cardData.description || ''),
+    [cardData.description]
+  );
 
   return (
     <Paper 

@@ -1049,9 +1049,18 @@ export function HierarchySortModal({ onClose, onSuccess }: HierarchySortModalPro
                       <IconX size={14} />
                     </ActionIcon>
                   ) : null}
+                  styles={{
+                    input: {
+                      paddingLeft: 10
+                    }
+                  }}
                 />
                 <ScrollArea h="calc(100vh - 280px)" style={{ paddingBottom: '16px' }}>
-                  <Box ref={containerRef} className="hierarchy-sort-container" style={{ paddingBottom: '16px' }}>
+                  <Box
+                    ref={containerRef}
+                    className="hierarchy-sort-container"
+                    style={{ paddingBottom: '16px', paddingRight: '10px' }}
+                  >
                     {filteredCategories.map((item) => {
                       const isSelected = selectedCategoryId === item.id;
                       return (
@@ -1090,7 +1099,7 @@ export function HierarchySortModal({ onClose, onSuccess }: HierarchySortModalPro
             <SortableContext items={categoryCards.map(i => i.id)} strategy={verticalListSortingStrategy}>
               <Stack gap="md" h="100%">
                 <Group justify="space-between" align="center">
-                  <Text fw={600} size="lg">
+                  <Text fw={600} size="lg" style={{ paddingLeft: 10 }}>
                     Карточки {selectedCategoryId ? `(${filteredCategories.find(c => c.id === selectedCategoryId)?.name || ''})` : ''}
                   </Text>
                   {categoryCards.length > 0 && (

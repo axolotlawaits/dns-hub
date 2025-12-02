@@ -1,28 +1,20 @@
 .hierarchy-block {
-  margin-left: calc(var(--layer, 0) * 24px);
-  transition: all 0.2s ease;
-  background-color: light-dark(var(--mantine-color-white), var(--theme-bg-secondary));
+  display: flex;
+  align-items: center;
+  border-radius: var(--mantine-radius-md);
   border: 1px solid light-dark(var(--mantine-color-gray-2), var(--color-accent-20));
+  background-color: light-dark(var(--mantine-color-white), var(--theme-bg-secondary));
+  margin-bottom: var(--mantine-spacing-xs);
+  gap: var(--mantine-spacing-sm);
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease,
+    transform 0.2s ease;
   position: relative;
 }
 
-.hierarchy-block::before {
-  content: '';
-  position: absolute;
-  left: -12px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 0;
-  height: 0;
-  border-top: 6px solid transparent;
-  border-bottom: 6px solid transparent;
-  border-left: 6px solid var(--color-accent-20);
-  transition: all 0.2s ease;
-}
-
 .hierarchy-block:hover {
-  background: linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--color-accent-10) 100%);
-  border-color: var(--color-accent-40);
+  background-color: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6));
+  border-color: var(--color-accent-30);
   box-shadow: var(--theme-shadow-sm);
   transform: translateX(2px);
 }
@@ -30,14 +22,7 @@
 .hierarchy-block-selected {
   background-color: light-dark(var(--mantine-color-blue-0), var(--color-accent-10)) !important;
   border-color: light-dark(var(--mantine-color-blue-4), var(--color-accent-50)) !important;
-  border-left-width: 4px;
-  border-left-color: light-dark(var(--mantine-color-blue-4), var(--color-accent-70));
-  box-shadow: var(--theme-shadow-md);
-}
-
-.hierarchy-block-selected::before {
-  border-left-color: light-dark(var(--mantine-color-blue-4), var(--color-accent-70));
-  left: -16px;
+  box-shadow: 0 0 0 3px var(--color-accent-10);
 }
 
 .hierarchy-block-expanded {
@@ -45,24 +30,23 @@
   border-left-color: var(--color-accent-40);
 }
 
-.hierarchy-block-expanded::before {
-  border-left-color: var(--color-accent-40);
-  left: -15px;
-}
-
 .hierarchy-block-selected.hierarchy-block-expanded {
   border-left-color: light-dark(var(--mantine-color-blue-4), var(--color-accent-70));
   background-color: light-dark(var(--mantine-color-blue-0), var(--color-accent-10)) !important;
-}
-
-.hierarchy-block-selected.hierarchy-block-expanded::before {
-  border-left-color: light-dark(var(--mantine-color-blue-4), var(--color-accent-70));
 }
 
 .hierarchy-chevron {
   color: light-dark(var(--color-primary-600), var(--color-accent-light-80));
   transform: rotate(var(--rotation, 0deg));
   transition: transform 0.2s ease;
+}
+
+/* Placeholder для иконки раскрытия, чтобы текст не прыгал, когда детей нет */
+.hierarchy-chevron-wrapper {
+  width: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .hierarchy-button {
@@ -79,21 +63,16 @@
 }
 
 .hierarchy-children-container {
-  margin-top: 12px;
-  margin-left: 24px;
-  padding-left: 16px;
-  border-left: 2px solid var(--theme-border-secondary);
+  margin-left: 18px;
+  margin-bottom:10px;
+  /* Убрали вертикальную линию слева */
+  border-left: none;
   position: relative;
 }
 
 .hierarchy-children-container::before {
-  content: '';
-  position: absolute;
-  left: -2px;
-  top: -12px;
-  width: 2px;
-  height: 12px;
-  background: var(--theme-border-secondary);
+  /* Отключаем декоративную вертикальную линию */
+  content: none;
 }
 
 .hierarchy-block-selected .hierarchy-children-container {
@@ -123,13 +102,37 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 100px;
-  margin-top: 10px;
+  height: 60px;
+  margin-top: 4px;
   color: var(--theme-text-secondary);
   font-style: italic;
 }
 
 .hierarchy-add-button-container {
   text-align: center;
+}
+
+/* Фиксированный заголовок (поиск + кнопка сортировки) внутри скролла иерархии */
+.hierarchy-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--theme-bg-elevated);
+}
+
+/* Выравнивание текста категории строго по левому краю */
+.hierarchy-title-button {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.hierarchy-title-text {
+  width: 100%;
+  text-align: left;
 }
 

@@ -1,0 +1,23 @@
+.global-search-card {
+  transition: all 0.2s ease;
+}
+
+.global-search-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--theme-shadow-md);
+}
+
+.global-search-card mark {
+  background-color: var(--mantine-color-yellow-3);
+  color: var(--mantine-color-dark-9);
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+/* Стили для темной темы */
+[data-theme="dark"] .global-search-card mark,
+[data-mantine-color-scheme="dark"] .global-search-card mark {
+  background-color: var(--mantine-color-yellow-5);
+  color: var(--mantine-color-dark-9);
+}
+

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Box, Text, Image, Stack } from '@mantine/core';
 import { API } from '../../../../../config/constants';
+import { formatDescriptionForTelegram } from '../../../../../utils/telegramFormatter';
 // Теперь description уже в формате HTML
 
 interface TelegramPreviewProps {
@@ -39,13 +40,15 @@ export function TelegramPreview({ name, description, images }: TelegramPreviewPr
     };
   }, []);
 
-  // Описание уже в формате HTML - используем как есть
+  // Описание форматируем так же, как на сайте (с сохранением переносов)
+  const formattedDescription = formatDescriptionForTelegram(description || '');
+
   // Формируем полный HTML с названием, если оно есть
-  const htmlDescription = name && description 
-    ? `<b>${name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</b><br><br>${description}`
+  const htmlDescription = name && formattedDescription 
+    ? `<b>${name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</b><br><br>${formattedDescription}`
     : name 
       ? `<b>${name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</b>`
-      : description || '';
+      : formattedDescription;
 
   return (
     <Box

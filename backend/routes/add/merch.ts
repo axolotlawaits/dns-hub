@@ -7,6 +7,7 @@ import {
   createMerchCard,
   updateMerchCard,
   deleteMerchCard,
+  getAllMerchCards,
   addCardImages,
   addMerchAttachment,
   deleteMerchAttachment,
@@ -287,6 +288,7 @@ router.get('/categories/:id/children', authenticateToken, async (req: any, res: 
 router.delete('/categories/:id', authenticateToken, deleteMerchCategory as any);
 
 // Роуты для карточек (layer = 0) - требуют аутентификации
+router.get('/cards', authenticateToken, getAllMerchCards as any);
 router.post('/cards', authenticateToken, ...(createMerchCard as any));
 router.put('/cards/:id', authenticateToken, ...(updateMerchCard as any));
 router.delete('/cards/:id', authenticateToken, deleteMerchCard as any);

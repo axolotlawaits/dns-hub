@@ -31,17 +31,51 @@ const getAuthToken = (): string | null => {
   return localStorage.getItem('token');
 };
 
-// Вспомогательная функция для создания заголовков с токеном
-const getAuthHeaders = (includeContentType: boolean = false): HeadersInit => {
-  const headers: HeadersInit = {};
+// Функция для выполнения запросов с автоматическим обновлением токена при 401
+const fetchWithAuthRetry = async (url: string, options: RequestInit = {}): Promise<Response> => {
+  // Первая попытка с текущим токеном
   const token = getAuthToken();
+  const headers = new Headers(options.headers);
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    headers.set('Authorization', `Bearer ${token}`);
   }
-  if (includeContentType) {
-    headers['Content-Type'] = 'application/json';
+  
+  let response = await fetch(url, {
+    ...options,
+    headers,
+  });
+
+  // Если получили 401, пробуем обновить токен и повторить запрос
+  if (response.status === 401) {
+    try {
+      const refreshResponse = await fetch(`${API}/refresh-token`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      if (refreshResponse.ok) {
+        const newToken = await refreshResponse.json();
+        localStorage.setItem('token', newToken);
+        
+        // Повторяем запрос с новым токеном
+        headers.set('Authorization', `Bearer ${newToken}`);
+        response = await fetch(url, {
+          ...options,
+          headers,
+        });
+      } else if (refreshResponse.status === 403) {
+        // Токен не может быть обновлен, нужно перелогиниться
+        localStorage.removeItem('user');
+        localStorage.removeItem('token');
+        throw new Error('Session expired. Please login again.');
+      }
+    } catch (refreshError) {
+      console.error('Token refresh failed:', refreshError);
+      throw refreshError;
+    }
   }
-  return headers;
+
+  return response;
 };
 
 // Утилита для обработки ответов
@@ -137,7 +171,9 @@ export const fetchAllCards = async (): Promise<CardItem[]> => {
     const url = `${API_BASE}/cards`;
     console.log(`🔄 Запрашиваем все карточки: ${url}`);
     
-    const response = await fetch(url);
+    const response = await fetchWithAuthRetry(url, {
+      method: 'GET',
+    });
     
     if (!response.ok) {
       throw new Error(`HTTP Error: ${response.status} ${response.statusText}`);
@@ -211,9 +247,8 @@ export const createCard = async (cardData: {
       console.log(`📁 Добавлено ${cardData.images.length} изображений`);
     }
 
-    const response = await fetch(url, {
+    const response = await fetchWithAuthRetry(url, {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: formData,
     });
 
@@ -266,9 +301,8 @@ export const updateCard = async (id: string, cardData: Partial<{
     if (cardData.description !== undefined) formData.append('description', cardData.description);
     if (cardData.isActive !== undefined) formData.append('isActive', cardData.isActive.toString());
     
-    const response = await fetch(url, {
+    const response = await fetchWithAuthRetry(url, {
       method: 'PUT',
-      headers: getAuthHeaders(),
       body: formData,
     });
     
@@ -314,10 +348,9 @@ export const updateCardImages = async (id: string, imageUrls: string[]): Promise
     const url = `${API_BASE}/cards/${id}/images/order`;
     console.log(`🖼️ Обновляем порядок изображений карточки ${id}:`, imageUrls);
     
-    const response = await fetch(url, {
+    const response = await fetchWithAuthRetry(url, {
       method: 'PUT',
       headers: {
-        ...getAuthHeaders(),
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ imageUrls }),
@@ -348,9 +381,8 @@ export const addCardImages = async (id: string, images: File[]): Promise<CardIte
       formData.append('images', image);
     });
 
-    const response = await fetch(url, {
+    const response = await fetchWithAuthRetry(url, {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: formData,
     });
 
@@ -374,10 +406,9 @@ export const updateCardAttachmentsOrder = async (cardId: string, attachmentIds: 
     const url = `${API_BASE}/attachments/${cardId}/order`;
     console.log(`🔄 Обновляем порядок attachments для карточки ${cardId}:`, attachmentIds);
     
-    const response = await fetch(url, {
+    const response = await fetchWithAuthRetry(url, {
       method: 'PATCH',
       headers: {
-        ...getAuthHeaders(),
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ attachmentIds }),
@@ -400,10 +431,9 @@ export const updateCardsOrder = async (categoryId: string, cardIds: string[]): P
     const url = `${API_BASE}/cards/${categoryId}/order`;
     console.log(`🔄 Обновляем порядок карточек в категории ${categoryId}:`, cardIds);
     
-    const response = await fetch(url, {
+    const response = await fetchWithAuthRetry(url, {
       method: 'PATCH',
       headers: {
-        ...getAuthHeaders(),
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ cardIds }),
@@ -426,10 +456,9 @@ export const moveCardToCategory = async (cardId: string, newCategoryId: string):
     const url = `${API_BASE}/cards/${cardId}/move`;
     console.log(`🔄 Перемещаем карточку ${cardId} в категорию ${newCategoryId}`);
     
-    const response = await fetch(url, {
+    const response = await fetchWithAuthRetry(url, {
       method: 'PATCH',
       headers: {
-        ...getAuthHeaders(),
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ newCategoryId }),
@@ -473,10 +502,9 @@ export const deleteCardImage = async (id: string, imageUrl: string): Promise<Car
     const url = `${API_BASE}/cards/${id}/images`;
     console.log(`🗑️ Удаляем изображение карточки ${id}:`, imageUrl);
     
-    const response = await fetch(url, {
+    const response = await fetchWithAuthRetry(url, {
       method: 'DELETE',
       headers: {
-        ...getAuthHeaders(),
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ imageUrl }),
@@ -521,9 +549,8 @@ export const toggleCardActive = async (id: string, isActive: boolean): Promise<C
     const formData = new FormData();
     formData.append('isActive', isActive.toString());
     
-    const response = await fetch(url, {
+    const response = await fetchWithAuthRetry(url, {
       method: 'PUT',
-      headers: getAuthHeaders(),
       body: formData,
     });
     
@@ -569,9 +596,8 @@ export const deleteCard = async (id: string): Promise<void> => {
     const url = `${API_BASE}/cards/${id}`;
     console.log(`🗑️ Удаляем карточку ${id}...`);
     
-    const response = await fetch(url, {
+    const response = await fetchWithAuthRetry(url, {
       method: 'DELETE',
-      headers: getAuthHeaders(),
     });
     
     if (!response.ok) {

@@ -4,7 +4,8 @@
 }
 
 .merch-hierarchy-container {
-  position: relative;
+  position: sticky;
+  top: 0;
   flex-shrink: 0;
   min-width: 0;
 }
@@ -12,7 +13,7 @@
 .merch-hierarchy-paper {
   width: 100%;
   min-width: 0;
-  min-height: 500px;
+  min-height: 0;
   background: var(--theme-bg-elevated);
   position: relative;
   border-color: var(--theme-border-primary);

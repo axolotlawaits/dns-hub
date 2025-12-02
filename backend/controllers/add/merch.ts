@@ -586,6 +586,82 @@ export const createMerchCard = [
   }
 ];
 
+// Получить все карточки (layer = 0)
+export const getAllMerchCards = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    console.log('📋 [getAllMerchCards] Запрос всех карточек');
+
+    // Получаем все карточки (layer = 0)
+    const cards = await prisma.merch.findMany({
+      where: {
+        layer: 0
+      },
+      include: {
+        attachments: {
+          select: {
+            id: true,
+            source: true,
+            type: true
+          },
+          orderBy: {
+            sortOrder: 'asc'
+          }
+        }
+      },
+      orderBy: [
+        { sortOrder: 'asc' },
+        { name: 'asc' }
+      ]
+    });
+
+    // Получаем информацию о категориях для каждой карточки
+    const cardsWithCategories = await Promise.all(
+      cards.map(async (card) => {
+        // Находим родительскую категорию
+        const category = card.parentId 
+          ? await prisma.merch.findUnique({
+              where: { id: card.parentId },
+              select: {
+                id: true,
+                name: true
+              }
+            })
+          : null;
+
+        // Формируем imageUrls из attachments
+        const imageUrls = card.attachments
+          .map(att => `${API}/public/add/merch/${att.source}`);
+
+        return {
+          id: card.id,
+          name: card.name,
+          description: card.description || '',
+          isActive: card.isActive,
+          categoryId: card.parentId || '',
+          category: category ? {
+            id: category.id,
+            name: category.name
+          } : null,
+          imageUrls: imageUrls,
+          attachments: card.attachments.map(att => ({
+            id: att.id,
+            source: att.source,
+            type: att.type
+          })),
+          createdAt: card.createdAt,
+          updatedAt: card.updatedAt
+        };
+      })
+    );
+
+    console.log(`✅ [getAllMerchCards] Найдено ${cardsWithCategories.length} карточек`);
+    res.json(cardsWithCategories);
+  } catch (error) {
+    console.error('❌ Ошибка при получении всех карточек:', error);
+    next(error);
+  }
+};
+
 // Обновить карточку (layer = 0)
 export const updateMerchCard = [
   uploadMerch.single('image'),
