@@ -64,19 +64,40 @@ const SortableAttachment = ({ attachment, onRemove }: SortableAttachmentProps) =
     cursor: isDragging ? 'grabbing' : 'grab'
   };
 
+  const [imageError, setImageError] = useState(false);
+
   return (
     <Box ref={setNodeRef} style={style}>
-      <Image
-        src={attachment.url}
-        alt="Attachment"
-        style={{ 
-          width: '100%', 
-          height: '100%',
-          objectFit: 'cover',
-          borderRadius: 8,
-          border: '1px solid var(--theme-border-primary)'
-        }}
-      />
+      {!imageError ? (
+        <Image
+          src={attachment.url}
+          alt="Attachment"
+          style={{ 
+            width: '100%', 
+            height: '100%',
+            objectFit: 'cover',
+            borderRadius: 8,
+            border: '1px solid var(--theme-border-primary)'
+          }}
+          onError={() => setImageError(true)}
+        />
+      ) : (
+        <Box
+          style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'var(--mantine-color-gray-1)',
+            borderRadius: 8,
+            border: '1px solid var(--theme-border-primary)',
+            color: 'var(--mantine-color-gray-6)'
+          }}
+        >
+          <Text size="xs" c="dimmed">Файл не найден</Text>
+        </Box>
+      )}
       <ActionIcon
         size="sm"
         color="gray"
@@ -523,7 +544,25 @@ export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) 
 
       // Добавляем новые изображения, если есть
       if (imageFiles.length > 0) {
-        await addCardImages(card.id, imageFiles);
+        const result = await addCardImages(card.id, imageFiles);
+        
+        // Обновляем список attachments с новыми добавленными файлами
+        if (result.attachments && result.attachments.length > 0) {
+          const newAttachments = result.attachments.map(att => ({
+            id: att.id,
+            url: att.source.startsWith('http') ? att.source : `${API}/public/add/merch/${att.source}`
+          }));
+          
+          // Добавляем новые attachments к существующим
+          setCurrentAttachments(prev => [...prev, ...newAttachments]);
+          
+          // Обновляем currentImages для предпросмотра
+          const newImageUrls = newAttachments.map(att => att.url);
+          setCurrentImages(prev => [...prev, ...newImageUrls]);
+          
+          // Обновляем initialAttachmentIdsRef для корректного отслеживания порядка
+          initialAttachmentIdsRef.current = [...initialAttachmentIdsRef.current, ...newAttachments.map(att => att.id)];
+        }
       }
 
       // Удаляем помеченные изображения

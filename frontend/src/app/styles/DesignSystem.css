@@ -69,6 +69,8 @@
   --color-accent-dark-15: rgba(37, 99, 235, 0.15);
 
   /* === СВЕТЛАЯ ТЕМА === */
+  /* Переменные темы теперь устанавливаются программно через ThemeProvider */
+  /* Оставляем только значения по умолчанию для начальной загрузки */
   --theme-bg-primary: var(--color-gray-50);
   --theme-bg-secondary: #ffffff;
   --theme-bg-tertiary: var(--color-gray-100);
@@ -90,17 +92,30 @@
   --theme-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
   --theme-shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
   
+  /* Современные тени с цветным акцентом 2025 */
+  --theme-shadow-colored: 0 4px 14px 0 rgba(59, 130, 246, 0.15);
+  --theme-shadow-colored-lg: 0 10px 25px -3px rgba(59, 130, 246, 0.2);
+  --theme-shadow-glow: 0 0 20px rgba(59, 130, 246, 0.3);
+  
+  /* Неоморфизм (subtle) */
+  --theme-shadow-neo-light: 4px 4px 8px rgba(0, 0, 0, 0.1), -4px -4px 8px rgba(255, 255, 255, 0.8);
+  --theme-shadow-neo-dark: 4px 4px 8px rgba(0, 0, 0, 0.3), -4px -4px 8px rgba(255, 255, 255, 0.05);
+  
   --theme-hover-bg: var(--color-gray-100);
-  --theme-bg-hover: var(--theme-hover-bg); /* Алиас для обратной совместимости */
+  --theme-bg-hover: var(--theme-hover-bg);
   --theme-active-bg: var(--color-primary-100);
   --theme-selected-bg: var(--color-primary-500);
   --theme-selected-text: #ffffff;
   
-  /* Переопределение Mantine переменных для консистентности */
-  --mantine-color-body: var(--theme-bg-elevated);
+  /* Mantine переменные устанавливаются программно через ThemeProvider */
+  /* Используем синеватые цвета вместо стандартных серых */
+  /* Для светлой темы - светлый фон (gray-50) */
+  --mantine-color-body: var(--theme-bg-primary);
 }
 
 /* === ТЕМНАЯ ТЕМА === */
+/* Переменные темы теперь устанавливаются программно через ThemeProvider */
+/* Оставляем только значения по умолчанию для начальной загрузки */
 [data-theme="dark"],
 [data-mantine-color-scheme="dark"] {
   --theme-bg-primary: var(--color-gray-900);
@@ -124,14 +139,24 @@
   --theme-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.4);
   --theme-shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.4), 0 8px 10px -6px rgb(0 0 0 / 0.4);
   
+  /* Современные тени с цветным акцентом для темной темы */
+  --theme-shadow-colored: 0 4px 14px 0 rgba(59, 130, 246, 0.25);
+  --theme-shadow-colored-lg: 0 10px 25px -3px rgba(59, 130, 246, 0.3);
+  --theme-shadow-glow: 0 0 20px rgba(59, 130, 246, 0.4);
+  
+  /* Неоморфизм для темной темы */
+  --theme-shadow-neo-dark: 4px 4px 8px rgba(0, 0, 0, 0.5), -4px -4px 8px rgba(255, 255, 255, 0.03);
+  
   --theme-hover-bg: var(--color-gray-700);
-  --theme-bg-hover: var(--theme-hover-bg); /* Алиас для обратной совместимости */
+  --theme-bg-hover: var(--theme-hover-bg);
   --theme-active-bg: var(--color-primary-900);
   --theme-selected-bg: var(--color-primary-500);
   --theme-selected-text: #ffffff;
   
-  /* Переопределение Mantine переменных для консистентности */
-  --mantine-color-body: var(--theme-bg-elevated);
+  /* Mantine переменные устанавливаются программно через ThemeProvider */
+  /* Используем синеватые цвета вместо стандартных серых */
+  /* Для темной темы - темный фон (gray-900) */
+  --mantine-color-body: var(--theme-bg-primary);
   
   /* Переопределение акцентных цветов для темной темы (более яркие) */
   --color-accent-05: rgba(59, 130, 246, 0.08);
@@ -210,6 +235,13 @@
   --transition-colors: color var(--transition-fast), background-color var(--transition-fast), border-color var(--transition-fast);
   --transition-transform: transform var(--transition-normal);
   --transition-opacity: opacity var(--transition-normal);
+  
+  /* Современные easing функции 2025 */
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --ease-elastic: cubic-bezier(0.68, -0.6, 0.32, 1.6);
+  --ease-smooth-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-smooth-out: cubic-bezier(0, 0, 0.2, 1);
 }
 
 /* === Z-INDEX === */
@@ -257,7 +289,7 @@
 
 .mantine-Select-option[data-selected="true"] {
   background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600)) !important;
-  color: white !important;
+  color: #ffffff !important;
   font-weight: 600 !important;
   box-shadow: 0 4px 12px var(--color-accent-30) !important;
 }
@@ -299,7 +331,7 @@
 
 .mantine-Combobox-option[data-selected="true"] {
   background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600)) !important;
-  color: white !important;
+  color: #ffffff !important;
   font-weight: 600 !important;
   box-shadow: 0 4px 12px var(--color-accent-30) !important;
 }
@@ -332,7 +364,108 @@
 [data-mantine-color-scheme="dark"] .mantine-Select-option[data-selected="true"],
 [data-mantine-color-scheme="dark"] .mantine-Combobox-option[data-selected="true"] {
   background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600)) !important;
-  color: white !important;
+  color: #ffffff !important;
+}
+
+/* Стили для текста в полях Select и MultiSelect в темной теме */
+[data-mantine-color-scheme="dark"] .mantine-Select-input,
+[data-mantine-color-scheme="dark"] .mantine-MultiSelect-input,
+[data-mantine-color-scheme="dark"] .mantine-Combobox-input {
+  color: #ffffff !important;
+}
+
+/* Стили для тегов (pills) в MultiSelect */
+[data-mantine-color-scheme="dark"] .mantine-MultiSelect-value,
+[data-mantine-color-scheme="dark"] .mantine-Pill-root,
+[data-mantine-color-scheme="dark"] .mantine-Pill-label {
+  color: #ffffff !important;
+}
+
+/* Стили для текста в значениях Select */
+[data-mantine-color-scheme="dark"] .mantine-Select-value {
+  color: #ffffff !important;
+}
+
+/* Стили для текста в кнопках в темной теме */
+[data-mantine-color-scheme="dark"] .mantine-Button-root,
+[data-mantine-color-scheme="dark"] .mantine-Button-label,
+[data-mantine-color-scheme="dark"] .mantine-Button-inner,
+[data-mantine-color-scheme="dark"] .mantine-Button-section {
+  color: #ffffff !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-Button-root[data-disabled="true"],
+[data-mantine-color-scheme="dark"] .mantine-Button-root[data-disabled="true"] .mantine-Button-label {
+  color: var(--theme-text-disabled) !important;
+  opacity: 0.6 !important;
+}
+
+/* Исключение для кнопок с variant="default" или "outline" - они могут иметь другой цвет */
+[data-mantine-color-scheme="dark"] .mantine-Button-root[data-variant="default"],
+[data-mantine-color-scheme="dark"] .mantine-Button-root[data-variant="outline"] {
+  color: #ffffff !important;
+}
+
+/* Стили для текста в полях ввода в темной теме */
+[data-mantine-color-scheme="dark"] .mantine-TextInput-input,
+[data-mantine-color-scheme="dark"] .mantine-Textarea-input,
+[data-mantine-color-scheme="dark"] .mantine-NumberInput-input,
+[data-mantine-color-scheme="dark"] .mantine-PasswordInput-input {
+  color: #ffffff !important;
+}
+
+/* Стили для лейблов полей ввода в темной теме */
+[data-mantine-color-scheme="dark"] .mantine-TextInput-label,
+[data-mantine-color-scheme="dark"] .mantine-Textarea-label,
+[data-mantine-color-scheme="dark"] .mantine-NumberInput-label,
+[data-mantine-color-scheme="dark"] .mantine-PasswordInput-label,
+[data-mantine-color-scheme="dark"] .mantine-Select-label,
+[data-mantine-color-scheme="dark"] .mantine-MultiSelect-label {
+  color: #ffffff !important;
+}
+
+/* Стили для Pagination в темной теме */
+[data-mantine-color-scheme="dark"] .mantine-Pagination-control {
+  color: #ffffff !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-Pagination-control[data-active="true"] {
+  color: #ffffff !important;
+}
+
+/* Стили для Badge в темной теме */
+[data-mantine-color-scheme="dark"] .mantine-Badge-root {
+  color: #ffffff !important;
+}
+
+/* Стили для ActionIcon в темной теме */
+[data-mantine-color-scheme="dark"] .mantine-ActionIcon-root {
+  color: #ffffff !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-ActionIcon-root[data-disabled="true"] {
+  color: var(--theme-text-disabled) !important;
+  opacity: 0.5 !important;
+}
+
+/* Стили для Tabs в темной теме */
+[data-mantine-color-scheme="dark"] .mantine-Tabs-tab {
+  color: var(--theme-text-primary) !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-Tabs-tab[data-active="true"] {
+  color: #ffffff !important;
+}
+
+/* Стили для Checkbox и Radio в темной теме */
+[data-mantine-color-scheme="dark"] .mantine-Checkbox-label,
+[data-mantine-color-scheme="dark"] .mantine-Radio-label {
+  color: #ffffff !important;
+}
+
+/* Стили для Switch в темной теме */
+[data-mantine-color-scheme="dark"] .mantine-Switch-label {
+  color: #ffffff !important;
 }
 
 /* Стили для Popover dropdown */
@@ -401,7 +534,7 @@
 
 .mantine-Menu-item[data-selected="true"] {
   background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600)) !important;
-  color: white !important;
+  color: #ffffff !important;
   font-weight: 600 !important;
   box-shadow: 0 4px 12px var(--color-accent-30) !important;
 }
@@ -429,7 +562,7 @@
 
 [data-mantine-color-scheme="dark"] .mantine-Menu-item[data-selected="true"] {
   background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600)) !important;
-  color: white !important;
+  color: #ffffff !important;
 }
 
 /* === БАЗОВЫЕ СТИЛИ === */
@@ -447,9 +580,53 @@ html {
 body {
   margin: 0;
   padding: 0;
-  background-color: var(--theme-bg-primary);
-  color: var(--theme-text-primary);
+  /* Используем theme переменные напрямую - они правильно устанавливаются через ThemeProvider */
+  background-color: var(--theme-bg-primary) !important;
+  color: var(--theme-text-primary) !important;
   transition: var(--transition-colors);
+}
+
+/* Глобальные стили для Mantine компонентов - используем theme переменные */
+[data-mantine-color-scheme="dark"] {
+  --mantine-color-body: var(--theme-bg-primary) !important;
+  --mantine-color-text: var(--theme-text-primary) !important;
+}
+
+[data-mantine-color-scheme="light"] {
+  --mantine-color-body: var(--theme-bg-primary) !important;
+  --mantine-color-text: var(--theme-text-primary) !important;
+}
+
+/* Стили для SegmentedControl - гармонируем с темной темой */
+[data-mantine-color-scheme="dark"] .mantine-SegmentedControl-root {
+  background: var(--theme-bg-secondary) !important;
+  border: 1px solid var(--theme-border-primary) !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-SegmentedControl-indicator {
+  background: #677995 !important;
+  border: 1px solid var(--theme-border-primary) !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-SegmentedControl-label {
+  color: var(--theme-text-primary) !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-SegmentedControl-label[data-active="true"] {
+  color: #ffffff !important;
+}
+
+/* Стили для placeholder текста в темной теме */
+[data-mantine-color-scheme="dark"] .mantine-TextInput-input::placeholder,
+[data-mantine-color-scheme="dark"] .mantine-Textarea-input::placeholder,
+[data-mantine-color-scheme="dark"] .mantine-NumberInput-input::placeholder,
+[data-mantine-color-scheme="dark"] .mantine-PasswordInput-input::placeholder,
+[data-mantine-color-scheme="dark"] .mantine-Select-input::placeholder,
+[data-mantine-color-scheme="dark"] .mantine-MultiSelect-input::placeholder,
+[data-mantine-color-scheme="dark"] input::placeholder,
+[data-mantine-color-scheme="dark"] textarea::placeholder {
+  color: #ffffff !important;
+  opacity: 0.7 !important;
 }
 
 /* === УТИЛИТЫ === */
@@ -477,11 +654,43 @@ body {
   border-radius: var(--radius-lg);
   box-shadow: var(--theme-shadow-sm);
   transition: var(--transition-all);
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--color-primary-500), var(--color-primary-600));
+  opacity: 0;
+  transition: opacity var(--transition-normal);
 }
 
 .card:hover {
   box-shadow: var(--theme-shadow-md);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  border-color: var(--color-primary-300);
+}
+
+.card:hover::before {
+  opacity: 1;
+}
+
+/* Glassmorphism эффект для карточек */
+.card-glass {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+[data-mantine-color-scheme="dark"] .card-glass {
+  background: rgba(30, 41, 59, 0.6);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 .button {
@@ -514,6 +723,13 @@ body {
 
 .button-primary:hover {
   background-color: var(--color-primary-600);
+  box-shadow: var(--theme-shadow-colored);
+  transform: translateY(-1px);
+}
+
+.button-primary:active {
+  transform: translateY(0);
+  box-shadow: var(--theme-shadow-sm);
 }
 
 .button-secondary {
@@ -524,6 +740,12 @@ body {
 
 .button-secondary:hover {
   background-color: var(--theme-hover-bg);
+  transform: translateY(-1px);
+  box-shadow: var(--theme-shadow-sm);
+}
+
+.button-secondary:active {
+  transform: translateY(0);
 }
 
 /* === АНИМАЦИИ === */
@@ -556,6 +778,69 @@ body {
   }
 }
 
+/* Современные анимации 2025 */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slide-up-fade {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes text-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
 .animate-fade-in {
   animation: fadeIn var(--transition-normal) ease-out;
 }
@@ -566,6 +851,38 @@ body {
 
 .animate-pulse {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  animation: shimmer 2s linear infinite;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
+  background-size: 1000px 100%;
+}
+
+.animate-gradient-shift {
+  background-size: 200% 200%;
+  animation: gradient-shift 3s ease infinite;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.animate-slide-up-fade {
+  animation: slide-up-fade 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.animate-text-reveal {
+  animation: text-reveal 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* === СОВРЕМЕННЫЕ СТИЛИ ДЛЯ REACT DATE PICKER === */
@@ -808,6 +1125,93 @@ body {
 }
 
 /* ========================================
+   СОВРЕМЕННЫЕ ЭФФЕКТЫ 2025
+   ======================================== */
+
+/* Улучшенный Glassmorphism */
+.glass-effect {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+[data-mantine-color-scheme="dark"] .glass-effect {
+  background: rgba(30, 41, 59, 0.7);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* Subtle 3D эффекты */
+.elevated-3d {
+  transform-style: preserve-3d;
+  transition: transform var(--transition-normal);
+}
+
+.elevated-3d:hover {
+  transform: translateY(-4px) rotateX(2deg);
+}
+
+/* Плавные градиенты с анимацией */
+.gradient-animated {
+  background: linear-gradient(
+    135deg,
+    var(--color-primary-500),
+    var(--color-primary-600),
+    var(--color-primary-700)
+  );
+  background-size: 200% 200%;
+  animation: gradient-shift 3s ease infinite;
+}
+
+/* Улучшенный focus для доступности */
+*:focus-visible {
+  outline: 2px solid var(--theme-border-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Плавные переходы для всех интерактивных элементов */
+button, a, input, select, textarea {
+  transition: all var(--transition-normal) var(--ease-smooth);
+}
+
+/* Улучшенные hover эффекты */
+.interactive-element {
+  transition: all var(--transition-normal) var(--ease-smooth);
+  cursor: pointer;
+}
+
+.interactive-element:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--theme-shadow-md);
+}
+
+.interactive-element:active {
+  transform: translateY(0);
+  box-shadow: var(--theme-shadow-sm);
+}
+
+/* Анимация появления для контента */
+.content-reveal {
+  animation: slide-up-fade 0.5s var(--ease-smooth);
+}
+
+/* Улучшенные тени с цветным акцентом */
+.shadow-colored {
+  box-shadow: var(--theme-shadow-colored);
+}
+
+.shadow-colored-lg {
+  box-shadow: var(--theme-shadow-colored-lg);
+}
+
+.shadow-glow {
+  box-shadow: var(--theme-shadow-glow);
+}
+
+/* ========================================
    ДОКУМЕНТАЦИЯ ПЕРЕМЕННЫХ
    ======================================== */
 /* 
@@ -822,11 +1226,28 @@ body {
  * --theme-bg-* - Фоны (primary, secondary, elevated, hover)
  * --theme-text-* - Текст (primary, secondary, tertiary, disabled, inverse)
  * --theme-border-* - Границы (primary, secondary, focus)
- * --theme-shadow-* - Тени (sm, md, lg, xl)
+ * --theme-shadow-* - Тени (sm, md, lg, xl, colored, glow)
+ * 
+ * EASING ФУНКЦИИ:
+ * --ease-smooth - Плавная анимация
+ * --ease-bounce - Отскок
+ * --ease-elastic - Эластичная
+ * 
+ * АНИМАЦИИ:
+ * .animate-fade-in, .animate-slide-in, .animate-pulse
+ * .animate-float, .animate-shimmer, .animate-gradient-shift
+ * .animate-scale-in, .animate-slide-up-fade, .animate-text-reveal
+ * 
+ * ЭФФЕКТЫ:
+ * .glass-effect - Glassmorphism
+ * .elevated-3d - Subtle 3D эффекты
+ * .gradient-animated - Анимированные градиенты
+ * .shadow-colored, .shadow-glow - Цветные тени
  * 
  * ИСПОЛЬЗОВАНИЕ:
  * background: var(--theme-bg-elevated);
  * color: var(--theme-text-primary);
  * border: 1px solid var(--theme-border);
  * box-shadow: var(--theme-shadow-md);
+ * transition: all var(--transition-normal) var(--ease-smooth);
  */

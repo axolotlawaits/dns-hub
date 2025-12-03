@@ -19,7 +19,20 @@ const storage = multer.diskStorage({
     // Исправляем кодировку русских символов и сохраняем оригинальное название
     const correctedFileName = decodeRussianFileName(file.originalname);
     console.log(`📄 [uploaderMerch] Исправляем кодировку: ${file.originalname} -> ${correctedFileName}`);
-    cb(null, correctedFileName);
+    
+    // Генерируем уникальное имя файла с проверкой на существование
+    const ext = path.extname(correctedFileName);
+    const baseName = path.basename(correctedFileName, ext);
+    let finalName = correctedFileName;
+    let counter = 1;
+    
+    while (fs.existsSync(path.join(merchUploadDir, finalName))) {
+      finalName = `${baseName}(${counter})${ext}`;
+      counter++;
+    }
+    
+    console.log(`📄 [uploaderMerch] Финальное имя файла: ${finalName}`);
+    cb(null, finalName);
   }
 });
 

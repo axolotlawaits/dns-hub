@@ -1734,6 +1734,36 @@ export const DynamicFormModal = ({
     }
   }, [mode, viewFieldsConfig, initialValues, renderViewField, renderAttachmentCard, onClose, onConfirm, form, onSubmit, fields, renderField, renderFieldGroup, groupFields, error, hideDefaultViewAttachments, viewExtraContent, attachmentsMap, fileAttachments, onFileAttachmentsChange, attachmentLabel, attachmentAccept, fileCardTitle, existingDocuments, onDeleteExistingDocument]);
 
+  // Keyboard navigation handler
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    // Escape закрывает модальное окно (уже обрабатывается Mantine)
+    if (e.key === 'Escape') {
+      handleClose();
+    }
+    // Enter на форме отправляет форму
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      const formElement = document.querySelector('form');
+      if (formElement) {
+        formElement.requestSubmit();
+      }
+    }
+  }, [handleClose]);
+
+  // Focus management - фокус на первый инпут при открытии
+  const firstInputRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (opened && mode !== 'view') {
+      // Небольшая задержка для корректного фокуса
+      setTimeout(() => {
+        const firstInput = document.querySelector('.form-modal input:not([type="hidden"]), .form-modal textarea, .form-modal select') as HTMLElement;
+        if (firstInput) {
+          firstInput.focus();
+        }
+      }, 100);
+    }
+  }, [opened, mode]);
+
   return (
     <>
     <Modal 
@@ -1751,6 +1781,12 @@ export const DynamicFormModal = ({
       withCloseButton
       closeOnClickOutside
       closeOnEscape
+      // ARIA атрибуты для доступности
+      aria-labelledby="modal-title"
+      aria-describedby="modal-description"
+      role="dialog"
+      aria-modal="true"
+      onKeyDown={handleKeyDown}
       styles={fullScreen ? {
         content: {
           width: '100vw',
@@ -1781,14 +1817,19 @@ export const DynamicFormModal = ({
         }
       }}
     >
-      <div style={{ 
-        flex: 1, 
-        overflow: 'auto', 
-        padding: 'var(--mantine-spacing-md)',
-        margin: '0',
-        display: 'flex',
-        flexDirection: 'column'
-      }}>
+      <div 
+        id="modal-description"
+        role="region"
+        aria-label="Содержимое модального окна"
+        style={{ 
+          flex: 1, 
+          overflow: 'auto', 
+          padding: 'var(--mantine-spacing-md)',
+          margin: '0',
+          display: 'flex',
+          flexDirection: 'column'
+        }}
+      >
       {modalContent}
       </div>
       {!hideButtons && mode !== 'view' && (

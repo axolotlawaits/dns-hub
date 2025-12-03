@@ -464,16 +464,16 @@
 
 /* Темная тема */
 [data-mantine-color-scheme="dark"] .login-form {
-  background: rgba(30, 30, 30, 0.95) !important;
+  background: var(--theme-bg-elevated) !important;
   border-color: var(--theme-border);
 }
 
 [data-mantine-color-scheme="dark"] .login-form::before {
-  background: linear-gradient(90deg, var(--color-blue-400), var(--color-purple-400), var(--color-pink-400));
+  background: linear-gradient(90deg, var(--color-primary-400), var(--color-primary-500), var(--color-primary-600));
 }
 
 [data-mantine-color-scheme="dark"] .image-credit {
-  background: rgba(30, 30, 30, 0.95);
+  background: var(--theme-bg-elevated);
   border-color: var(--theme-border);
 }
 

@@ -24,8 +24,29 @@ function Root() {
   return (
     <MantineProvider 
       theme={{
-        primaryColor: isDark ? 'indigo' : 'lighterViolet', 
-        colors: {'lighterViolet': ['#faf9ff', '#ebe9ff', '#d7d3ff', '#c3beff', '#aea8ff', '#9a93ff', '#857dff', '#6f68ff', '#5a52ff', '#4540ff']}
+        primaryColor: 'blue',
+        // Используем синеватые цвета из нашей темы
+        colors: {
+          blue: [
+            '#f0f9ff', // 50
+            '#e0f2fe', // 100
+            '#bae6fd', // 200
+            '#7dd3fc', // 300
+            '#38bdf8', // 400
+            '#0ea5e9', // 500
+            '#0284c7', // 600
+            '#0369a1', // 700
+            '#075985', // 800
+            '#0c4a6e', // 900
+          ],
+        },
+        // Переопределяем цвета body и text для использования наших цветов
+        // Используем primary для основного фона страницы
+        // Используем CSS переменные, которые будут правильно разрешены
+        other: {
+          bodyBg: 'var(--theme-bg-primary)',
+          bodyColor: 'var(--theme-text-primary)',
+        },
       }} 
       forceColorScheme={isDark ? 'dark' : 'light'}
     >

@@ -3,7 +3,6 @@
    ======================================== */
 
 .form-modal .mantine-Modal-content {
-
   position: fixed !important;
   top: 50% !important;
   left: 50% !important;
@@ -14,33 +13,35 @@
   min-width: 600px !important;
   height: auto !important;
   border-radius: 16px !important;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+  background: #0f172a !important; /* Цвет body модалки */
+  border: 1px solid #334155 !important;
 }
 
 .form-modal .mantine-Modal-header {
   padding: 24px 24px 16px 24px;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(135deg, #1e293b, #334155) !important; /* Градиент для header */
+  border-bottom: 1px solid #334155 !important;
   border-radius: 16px 16px 0 0;
 }
 
 .form-modal .mantine-Modal-title {
   font-size: 20px;
   font-weight: 700;
-  color: #1e293b;
+  color: #ffffff !important; /* Белый текст */
   margin: 0;
 }
 
 .form-modal .mantine-Modal-close {
-  color: #64748b;
+  color: #cbd5e1 !important; /* Светло-серый для иконки закрытия */
   background: transparent;
   border-radius: 8px;
   transition: all 0.2s ease;
 }
 
 .form-modal .mantine-Modal-close:hover {
-  color: #1e293b;
-  background-color: #e2e8f0;
+  color: #ffffff !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
   transform: scale(1.05);
 }
 
@@ -48,36 +49,66 @@
   padding: 24px;
   max-height: 70vh;
   overflow-y: auto;
-  background: #ffffff;
+  background: #0f172a !important; /* Цвет body модалки */
+  color: #ffffff !important; /* Белый текст */
 }
 
-/* Темная тема для модальных окон */
+/* Светлая тема - используем стандартные цвета */
+[data-mantine-color-scheme="light"] .form-modal .mantine-Modal-content {
+  background: var(--theme-bg-elevated) !important;
+  border: 1px solid var(--theme-border-primary) !important;
+}
+
+[data-mantine-color-scheme="light"] .form-modal .mantine-Modal-header {
+  background: var(--theme-bg-tertiary) !important;
+  border-bottom-color: var(--theme-border-primary) !important;
+}
+
+[data-mantine-color-scheme="light"] .form-modal .mantine-Modal-title {
+  color: var(--theme-text-primary) !important;
+}
+
+[data-mantine-color-scheme="light"] .form-modal .mantine-Modal-close {
+  color: var(--theme-text-secondary) !important;
+}
+
+[data-mantine-color-scheme="light"] .form-modal .mantine-Modal-close:hover {
+  color: var(--theme-text-primary) !important;
+  background-color: var(--theme-bg-hover) !important;
+}
+
+[data-mantine-color-scheme="light"] .form-modal .mantine-Modal-body {
+  background: var(--theme-bg-elevated) !important;
+  color: var(--theme-text-primary) !important;
+}
+
+/* Темная тема - используем темно-синие цвета */
 [data-mantine-color-scheme="dark"] .form-modal .mantine-Modal-header {
-  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-  border-bottom-color: #475569;
+  background: linear-gradient(135deg, #1e293b, #334155) !important; /* Градиент для header */
+  border-bottom-color: #334155 !important;
 }
 
 [data-mantine-color-scheme="dark"] .form-modal .mantine-Modal-title {
-  color: #f1f5f9;
+  color: #ffffff !important;
 }
 
 [data-mantine-color-scheme="dark"] .form-modal .mantine-Modal-close {
-  color: #94a3b8;
+  color: #cbd5e1 !important;
 }
 
 [data-mantine-color-scheme="dark"] .form-modal .mantine-Modal-close:hover {
-  color: #f1f5f9;
-  background-color: #475569;
+  color: #ffffff !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
 }
 
 [data-mantine-color-scheme="dark"] .form-modal .mantine-Modal-body {
-  background: #0f172a;
+  background: #0f172a !important; /* Цвет body модалки */
+  color: #ffffff !important;
 }
 
-
 [data-mantine-color-scheme="dark"] .form-modal .mantine-Modal-content {
-  background: #0f172a;
-  border: 1px solid #334155;
+  background: #0f172a !important; /* Цвет body модалки */
+  border: 1px solid #334155 !important;
 }
 
 /* Дополнительные стили для правильного отображения */
@@ -193,16 +224,16 @@
 
 .form-modal .view-field-label {
   font-weight: 600;
-  color: #333;
+  color: var(--theme-text-primary);
   margin-bottom: 4px;
 }
 
 .form-modal .view-field-value {
-  color: #666;
+  color: var(--theme-text-secondary);
   padding: 8px;
-  background: #f5f5f5;
+  background: var(--theme-bg-tertiary);
   border-radius: 4px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--theme-border-primary);
 }
 
 /* Стили для полей просмотра в режиме view */
@@ -250,9 +281,9 @@
 [data-mantine-color-scheme="dark"] .form-modal .mantine-Textarea-input,
 [data-mantine-color-scheme="dark"] .form-modal .mantine-NumberInput-input,
 [data-mantine-color-scheme="dark"] .form-modal .mantine-MultiSelect-input {
-  background: #1e293b;
-  border-color: #475569;
-  color: #f1f5f9;
+  background: var(--theme-bg-elevated);
+  border-color: var(--theme-border-primary);
+  color: var(--theme-text-primary);
 }
 
 [data-mantine-color-scheme="dark"] .form-modal .mantine-TextInput-input:focus,
@@ -260,7 +291,7 @@
 [data-mantine-color-scheme="dark"] .form-modal .mantine-Textarea-input:focus,
 [data-mantine-color-scheme="dark"] .form-modal .mantine-NumberInput-input:focus,
 [data-mantine-color-scheme="dark"] .form-modal .mantine-MultiSelect-input:focus {
-  border-color: #3b82f6;
+  border-color: var(--theme-border-focus);
   box-shadow: 0 0 0 3px var(--color-accent-10);
 }
 
@@ -269,17 +300,17 @@
 [data-mantine-color-scheme="dark"] .form-modal .mantine-Textarea-label,
 [data-mantine-color-scheme="dark"] .form-modal .mantine-NumberInput-label,
 [data-mantine-color-scheme="dark"] .form-modal .mantine-MultiSelect-label {
-  color: #e2e8f0;
+  color: var(--theme-text-primary);
 }
 
 [data-mantine-color-scheme="dark"] .form-modal .view-field-value {
-  background: #1e293b;
-  color: #e2e8f0;
-  border: 1px solid #475569;
+  background: var(--theme-bg-elevated);
+  color: var(--theme-text-primary);
+  border: 1px solid var(--theme-border-primary);
 }
 
 [data-mantine-color-scheme="dark"] .form-modal .view-field-label {
-  color: #e2e8f0;
+  color: var(--theme-text-primary);
 }
 
 [data-mantine-color-scheme="dark"] .form-modal.view-mode .view-field-label {
@@ -527,15 +558,15 @@
 
 /* Стили для футера модального окна */
 .modal-footer {
-  border-top: 1px solid var(--theme-border) !important;
-  background: var(--theme-bg-elevated) !important;
+  border-top: 1px solid #334155 !important;
+  background: linear-gradient(135deg, #1e293b, #334155) !important; /* Градиент для футера */
   padding: var(--space-lg) var(--space-md) !important;
   display: flex !important;
   justify-content: flex-end !important;
   gap: var(--space-md) !important;
   flex-shrink: 0 !important;
   border-radius: 0 0 var(--radius-lg) var(--radius-lg) !important;
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.3) !important;
 }
 
 /* Стили для кнопок в футере */
@@ -557,8 +588,8 @@
 
 /* Темная тема для футера */
 [data-mantine-color-scheme="dark"] .modal-footer {
-  border-top-color: var(--theme-border) !important;
-  background: var(--theme-bg-elevated) !important;
+  border-top-color: #334155 !important;
+  background: linear-gradient(135deg, #1e293b, #334155) !important; /* Градиент для футера */
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.3) !important;
 }
 
@@ -586,7 +617,7 @@
 }
 
 .mantine-DatePicker-calendarHeaderLabel {
-  color: white !important;
+  color: var(--theme-text-inverse) !important;
   font-weight: 600 !important;
   font-size: var(--font-size-lg) !important;
 }
@@ -595,7 +626,7 @@
   background: rgba(255, 255, 255, 0.2) !important;
   border: none !important;
   border-radius: var(--radius-sm) !important;
-  color: white !important;
+  color: var(--theme-text-inverse) !important;
   width: 32px !important;
   height: 32px !important;
   transition: all 0.2s ease !important;
@@ -634,7 +665,7 @@
 
 .mantine-DatePicker-day[data-selected="true"] {
   background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600)) !important;
-  color: white !important;
+  color: var(--theme-text-inverse) !important;
   font-weight: 600 !important;
   box-shadow: 0 4px 12px var(--color-accent-30) !important;
 }
@@ -685,7 +716,7 @@
 
 [data-mantine-color-scheme="dark"] .mantine-DatePicker-day[data-selected="true"] {
   background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600)) !important;
-  color: white !important;
+  color: var(--theme-text-inverse) !important;
 }
 
 [data-mantine-color-scheme="dark"] .mantine-DatePicker-day[data-outside="true"] {
@@ -817,7 +848,7 @@
 }
 
 .mantine-DateInput-calendarHeaderLabel {
-  color: white !important;
+  color: var(--theme-text-inverse) !important;
   font-weight: 600 !important;
   font-size: var(--font-size-lg) !important;
 }
@@ -826,7 +857,7 @@
   background: rgba(255, 255, 255, 0.2) !important;
   border: none !important;
   border-radius: var(--radius-sm) !important;
-  color: white !important;
+  color: var(--theme-text-inverse) !important;
   width: 32px !important;
   height: 32px !important;
   transition: all 0.2s ease !important;
@@ -865,7 +896,7 @@
 
 .mantine-DateInput-day[data-selected="true"] {
   background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600)) !important;
-  color: white !important;
+  color: var(--theme-text-inverse) !important;
   font-weight: 600 !important;
   box-shadow: 0 4px 12px var(--color-accent-30) !important;
 }
@@ -943,7 +974,7 @@
 
 [data-mantine-color-scheme="dark"] .mantine-DateInput-day[data-selected="true"] {
   background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600)) !important;
-  color: white !important;
+  color: var(--theme-text-inverse) !important;
 }
 
 [data-mantine-color-scheme="dark"] .mantine-DateInput-day[data-outside="true"] {

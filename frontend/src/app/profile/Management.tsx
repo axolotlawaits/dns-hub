@@ -399,7 +399,11 @@ function Management() {
       if (selectedGroupFilter) {
         filteredPositions = positions.filter((p: any) => p.groupUuid === selectedGroupFilter);
       }
-      return filteredPositions.map((p: any) => ({value: p.uuid, label: p.name}))
+      return filteredPositions.map((p: any) => ({
+        value: p.uuid, 
+        label: p.name,
+        groupName: p.group?.name || 'Группа не указана'
+      }))
     }
     if (entityType === 'user') return users.map((u: User) => ({value: u.id, label: u.name}))
     return []
@@ -600,7 +604,17 @@ function Management() {
                 )}
               </Text>
               <MultiSelect 
-                data={entityOptions} 
+                data={entityOptions.map((opt: any) => {
+                  // Для должностей добавляем информацию о группе в label с tooltip через title
+                  if (entityType === 'position' && opt.groupName) {
+                    return {
+                      ...opt,
+                      label: opt.label,
+                      title: `Группа: ${opt.groupName}`
+                    };
+                  }
+                  return opt;
+                })} 
                 value={selectedEntities} 
                 onChange={(values) => {
                   // Ограничиваем количество выбранных сущностей
@@ -620,6 +634,9 @@ function Management() {
                 clearable
                 disabled={loading}
                 maxDropdownHeight={300}
+                classNames={entityType === 'position' ? {
+                  option: 'position-option-with-tooltip'
+                } : undefined}
               />
             </Box>
             {entityType === 'user' && selectedEntities.length === 1 && (

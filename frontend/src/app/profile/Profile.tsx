@@ -9,10 +9,12 @@ import ProfileInfo from "./ProfileInfo";
 import '../styles/Profile.css'
 import { useUserContext } from "../../hooks/useUserContext";
 import Management from "./Management";
+import AdminPanel from "./AdminPanel";
 import { 
   IconUser, 
   IconShield, 
-  IconPhoto
+  IconPhoto,
+  IconSettings
 } from '@tabler/icons-react';
 import { usePageHeader } from "../../contexts/PageHeaderContext";
 
@@ -65,6 +67,15 @@ function Profile() {
                   Управление доступом
                 </Tabs.Tab>
               )}
+              {user?.role === 'DEVELOPER' && (
+                <Tabs.Tab 
+                  value="third" 
+                  leftSection={<IconSettings size={18} />}
+                  className="profile-tab-item"
+                >
+                  Админ панель
+                </Tabs.Tab>
+              )}
             </Tabs.List>
           </Tabs>
         </Card>
@@ -78,6 +89,11 @@ function Profile() {
             <Tabs.Panel value="second">
               <Management />
             </Tabs.Panel>
+            {user?.role === 'DEVELOPER' && (
+              <Tabs.Panel value="third">
+                <AdminPanel />
+              </Tabs.Panel>
+            )}
           </Tabs>
         </Box>
       </Stack>

@@ -14,9 +14,14 @@
 
 .custom-modal .mantine-Modal-header {
   padding: 24px 24px 16px 24px;
-  background: var(--theme-bg-elevated);
+  background: var(--theme-bg-tertiary);
   border-bottom: 1px solid var(--theme-border);
   border-radius: 16px 16px 0 0;
+}
+
+/* Темная тема для CustomModal header */
+[data-mantine-color-scheme="dark"] .custom-modal .mantine-Modal-header {
+  background: var(--theme-bg-secondary);
 }
 
 .custom-modal .mantine-Modal-title,
@@ -42,7 +47,8 @@
 
 .custom-modal .mantine-Modal-body {
   padding: 24px;
-  background: var(--theme-bg-primary);
+  background: var(--theme-bg-elevated);
+  color: var(--theme-text-primary);
   border-radius: 0 0 16px 16px;
 }
 

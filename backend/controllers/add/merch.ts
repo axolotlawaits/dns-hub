@@ -824,10 +824,29 @@ export const addCardImages = [
       // Добавляем новые изображения
       if (req.files && Array.isArray(req.files) && req.files.length > 0) {
         const files = req.files as Express.Multer.File[];
+        const savedAttachments: any[] = [];
+        
         for (const file of files) {
-          
           try {
-            await prisma.merchAttachment.create({
+            // Проверяем, что файл действительно сохранен на диске
+            const filePath = path.join(process.cwd(), 'public', 'add', 'merch', file.filename);
+            if (!fs.existsSync(filePath)) {
+              console.error(`❌ [addCardImages] Файл не найден на диске: ${file.filename}`);
+              throw new Error(`Файл ${file.originalname} не был сохранен на диск`);
+            }
+
+            // Проверяем размер файла (должен быть больше 0)
+            const stats = fs.statSync(filePath);
+            if (stats.size === 0) {
+              console.error(`❌ [addCardImages] Файл пустой: ${file.filename}`);
+              // Удаляем пустой файл
+              fs.unlinkSync(filePath);
+              throw new Error(`Файл ${file.originalname} пустой и был удален`);
+            }
+
+            console.log(`✅ [addCardImages] Файл сохранен: ${file.filename} (${stats.size} bytes)`);
+            
+            const attachment = await prisma.merchAttachment.create({
               data: {
                 source: file.filename, // Сохраняем название файла как оно сохранено на диске
                 type: 'image',
@@ -836,12 +855,27 @@ export const addCardImages = [
                 sortOrder: nextSortOrder++
               }
             });
+            
+            savedAttachments.push(attachment);
           } catch (error) {
             console.error(`❌ [addCardImages] Ошибка при добавлении файла ${file.originalname}:`, error);
+            // Удаляем файл с диска, если он был создан, но не сохранен в БД
+            try {
+              const filePath = path.join(process.cwd(), 'public', 'add', 'merch', file.filename);
+              if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+                console.log(`🗑️ [addCardImages] Удален файл после ошибки: ${file.filename}`);
+              }
+            } catch (cleanupError) {
+              console.error(`⚠️ [addCardImages] Ошибка при очистке файла ${file.filename}:`, cleanupError);
+            }
             throw error;
           }
         }
+        
+        console.log(`✅ [addCardImages] Успешно добавлено ${savedAttachments.length} файлов к карточке ${cardId}`);
       } else {
+        console.warn('⚠️ [addCardImages] Нет файлов для добавления');
       }
 
       // Получаем обновленную карточку с attachments

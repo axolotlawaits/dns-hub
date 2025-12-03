@@ -47,45 +47,78 @@ const LogViewer: React.FC = () => {
       return;
     }
 
-    // Создаем EventSource для SSE подключения
-    // EventSource не поддерживает заголовки, используем query параметр
-    const eventSource = new EventSource(`${API}/logs/stream?token=${encodeURIComponent(token)}`);
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_ATTEMPTS = 5;
+    const RECONNECT_DELAY = 3000; // 3 секунды
 
-    eventSourceRef.current = eventSource;
-
-    eventSource.onopen = () => {
-      console.log('📡 [SSE] Подключение установлено');
-      setIsConnected(true);
-    };
-
-    eventSource.onmessage = (event) => {
-      try {
-        const logData: LogEntry = JSON.parse(event.data);
-        
-        if (logData.type === 'connected') {
-          console.log('📡 [SSE]', logData.message);
-          return;
-        }
-
-        setLogs((prevLogs) => {
-          const newLogs = [...prevLogs, logData];
-          // Ограничиваем количество логов до 2000 для оптимизации
-          return newLogs.slice(-2000);
-        });
-      } catch (error) {
-        console.error('Error parsing log data:', error);
+    const connectSSE = () => {
+      // Закрываем предыдущее подключение, если оно есть
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
       }
+
+      // Создаем EventSource для SSE подключения
+      // EventSource не поддерживает заголовки, используем query параметр
+      const eventSource = new EventSource(`${API}/logs/stream?token=${encodeURIComponent(token)}`);
+
+      eventSourceRef.current = eventSource;
+
+      eventSource.onopen = () => {
+        console.log('📡 [SSE] Подключение установлено');
+        setIsConnected(true);
+        reconnectAttempts = 0; // Сбрасываем счетчик при успешном подключении
+      };
+
+      eventSource.onmessage = (event) => {
+        try {
+          const logData: LogEntry = JSON.parse(event.data);
+          
+          if (logData.type === 'connected') {
+            console.log('📡 [SSE]', logData.message);
+            return;
+          }
+
+          setLogs((prevLogs) => {
+            const newLogs = [...prevLogs, logData];
+            // Ограничиваем количество логов до 2000 для оптимизации
+            return newLogs.slice(-2000);
+          });
+        } catch (error) {
+          console.error('Error parsing log data:', error);
+        }
+      };
+
+      eventSource.onerror = (error) => {
+        console.error('📡 [SSE] Ошибка:', error);
+        setIsConnected(false);
+        
+        // Проверяем состояние подключения
+        if (eventSource.readyState === EventSource.CLOSED) {
+          // Подключение закрыто, пытаемся переподключиться
+          if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+            reconnectAttempts++;
+            console.log(`📡 [SSE] Попытка переподключения ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}...`);
+            
+            setTimeout(() => {
+              connectSSE();
+            }, RECONNECT_DELAY);
+          } else {
+            console.error('📡 [SSE] Достигнуто максимальное количество попыток переподключения');
+          }
+        }
+        
+        eventSource.close();
+      };
     };
 
-    eventSource.onerror = (error) => {
-      console.error('📡 [SSE] Ошибка:', error);
-      setIsConnected(false);
-      eventSource.close();
-    };
+    connectSSE();
 
     return () => {
-      eventSource.close();
-      eventSourceRef.current = null;
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
     };
   }, [token]);
 

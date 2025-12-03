@@ -79,6 +79,8 @@
 
 /* Стили для содержимого модального окна */
 .file-preview-modal .mantine-Modal-body {
+  background: var(--theme-bg-elevated);
+  color: var(--theme-text-primary);
   height: 100vh;
   max-height: 100vh;
   overflow: hidden !important;
@@ -174,7 +176,7 @@
   background: rgba(17, 24, 39, 0.7);
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #fff;
+  color: var(--theme-text-inverse);
 }
 
 .file-preview-modal .image-container .image-zoom-bar > * {
@@ -235,7 +237,7 @@
 }
 
 .file-preview-modal__file-title {
-  color: #fff;
+  color: var(--theme-text-inverse);
   font-size: 18px;
   font-weight: 700;
   margin: 0;
@@ -249,7 +251,7 @@
 
 .file-preview-modal__action-btn {
   background: rgba(255, 255, 255, 0.2);
-  color: #fff;
+  color: var(--theme-text-inverse);
   border: 1px solid rgba(255, 255, 255, 0.3);
   backdrop-filter: blur(10px);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -340,7 +342,7 @@
 
 .file-preview-modal__nav-button:not([data-disabled="true"]) {
   background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600));
-  color: #fff;
+  color: var(--theme-text-inverse);
   border: none;
 }
 
@@ -456,7 +458,7 @@
 }
 
 .file-preview-modal__thumbnail-name.is-active {
-  color: #fff;
+  color: var(--theme-text-inverse);
 }
 
 .file-preview-modal__thumbnail-ext {
@@ -786,7 +788,7 @@
 
 .file-preview-modal__overlay-button {
   background: rgba(17, 24, 39, 0.7);
-  color: #fff;
+  color: var(--theme-text-inverse);
   border: 1px solid rgba(255, 255, 255, 0.1);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
@@ -800,11 +802,11 @@
   pointer-events: auto;
   width: 100%;
   padding: 8px 12px;
-  color: #fff;
+  color: var(--theme-text-inverse);
 }
 
 .file-preview-modal__overlay-counter {
-  color: #fff;
+  color: var(--theme-text-inverse);
   background: rgba(17, 24, 39, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 999px;
@@ -824,7 +826,7 @@
   background: rgba(17, 24, 39, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-width: 1px;
-  color: #fff;
+  color: var(--theme-text-inverse);
 }
 
 .file-preview-modal__zoom-icon {
@@ -839,7 +841,7 @@
   width: 48px;
   text-align: right;
   font-variant-numeric: tabular-nums;
-  color: #fff;
+  color: var(--theme-text-inverse);
 }
 
 .file-preview-modal__image {

@@ -21,7 +21,8 @@ import {
   Tooltip,
   Modal,
   Textarea,
-  Divider
+  Divider,
+  Box
 } from '@mantine/core';
 import { 
   IconBug, 
@@ -208,13 +209,14 @@ const BugReports: React.FC = () => {
   };
 
   return (
-    <Container size="xl" py="md">
-      <Title order={1} mb="lg">
-        <Group>
-          <IconBug size={32} />
-          Отчеты об ошибках DNS Radio
-        </Group>
-      </Title>
+    <Box style={{ width: '100%', padding: 'var(--mantine-spacing-md)' }}>
+      <Stack gap="lg">
+        <Title order={1} mb="lg" c="var(--theme-text-primary)">
+          <Group>
+            <IconBug size={32} />
+            Отчеты об ошибках DNS Radio
+          </Group>
+        </Title>
 
       <Tabs defaultValue="reports">
         <Tabs.List>
@@ -224,8 +226,16 @@ const BugReports: React.FC = () => {
 
         <Tabs.Panel value="reports" pt="md">
           {/* Фильтры */}
-          <Paper p="md" mb="md">
-            <Title order={3} mb="md">
+          <Paper 
+            p="md" 
+            mb="md"
+            withBorder
+            style={{
+              background: 'var(--theme-bg-elevated)',
+              borderColor: 'var(--theme-border-primary)'
+            }}
+          >
+            <Title order={3} mb="md" c="var(--theme-text-primary)">
               <Group>
                 <IconFilter size={20} />
                 Фильтры
@@ -608,7 +618,8 @@ const BugReports: React.FC = () => {
           </Group>
         </Stack>
       </Modal>
-    </Container>
+      </Stack>
+    </Box>
   );
 };
 

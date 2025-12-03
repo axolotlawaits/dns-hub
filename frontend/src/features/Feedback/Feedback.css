@@ -2,33 +2,37 @@
   width: 100%;
 }
 
-/* Стили для таблицы обратной связи в темной теме */
+/* Стили для таблицы обратной связи */
 .feedback-container .mantine-Table-th {
-  color: var(--mantine-color-text) !important;
-  background-color: var(--mantine-color-body) !important;
+  color: var(--theme-text-primary) !important;
+  background-color: var(--theme-bg-elevated) !important;
+  border-bottom: 1px solid var(--theme-border-primary) !important;
 }
 
 .feedback-container .mantine-Table-td {
-  color: var(--mantine-color-text) !important;
+  color: var(--theme-text-primary) !important;
+  border-bottom: 1px solid var(--theme-border-primary) !important;
 }
 
 .feedback-container .mantine-Table-tr {
-  color: var(--mantine-color-text) !important;
+  color: var(--theme-text-primary) !important;
+  transition: background-color 0.2s ease;
 }
 
 .feedback-container .mantine-Table-tr:hover {
-  background-color: var(--mantine-color-gray-8) !important;
+  background-color: var(--theme-hover-bg) !important;
 }
 
 /* Глобальные стили для таблицы обратной связи */
 .feedback-container table th,
 .feedback-container table td {
-  color: var(--mantine-color-text) !important;
+  color: var(--theme-text-primary) !important;
 }
 
 .feedback-container table thead th {
-  color: var(--mantine-color-text) !important;
-  background-color: var(--mantine-color-body) !important;
+  color: var(--theme-text-primary) !important;
+  background-color: var(--theme-bg-elevated) !important;
+  font-weight: 600;
 }
 
 /* Фон для непрочитанных строк */

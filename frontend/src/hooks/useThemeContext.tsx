@@ -1,10 +1,17 @@
-import { ThemeContext } from "../contexts/ThemeContext";
-import { useContext } from "react";
+import { useTheme, ThemeColors } from "../contexts/ThemeContext";
 
 export function useThemeContext() {
-  const context = useContext(ThemeContext)
-  if (!context) {
-    throw Error('must be used inside ThemeContextProvider')
-  }
-  return context
+  return useTheme();
+}
+
+// Хук для удобного доступа к цветам темы
+export function useThemeColors(): ThemeColors {
+  const { colors } = useTheme();
+  return colors;
+}
+
+// Хук для получения предустановленных стилей
+export function useThemeStyles() {
+  const { styles } = useTheme();
+  return styles;
 }

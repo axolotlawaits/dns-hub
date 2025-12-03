@@ -355,7 +355,7 @@ export const updateCardImages = async (id: string, imageUrls: string[]): Promise
 };
 
 // Функция для добавления новых изображений к карточке
-export const addCardImages = async (id: string, images: File[]): Promise<CardItem> => {
+export const addCardImages = async (id: string, images: File[]): Promise<{ attachments: Array<{ id: string; source: string; type: string }> }> => {
   try {
     const url = `${API_BASE}/cards/${id}/images`;
 
@@ -370,11 +370,16 @@ export const addCardImages = async (id: string, images: File[]): Promise<CardIte
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP Error: ${response.status}`);
+      const errorText = await response.text();
+      throw new Error(`HTTP Error: ${response.status} - ${errorText}`);
     }
 
     const data = await handleResponse(response);
-    return data;
+    
+    // Возвращаем attachments для обновления состояния на фронтенде
+    return {
+      attachments: data.attachments || []
+    };
   } catch (error) {
     console.error('❌ Ошибка при добавлении изображений:', error);
     throw error;
@@ -730,12 +735,31 @@ export function useCardStore() {
       setLoading(true);
       setError(null);
       
-      const updatedCard = await addCardImages(id, images);
+      const result = await addCardImages(id, images);
       
-      // Обновляем карточку в состоянии
-      setCards(prev => prev.map(card => 
-        card.id === id ? updatedCard : card
-      ));
+      // Обновляем карточку в состоянии, добавляя новые attachments
+      let updatedCard: CardItem | undefined;
+      setCards(prev => prev.map(card => {
+        if (card.id === id) {
+          const newAttachments = result.attachments.map(att => ({
+            id: att.id,
+            source: att.source,
+            type: att.type
+          }));
+          updatedCard = {
+            ...card,
+            attachments: [...(card.attachments || []), ...newAttachments],
+            imageUrls: [
+              ...(card.imageUrls || []),
+              ...newAttachments.map(att => 
+                att.source.startsWith('http') ? att.source : `${API}/public/add/merch/${att.source}`
+              )
+            ]
+          };
+          return updatedCard;
+        }
+        return card;
+      }));
       
       return updatedCard;
     } catch (err) {

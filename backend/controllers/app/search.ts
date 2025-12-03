@@ -216,7 +216,17 @@ export const getAllGroups = async (req: Request, res: Response): Promise<any> =>
 }
 
 export const getAllPositions = async (req: Request, res: Response): Promise<any> => {
-  const positions = await prisma.position.findMany({include: { positionToolAccesses: true }})
+  const positions = await prisma.position.findMany({
+    include: { 
+      positionToolAccesses: true,
+      group: {
+        select: {
+          uuid: true,
+          name: true
+        }
+      }
+    }
+  })
   if (positions) {
     res.status(200).json(positions) 
   } else {

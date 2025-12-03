@@ -350,49 +350,74 @@ function FeedbackModule() {
   const availableTools = stats?.byTool ? Object.keys(stats.byTool) : [];
 
   return (
-    <Stack gap="md">
-      <Title order={2}>Обратная связь</Title>
+    <Box style={{ width: '100%', padding: 'var(--mantine-spacing-md)' }}>
+      <Stack gap="lg">
+        <Title order={2} c="var(--theme-text-primary)">Обратная связь</Title>
 
       {/* Статистика */}
       {stats && (
         <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
-          <Paper withBorder p="md" radius="md">
+          <Paper 
+            withBorder 
+            p="md" 
+            radius="md"
+            style={{
+              background: 'var(--theme-bg-elevated)',
+              borderColor: 'var(--theme-border-primary)'
+            }}
+          >
             <Group justify="space-between">
               <div>
-                <Text size="sm" c="dimmed" mb={4}>
+                <Text size="sm" c="var(--theme-text-secondary)" mb={4}>
                   Всего сообщений
                 </Text>
-                <Text size="xl" fw={700}>
+                <Text size="xl" fw={700} c="var(--theme-text-primary)">
                   {stats.total}
                 </Text>
               </div>
-              <IconMail size={32} color="var(--mantine-color-blue-6)" />
+              <IconMail size={32} color="var(--color-primary-500)" />
             </Group>
           </Paper>
-          <Paper withBorder p="md" radius="md">
+          <Paper 
+            withBorder 
+            p="md" 
+            radius="md"
+            style={{
+              background: 'var(--theme-bg-elevated)',
+              borderColor: 'var(--theme-border-primary)'
+            }}
+          >
             <Group justify="space-between">
               <div>
-                <Text size="sm" c="dimmed" mb={4}>
+                <Text size="sm" c="var(--theme-text-secondary)" mb={4}>
                   Непрочитанных
                 </Text>
-                <Text size="xl" fw={700} c="red">
+                <Text size="xl" fw={700} c="var(--color-red-500)">
                   {stats.unread}
                 </Text>
               </div>
-              <IconMail size={32} color="var(--mantine-color-red-6)" />
+              <IconMail size={32} color="var(--color-red-500)" />
             </Group>
           </Paper>
-          <Paper withBorder p="md" radius="md">
+          <Paper 
+            withBorder 
+            p="md" 
+            radius="md"
+            style={{
+              background: 'var(--theme-bg-elevated)',
+              borderColor: 'var(--theme-border-primary)'
+            }}
+          >
             <Group justify="space-between">
               <div>
-                <Text size="sm" c="dimmed" mb={4}>
+                <Text size="sm" c="var(--theme-text-secondary)" mb={4}>
                   Прочитанных
                 </Text>
-                <Text size="xl" fw={700} c="green">
+                <Text size="xl" fw={700} c="var(--color-green-500)">
                   {stats.read}
                 </Text>
               </div>
-              <IconMailOpened size={32} color="var(--mantine-color-green-6)" />
+              <IconMailOpened size={32} color="var(--color-green-500)" />
             </Group>
           </Paper>
         </SimpleGrid>
@@ -452,27 +477,35 @@ function FeedbackModule() {
       </Group>
 
       {/* Таблица */}
-      <Paper withBorder p="md" radius="md">
+      <Paper 
+        withBorder 
+        p="md" 
+        radius="md"
+        style={{
+          background: 'var(--theme-bg-elevated)',
+          borderColor: 'var(--theme-border-primary)'
+        }}
+      >
         <ScrollArea>
-          <Table>
+          <Table className="feedback-container">
             <Table.Thead>
               <Table.Tr>
-                <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Инструмент</Table.Th>
-                <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Пользователь</Table.Th>
-                <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Email</Table.Th>
-                <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Сообщение</Table.Th>
-                <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Фото</Table.Th>
-                <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Дата</Table.Th>
-                <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Приоритет</Table.Th>
-                <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Статус</Table.Th>
-                <Table.Th style={{ color: 'var(--mantine-color-text)' }}>Действия</Table.Th>
+                <Table.Th>Инструмент</Table.Th>
+                <Table.Th>Пользователь</Table.Th>
+                <Table.Th>Email</Table.Th>
+                <Table.Th>Сообщение</Table.Th>
+                <Table.Th>Фото</Table.Th>
+                <Table.Th>Дата</Table.Th>
+                <Table.Th>Приоритет</Table.Th>
+                <Table.Th>Статус</Table.Th>
+                <Table.Th>Действия</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
               {feedbacks.length === 0 ? (
                 <Table.Tr>
-                  <Table.Td colSpan={8}>
-                    <Text c="dimmed" ta="center" py="xl">
+                  <Table.Td colSpan={9}>
+                    <Text c="var(--theme-text-secondary)" ta="center" py="xl">
                       Нет обратной связи
                     </Text>
                   </Table.Td>
@@ -495,16 +528,16 @@ function FeedbackModule() {
                     <Table.Td>
                       <Group gap="xs">
                         <IconUser size={16} />
-                        <Text size="sm" fw={feedback.isRead ? 400 : 600} c="var(--mantine-color-text)">
+                        <Text size="sm" fw={feedback.isRead ? 400 : 600} c="var(--theme-text-primary)">
                           {getUserName(feedback)}
                         </Text>
                       </Group>
                     </Table.Td>
                     <Table.Td>
-                      <Text size="sm" c="var(--mantine-color-text)">{feedback.email}</Text>
+                      <Text size="sm" c="var(--theme-text-primary)">{feedback.email}</Text>
                     </Table.Td>
                     <Table.Td>
-                      <Text size="sm" c="var(--mantine-color-text)" lineClamp={2}>
+                      <Text size="sm" c="var(--theme-text-primary)" lineClamp={2}>
                         {feedback.text}
                       </Text>
                     </Table.Td>
@@ -520,7 +553,7 @@ function FeedbackModule() {
                     <Table.Td>
                       <Group gap="xs">
                         <IconCalendar size={14} />
-                        <Text size="sm" c="dimmed">
+                        <Text size="sm" c="var(--theme-text-secondary)">
                           {formatDate(feedback.createdAt)}
                         </Text>
                       </Group>
@@ -692,8 +725,9 @@ function FeedbackModule() {
                 withBorder 
                 radius="md" 
                 style={{ 
-                  backgroundColor: 'var(--mantine-color-body)',
-                  color: 'var(--mantine-color-text)'
+                  backgroundColor: 'var(--theme-bg-elevated)',
+                  borderColor: 'var(--theme-border-primary)',
+                  color: 'var(--theme-text-primary)'
                 }}
               >
                 <Text 
@@ -748,7 +782,8 @@ function FeedbackModule() {
           </Stack>
         )}
       </Modal>
-    </Stack>
+      </Stack>
+    </Box>
   );
 }
 
