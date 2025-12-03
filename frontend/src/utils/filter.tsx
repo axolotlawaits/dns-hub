@@ -105,6 +105,8 @@ export const Filter = ({
     ? (currentFilter as DateFilter)?.start || (currentFilter as DateFilter)?.end
     : filterType === 'time'
     ? (currentFilter as TimeFilter)?.from || (currentFilter as TimeFilter)?.to
+    : filterType === 'text'
+    ? (Array.isArray(currentFilter) && currentFilter.length > 0 && currentFilter[0]) || (typeof currentFilter === 'string' && currentFilter)
     : selectedValues.length > 0;
 
   const getFilterIcon = () => {
@@ -266,6 +268,39 @@ export const Filter = ({
             }}
             data-remaining={selectedValues.length > 2 ? `+${selectedValues.length - 2}` : ''}
             data-has-remaining={selectedValues.length > 2 ? 'true' : 'false'}
+          />
+        </Box>
+      );
+    case 'text':
+      const textValue = Array.isArray(currentFilter) && currentFilter.length > 0 
+        ? currentFilter[0] 
+        : (typeof currentFilter === 'string' ? currentFilter : '');
+      return (
+        <Box className={`filter-item ${hasActiveFilter ? 'filter-active' : ''}`}>
+          <Text className="filter-label">
+            {getFilterIcon()}
+            {label}
+          </Text>
+          <TextInput
+            placeholder={placeholder}
+            value={textValue}
+            onChange={(e) => {
+              const value = e.target.value;
+              // Сохраняем как массив для совместимости с FilterGroup
+              onFilterChange(value ? [value] : []);
+            }}
+            className="filter-input"
+            leftSection={getFilterIcon()}
+            rightSection={showClearButton && textValue ? (
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                color="gray"
+                onClick={handleClear}
+              >
+                <IconX size={12} />
+              </ActionIcon>
+            ) : null}
           />
         </Box>
       );     

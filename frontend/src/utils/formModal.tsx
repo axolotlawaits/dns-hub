@@ -1,4 +1,4 @@
-import { Modal, TextInput, Select, Button, Alert, Stack, Textarea, Text, Group, Card, Paper, ActionIcon, MultiSelect, Badge, Anchor } from '@mantine/core';
+import { Modal, TextInput, Select, Button, Alert, Stack, Textarea, Text, Group, Card, Paper, ActionIcon, MultiSelect, Badge, Anchor, Switch } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useState, useEffect, useCallback, useMemo, useRef, JSX, memo } from 'react';
 import dayjs from 'dayjs';
@@ -1444,7 +1444,20 @@ export const DynamicFormModal = ({
           </div>
         );
       case 'boolean':
-        return null;
+        return (
+          <Switch
+            key={field.name}
+            label={field.label}
+            checked={form.getInputProps(field.name, { type: 'checkbox' }).checked || false}
+            onChange={(e) => {
+              form.setFieldValue(field.name, e.currentTarget.checked);
+              field.onChange?.(e.currentTarget.checked, form.setFieldValue);
+            }}
+            required={field.required}
+            disabled={field.disabled}
+            mb={field.mb}
+          />
+        );
       default:
         return null;
     }

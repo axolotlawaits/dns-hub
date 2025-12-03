@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Tabs, Box, Card } from '@mantine/core';
-import { IconTerminal, IconMessageCircle, IconBug } from '@tabler/icons-react';
+import { IconTerminal, IconMessageCircle, IconBug, IconTags, IconMenu2 } from '@tabler/icons-react';
 import LogViewer from '../../components/LogViewer';
 import FeedbackModule from '../../features/Feedback/Feedback';
 import BugReports from '../../features/Retail/BugReports/BugReports';
+import TypesManagement from './components/TypesManagement';
+import NavigationManagement from './components/NavigationManagement';
 
 function AdminPanel() {
   const [activeTab, setActiveTab] = useState<string | null>('logs');
@@ -35,6 +37,18 @@ function AdminPanel() {
             >
               Отчеты об ошибках
             </Tabs.Tab>
+            <Tabs.Tab 
+              value="types" 
+              leftSection={<IconTags size={18} />}
+            >
+              Типы
+            </Tabs.Tab>
+            <Tabs.Tab 
+              value="navigation" 
+              leftSection={<IconMenu2 size={18} />}
+            >
+              Пункты меню
+            </Tabs.Tab>
           </Tabs.List>
         </Tabs>
       </Card>
@@ -49,6 +63,12 @@ function AdminPanel() {
           </Tabs.Panel>
           <Tabs.Panel value="bugreports">
             <BugReports />
+          </Tabs.Panel>
+          <Tabs.Panel value="types">
+            <TypesManagement />
+          </Tabs.Panel>
+          <Tabs.Panel value="navigation">
+            <NavigationManagement />
           </Tabs.Panel>
         </Tabs>
       </Box>
