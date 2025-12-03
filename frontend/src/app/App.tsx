@@ -42,7 +42,7 @@ import SupplyDocs from '../features/Accounting/SupplyDocs/SupplyDocs';
 import Roc from '../features/Accounting/Roc/Roc';
 import Media from '../features/Ad/Media/Media';
 import RK from '../features/Ad/RK/RK';
-import Merch from '../features/Ad/Merch/Merch';
+import Merch from '../features/Retail/Merch/Merch';
 import Retail from '../features/Retail/Retail';
 import PrintService from '../features/Retail/PrintService/PrintService';
 import { Scanner } from '../features/Scanner';
@@ -234,7 +234,7 @@ function App() {
                   <Route path="/aho/meter-reading" element={<MeterReading />} />
                   <Route path="/aho/correspondence" element={<Correspondence />} />
                   <Route path="/add/media" element={<Media />} />
-                  <Route path="/add/merch" element={<Merch />} />
+                  <Route path="/retail/merch" element={<Merch />} />
                   <Route path='/supply/loaders' element={<LoadersHome />} />
                   <Route path='/supply/loaders/route/:id' element={<RouteComponent />} />
                   <Route path='/retail/print-service' element={<PrintService />} />

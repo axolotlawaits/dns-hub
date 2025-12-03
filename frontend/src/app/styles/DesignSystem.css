@@ -414,6 +414,19 @@
   color: #ffffff !important;
 }
 
+/* Стили для плейсхолдера FileInput в темной теме */
+[data-mantine-color-scheme="dark"] .mantine-FileInput-placeholder,
+[data-mantine-color-scheme="dark"] .mantine-InputPlaceholder-placeholder,
+[data-mantine-color-scheme="dark"] .mantine-FileInput-input .mantine-InputPlaceholder-placeholder,
+[data-mantine-color-scheme="dark"] button.mantine-FileInput-input .mantine-InputPlaceholder-placeholder,
+[data-mantine-color-scheme="dark"] .mantine-FileInput-input span.mantine-InputPlaceholder-placeholder,
+[data-mantine-color-scheme="dark"] button.mantine-FileInput-input span.mantine-FileInput-placeholder,
+[data-mantine-color-scheme="dark"] button[data-variant="default"].mantine-FileInput-input .mantine-InputPlaceholder-placeholder,
+[data-mantine-color-scheme="dark"] button[data-variant="default"].mantine-FileInput-input .mantine-FileInput-placeholder {
+  color: #ffffff !important;
+  opacity: 0.7 !important;
+}
+
 /* Стили для лейблов полей ввода в темной теме */
 [data-mantine-color-scheme="dark"] .mantine-TextInput-label,
 [data-mantine-color-scheme="dark"] .mantine-Textarea-label,

@@ -98,16 +98,19 @@ export default function NewsList() {
 
   const handleCreateNews = async () => {
     try {
+      const token = localStorage.getItem('token');
       const response = await fetch(`${API}/news`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
         },
         body: JSON.stringify(newsForm),
       });
 
       if (!response.ok) {
-        throw new Error('Ошибка создания новости');
+        const errorText = await response.text();
+        throw new Error(`Ошибка создания новости: ${errorText}`);
       }
 
       const newNews = await response.json();
@@ -123,16 +126,19 @@ export default function NewsList() {
     if (!selectedNews) return;
 
     try {
+      const token = localStorage.getItem('token');
       const response = await fetch(`${API}/news/${selectedNews.id}`, {
-        method: 'PUT',
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
         },
         body: JSON.stringify(newsForm),
       });
 
       if (!response.ok) {
-        throw new Error('Ошибка обновления новости');
+        const errorText = await response.text();
+        throw new Error(`Ошибка обновления новости: ${errorText}`);
       }
 
       const updatedNews = await response.json();
@@ -149,12 +155,17 @@ export default function NewsList() {
     if (!selectedNews) return;
 
     try {
+      const token = localStorage.getItem('token');
       const response = await fetch(`${API}/news/${selectedNews.id}`, {
         method: 'DELETE',
+        headers: {
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
       });
 
       if (!response.ok) {
-        throw new Error('Ошибка удаления новости');
+        const errorText = await response.text();
+        throw new Error(`Ошибка удаления новости: ${errorText}`);
       }
 
       setNews(news.filter(n => n.id !== selectedNews.id));
