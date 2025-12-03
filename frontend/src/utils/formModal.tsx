@@ -1438,7 +1438,7 @@ export const DynamicFormModal = ({
               withDnd={field.withDnd}
               fileFields={field.fileFields || []}
               onMetaChange={handleMetaChangeFor(field.name)}
-              hidePreview={true}
+              hidePreview={false}
               accept={field.accept || "*"}
             />
           </div>
