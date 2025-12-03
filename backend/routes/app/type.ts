@@ -14,11 +14,13 @@ const router = express.Router();
 // Маршрут для всех элементов типов
 router.get('/', getTypes);
 
+// Маршрут для получения типов для модели
+// ВАЖНО: этот маршрут должен идти ДО `/:id`, иначе Express
+// будет интерпретировать `sub` как значение параметра `id`
+router.get('/sub', getTypesByModelUuid);
+
 // Маршрут для получения типа по ID
 router.get('/:id', getTypeById);
-
-// Маршрут для получения типов для модели
-router.get('/sub', getTypesByModelUuid);
 
 // Маршрут для создания типа
 router.post('/', createType);

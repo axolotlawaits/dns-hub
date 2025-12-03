@@ -1361,7 +1361,7 @@ class MerchBotService {
           feedback.step = 'text';
           await ctx.reply('📝 Теперь введите текст вашего сообщения:');
         } else {
-          await ctx.reply('❌ Неверный формат email. Пожалуйста, введите корректный email адрес:');
+          await ctx.reply('❌ Неверный формат email или email не является корпоративным. Пожалуйста, используйте корпоративный email (@dns-shop.ru или @dns-loc.ru):');
         }
         break;
         
@@ -1962,7 +1962,13 @@ class MerchBotService {
   // Вспомогательные методы
   private isValidEmail(email: string): boolean {
     const pattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    return pattern.test(email);
+    if (!pattern.test(email)) {
+      return false;
+    }
+    // Проверка на корпоративный домен
+    const emailLower = email.toLowerCase().trim();
+    const allowedDomains = ['@dns-shop.ru', '@dns-loc.ru'];
+    return allowedDomains.some(domain => emailLower.endsWith(domain));
   }
 
   private formatDescription(description: string): string {

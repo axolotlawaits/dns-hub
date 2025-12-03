@@ -141,11 +141,33 @@ function generateBasicHtml(subject: string, message: string, subtitle?: string):
   <body><div class="container"><table class="card" role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td class="header"><div class="title">${safeSubject}</div>${sub}</td></tr><tr><td class="content"><div style="font-size:14px;line-height:1.6">${safeMessage}</div></td></tr></table></div></body></html>`;
 }
 
+// Проверка корпоративного email
+function isCorporateEmail(email: string): boolean {
+  if (!email) return false;
+  const emailLower = email.toLowerCase().trim();
+  const allowedDomains = ['@dns-shop.ru', '@dns-loc.ru'];
+  return allowedDomains.some(domain => emailLower.endsWith(domain));
+}
+
 // Отправка уведомления
 async function send(notification: NotificationWithRelations): Promise<boolean> {
   if (!transporter || !notification.receiver?.email) {
     return false;
   }
+  
+  // Проверка на корпоративный email для уведомлений из merchbot
+  // Проверяем по имени инструмента или по link (если есть в metadata)
+  const toolName = notification.tool?.name?.toLowerCase() || '';
+  const toolLink = (notification.tool as any)?.link?.toLowerCase() || '';
+  const isMerchTool = toolName.includes('мерч') || toolName.includes('merch') || 
+                      toolLink.includes('merch') || toolLink.includes('retail/merch') || 
+                      toolLink.includes('ad/merch');
+  
+  if (isMerchTool && !isCorporateEmail(notification.receiver.email)) {
+    console.warn(`[EmailService] Skipping email to non-corporate address for merch tool: ${notification.receiver.email}`);
+    return false;
+  }
+  
   try {
     await transporter.sendMail({
       from: `"${notification.sender?.name ?? 'DNS Hub'}" <${process.env.EMAIL_USER}>`,
