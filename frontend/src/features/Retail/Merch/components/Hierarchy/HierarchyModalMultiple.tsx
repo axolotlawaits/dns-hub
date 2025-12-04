@@ -332,7 +332,7 @@ export function HierarchyEditModal({ item, onClose, onSuccess }: ItemModalProps)
         
         for (const attachmentId of deletedAttachmentIds) {
           try {
-            const response = await fetch(`${API}/add/merch/attachments/${attachmentId}`, {
+            const response = await fetch(`${API}/retail/merch/attachments/${attachmentId}`, {
               method: 'DELETE',
               headers,
             });

@@ -63,7 +63,7 @@ function Merch() {
     
     // Проверяем доступ через access context
     const merchAccess = access.find(tool => 
-      tool.link === 'retail/merch' || tool.link === '/retail/merch' || tool.link === 'add/merch' || tool.link === '/add/merch'
+      tool.link === 'retail/merch' || tool.link === '/retail/merch'
     );
     
     return merchAccess?.accessLevel === 'FULL';

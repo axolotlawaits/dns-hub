@@ -59,6 +59,7 @@ import AppStore from '../features/Retail/AppStore/AppStore';
 import FeedbackModule from '../features/Feedback/Feedback';
 import BugReports from '../features/Retail/BugReports/BugReports';
 import LogViewer from '../components/LogViewer';
+import AdminPanel from './profile/AdminPanel';
 import { useNotifications } from '../hooks/useNotifications';
 import { useEffect, useState } from 'react';
 import { API } from '../config/constants';
@@ -247,6 +248,13 @@ function App() {
                   <Route path='/retail/bug-reports' element={<BugReports />} />
                   <Route path='/logs' element={<LogViewer />} />
                   <Route path='/feedback' element={<FeedbackModule />} />
+                  {user.role === 'DEVELOPER' && (
+                    <>
+                      <Route path='/admin/branches' element={<AdminPanel initialTab="branches" />} />
+                      <Route path='/admin/users' element={<AdminPanel initialTab="users" />} />
+                      <Route path='/admin/system' element={<AdminPanel initialTab="system" />} />
+                    </>
+                  )}
                 </Route>
                 <Route path='/supply/loaders' element={<LoadersHome />} />
                 <Route path='/supply/loaders/route/:id' element={<RouteComponent />} />

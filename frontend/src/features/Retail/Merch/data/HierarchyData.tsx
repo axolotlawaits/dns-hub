@@ -19,8 +19,8 @@ export interface DataItem {
   }>;
 }
 
-// Базовый URL API
-const API_BASE = `${API}/add/merch`;
+// Базовый URL API (новый путь retail/merch)
+const API_BASE = `${API}/retail/merch`;
 
 // Вспомогательная функция для получения токена
 const getAuthToken = (): string | null => {

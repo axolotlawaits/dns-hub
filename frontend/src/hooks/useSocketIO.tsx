@@ -8,6 +8,7 @@ export const useSocketIO = () => {
   const socketRef = useRef<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [lastNotification, setLastNotification] = useState<any>(null);
+  const [systemMetrics, setSystemMetrics] = useState<any>(null);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -51,6 +52,11 @@ export const useSocketIO = () => {
         setLastNotification(message);
       });
 
+      socket.on('system_metrics', (metrics) => {
+        console.log('[Socket.IO] System metrics received:', metrics);
+        setSystemMetrics(metrics);
+      });
+
       socket.on('disconnect', (reason) => {
         console.log(`[Socket.IO] Disconnected: ${reason}`);
         setIsConnected(false);
@@ -84,5 +90,5 @@ export const useSocketIO = () => {
     };
   }, [user?.id]);
 
-  return { isConnected, lastNotification };
+  return { isConnected, lastNotification, systemMetrics };
 };

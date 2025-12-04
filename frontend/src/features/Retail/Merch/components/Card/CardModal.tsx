@@ -402,7 +402,7 @@ export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) 
   const [currentAttachments, setCurrentAttachments] = useState<Array<{ id: string; url: string }>>(
     (card.attachments || []).map(att => ({
       id: att.id,
-      url: att.source.startsWith('http') ? att.source : `${API}/public/add/merch/${att.source}`
+      url: att.source.startsWith('http') ? att.source : `${API}/public/retail/merch/${att.source}`
     }))
   );
   // Какие вложения пользователь пометил на удаление (по URL)
@@ -446,7 +446,7 @@ export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) 
     setCurrentImages(card.imageUrls || []);
     const normalizedAttachments = (card.attachments || []).map(att => ({
       id: att.id,
-      url: att.source.startsWith('http') ? att.source : `${API}/public/add/merch/${att.source}`
+      url: att.source.startsWith('http') ? att.source : `${API}/public/retail/merch/${att.source}`
     }));
     setCurrentAttachments(normalizedAttachments);
     initialAttachmentIdsRef.current = normalizedAttachments.map(att => att.id);
@@ -550,7 +550,7 @@ export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) 
         if (result.attachments && result.attachments.length > 0) {
           const newAttachments = result.attachments.map(att => ({
             id: att.id,
-            url: att.source.startsWith('http') ? att.source : `${API}/public/add/merch/${att.source}`
+            url: att.source.startsWith('http') ? att.source : `${API}/public/retail/merch/${att.source}`
           }));
           
           // Добавляем новые attachments к существующим
@@ -756,7 +756,7 @@ export function EditCardModal({ card, onSuccess, onClose }: EditCardModalProps) 
             name={name}
             description={description}
             images={[
-              ...currentImages.map(url => url.startsWith('http') ? url : `${API}/public/add/merch/${url}`),
+              ...currentImages.map(url => url.startsWith('http') ? url : `${API}/public/retail/merch/${url}`),
               ...previewUrls
             ]}
           />

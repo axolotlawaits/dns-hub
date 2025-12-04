@@ -151,7 +151,7 @@ function Card({ cardData, onEdit, onDelete, onToggleActive, searchQuery = '' }: 
       const source = attachment.source;
       const resolvedUrl = source.startsWith('http')
         ? source
-        : `${API}/public/add/merch/${source}`;
+        : `${API}/public/retail/merch/${source}`;
 
       const cleanPath = source.split('?')[0];
       const segments = cleanPath.split(/[\\\/]/);

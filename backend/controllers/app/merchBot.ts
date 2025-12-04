@@ -2078,20 +2078,32 @@ class MerchBotService {
       console.log(`📁 [getImageUrl] Извлечено имя файла из пути: ${imagePath} -> ${fileName}`);
     }
     
-    // Убираем префикс "public/add/merch/" если он есть
+    // Убираем префикс "public/retail/merch/" если он есть
+    if (fileName.startsWith('public/retail/merch/')) {
+      fileName = fileName.replace('public/retail/merch/', '');
+      console.log(`📁 [getImageUrl] Убран префикс public/retail/merch/: ${fileName}`);
+    }
+    
+    // Убираем старый префикс "public/add/merch/" если он есть (для совместимости)
     if (fileName.startsWith('public/add/merch/')) {
       fileName = fileName.replace('public/add/merch/', '');
       console.log(`📁 [getImageUrl] Убран префикс public/add/merch/: ${fileName}`);
     }
     
-    // Убираем префикс "add/merch/" если он есть
+    // Убираем префикс "retail/merch/" если он есть
+    if (fileName.startsWith('retail/merch/')) {
+      fileName = fileName.replace('retail/merch/', '');
+      console.log(`📁 [getImageUrl] Убран префикс retail/merch/: ${fileName}`);
+    }
+    
+    // Убираем старый префикс "add/merch/" если он есть (для совместимости)
     if (fileName.startsWith('add/merch/')) {
       fileName = fileName.replace('add/merch/', '');
       console.log(`📁 [getImageUrl] Убран префикс add/merch/: ${fileName}`);
     }
     
-    // Формируем правильный URL
-    const url = `${API}/public/add/merch/${fileName}`;
+    // Формируем правильный URL (новый путь retail/merch)
+    const url = `${API}/public/retail/merch/${fileName}`;
     console.log(`📁 [getImageUrl] Итоговый URL: ${url}`);
     return url;
   }

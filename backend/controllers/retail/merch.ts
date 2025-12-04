@@ -74,7 +74,7 @@ export const getMerchHierarchy = async (req: Request, res: Response, next: NextF
       // Формируем imageUrls из attachments
       const imageUrls = category.attachments
         .filter((att: any) => att.type === 'image')
-        .map((att: any) => `${API}/public/add/merch/${att.source}`);
+        .map((att: any) => `${API}/public/retail/merch/${att.source}`);
       
       return {
         id: category.id,
@@ -285,7 +285,7 @@ export const updateMerchCategory = [
         // Формируем imageUrls из attachments
         const imageUrls = categoryWithNewAttachments!.attachments
           .filter(att => att.type === 'image')
-          .map(att => `${API}/public/add/merch/${att.source}`);
+          .map(att => `${API}/public/retail/merch/${att.source}`);
         
         return res.json({
           id: categoryWithNewAttachments!.id,
@@ -308,7 +308,7 @@ export const updateMerchCategory = [
       // Формируем imageUrls из attachments
       const imageUrls = updatedCategory.attachments
         .filter(att => att.type === 'image')
-        .map(att => `${API}/public/add/merch/${att.source}`);
+        .map(att => `${API}/public/retail/merch/${att.source}`);
 
       return res.json({
         id: updatedCategory.id,
@@ -533,7 +533,7 @@ export const createMerchCard = [
 
       // Формируем imageUrls из attachments
       const imageUrls = newCard.attachments
-        .map(att => `${API}/public/add/merch/${att.source}`);
+        .map(att => `${API}/public/retail/merch/${att.source}`);
 
       // Обновляем кэш бота после создания карточки
       try {
@@ -609,7 +609,7 @@ export const getAllMerchCards = async (req: Request, res: Response, next: NextFu
 
         // Формируем imageUrls из attachments
         const imageUrls = card.attachments
-          .map(att => `${API}/public/add/merch/${att.source}`);
+          .map(att => `${API}/public/retail/merch/${att.source}`);
 
         return {
           id: card.id,
@@ -706,7 +706,7 @@ export const updateMerchCard = [
         
         const imageUrls = currentCard.attachments
           .filter(att => att.type === 'image')
-          .map(att => `${API}/public/add/merch/${att.source}`);
+          .map(att => `${API}/public/retail/merch/${att.source}`);
         
         return res.json({
           id: currentCard.id,
@@ -752,7 +752,7 @@ export const updateMerchCard = [
       // Формируем imageUrls из attachments
       const imageUrls = updatedCard.attachments
         .filter(att => att.type === 'image')
-        .map(att => `${API}/public/add/merch/${att.source}`);
+        .map(att => `${API}/public/retail/merch/${att.source}`);
 
       // Обновляем кэш бота после обновления карточки (если карточка активна)
       if (updatedCard.isActive) {
@@ -1205,7 +1205,7 @@ export const deleteMerchAttachment = async (req: Request, res: Response, next: N
 
       if (updatedCategory) {
         const imageAttachment = updatedCategory.attachments.find(att => att.type === 'image');
-        const imageUrl = imageAttachment ? `${API}/public/add/merch/${imageAttachment.source}` : null;
+        const imageUrl = imageAttachment ? `${API}/public/retail/merch/${imageAttachment.source}` : null;
 
         return res.json({
           message: 'Attachment успешно удален',

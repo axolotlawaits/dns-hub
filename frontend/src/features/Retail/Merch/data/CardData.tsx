@@ -124,7 +124,7 @@ export const fetchCardsByCategory = async (
       const cards: CardItem[] = data.map((item: any) => {
         // Используем imageUrls если они есть (полные URL), иначе формируем из attachments
         const imageUrls = item.imageUrls || (item.attachments || []).map((att: any) => 
-          att.source.startsWith('http') ? att.source : `${API}/public/add/merch/${att.source}`
+          att.source.startsWith('http') ? att.source : `${API}/public/retail/merch/${att.source}`
         );
         
         return {
@@ -219,7 +219,10 @@ export const createCard = async (cardData: {
   categoryId: string;
   isActive?: boolean;
   images?: File[];
-}): Promise<CardItem> => {
+}, retryCount: number = 0): Promise<CardItem> => {
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 2000; // 2 секунды
+
   try {
     const url = `${API_BASE}/cards`;
 
@@ -241,8 +244,38 @@ export const createCard = async (cardData: {
       body: formData,
     });
 
+    // Обработка ошибок с retry для 503 и других временных ошибок
     if (!response.ok) {
-      throw new Error(`HTTP Error: ${response.status}`);
+      const status = response.status;
+      
+      // Для временных ошибок (503, 502, 504) пробуем повторить запрос
+      if ((status === 503 || status === 502 || status === 504) && retryCount < MAX_RETRIES) {
+        console.warn(`⚠️ Временная ошибка ${status} при создании карточки. Попытка ${retryCount + 1}/${MAX_RETRIES}...`);
+        
+        // Ждем перед повторной попыткой с экспоненциальной задержкой
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (retryCount + 1)));
+        
+        // Повторяем запрос
+        return createCard(cardData, retryCount + 1);
+      }
+      
+      // Для других ошибок пытаемся получить текст ошибки
+      let errorMessage = `HTTP Error: ${status}`;
+      try {
+        const errorText = await response.text();
+        if (errorText) {
+          try {
+            const errorJson = JSON.parse(errorText);
+            errorMessage = errorJson.error || errorJson.message || errorMessage;
+          } catch {
+            errorMessage = errorText.substring(0, 200);
+          }
+        }
+      } catch (e) {
+        // Игнорируем ошибки при чтении ответа
+      }
+      
+      throw new Error(errorMessage);
     }
 
     const data = await handleResponse(response);
@@ -252,7 +285,8 @@ export const createCard = async (cardData: {
       id: data.id,
       name: data.name,
       description: data.description || '',
-      imageUrls: data.imageUrl ? [data.imageUrl] : [],
+      imageUrls: data.imageUrl ? [data.imageUrl] : (data.imageUrls || []),
+      attachments: data.attachments || [],
       isActive: data.isActive,
       categoryId: cardData.categoryId,
       category: {
@@ -266,6 +300,20 @@ export const createCard = async (cardData: {
     return card;
   } catch (error) {
     console.error('❌ Ошибка при создании карточки:', error);
+    
+    // Если это была последняя попытка, пробрасываем ошибку дальше
+    if (retryCount >= MAX_RETRIES) {
+      const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка при создании карточки';
+      throw new Error(errorMessage);
+    }
+    
+    // Для сетевых ошибок тоже пробуем повторить
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      console.warn(`⚠️ Сетевая ошибка при создании карточки. Попытка ${retryCount + 1}/${MAX_RETRIES}...`);
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (retryCount + 1)));
+      return createCard(cardData, retryCount + 1);
+    }
+    
     throw error;
   }
 };
@@ -302,7 +350,7 @@ export const updateCard = async (id: string, cardData: Partial<{
     // Преобразуем ответ в формат CardItem
     // Используем imageUrls если они есть (полные URL), иначе формируем из attachments
     const imageUrls = data.imageUrls || (data.attachments || []).map((att: any) => 
-      att.source.startsWith('http') ? att.source : `${API}/public/add/merch/${att.source}`
+      att.source.startsWith('http') ? att.source : `${API}/public/retail/merch/${att.source}`
     );
     
     const card: CardItem = {
@@ -456,7 +504,7 @@ export const moveCardToCategory = async (cardId: string, newCategoryId: string):
       name: data.card.name,
       description: data.card.description || '',
       imageUrls: data.card.attachments?.map((att: any) => 
-        att.source.startsWith('http') ? att.source : `${API}/public/add/merch/${att.source}`
+        att.source.startsWith('http') ? att.source : `${API}/public/retail/merch/${att.source}`
       ) || [],
       attachments: data.card.attachments || [],
       isActive: data.card.isActive,
@@ -539,7 +587,7 @@ export const toggleCardActive = async (id: string, isActive: boolean): Promise<C
     // Преобразуем ответ в формат CardItem
     // Используем imageUrls если они есть (полные URL), иначе формируем из attachments
     const imageUrls = data.imageUrls || (data.attachments || []).map((att: any) => 
-      att.source && att.source.startsWith('http') ? att.source : `${API}/public/add/merch/${att.source || ''}`
+      att.source && att.source.startsWith('http') ? att.source : `${API}/public/retail/merch/${att.source || ''}`
     ).filter((url: string) => url);
     
     const card: CardItem = {
@@ -574,6 +622,12 @@ export const deleteCard = async (id: string): Promise<void> => {
       method: 'DELETE',
     });
     
+    // Если карточка уже удалена на бэкенде, считаем операцию успешной
+    if (response.status === 404) {
+      console.warn(`⚠️ Карточка ${id} не найдена на сервере при удалении (404). Считаем, что она уже удалена.`);
+      return;
+    }
+
     if (!response.ok) {
       throw new Error(`HTTP Error: ${response.status}`);
     }
@@ -752,7 +806,7 @@ export function useCardStore() {
             imageUrls: [
               ...(card.imageUrls || []),
               ...newAttachments.map(att => 
-                att.source.startsWith('http') ? att.source : `${API}/public/add/merch/${att.source}`
+                att.source.startsWith('http') ? att.source : `${API}/public/retail/merch/${att.source}`
               )
             ]
           };

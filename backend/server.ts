@@ -30,12 +30,15 @@ import filialRouter from './routes/supply/filial.js'
 import mediaRouter from './routes/add/media.js'
 import rkRouter from './routes/add/rk.js'
 import sliderRouter from './routes/add/slider.js'
-import merchRouter from './routes/add/merch.js'
+import merchRouter from './routes/retail/merch.js'
 import printServiceRouter from './routes/retail/printService.js'
 import appStoreRouter from './routes/retail/appStore.js'
 import adminRouter from './routes/admin.js'
 import telegramRouter  from './routes/app/telegram.js'
 import bugReportsRouter from './routes/app/bugReports.js'
+import branchesRouter from './routes/admin/branches.js'
+import usersRouter from './routes/admin/users.js'
+import systemRouter from './routes/admin/system.js'
 
 import fs from 'fs'
 import cookieParser from 'cookie-parser'
@@ -87,7 +90,6 @@ const __dirname = path.resolve()
 app.set('trust proxy', true);
 
 const server = createServer(app);
-
 
 const socketService = SocketIOService.getInstance();
 socketService.initialize(server);
@@ -151,17 +153,17 @@ app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 app.use(express.json())
 app.use(cookieParser())
-app.use(express.static(path.join(__dirname, 'public')))
-
-app.use("/hub-api", express.static(__dirname))
-
-
 
 // Аутентификация
 app.use('/hub-api/user', userRouter)
 
 // Bug reports
 app.use('/hub-api/bug-reports', bugReportsRouter);
+
+// Admin routes (только для DEVELOPER)
+app.use('/hub-api/admin/branches', branchesRouter);
+app.use('/hub-api/admin/users', usersRouter);
+app.use('/hub-api/admin/system', systemRouter);
 
 // Остальные роуты
 app.use('/hub-api/access', accessRouter)
@@ -213,7 +215,6 @@ app.use('/hub-api/accounting/roc', rocRouter)
 app.use('/hub-api/add/media', mediaRouter)
 app.use('/hub-api/add/rk', rkRouter)
 app.use('/hub-api/add/sliders', sliderRouter)
-app.use('/hub-api/add/merch', merchRouter)
 app.use('/hub-api/retail/merch', merchRouter) // Дублируем маршрут для retail
 app.use('/hub-api/retail/print-service', printServiceRouter);
 app.use('/hub-api/retail/app-store', appStoreRouter);
@@ -283,6 +284,12 @@ app.use('/hub-api/loaders/routeDay', routeDayRouter)
 app.use('/hub-api/loaders/filial', filialRouter)
 
 app.post('/hub-api/refresh-token', refreshToken)
+
+// Статические файлы должны быть ПОСЛЕ всех роутов, чтобы не перехватывать API запросы
+// Доступ к файлам по пути /hub-api/public/...
+app.use('/hub-api/public', express.static(path.join(__dirname, 'public')))
+// И прямой доступ по /public/... (для совместимости)
+app.use('/public', express.static(path.join(__dirname, 'public')))
 
 console.log('🚀 Server starting...');
 
@@ -385,7 +392,7 @@ server.listen(port, async function() {
             console.error('  - Неверный формат токена');
             console.error('  - Отсутствует MERCH_BOT_TOKEN');
             console.error('  - Отсутствует MERCH_BOT_NAME');
-            console.error('❌ [Server] Бот не будет запущен автоматически. Используйте /hub-api/add/merch/bot-start для ручного запуска');
+            console.error('❌ [Server] Бот не будет запущен автоматически. Используйте /hub-api/retail/merch/bot-start для ручного запуска');
             return;
           }
           
@@ -406,7 +413,7 @@ server.listen(port, async function() {
             console.error('  - Ошибка подключения к Telegram API');
             console.error('  - Неверный токен');
             console.error('  - Конфликт с другим экземпляром бота');
-            console.error('❌ [Server] Бот не запущен. Используйте /hub-api/add/merch/bot-start для повторной попытки');
+            console.error('❌ [Server] Бот не запущен. Используйте /hub-api/retail/merch/bot-start для повторной попытки');
             
             // В продакшене логируем более детально
             if (process.env.NODE_ENV === 'production') {
@@ -423,7 +430,7 @@ server.listen(port, async function() {
             // В продакшене логируем более детально
             if (process.env.NODE_ENV === 'production') {
               console.error('⚠️ [Server] PRODUCTION: Ошибка при попытке запустить Merch bot');
-              console.error('⚠️ [Server] Используйте /hub-api/add/merch/bot-start для ручного запуска');
+              console.error('⚠️ [Server] Используйте /hub-api/retail/merch/bot-start для ручного запуска');
             }
           }
         }

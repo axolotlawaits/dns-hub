@@ -962,7 +962,7 @@ export function HierarchySortModal({ onClose, onSuccess }: HierarchySortModalPro
       headers['Authorization'] = `Bearer ${token}`;
     }
     
-    const response = await fetch(`${API}/add/merch/categories/${categoryId}/parent`, {
+    const response = await fetch(`${API}/retail/merch/categories/${categoryId}/parent`, {
       method: 'PATCH',
       headers,
       body: JSON.stringify({ parentId: newParentId })

@@ -3,8 +3,8 @@ import path from 'path';
 import fs from 'fs';
 import { decodeRussianFileName } from '../utils/format.js';
 
-// Создаем директорию для мерч-файлов, если её нет
-const merchUploadDir = path.join(process.cwd(), 'public', 'add', 'merch');
+// Создаем директорию для мерч-файлов (новый путь retail/merch), если её нет
+const merchUploadDir = path.join(process.cwd(), 'public', 'retail', 'merch');
 if (!fs.existsSync(merchUploadDir)) {
   fs.mkdirSync(merchUploadDir, { recursive: true });
 }

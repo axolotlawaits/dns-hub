@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Container,
   Paper,
   Title,
   Text,
@@ -37,6 +36,7 @@ import {
 } from '@tabler/icons-react';
 import { CardListSkeleton, StatsSkeleton } from '../../../components/LoadingStates';
 import useAuthFetch from '../../../hooks/useAuthFetch';
+import { API } from '../../../config/constants';
 
 interface BugReport {
   id: string;
@@ -124,7 +124,7 @@ const BugReports: React.FC = () => {
         ...Object.fromEntries(Object.entries(filters).filter(([_, value]) => value))
       });
 
-      const response = await authFetch(`/hub-api/bug-reports?${params}`);
+      const response = await authFetch(`${API}/bug-reports?${params}`);
       if (response && response.ok) {
         const data = await response.json();
         setBugReports(data.data);
@@ -140,7 +140,7 @@ const BugReports: React.FC = () => {
   // Загрузка статистики
   const fetchStatistics = async () => {
     try {
-      const response = await authFetch('/hub-api/bug-reports/statistics?days=7');
+      const response = await authFetch(`${API}/bug-reports/statistics?days=7`);
       if (response && response.ok) {
         const data = await response.json();
         setStatistics(data.data);
@@ -182,7 +182,7 @@ const BugReports: React.FC = () => {
     if (!selectedReport) return;
 
     try {
-      const response = await authFetch('/hub-api/bug-reports/resolve', {
+      const response = await authFetch(`${API}/bug-reports/resolve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

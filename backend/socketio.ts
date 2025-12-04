@@ -296,6 +296,28 @@ export class SocketIOService {
     return success;
   }
 
+  // Отправка метрик системы всем подключенным DEVELOPER пользователям
+  public broadcastSystemMetrics(metrics: any): void {
+    if (!this.io) return;
+    
+    // Отправляем метрики всем подключенным DEVELOPER пользователям
+    const developerUserIds = Array.from(this.userToSockets.keys());
+    
+    developerUserIds.forEach(userId => {
+      const conns = this.getUserConnections(userId);
+      conns.forEach(conn => {
+        try {
+          this.io?.to(conn.socketId).emit('system_metrics', {
+            ...metrics,
+            timestamp: Date.now()
+          });
+        } catch (err) {
+          console.error(`[Socket.IO] Error broadcasting metrics to user ${userId}:`, err);
+        }
+      });
+    });
+  }
+
   public getConnectedUsers(): string[] {
     return Array.from(this.userToSockets.keys());
   }

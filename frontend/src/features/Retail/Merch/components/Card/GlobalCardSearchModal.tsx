@@ -210,7 +210,7 @@ export function GlobalCardSearchModal({ onClose }: GlobalCardSearchModalProps) {
                   const firstImage = card.imageUrls?.[0];
                   const imageUrl = firstImage?.startsWith('http') 
                     ? firstImage 
-                    : `${API}/public/add/merch/${firstImage || ''}`;
+                    : `${API}/public/retail/merch/${firstImage || ''}`;
                   
                   return (
                     <Paper

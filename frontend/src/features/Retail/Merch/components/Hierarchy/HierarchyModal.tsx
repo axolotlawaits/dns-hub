@@ -278,7 +278,7 @@ export function HierarchyEditModal({ item, onClose, onSuccess }: ItemModalProps)
           <Text size="sm" mb="xs">Текущее изображение:</Text>
           <Group>
             <Image
-              src={currentImageUrl.startsWith('http') ? currentImageUrl : `${API}/public/add/merch/${currentImageUrl}`}
+              src={currentImageUrl.startsWith('http') ? currentImageUrl : `${API}/public/retail/merch/${currentImageUrl}`}
               alt="Current"
               style={{ maxWidth: 200, maxHeight: 200 }}
               fit="cover"

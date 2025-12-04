@@ -747,10 +747,10 @@ function FeedbackModule() {
                   {selectedFeedback.photos.map((photo, index) => {
                     let photoPath: string;
                     if (selectedFeedback.tool === 'merch') {
-                      // Для merch бота фото могут быть в разных местах
+                      // Для merch бота фото теперь в public/retail/merch (старые add/merch обрабатывает бэкенд)
                       photoPath = photo.startsWith('http') 
                         ? photo 
-                        : `${API}/public/add/merch/${photo}`;
+                        : `${API}/public/retail/merch/${photo}`;
                     } else {
                       // Для остальных инструментов фото в public/feedback/
                       photoPath = photo.startsWith('http') 

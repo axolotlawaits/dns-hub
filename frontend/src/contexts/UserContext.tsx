@@ -112,9 +112,11 @@ export const UserContextProvider = ({ children }: Props) => {
       const newToken = await response.json(); // Backend возвращает токен напрямую
       setToken(newToken);
       localStorage.setItem('token', newToken);
+      return newToken;
     } else {
-      // Если refresh не удался, делаем logout
+      // Если refresh не удался, делаем logout и выбрасываем ошибку
       logout();
+      throw new Error('Failed to refresh token');
     }
   };
 

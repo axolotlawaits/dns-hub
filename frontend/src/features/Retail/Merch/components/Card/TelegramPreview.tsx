@@ -21,7 +21,7 @@ export function TelegramPreview({ name, description, images }: TelegramPreviewPr
       return blobUrl;
     }
     if (typeof img === 'string') {
-      return img.startsWith('http') ? img : `${API}/public/add/merch/${img}`;
+      return img.startsWith('http') ? img : `${API}/public/retail/merch/${img}`;
     }
     return '';
   }).filter(Boolean);

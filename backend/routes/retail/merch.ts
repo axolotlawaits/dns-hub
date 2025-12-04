@@ -16,7 +16,7 @@ import {
   updateCategoriesOrder,
   updateCategoryParent,
   moveCardToCategory
-} from '../../controllers/add/merch.js';
+} from '../../controllers/retail/merch.js';
 import { authenticateToken } from '../../middleware/auth.js';
 import { merchBotService } from '../../controllers/app/merchBot.js';
 import { prisma, API } from '../../server.js';
@@ -69,7 +69,7 @@ router.get('/bot-status', async (req: any, res: any) => {
 // Обработчик для запуска бота (поддерживает и GET, и POST для удобства)
 const handleBotStart = async (req: any, res: any) => {
   try {
-    console.log(`🚀 [Routes] ${req.method} /add/merch/bot-start - Запрос получен`);
+    console.log(`🚀 [Routes] ${req.method} /retail/merch/bot-start - Запрос получен`);
     console.log('🚀 [Routes] Method:', req.method);
     console.log('🚀 [Routes] Path:', req.path);
     console.log('🚀 [Routes] Original URL:', req.originalUrl);
@@ -170,7 +170,7 @@ router.post('/bot-start', handleBotStart);
 
 router.post('/bot-stop', async (req: any, res: any) => {
   try {
-    console.log('🛑 [Routes] Остановка Merch бота через /add/merch/bot-stop...');
+    console.log('🛑 [Routes] Остановка Merch бота через /retail/merch/bot-stop...');
     // merchBotService уже импортирован статически сверху
     await merchBotService.stop();
     
@@ -187,7 +187,7 @@ router.post('/bot-stop', async (req: any, res: any) => {
 
 router.post('/bot-restart', async (req: any, res: any) => {
   try {
-    console.log('🔄 [Routes] Перезапуск Merch бота через /add/merch/bot-restart...');
+    console.log('🔄 [Routes] Перезапуск Merch бота через /retail/merch/bot-restart...');
     // merchBotService уже импортирован статически сверху
     const success = await merchBotService.restart();
     
@@ -389,7 +389,7 @@ router.delete('/cards/:id/images', authenticateToken, async (req: any, res: any,
       return res.status(404).json({ error: 'Карточка не найдена' });
     }
 
-    const imageUrls = updatedCard.attachments.map(att => `${API}/public/add/merch/${att.source}`);
+    const imageUrls = updatedCard.attachments.map(att => `${API}/public/retail/merch/${att.source}`);
 
     return res.json({
       id: updatedCard.id,
@@ -488,7 +488,7 @@ router.delete('/categories/:id/image', authenticateToken, async (req: any, res: 
     }
 
     const imageAttachment = updatedCategory.attachments.find(att => att.type === 'image');
-    const imageUrl = imageAttachment ? `${API}/public/add/merch/${imageAttachment.source}` : null;
+    const imageUrl = imageAttachment ? `${API}/public/retail/merch/${imageAttachment.source}` : null;
 
     return res.json({
       id: updatedCategory.id,
