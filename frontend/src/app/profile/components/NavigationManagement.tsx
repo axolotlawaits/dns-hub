@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ColumnFiltersState } from '@tanstack/react-table';
 import {
   Container,
@@ -13,10 +13,13 @@ import {
   Badge,
   Stack,
   Alert,
-  Pagination,
-  Text
+  Text,
+  Grid,
+  ScrollArea,
+  Divider,
+  Box
 } from '@mantine/core';
-import { IconEdit, IconTrash, IconPlus, IconAlertCircle } from '@tabler/icons-react';
+import { IconEdit, IconTrash, IconPlus, IconAlertCircle, IconMenu2, IconChevronRight } from '@tabler/icons-react';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { FilterGroup } from '../../../utils/filter';
 import useAuthFetch from '../../../hooks/useAuthFetch';
@@ -44,10 +47,9 @@ export default function NavigationManagement() {
   const [modalOpened, setModalOpened] = useState(false);
   const [deleteModalOpened, setDeleteModalOpened] = useState(false);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [selectedRootItem, setSelectedRootItem] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const itemsPerPage = 20;
 
   const authFetch = useAuthFetch();
 
@@ -216,65 +218,6 @@ export default function NavigationManagement() {
     included: selectedItem.included,
   } : undefined, [selectedItem]);
 
-  // Получаем значения фильтров
-  const parentFilter = columnFilters.find(f => f.id === 'parent')?.value as string[] || [];
-  const includedFilter = columnFilters.find(f => f.id === 'included')?.value as string[] || [];
-  const nameFilter = columnFilters.find(f => f.id === 'name')?.value as string[] || [];
-
-  // Фильтрация пунктов меню
-  const filteredItems = menuItems.filter(item => {
-    if (parentFilter.length > 0) {
-      const hasRoot = parentFilter.includes('root');
-      const hasParent = parentFilter.some(p => p !== 'root' && p === item.parent_id);
-      if (!hasRoot && !hasParent) return false;
-      if (hasRoot && item.parent_id !== null && !hasParent) return false;
-      if (!hasRoot && item.parent_id !== parentFilter.find(p => p !== 'root')) return false;
-    }
-    if (includedFilter.length > 0) {
-      const included = includedFilter.includes('true');
-      const excluded = includedFilter.includes('false');
-      if (included && !excluded && !item.included) return false;
-      if (excluded && !included && item.included) return false;
-    }
-    // Для text фильтров берем первый элемент массива (текст поиска)
-    const nameSearch = nameFilter.length > 0 ? nameFilter[0].toLowerCase() : '';
-    if (nameSearch && !item.name.toLowerCase().includes(nameSearch)) return false;
-    return true;
-  });
-
-  // Сортировка: сначала по parent_id (null в начале), потом по order, потом по названию
-  const sortedItems = [...filteredItems].sort((a, b) => {
-    // Сначала сортируем по наличию parent_id (корневые элементы первыми)
-    if (a.parent_id === null && b.parent_id !== null) return -1;
-    if (a.parent_id !== null && b.parent_id === null) return 1;
-    
-    // Если оба имеют parent_id или оба не имеют, сортируем по parent_id
-    if (a.parent_id !== b.parent_id) {
-      if (a.parent_id === null || b.parent_id === null) return 0;
-      return a.parent_id.localeCompare(b.parent_id);
-    }
-    
-    // Затем по order
-    if (a.order !== b.order) {
-      return a.order - b.order;
-    }
-    
-    // И наконец по названию
-    return a.name.localeCompare(b.name);
-  });
-
-  const paginatedItems = sortedItems.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
-  const totalPages = Math.ceil(sortedItems.length / itemsPerPage);
-
-  const getParentName = (parentId: string | null) => {
-    if (!parentId) return 'Корневой';
-    const parent = menuItems.find(item => item.id === parentId);
-    return parent?.name || 'Неизвестно';
-  };
-
   const handleColumnFiltersChange = (columnId: string, value: any) => {
     setColumnFilters(prev => {
       const filtered = prev.filter(f => f.id !== columnId);
@@ -283,11 +226,69 @@ export default function NavigationManagement() {
       }
       return filtered;
     });
-    setCurrentPage(1);
   };
 
+  // Получаем значения фильтров
+  const includedFilter = columnFilters.find(f => f.id === 'included')?.value as string[] || [];
+  const nameFilter = columnFilters.find(f => f.id === 'name')?.value as string[] || [];
+
+  // Функция для применения фильтров (мемоизирована)
+  const applyFilters = useCallback((items: MenuItem[]) => {
+    return items.filter(item => {
+      // Фильтр по статусу
+      if (includedFilter.length > 0) {
+        const included = includedFilter.includes('true');
+        const excluded = includedFilter.includes('false');
+        if (included && !excluded && !item.included) return false;
+        if (excluded && !included && item.included) return false;
+      }
+      // Фильтр по названию
+      const nameSearch = nameFilter.length > 0 ? nameFilter[0].toLowerCase() : '';
+      if (nameSearch && !item.name.toLowerCase().includes(nameSearch)) return false;
+      return true;
+    });
+  }, [includedFilter, nameFilter]);
+
+  // Получаем только корневые элементы для левой колонки (без иерархии)
+  const rootItemsForLeftColumn = useMemo(() => {
+    const filtered = menuItems.filter(item => item.parent_id === null);
+    return applyFilters(filtered)
+      .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+  }, [menuItems, applyFilters]);
+
   // Получаем уникальные родительские элементы для фильтра
-  const rootItems = menuItems.filter(item => item.parent_id === null);
+  const rootItems = useMemo(() => {
+    const filtered = menuItems.filter(item => item.parent_id === null);
+    return applyFilters(filtered)
+      .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+  }, [menuItems, includedFilter, nameFilter]);
+
+  // Получаем дочерние элементы выбранного корневого пункта с иерархией
+  const childItems = useMemo(() => {
+    if (!selectedRootItem) return [];
+    
+    // Рекурсивная функция для построения дерева дочерних элементов
+    const buildChildTree = (parentId: string, level: number = 0): Array<MenuItem & { level: number }> => {
+      const children = menuItems
+        .filter(item => item.parent_id === parentId)
+        .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+      
+      const result: Array<MenuItem & { level: number }> = [];
+      
+      for (const child of children) {
+        if (applyFilters([child]).length > 0) {
+          result.push({ ...child, level });
+          // Рекурсивно получаем дочерние элементы
+          const grandchildren = buildChildTree(child.id, level + 1);
+          result.push(...grandchildren);
+        }
+      }
+      
+      return result;
+    };
+    
+    return buildChildTree(selectedRootItem, 0);
+  }, [menuItems, selectedRootItem, includedFilter, nameFilter]);
 
   const filterConfig = useMemo(() => [
     {
@@ -335,95 +336,228 @@ export default function NavigationManagement() {
         )}
 
         {/* Фильтры */}
+        <FilterGroup
+          filters={filterConfig}
+          columnFilters={columnFilters}
+          onColumnFiltersChange={handleColumnFiltersChange}
+        />
 
-          <FilterGroup
-            filters={filterConfig}
-            columnFilters={columnFilters}
-            onColumnFiltersChange={handleColumnFiltersChange}
-          />
-
-
-        <Paper shadow="sm" p="md" radius="md" withBorder>
-          {loading ? (
-            <Text>Загрузка...</Text>
-          ) : (
-            <>
-              {sortedItems.length === 0 ? (
-                <Text c="dimmed" ta="center" py="xl">
-                  {columnFilters.length > 0 ? 'Нет результатов по заданным фильтрам' : 'Нет пунктов меню'}
-                </Text>
-              ) : (
-                <>
-                  <Table striped highlightOnHover>
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th>Название</Table.Th>
-                    <Table.Th>Иконка</Table.Th>
-                    <Table.Th>Ссылка</Table.Th>
-                    <Table.Th>Родитель</Table.Th>
-                    <Table.Th>Порядок</Table.Th>
-                    <Table.Th>Статус</Table.Th>
-                    <Table.Th>Действия</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {paginatedItems.map((item) => (
-                    <Table.Tr key={item.id}>
-                      <Table.Td>{item.name}</Table.Td>
-                      <Table.Td>
-                        <Text size="sm" c="dimmed">{item.icon}</Text>
-                      </Table.Td>
-                      <Table.Td>
-                        <Text size="sm" c="dimmed">{item.link}</Text>
-                      </Table.Td>
-                      <Table.Td>{getParentName(item.parent_id)}</Table.Td>
-                      <Table.Td>{item.order}</Table.Td>
-                      <Table.Td>
-                        <Badge color={item.included ? 'green' : 'gray'}>
-                          {item.included ? 'Включен' : 'Скрыт'}
-                        </Badge>
-                      </Table.Td>
-                      <Table.Td>
-                        <Group gap="xs">
-                          <Tooltip label="Редактировать">
-                            <ActionIcon
-                              variant="light"
-                              color="blue"
-                              onClick={() => handleEdit(item)}
+        {/* Две колонки: корневые и дочерние */}
+        <Grid gutter="md">
+          {/* Левая колонка: Все пункты с иерархией */}
+          <Grid.Col span={4}>
+            <Paper shadow="sm" p="md" radius="md" withBorder h="calc(100vh - 300px)">
+              <Stack gap="md" h="100%">
+                <Group justify="space-between">
+                  <Title order={4}>Корневые пункты</Title>
+                  <Badge variant="light">{rootItemsForLeftColumn.length}</Badge>
+                </Group>
+                {loading ? (
+                  <Text c="dimmed">Загрузка...</Text>
+                ) : (
+                  <ScrollArea h="100%">
+                    {rootItemsForLeftColumn.length === 0 ? (
+                      <Text c="dimmed" ta="center" py="xl">
+                        Нет корневых пунктов
+                      </Text>
+                    ) : (
+                      <Table striped highlightOnHover>
+                        <Table.Tbody>
+                          {rootItemsForLeftColumn.map((item) => (
+                            <Table.Tr
+                              key={item.id}
+                              style={{
+                                cursor: 'pointer',
+                                backgroundColor: selectedRootItem === item.id
+                                  ? 'var(--theme-bg-secondary)'
+                                  : undefined,
+                              }}
+                              onClick={() => setSelectedRootItem(item.id)}
                             >
-                              <IconEdit size={18} />
-                            </ActionIcon>
-                          </Tooltip>
-                          <Tooltip label="Удалить">
-                            <ActionIcon
-                              variant="light"
-                              color="red"
-                              onClick={() => handleDelete(item)}
-                            >
-                              <IconTrash size={18} />
-                            </ActionIcon>
-                          </Tooltip>
-                        </Group>
-                      </Table.Td>
-                    </Table.Tr>
-                  ))}
-                </Table.Tbody>
-              </Table>
+                              <Table.Td>
+                                <Group gap="xs">
+                                  <IconMenu2 size={16} />
+                                  <Text fw={selectedRootItem === item.id ? 600 : 400}>
+                                    {item.name}
+                                  </Text>
+                                </Group>
+                              </Table.Td>
+                              <Table.Td>
+                                <Badge color={item.included ? 'green' : 'gray'} size="sm">
+                                  {item.included ? 'Вкл' : 'Скрыт'}
+                                </Badge>
+                              </Table.Td>
+                              <Table.Td>
+                                <Group gap="xs">
+                                  <Tooltip label="Редактировать">
+                                    <ActionIcon
+                                      variant="subtle"
+                                      color="blue"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleEdit(item);
+                                      }}
+                                    >
+                                      <IconEdit size={16} />
+                                    </ActionIcon>
+                                  </Tooltip>
+                                  <Tooltip label="Удалить">
+                                    <ActionIcon
+                                      variant="subtle"
+                                      color="red"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDelete(item);
+                                      }}
+                                    >
+                                      <IconTrash size={16} />
+                                    </ActionIcon>
+                                  </Tooltip>
+                                </Group>
+                              </Table.Td>
+                            </Table.Tr>
+                          ))}
+                        </Table.Tbody>
+                      </Table>
+                    )}
+                  </ScrollArea>
+                )}
+              </Stack>
+            </Paper>
+          </Grid.Col>
 
-                  {totalPages > 1 && (
-                    <Group justify="center" mt="md">
-                      <Pagination
-                        value={currentPage}
-                        onChange={setCurrentPage}
-                        total={totalPages}
-                      />
-                    </Group>
+          {/* Разделитель */}
+          <Grid.Col span={0.5}>
+            <Divider orientation="vertical" />
+          </Grid.Col>
+
+          {/* Правая колонка: Дочерние пункты */}
+          <Grid.Col span={7.5}>
+            <Paper shadow="sm" p="md" radius="md" withBorder h="calc(100vh - 300px)">
+              <Stack gap="md" h="100%">
+                <Group justify="space-between">
+                  <Title order={4}>
+                    Дочерние пункты
+                    {selectedRootItem && (
+                      <Text span c="dimmed" size="sm" fw={400}>
+                        {' '}({rootItems.find(r => r.id === selectedRootItem)?.name || ''})
+                      </Text>
+                    )}
+                  </Title>
+                  {childItems.length > 0 && (
+                    <Badge variant="light">{childItems.length}</Badge>
                   )}
-                </>
-              )}
-            </>
-          )}
-        </Paper>
+                </Group>
+                {loading ? (
+                  <Text c="dimmed">Загрузка...</Text>
+                ) : !selectedRootItem ? (
+                  <Box
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      height: '100%',
+                      flexDirection: 'column',
+                      gap: 16,
+                    }}
+                  >
+                    <IconMenu2 size={48} color="var(--mantine-color-gray-4)" />
+                    <Text c="dimmed" size="lg">
+                      Выберите корневой пункт слева для просмотра дочерних элементов
+                    </Text>
+                  </Box>
+                ) : childItems.length === 0 ? (
+                  <Box
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      height: '100%',
+                      flexDirection: 'column',
+                      gap: 16,
+                    }}
+                  >
+                    <IconMenu2 size={48} color="var(--mantine-color-gray-4)" />
+                    <Text c="dimmed">У этого пункта нет дочерних элементов</Text>
+                  </Box>
+                ) : (
+                  <ScrollArea h="100%">
+                    <Table striped highlightOnHover>
+                      <Table.Thead>
+                        <Table.Tr>
+                          <Table.Th>Название</Table.Th>
+                          <Table.Th>Иконка</Table.Th>
+                          <Table.Th>Ссылка</Table.Th>
+                          <Table.Th>Порядок</Table.Th>
+                          <Table.Th>Статус</Table.Th>
+                          <Table.Th>Действия</Table.Th>
+                        </Table.Tr>
+                      </Table.Thead>
+                      <Table.Tbody>
+                        {childItems.map((item) => (
+                          <Table.Tr key={item.id}>
+                            <Table.Td>
+                              <Group gap="xs" style={{ paddingLeft: `${item.level * 20}px` }}>
+                                {item.level > 0 && (
+                                  <IconChevronRight 
+                                    size={14} 
+                                    style={{ 
+                                      opacity: 0.4,
+                                      marginRight: '4px'
+                                    }} 
+                                  />
+                                )}
+                                <Text fw={item.level === 0 ? 500 : 400}>
+                                  {item.name}
+                                </Text>
+                              </Group>
+                            </Table.Td>
+                            <Table.Td>
+                              <Text size="sm" c="dimmed">{item.icon}</Text>
+                            </Table.Td>
+                            <Table.Td>
+                              <Text size="sm" c="dimmed">{item.link}</Text>
+                            </Table.Td>
+                            <Table.Td>{item.order}</Table.Td>
+                            <Table.Td>
+                              <Badge color={item.included ? 'green' : 'gray'}>
+                                {item.included ? 'Включен' : 'Скрыт'}
+                              </Badge>
+                            </Table.Td>
+                            <Table.Td>
+                              <Group gap="xs">
+                                <Tooltip label="Редактировать">
+                                  <ActionIcon
+                                    variant="light"
+                                    color="blue"
+                                    onClick={() => handleEdit(item)}
+                                  >
+                                    <IconEdit size={18} />
+                                  </ActionIcon>
+                                </Tooltip>
+                                <Tooltip label="Удалить">
+                                  <ActionIcon
+                                    variant="light"
+                                    color="red"
+                                    onClick={() => handleDelete(item)}
+                                  >
+                                    <IconTrash size={18} />
+                                  </ActionIcon>
+                                </Tooltip>
+                              </Group>
+                            </Table.Td>
+                          </Table.Tr>
+                        ))}
+                      </Table.Tbody>
+                    </Table>
+                  </ScrollArea>
+                )}
+              </Stack>
+            </Paper>
+          </Grid.Col>
+        </Grid>
 
         <DynamicFormModal
           opened={modalOpened}

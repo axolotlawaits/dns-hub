@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import React from 'react';
 import { ColumnFiltersState } from '@tanstack/react-table';
 import {
   Container,
@@ -13,10 +14,13 @@ import {
   Badge,
   Stack,
   Alert,
-  Pagination,
-  Text
+  Text,
+  Grid,
+  ScrollArea,
+  Divider,
+  Box
 } from '@mantine/core';
-import { IconEdit, IconTrash, IconPlus, IconAlertCircle } from '@tabler/icons-react';
+import { IconEdit, IconTrash, IconPlus, IconAlertCircle, IconTags, IconFolder, IconChevronRight, IconChevronDown } from '@tabler/icons-react';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { FilterGroup } from '../../../utils/filter';
 import useAuthFetch from '../../../hooks/useAuthFetch';
@@ -46,10 +50,11 @@ export default function TypesManagement() {
   const [modalOpened, setModalOpened] = useState(false);
   const [deleteModalOpened, setDeleteModalOpened] = useState(false);
   const [selectedType, setSelectedType] = useState<Type | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [selectedToolId, setSelectedToolId] = useState<string | null>(null);
+  const [selectedChapter, setSelectedChapter] = useState<string | null>(null);
+  const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const itemsPerPage = 20;
 
   const authFetch = useAuthFetch();
 
@@ -196,37 +201,55 @@ export default function TypesManagement() {
   } : undefined, [selectedType]);
 
   // Получаем значения фильтров
-  const toolFilter = columnFilters.find(f => f.id === 'tool')?.value as string[] || [];
   const chapterFilter = columnFilters.find(f => f.id === 'chapter')?.value as string[] || [];
   const nameFilter = columnFilters.find(f => f.id === 'name')?.value as string[] || [];
 
-  // Фильтрация типов
-  const filteredTypes = types.filter(type => {
-    if (toolFilter.length > 0 && !toolFilter.includes(type.model_uuid)) return false;
-    // Для text фильтров берем первый элемент массива (текст поиска)
-    const chapterSearch = chapterFilter.length > 0 ? chapterFilter[0].toLowerCase() : '';
-    if (chapterSearch && !type.chapter.toLowerCase().includes(chapterSearch)) return false;
-    const nameSearch = nameFilter.length > 0 ? nameFilter[0].toLowerCase() : '';
-    if (nameSearch && !type.name.toLowerCase().includes(nameSearch)) return false;
-    return true;
-  });
+  // Функция для применения фильтров
+  const applyFilters = (items: Type[]) => {
+    return items.filter(type => {
+      // Фильтр по разделу
+      const chapterSearch = chapterFilter.length > 0 ? chapterFilter[0].toLowerCase() : '';
+      if (chapterSearch && !type.chapter.toLowerCase().includes(chapterSearch)) return false;
+      // Фильтр по названию
+      const nameSearch = nameFilter.length > 0 ? nameFilter[0].toLowerCase() : '';
+      if (nameSearch && !type.name.toLowerCase().includes(nameSearch)) return false;
+      return true;
+    });
+  };
 
-  // Сортировка: сначала по инструменту, потом по разделу, потом по названию
-  const sortedTypes = [...filteredTypes].sort((a, b) => {
-    if (a.Tool.name !== b.Tool.name) {
-      return a.Tool.name.localeCompare(b.Tool.name);
-    }
-    if (a.chapter !== b.chapter) {
-      return a.chapter.localeCompare(b.chapter);
-    }
-    return a.name.localeCompare(b.name);
-  });
+  // Строим иерархию: инструменты → разделы
+  const toolsWithChapters = useMemo(() => {
+    return tools
+      .map(tool => {
+        // Получаем все разделы для этого инструмента
+        const toolTypes = types.filter(type => type.model_uuid === tool.id);
+        const chapters = Array.from(new Set(toolTypes.map(t => t.chapter || 'Без раздела')))
+          .sort()
+          .map(chapter => ({
+            name: chapter,
+            count: toolTypes.filter(t => (t.chapter || 'Без раздела') === chapter).length
+          }));
+        
+        return {
+          ...tool,
+          chapters,
+          totalCount: toolTypes.length
+        };
+      })
+      .filter(tool => tool.totalCount > 0) // Показываем только инструменты с типами
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [tools, types]);
 
-  const paginatedTypes = sortedTypes.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
-  const totalPages = Math.ceil(sortedTypes.length / itemsPerPage);
+  // Получаем типы выбранного раздела
+  const selectedChapterTypes = useMemo(() => {
+    if (!selectedToolId || !selectedChapter) return [];
+    const filtered = types.filter(type => 
+      type.model_uuid === selectedToolId && 
+      (type.chapter || 'Без раздела') === selectedChapter
+    );
+    return applyFilters(filtered)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [types, selectedToolId, selectedChapter, chapterFilter, nameFilter]);
 
   const handleColumnFiltersChange = (columnId: string, value: any) => {
     setColumnFilters(prev => {
@@ -236,17 +259,9 @@ export default function TypesManagement() {
       }
       return filtered;
     });
-    setCurrentPage(1);
   };
 
   const filterConfig = useMemo(() => [
-    {
-      type: 'select' as const,
-      columnId: 'tool',
-      label: 'Инструмент',
-      placeholder: 'Выберите инструменты',
-      options: tools.map(tool => ({ value: tool.id, label: tool.name })),
-    },
     {
       type: 'text' as const,
       columnId: 'chapter',
@@ -259,7 +274,7 @@ export default function TypesManagement() {
       label: 'Название',
       placeholder: 'Поиск по названию...',
     },
-  ], [tools]);
+  ], []);
 
   return (
     <Container size="xl">
@@ -278,94 +293,255 @@ export default function TypesManagement() {
         )}
 
         {/* Фильтры */}
+        <FilterGroup
+          filters={filterConfig}
+          columnFilters={columnFilters}
+          onColumnFiltersChange={handleColumnFiltersChange}
+        />
 
-          <FilterGroup
-            filters={filterConfig}
-            columnFilters={columnFilters}
-            onColumnFiltersChange={handleColumnFiltersChange}
-          />
+        {/* Две колонки: инструменты и типы */}
+        <Grid gutter="md">
+          {/* Левая колонка: Инструменты */}
+          <Grid.Col span={4}>
+            <Paper shadow="sm" p="md" radius="md" withBorder h="calc(100vh - 300px)">
+              <Stack gap="md" h="100%">
+                <Group justify="space-between">
+                  <Title order={4}>Инструменты</Title>
+                  <Badge variant="light">{toolsWithChapters.length}</Badge>
+                </Group>
+                {loading ? (
+                  <Text c="dimmed">Загрузка...</Text>
+                ) : (
+                  <ScrollArea h="100%">
+                    {toolsWithChapters.length === 0 ? (
+                      <Text c="dimmed" ta="center" py="xl">
+                        Нет инструментов
+                      </Text>
+                    ) : (
+                      <Table striped highlightOnHover>
+                        <Table.Tbody>
+                          {toolsWithChapters.map((tool) => {
+                            const isExpanded = expandedTools.has(tool.id);
+                            const isSelected = selectedToolId === tool.id;
+                            return (
+                              <React.Fragment key={tool.id}>
+                                {/* Инструмент */}
+                                <Table.Tr
+                                  style={{
+                                    cursor: 'pointer',
+                                    backgroundColor: isSelected
+                                      ? 'var(--theme-bg-secondary)'
+                                      : undefined,
+                                  }}
+                                  onClick={() => {
+                                    setSelectedToolId(tool.id);
+                                    setExpandedTools(prev => {
+                                      const newSet = new Set(prev);
+                                      if (newSet.has(tool.id)) {
+                                        newSet.delete(tool.id);
+                                        setSelectedChapter(null);
+                                      } else {
+                                        newSet.add(tool.id);
+                                        // Автоматически выбираем первый раздел, если он есть
+                                        if (tool.chapters.length > 0) {
+                                          setSelectedChapter(tool.chapters[0].name);
+                                        } else {
+                                          setSelectedChapter(null);
+                                        }
+                                      }
+                                      return newSet;
+                                    });
+                                  }}
+                                >
+                                  <Table.Td>
+                                    <Group gap="xs">
+                                      {isExpanded ? (
+                                        <IconChevronDown size={14} style={{ opacity: 0.6 }} />
+                                      ) : (
+                                        <IconChevronRight size={14} style={{ opacity: 0.6 }} />
+                                      )}
+                                      <IconTags size={16} />
+                                      <Text fw={isSelected ? 600 : 500}>
+                                        {tool.name}
+                                      </Text>
+                                    </Group>
+                                  </Table.Td>
+                                  <Table.Td>
+                                    <Badge variant="light" size="sm">
+                                      {tool.totalCount}
+                                    </Badge>
+                                  </Table.Td>
+                                </Table.Tr>
+                                {/* Разделы инструмента */}
+                                {isExpanded && tool.chapters.map((chapter) => {
+                                  const isChapterSelected = selectedChapter === chapter.name && isSelected;
+                                  return (
+                                    <Table.Tr
+                                      key={`${tool.id}-${chapter.name}`}
+                                      style={{
+                                        cursor: 'pointer',
+                                        backgroundColor: isChapterSelected
+                                          ? 'var(--theme-bg-secondary)'
+                                          : undefined,
+                                      }}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedToolId(tool.id);
+                                        setSelectedChapter(chapter.name);
+                                      }}
+                                    >
+                                      <Table.Td>
+                                        <Group gap="xs" style={{ paddingLeft: '24px' }}>
+                                          <IconFolder size={14} style={{ opacity: 0.7 }} />
+                                          <Text 
+                                            fw={isChapterSelected ? 600 : 400}
+                                            c={isChapterSelected ? undefined : 'dimmed'}
+                                            size="sm"
+                                          >
+                                            {chapter.name}
+                                          </Text>
+                                        </Group>
+                                      </Table.Td>
+                                      <Table.Td>
+                                        <Badge variant="light" size="sm">
+                                          {chapter.count}
+                                        </Badge>
+                                      </Table.Td>
+                                    </Table.Tr>
+                                  );
+                                })}
+                              </React.Fragment>
+                            );
+                          })}
+                        </Table.Tbody>
+                      </Table>
+                    )}
+                  </ScrollArea>
+                )}
+              </Stack>
+            </Paper>
+          </Grid.Col>
 
+          {/* Разделитель */}
+          <Grid.Col span={0.5}>
+            <Divider orientation="vertical" />
+          </Grid.Col>
 
-        <Paper shadow="sm" p="md" radius="md" withBorder>
-          {loading ? (
-            <Text>Загрузка...</Text>
-          ) : (
-            <>
-              {sortedTypes.length === 0 ? (
-                <Text c="dimmed" ta="center" py="xl">
-                  {columnFilters.length > 0 ? 'Нет результатов по заданным фильтрам' : 'Нет типов'}
-                </Text>
-              ) : (
-                <>
-                  <Table striped highlightOnHover>
-                    <Table.Thead>
-                      <Table.Tr>
-                        <Table.Th>Название</Table.Th>
-                        <Table.Th>Раздел</Table.Th>
-                        <Table.Th>Инструмент</Table.Th>
-                        <Table.Th>Цвет</Table.Th>
-                        <Table.Th>Действия</Table.Th>
-                      </Table.Tr>
-                    </Table.Thead>
-                    <Table.Tbody>
-                      {paginatedTypes.map((type) => (
-                    <Table.Tr key={type.id}>
-                      <Table.Td>{type.name}</Table.Td>
-                      <Table.Td>{type.chapter}</Table.Td>
-                      <Table.Td>{type.Tool.name}</Table.Td>
-                      <Table.Td>
-                        {type.colorHex ? (
-                          <Badge
-                            color={type.colorHex}
-                            style={{ backgroundColor: type.colorHex }}
-                          >
-                            {type.colorHex}
-                          </Badge>
-                        ) : (
-                          <Text c="dimmed">—</Text>
-                        )}
-                      </Table.Td>
-                      <Table.Td>
-                        <Group gap="xs">
-                          <Tooltip label="Редактировать">
-                            <ActionIcon
-                              variant="light"
-                              color="blue"
-                              onClick={() => handleEdit(type)}
-                            >
-                              <IconEdit size={18} />
-                            </ActionIcon>
-                          </Tooltip>
-                          <Tooltip label="Удалить">
-                            <ActionIcon
-                              variant="light"
-                              color="red"
-                              onClick={() => handleDelete(type)}
-                            >
-                              <IconTrash size={18} />
-                            </ActionIcon>
-                          </Tooltip>
-                        </Group>
-                      </Table.Td>
-                    </Table.Tr>
-                      ))}
-                    </Table.Tbody>
-                  </Table>
-
-                  {totalPages > 1 && (
-                    <Group justify="center" mt="md">
-                      <Pagination
-                        value={currentPage}
-                        onChange={setCurrentPage}
-                        total={totalPages}
-                      />
-                    </Group>
+          {/* Правая колонка: Типы выбранного инструмента */}
+          <Grid.Col span={7.5}>
+            <Paper shadow="sm" p="md" radius="md" withBorder h="calc(100vh - 300px)">
+              <Stack gap="md" h="100%">
+                <Group justify="space-between">
+                  <Title order={4}>
+                    Типы
+                    {selectedToolId && selectedChapter && (
+                      <Text span c="dimmed" size="sm" fw={400}>
+                        {' '}({tools.find(t => t.id === selectedToolId)?.name || ''} / {selectedChapter})
+                      </Text>
+                    )}
+                  </Title>
+                  {selectedChapterTypes.length > 0 && (
+                    <Badge variant="light">{selectedChapterTypes.length}</Badge>
                   )}
-                </>
-              )}
-            </>
-          )}
-        </Paper>
+                </Group>
+                {loading ? (
+                  <Text c="dimmed">Загрузка...</Text>
+                ) : !selectedToolId || !selectedChapter ? (
+                  <Box
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      height: '100%',
+                      flexDirection: 'column',
+                      gap: 16,
+                    }}
+                  >
+                    <IconTags size={48} color="var(--mantine-color-gray-4)" />
+                    <Text c="dimmed" size="lg">
+                      {!selectedToolId 
+                        ? 'Выберите инструмент слева для просмотра разделов'
+                        : 'Выберите раздел слева для просмотра типов'}
+                    </Text>
+                  </Box>
+                ) : selectedChapterTypes.length === 0 ? (
+                  <Box
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      height: '100%',
+                      flexDirection: 'column',
+                      gap: 16,
+                    }}
+                  >
+                    <IconTags size={48} color="var(--mantine-color-gray-4)" />
+                    <Text c="dimmed">
+                      {columnFilters.length > 0 
+                        ? 'Нет результатов по заданным фильтрам' 
+                        : 'В этом разделе нет типов'}
+                    </Text>
+                  </Box>
+                ) : (
+                  <ScrollArea h="100%">
+                    <Table striped highlightOnHover>
+                      <Table.Thead>
+                        <Table.Tr>
+                          <Table.Th>Название</Table.Th>
+                          <Table.Th>Цвет</Table.Th>
+                          <Table.Th>Действия</Table.Th>
+                        </Table.Tr>
+                      </Table.Thead>
+                      <Table.Tbody>
+                        {selectedChapterTypes.map((type) => (
+                          <Table.Tr key={type.id}>
+                            <Table.Td>
+                              <Text>{type.name}</Text>
+                            </Table.Td>
+                            <Table.Td>
+                              {type.colorHex ? (
+                                <Badge
+                                  color={type.colorHex}
+                                  style={{ backgroundColor: type.colorHex }}
+                                >
+                                  {type.colorHex}
+                                </Badge>
+                              ) : (
+                                <Text c="dimmed">—</Text>
+                              )}
+                            </Table.Td>
+                            <Table.Td>
+                              <Group gap="xs">
+                                <Tooltip label="Редактировать">
+                                  <ActionIcon
+                                    variant="light"
+                                    color="blue"
+                                    onClick={() => handleEdit(type)}
+                                  >
+                                    <IconEdit size={18} />
+                                  </ActionIcon>
+                                </Tooltip>
+                                <Tooltip label="Удалить">
+                                  <ActionIcon
+                                    variant="light"
+                                    color="red"
+                                    onClick={() => handleDelete(type)}
+                                  >
+                                    <IconTrash size={18} />
+                                  </ActionIcon>
+                                </Tooltip>
+                              </Group>
+                            </Table.Td>
+                          </Table.Tr>
+                        ))}
+                      </Table.Tbody>
+                    </Table>
+                  </ScrollArea>
+                )}
+              </Stack>
+            </Paper>
+          </Grid.Col>
+        </Grid>
 
         <DynamicFormModal
           opened={modalOpened}

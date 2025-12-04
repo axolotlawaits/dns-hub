@@ -214,6 +214,7 @@ app.use('/hub-api/add/media', mediaRouter)
 app.use('/hub-api/add/rk', rkRouter)
 app.use('/hub-api/add/sliders', sliderRouter)
 app.use('/hub-api/add/merch', merchRouter)
+app.use('/hub-api/retail/merch', merchRouter) // Дублируем маршрут для retail
 app.use('/hub-api/retail/print-service', printServiceRouter);
 app.use('/hub-api/retail/app-store', appStoreRouter);
 

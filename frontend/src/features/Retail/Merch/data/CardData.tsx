@@ -24,7 +24,7 @@ export interface CardItem {
 }
 
 // Базовый URL API
-const API_BASE = `${API}/add/merch`;
+const API_BASE = `${API}/retail/merch`;
 
 // Вспомогательная функция для получения токена
 const getAuthToken = (): string | null => {
