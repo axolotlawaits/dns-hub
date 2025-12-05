@@ -438,7 +438,7 @@ function CardGroup({ hasFullAccess = true, onCardsUpdate }: CardGroupProps) {
           
           {/* Кнопка "наверх" */}
           {scrollY > 400 && (
-            <Affix position={{ bottom: 20, right: 20 }} zIndex={1000}>
+            <Affix position={{ bottom: 80, right: 20 }} zIndex={1000}>
               <Transition transition="slide-up" mounted={true}>
                 {(transitionStyles) => (
                   <ActionIcon
