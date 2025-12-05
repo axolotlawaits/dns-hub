@@ -1,7 +1,7 @@
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState, useRef } from 'react';
 import { useDisclosure } from '@mantine/hooks';
-import { Button, Container, Alert, Center, Box, Pagination, Select, Group, Text, Stack, LoadingOverlay, TextInput, ActionIcon } from '@mantine/core';
-import { IconPlus, IconEdit, IconTrash, IconSearch, IconX } from '@tabler/icons-react';
+import { Button, Container, Alert, Center, Box, Pagination, Select, Group, Text, Stack, LoadingOverlay, TextInput, ActionIcon, Affix, Transition, SimpleGrid, SegmentedControl } from '@mantine/core';
+import { IconPlus, IconEdit, IconTrash, IconSearch, IconX, IconArrowUp, IconApps, IconList } from '@tabler/icons-react';
 import Card from './Card';
 import { AddCardModal, EditCardModal, DeleteCardModal } from './CardModal';
 import { useApp } from '../../context/SelectedCategoryContext';
@@ -29,6 +29,10 @@ function CardGroup({ hasFullAccess = true, onCardsUpdate }: CardGroupProps) {
   const [pageSize, setPageSize] = useState(20);
   const [activeFilter, setActiveFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [scrollY, setScrollY] = useState(0);
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const scrollParentRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (selectedId) {
@@ -37,6 +41,111 @@ function CardGroup({ hasFullAccess = true, onCardsUpdate }: CardGroupProps) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, currentPage, pageSize, activeFilter]); // Убираем loadCardsByCategory из зависимостей
+
+  // Отслеживание скролла для кнопки "наверх" - находим родительский контейнер со скроллом
+  useEffect(() => {
+    const findScrollContainer = (): HTMLElement | null => {
+      // Сначала ищем по классу mantine-AppShell-main
+      const appShellMain = document.querySelector('.mantine-AppShell-main') as HTMLElement;
+      if (appShellMain) {
+        const style = window.getComputedStyle(appShellMain);
+        const hasOverflow = style.overflowY === 'auto' || style.overflowY === 'scroll' || 
+                           style.overflow === 'auto' || style.overflow === 'scroll';
+        if (hasOverflow || appShellMain.scrollHeight > appShellMain.clientHeight) {
+          return appShellMain;
+        }
+      }
+      
+      // Если не нашли по классу, ищем контейнер со скроллом, начиная с самого элемента и поднимаясь вверх по дереву
+      let element: HTMLElement | null = scrollContainerRef.current;
+      const maxDepth = 20; // Ограничение глубины поиска
+      let depth = 0;
+      
+      while (element && depth < maxDepth) {
+        const style = window.getComputedStyle(element);
+        const hasOverflow = style.overflowY === 'auto' || style.overflowY === 'scroll' || 
+                           style.overflow === 'auto' || style.overflow === 'scroll';
+        
+        // Также проверяем, есть ли у элемента скролл (scrollHeight > clientHeight)
+        const hasScroll = element.scrollHeight > element.clientHeight;
+        
+        if (hasOverflow && hasScroll) {
+          return element;
+        }
+        
+        element = element.parentElement;
+        depth++;
+      }
+      
+      // Если не нашли по overflow, ищем по наличию скролла
+      element = scrollContainerRef.current;
+      depth = 0;
+      while (element && depth < maxDepth) {
+        if (element.scrollHeight > element.clientHeight && element.scrollTop !== undefined) {
+          return element;
+        }
+        element = element.parentElement;
+        depth++;
+      }
+      
+      return null;
+    };
+
+    const handleScroll = () => {
+      const scrollContainer = scrollParentRef.current || findScrollContainer();
+      if (scrollContainer) {
+        const scrollTop = scrollContainer.scrollTop || 0;
+        setScrollY(scrollTop);
+      } else {
+        // Fallback на window
+        const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+        setScrollY(scrollY);
+      }
+    };
+    
+    // Находим контейнер со скроллом с небольшой задержкой для гарантии, что DOM готов
+    const timeoutId = setTimeout(() => {
+      scrollParentRef.current = findScrollContainer();
+      
+      // Если не нашли, пробуем найти AppShell-main по классу
+      if (!scrollParentRef.current) {
+        const appShellMain = document.querySelector('.mantine-AppShell-main') as HTMLElement;
+        if (appShellMain) {
+          scrollParentRef.current = appShellMain;
+        }
+      }
+      
+      if (scrollParentRef.current) {
+        console.log('📜 [CardGroup] Найден скролл-контейнер:', scrollParentRef.current, {
+          scrollHeight: scrollParentRef.current.scrollHeight,
+          clientHeight: scrollParentRef.current.clientHeight,
+          className: scrollParentRef.current.className
+        });
+        scrollParentRef.current.addEventListener('scroll', handleScroll, { passive: true });
+        handleScroll(); // Инициализируем начальное значение
+      } else {
+        console.warn('⚠️ [CardGroup] Скролл-контейнер не найден, используем window');
+        // Fallback на window
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        handleScroll();
+      }
+    }, 200); // Увеличиваем задержку для гарантии готовности DOM
+    
+    return () => {
+      clearTimeout(timeoutId);
+      scrollParentRef.current?.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
+  const scrollToTop = () => {
+    if (scrollParentRef.current) {
+      scrollParentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      // Fallback на window
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
 
   // Уведомляем родителя об обновлении карточек только при изменении selectedId
   useEffect(() => {
@@ -226,8 +335,8 @@ function CardGroup({ hasFullAccess = true, onCardsUpdate }: CardGroupProps) {
                 ) : null}
                 size="sm"
               />
-              <Group justify="space-between" align="center">
-                <Group>
+              <Group justify="space-between" align="flex-end">
+                <Group align="flex-end">
                   <Select
                     label="Статус"
                     placeholder="Все карточки"
@@ -261,6 +370,17 @@ function CardGroup({ hasFullAccess = true, onCardsUpdate }: CardGroupProps) {
                     w={100}
                   />
                 </Group>
+                <Group align="flex-end">
+                  <SegmentedControl
+                    value={viewMode}
+                    onChange={(value) => setViewMode(value as 'list' | 'grid')}
+                    data={[
+                      { label: <IconApps size={16} />, value: 'grid' },
+                      { label: <IconList size={16} />, value: 'list' }
+                    ]}
+                    size="sm"
+                  />
+                </Group>
               <Group>
                 <Text size="sm" c="dimmed">
                   Показано {cards.length} из {pagination.total} карточек
@@ -282,18 +402,60 @@ function CardGroup({ hasFullAccess = true, onCardsUpdate }: CardGroupProps) {
           </Box>
 
           {/* Карточки */}
-          <Box>
-            {visibleCards.map((card) => (
-              <Card 
-                key={card.id}
-                cardData={card}
-                onEdit={hasFullAccess ? handleEditCard : undefined}
-                onDelete={hasFullAccess ? handleDeleteCard : undefined}
-                onToggleActive={hasFullAccess ? handleToggleActive : undefined}
-                searchQuery={searchQuery}
-              />
-            ))}
+          <Box ref={scrollContainerRef}>
+            {viewMode === 'list' ? (
+              <Box>
+                {visibleCards.map((card) => (
+                  <Card 
+                    key={card.id}
+                    cardData={card}
+                    onEdit={hasFullAccess ? handleEditCard : undefined}
+                    onDelete={hasFullAccess ? handleDeleteCard : undefined}
+                    onToggleActive={hasFullAccess ? handleToggleActive : undefined}
+                    searchQuery={searchQuery}
+                  />
+                ))}
+              </Box>
+            ) : (
+              <SimpleGrid
+                cols={{ base: 1, sm: 2, md: 3, lg: 3 }}
+                spacing="md"
+              >
+                {visibleCards.map((card) => (
+                  <Card 
+                    key={card.id}
+                    cardData={card}
+                    onEdit={hasFullAccess ? handleEditCard : undefined}
+                    onDelete={hasFullAccess ? handleDeleteCard : undefined}
+                    onToggleActive={hasFullAccess ? handleToggleActive : undefined}
+                    searchQuery={searchQuery}
+                    compact={true}
+                  />
+                ))}
+              </SimpleGrid>
+            )}
           </Box>
+          
+          {/* Кнопка "наверх" */}
+          {scrollY > 400 && (
+            <Affix position={{ bottom: 20, right: 20 }} zIndex={1000}>
+              <Transition transition="slide-up" mounted={true}>
+                {(transitionStyles) => (
+                  <ActionIcon
+                    style={{ ...transitionStyles, zIndex: 1000 }}
+                    onClick={scrollToTop}
+                    size="xl"
+                    radius="xl"
+                    variant="filled"
+                    color="blue"
+                    title="Вернуться наверх"
+                  >
+                    <IconArrowUp size={20} />
+                  </ActionIcon>
+                )}
+              </Transition>
+            </Affix>
+          )}
           
           {/* Пагинация */}
           {pagination.totalPages > 1 && (

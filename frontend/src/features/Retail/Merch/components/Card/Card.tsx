@@ -105,9 +105,10 @@ interface CardProps {
   onDelete?: (cardId: string) => void;
   onToggleActive?: (cardId: string, isActive: boolean) => void;
   searchQuery?: string;
+  compact?: boolean;
 }
 
-function Card({ cardData, onEdit, onDelete, onToggleActive, searchQuery = '' }: CardProps) {
+function Card({ cardData, onEdit, onDelete, onToggleActive, searchQuery = '', compact = false }: CardProps) {
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [zoomModalOpened, setZoomModalOpened] = useState(false);
   const [isActiveLoading, setIsActiveLoading] = useState(false);
@@ -196,12 +197,22 @@ function Card({ cardData, onEdit, onDelete, onToggleActive, searchQuery = '' }: 
     setZoomModalOpened(true);
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('ru-RU', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
+  const formatDate = (dateString: string | Date | null | undefined) => {
+    if (!dateString) return 'Не указано';
+    try {
+      const date = dateString instanceof Date ? dateString : new Date(dateString);
+      if (isNaN(date.getTime())) {
+        return 'Неверная дата';
+      }
+      return date.toLocaleDateString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    } catch (error) {
+      console.error('Ошибка форматирования даты:', error, dateString);
+      return 'Неверная дата';
+    }
   };
 
   // Описание форматируем так же, как в Telegram-превью (переносы сохраняются)
@@ -209,6 +220,145 @@ function Card({ cardData, onEdit, onDelete, onToggleActive, searchQuery = '' }: 
     () => formatDescriptionForTelegram(cardData.description || ''),
     [cardData.description]
   );
+
+  if (compact) {
+    // Компактный режим для сетки
+    return (
+      <Paper 
+        withBorder
+        radius="md" 
+        p="md" 
+        className="card-container"
+        style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+      >
+        {/* Заголовок */}
+        <Group justify="space-between" mb="xs" align="flex-start" wrap="nowrap">
+          <Title order={4} style={{ margin: 0, flex: 1 }} lineClamp={2}>
+            {searchQuery.trim() ? (
+              (() => {
+                const regex = new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+                const parts = truncateText(cardData.name, 30).split(regex);
+                return parts.map((part, index) => 
+                  regex.test(part) ? (
+                    <mark key={index} style={{ 
+                      backgroundColor: 'var(--mantine-color-yellow-3)', 
+                      color: 'var(--mantine-color-dark-9)',
+                      padding: '0 2px',
+                      borderRadius: '2px'
+                    }}>
+                      {part}
+                    </mark>
+                  ) : part
+                );
+              })()
+            ) : (
+              truncateText(cardData.name, 30)
+            )}
+          </Title>
+          <Badge 
+            color={cardData.isActive ? 'green' : 'gray'} 
+            variant="light"
+            size="xs"
+          >
+            {cardData.isActive ? '✓' : '✗'}
+          </Badge>
+        </Group>
+
+        {/* Первое изображение или PDF */}
+        {fileMeta.length > 0 && (
+          <Box mb="xs" style={{ flex: 1, minHeight: 150, position: 'relative' }}>
+            {fileMeta[0].isPdf ? (
+              <Box
+                style={{
+                  width: '100%',
+                  height: 150,
+                  position: 'relative',
+                  backgroundColor: 'var(--mantine-color-gray-1)',
+                  borderRadius: 'var(--mantine-radius-md)',
+                  border: '1px solid var(--mantine-color-gray-3)',
+                  cursor: 'pointer',
+                  overflow: 'hidden'
+                }}
+                onClick={() => openImageZoom(0)}
+              >
+                <PdfCardPreview src={fileMeta[0].resolvedUrl} />
+              </Box>
+            ) : (
+              <Image
+                src={fileMeta[0].resolvedUrl}
+                alt={fileMeta[0].baseName}
+                height={150}
+                fit="cover"
+                radius="md"
+                style={{ cursor: 'pointer' }}
+                onClick={() => openImageZoom(0)}
+              />
+            )}
+            {fileMeta.length > 1 && (
+              <Badge 
+                size="xs" 
+                variant="filled" 
+                style={{ position: 'absolute', top: 8, right: 8 }}
+              >
+                +{fileMeta.length - 1}
+              </Badge>
+            )}
+          </Box>
+        )}
+
+        {/* Описание (сокращенное) */}
+        {cardData.description && (
+          <Text size="xs" c="dimmed" lineClamp={2} mb="xs">
+            {cardData.description.replace(/<[^>]*>/g, '').substring(0, 100)}
+            {cardData.description.length > 100 ? '...' : ''}
+          </Text>
+        )}
+
+        {/* Кнопки действий */}
+        <Group justify="flex-end" gap="xs" mt="auto">
+          {onToggleActive && (
+            <Switch
+              checked={cardData.isActive}
+              onChange={(event) => handleToggleActive(event.currentTarget.checked)}
+              disabled={isActiveLoading}
+              size="xs"
+            />
+          )}
+          {onEdit && (
+            <ActionIcon 
+              variant="subtle" 
+              color="blue"
+              size="sm"
+              onClick={CardEdit}
+            >
+              <IconEdit size={14} />
+            </ActionIcon>
+          )}
+          {onDelete && (
+            <ActionIcon 
+              variant="subtle" 
+              color="red"
+              size="sm"
+              onClick={CardDelete}
+            >
+              <IconTrash size={14} />
+            </ActionIcon>
+          )}
+        </Group>
+
+        {/* Модальное окно для просмотра файлов */}
+        <FilePreviewModal
+          opened={zoomModalOpened}
+          onClose={() => {
+            setZoomModalOpened(false);
+            setSelectedImageIndex(null);
+          }}
+          attachments={fileMeta.map(meta => meta.attachment)}
+          initialIndex={selectedImageIndex || 0}
+        />
+      </Paper>
+    );
+  }
 
   return (
     <Paper 

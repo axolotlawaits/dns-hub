@@ -39,6 +39,8 @@ import bugReportsRouter from './routes/app/bugReports.js'
 import branchesRouter from './routes/admin/branches.js'
 import usersRouter from './routes/admin/users.js'
 import systemRouter from './routes/admin/system.js'
+import analyticsRouter from './routes/admin/analytics.js'
+import auditRouter from './routes/admin/audit.js'
 
 import fs from 'fs'
 import cookieParser from 'cookie-parser'
@@ -164,6 +166,8 @@ app.use('/hub-api/bug-reports', bugReportsRouter);
 app.use('/hub-api/admin/branches', branchesRouter);
 app.use('/hub-api/admin/users', usersRouter);
 app.use('/hub-api/admin/system', systemRouter);
+app.use('/hub-api/admin/analytics', analyticsRouter);
+app.use('/hub-api/admin/audit', auditRouter);
 
 // Остальные роуты
 app.use('/hub-api/access', accessRouter)
@@ -250,9 +254,13 @@ app.use('/hub-api/scanner', async (req, res, next) => {
   next();
 });
 
-// Временный fallback для настройки футера (исключает 404 в dev и не ломает UI)
+// Временный fallback для настроек пользователя (исключает 404 в dev и не ломает UI)
 app.get('/hub-api/user/settings/:userId/auto_hide_footer', (req, res) => {
   res.json({ value: false });
+});
+
+app.get('/hub-api/user/settings/:userId/nav_menu_mode', (req, res) => {
+  res.json({ value: 'auto' });
 });
 
 // Ленивая загрузка safety journal роутера

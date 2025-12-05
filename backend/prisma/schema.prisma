@@ -225,6 +225,7 @@ model User {
   UserSettings           UserSettings[]
   userToolAccesses       UserToolAccess[]
   MerchAttachments       MerchAttachment[]
+  auditLogs              AuditLog[]
 }
 
 model UserData {
@@ -927,4 +928,25 @@ model BranchImage {
   link        String
   branch_uuid String
   branch      Branch @relation(fields: [branch_uuid], references: [uuid])
+}
+
+// Аудит действий пользователей
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String
+  userEmail   String?
+  action      String   // CREATE, UPDATE, DELETE, LOGIN, LOGOUT, etc.
+  entityType  String?  // User, Tool, Branch, etc.
+  entityId    String?  // ID сущности
+  details     Json?    // Дополнительные детали действия
+  ipAddress   String?
+  userAgent   String?
+  timestamp   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([action])
+  @@index([entityType])
+  @@index([timestamp])
+  @@index([userId, timestamp])
 }

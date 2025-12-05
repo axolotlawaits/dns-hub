@@ -5,6 +5,7 @@ import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
 import { prisma, API } from '../../server.js';
+import { logUserAction } from '../../middleware/audit.js';
 
 // Схемы валидации
 const MerchCategorySchema = z.object({
@@ -377,7 +378,7 @@ export const deleteMerchCategory = async (req: Request, res: Response, next: Nex
         if (child.attachments && child.attachments.length > 0) {
           for (const attachment of child.attachments) {
             try {
-              const filePath = path.join(process.cwd(), 'public', 'add', 'merch', attachment.source);
+              const filePath = path.join(process.cwd(), 'public', 'retail', 'merch', attachment.source);
               if (fs.existsSync(filePath)) {
                 fs.unlinkSync(filePath);
               }
@@ -408,7 +409,7 @@ export const deleteMerchCategory = async (req: Request, res: Response, next: Nex
       if (category.attachments && category.attachments.length > 0) {
         for (const attachment of category.attachments) {
           try {
-            const filePath = path.join(process.cwd(), 'public', 'add', 'merch', attachment.source);
+            const filePath = path.join(process.cwd(), 'public', 'retail', 'merch', attachment.source);
             if (fs.existsSync(filePath)) {
               fs.unlinkSync(filePath);
             }
@@ -544,7 +545,7 @@ export const createMerchCard = [
         // Не прерываем выполнение, если не удалось обновить кэш
       }
 
-      res.status(201).json({
+      const response = {
         id: newCard.id,
         name: newCard.name,
         description: newCard.description,
@@ -558,8 +559,27 @@ export const createMerchCard = [
           source: att.source,
           type: att.type
         })),
-        imageUrls: imageUrls
-      });
+        imageUrls: imageUrls,
+        createdAt: newCard.createdAt.toISOString()
+      };
+
+      // Логируем действие
+      const userEmail = (req as any).token?.userEmail || null;
+      const ipAddressRaw = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+      const ipAddress = Array.isArray(ipAddressRaw) ? ipAddressRaw[0] : ipAddressRaw;
+      const userAgent = req.headers['user-agent'] || undefined;
+      await logUserAction(
+        userId,
+        userEmail,
+        'CREATE',
+        'MerchCard',
+        newCard.id,
+        { name: newCard.name, categoryId },
+        ipAddress || undefined,
+        userAgent
+      ).catch(err => console.error('Ошибка логирования:', err));
+
+      res.status(201).json(response);
     } catch (error) {
       console.error('❌ Ошибка при создании карточки:', error);
       next(error);
@@ -617,6 +637,8 @@ export const getAllMerchCards = async (req: Request, res: Response, next: NextFu
           description: card.description || '',
           isActive: card.isActive,
           categoryId: card.parentId || '',
+          createdAt: card.createdAt.toISOString(),
+          updatedAt: card.updatedAt?.toISOString() || null,
           category: category ? {
             id: category.id,
             name: category.name
@@ -626,9 +648,7 @@ export const getAllMerchCards = async (req: Request, res: Response, next: NextFu
             id: att.id,
             source: att.source,
             type: att.type
-          })),
-          createdAt: card.createdAt,
-          updatedAt: card.updatedAt
+          }))
         };
       })
     );
@@ -765,7 +785,7 @@ export const updateMerchCard = [
         }
       }
 
-      return res.json({
+      const response = {
         id: updatedCard.id,
         name: updatedCard.name,
         description: updatedCard.description,
@@ -779,8 +799,30 @@ export const updateMerchCard = [
           source: att.source,
           type: att.type
         })),
-        imageUrls: imageUrls
-      });
+        imageUrls: imageUrls,
+        createdAt: updatedCard.createdAt.toISOString()
+      };
+
+      // Логируем действие
+      const userId = (req as any).token?.userId;
+      if (userId) {
+        const userEmail = (req as any).token?.userEmail || null;
+        const ipAddressRaw = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+        const ipAddress = Array.isArray(ipAddressRaw) ? ipAddressRaw[0] : ipAddressRaw;
+        const userAgent = req.headers['user-agent'] || undefined;
+        await logUserAction(
+          userId,
+          userEmail,
+          'UPDATE',
+          'MerchCard',
+          updatedCard.id,
+          { name: updatedCard.name, changes: updateData },
+          ipAddress || undefined,
+          userAgent
+        ).catch(err => console.error('Ошибка логирования:', err));
+      }
+
+      return res.json(response);
     } catch (error) {
       console.error('❌ Ошибка при обновлении карточки:', error);
       next(error);
@@ -829,7 +871,7 @@ export const addCardImages = [
         for (const file of files) {
           try {
             // Проверяем, что файл действительно сохранен на диске
-            const filePath = path.join(process.cwd(), 'public', 'add', 'merch', file.filename);
+            const filePath = path.join(process.cwd(), 'public', 'retail', 'merch', file.filename);
             if (!fs.existsSync(filePath)) {
               console.error(`❌ [addCardImages] Файл не найден на диске: ${file.filename}`);
               throw new Error(`Файл ${file.originalname} не был сохранен на диск`);
@@ -861,7 +903,7 @@ export const addCardImages = [
             console.error(`❌ [addCardImages] Ошибка при добавлении файла ${file.originalname}:`, error);
             // Удаляем файл с диска, если он был создан, но не сохранен в БД
             try {
-              const filePath = path.join(process.cwd(), 'public', 'add', 'merch', file.filename);
+              const filePath = path.join(process.cwd(), 'public', 'retail', 'merch', file.filename);
               if (fs.existsSync(filePath)) {
                 fs.unlinkSync(filePath);
                 console.log(`🗑️ [addCardImages] Удален файл после ошибки: ${file.filename}`);
@@ -1173,7 +1215,7 @@ export const deleteMerchAttachment = async (req: Request, res: Response, next: N
     }
 
     // Удаляем файл
-    const filePath = path.join(process.cwd(), 'public', 'add', 'merch', attachment.source);
+    const filePath = path.join(process.cwd(), 'public', 'retail', 'merch', attachment.source);
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }
@@ -1323,7 +1365,7 @@ export const deleteMerchCard = async (req: Request, res: Response, next: NextFun
       if (existingCard.attachments && existingCard.attachments.length > 0) {
         for (const attachment of existingCard.attachments) {
           try {
-            const filePath = path.join(process.cwd(), 'public', 'add', 'merch', attachment.source);
+            const filePath = path.join(process.cwd(), 'public', 'retail', 'merch', attachment.source);
             if (fs.existsSync(filePath)) {
               fs.unlinkSync(filePath);
             }
@@ -1343,6 +1385,25 @@ export const deleteMerchCard = async (req: Request, res: Response, next: NextFun
         where: { id: cardId }
       });
     });
+
+    // Логируем действие
+    const userId = (req as any).token?.userId;
+    if (userId) {
+      const userEmail = (req as any).token?.userEmail || null;
+      const ipAddressRaw = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+      const ipAddress = Array.isArray(ipAddressRaw) ? ipAddressRaw[0] : ipAddressRaw;
+      const userAgent = req.headers['user-agent'] || undefined;
+      await logUserAction(
+        userId,
+        userEmail,
+        'DELETE',
+        'MerchCard',
+        existingCard.id,
+        { name: existingCard.name },
+        ipAddress || undefined,
+        userAgent
+      ).catch(err => console.error('Ошибка логирования:', err));
+    }
 
     return res.json({ 
       message: 'Карточка успешно удалена',

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Container,
   Paper,
@@ -194,49 +194,7 @@ export default function SystemLoad() {
   const authFetch = useAuthFetch();
   const { isConnected, systemMetrics: wsMetrics } = useSocketIO();
 
-  // Используем метрики из WebSocket, если доступны
-  useEffect(() => {
-    if (wsMetrics && isMonitoring) {
-      console.log('📊 [SystemLoad] Received metrics via WebSocket');
-      const newMetrics = wsMetrics;
-      setMetrics(newMetrics);
-      
-      // Добавляем данные в историю для графиков
-      const diskPercentage = newMetrics.disk?.percentage ?? 
-        (newMetrics.disks && newMetrics.disks.length > 0 
-          ? newMetrics.disks.reduce((sum: number, d: any) => sum + d.percentage, 0) / newMetrics.disks.length 
-          : 0);
-      
-      const historyPoint: MetricHistory = {
-        timestamp: wsMetrics.timestamp || Date.now(),
-        cpu: newMetrics.cpu?.usage ?? 0,
-        memory: newMetrics.memory?.percentage ?? 0,
-        disk: diskPercentage,
-        network: 0,
-        gpu: 0,
-      };
-
-      setHistory(prev => {
-        const updated = [...prev, historyPoint];
-        // Ограничиваем историю в зависимости от выбранного диапазона
-        const maxPoints = timeRange === '1m' ? 6 : timeRange === '5m' ? 30 : timeRange === '15m' ? 90 : 360;
-        return updated.slice(-maxPoints);
-      });
-    }
-  }, [wsMetrics, isMonitoring, timeRange]);
-
-  // Загружаем метрики при старте мониторинга (fallback на HTTP если WebSocket недоступен)
-  useEffect(() => {
-    if (isMonitoring && !isConnected) {
-      // Первая загрузка - только быстрые данные
-      fetchMetrics(true);
-      // Последующие обновления - полные данные каждые 10 секунд
-      const interval = setInterval(() => fetchMetrics(false), 10000);
-      return () => clearInterval(interval);
-    }
-  }, [isMonitoring, isConnected]);
-
-  const fetchMetrics = async (isFirstLoad: boolean = false) => {
+  const fetchMetrics = useCallback(async (isFirstLoad: boolean = false) => {
     if (!isMonitoring) return; // Не загружаем если мониторинг не запущен
     
     try {
@@ -293,14 +251,58 @@ export default function SystemLoad() {
         }
       } else {
         setError('Не удалось загрузить метрики системы');
+        setLoading(false);
       }
     } catch (error) {
       console.error('Error fetching system metrics:', error);
       setError('Ошибка загрузки метрик системы');
-    } finally {
       setLoading(false);
     }
-  };
+  }, [isMonitoring, authFetch]);
+
+  // Используем метрики из WebSocket, если доступны
+  useEffect(() => {
+    if (wsMetrics && isMonitoring) {
+      console.log('📊 [SystemLoad] Received metrics via WebSocket');
+      const newMetrics = wsMetrics;
+      setMetrics(newMetrics);
+      
+      // Добавляем данные в историю для графиков
+      const diskPercentage = newMetrics.disk?.percentage ?? 
+        (newMetrics.disks && newMetrics.disks.length > 0 
+          ? newMetrics.disks.reduce((sum: number, d: any) => sum + d.percentage, 0) / newMetrics.disks.length 
+          : 0);
+      
+      const historyPoint: MetricHistory = {
+        timestamp: wsMetrics.timestamp || Date.now(),
+        cpu: newMetrics.cpu?.usage ?? 0,
+        memory: newMetrics.memory?.percentage ?? 0,
+        disk: diskPercentage,
+        network: 0,
+        gpu: 0,
+      };
+
+      setHistory(prev => {
+        const updated = [...prev, historyPoint];
+        // Ограничиваем историю в зависимости от выбранного диапазона
+        const maxPoints = timeRange === '1m' ? 6 : timeRange === '5m' ? 30 : timeRange === '15m' ? 90 : 360;
+        return updated.slice(-maxPoints);
+      });
+    }
+  }, [wsMetrics, isMonitoring, timeRange]);
+
+  // Загружаем метрики при старте мониторинга (fallback на HTTP если WebSocket недоступен)
+  useEffect(() => {
+    if (isMonitoring) {
+      if (!isConnected) {
+        // Первая загрузка - только быстрые данные
+        fetchMetrics(true);
+        // Последующие обновления - полные данные каждые 10 секунд
+        const interval = setInterval(() => fetchMetrics(false), 10000);
+        return () => clearInterval(interval);
+      }
+    }
+  }, [isMonitoring, isConnected, fetchMetrics]);
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 B';
@@ -343,9 +345,12 @@ export default function SystemLoad() {
     );
   }
 
-  const handleStartMonitoring = () => {
+  const handleStartMonitoring = async () => {
     setIsMonitoring(true);
     setLoading(true);
+    setError(null);
+    // Сразу запускаем загрузку метрик
+    await fetchMetrics(true);
   };
 
   const handleStopMonitoring = () => {

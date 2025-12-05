@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Tabs, Box, Card } from '@mantine/core';
-import { IconTerminal, IconMessageCircle, IconBug, IconTags, IconMenu2, IconBuilding, IconUsers, IconActivity } from '@tabler/icons-react';
+import { IconTerminal, IconMessageCircle, IconBug, IconTags, IconMenu2, IconBuilding, IconUsers, IconActivity, IconChartBar, IconShield } from '@tabler/icons-react';
 import LogViewer from '../../components/LogViewer';
 import FeedbackModule from '../../features/Feedback/Feedback';
 import BugReports from '../../features/Retail/BugReports/BugReports';
@@ -9,6 +9,8 @@ import NavigationManagement from './components/NavigationManagement';
 import BranchesManagement from './components/BranchesManagement';
 import UsersManagement from './components/UsersManagement';
 import SystemLoad from './components/SystemLoad';
+import Analytics from './components/Analytics';
+import Audit from './components/Audit';
 
 interface AdminPanelProps {
   initialTab?: string;
@@ -80,6 +82,18 @@ function AdminPanel({ initialTab = 'logs' }: AdminPanelProps) {
             >
               Нагрузка на систему
             </Tabs.Tab>
+            <Tabs.Tab 
+              value="analytics" 
+              leftSection={<IconChartBar size={18} />}
+            >
+              Аналитика
+            </Tabs.Tab>
+            <Tabs.Tab 
+              value="audit" 
+              leftSection={<IconShield size={18} />}
+            >
+              Аудит
+            </Tabs.Tab>
           </Tabs.List>
         </Tabs>
       </Card>
@@ -124,6 +138,16 @@ function AdminPanel({ initialTab = 'logs' }: AdminPanelProps) {
           {activeTab === 'system' && (
             <Tabs.Panel value="system">
               <SystemLoad />
+            </Tabs.Panel>
+          )}
+          {activeTab === 'analytics' && (
+            <Tabs.Panel value="analytics">
+              <Analytics />
+            </Tabs.Panel>
+          )}
+          {activeTab === 'audit' && (
+            <Tabs.Panel value="audit">
+              <Audit />
             </Tabs.Panel>
           )}
         </Tabs>

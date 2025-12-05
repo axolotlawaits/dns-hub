@@ -250,19 +250,24 @@ function Merch() {
                     style={{ 
                       flex: isHierarchyVisible ? '1 1 70%' : '1 1 100%', 
                       minWidth: 0,
-                      transition: 'flex 0.3s ease'
+                      transition: 'flex 0.3s ease',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      overflow: 'hidden'
                     }}
                   >
-                    <Stack gap="md">
+                    <Stack gap="md" style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
                       <Group justify="space-between" align="center">
                         <Text size="lg" fw={600} className="merch-title" style={{ paddingLeft: 10 }}>
                           Карточки товаров
                         </Text>
                       </Group>
-                      <CardGroup 
-                        hasFullAccess={hasFullAccess}
-                        onCardsUpdate={() => {}}
-                      />
+                      <Box style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+                        <CardGroup 
+                          hasFullAccess={hasFullAccess}
+                          onCardsUpdate={() => {}}
+                        />
+                      </Box>
                     </Stack>
                   </Paper>
 
