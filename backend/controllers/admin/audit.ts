@@ -160,11 +160,11 @@ export const getAuditLogs = async (req: Request, res: Response, next: NextFuncti
       stats: {
         actions: actionStats.map(s => ({
           action: s.action,
-          count: s._count.action
+          count: s._count
         })),
         entities: entityStats.map(s => ({
           entityType: s.entityType,
-          count: s._count.entityType
+          count: s._count
         }))
       }
     });
@@ -249,7 +249,7 @@ export const getAuditStats = async (req: Request, res: Response, next: NextFunct
           userId: userLog.userId,
           email: user?.email || 'Unknown',
           role: user?.role || 'UNKNOWN',
-          actionCount: userLog._count.userId
+          actionCount: userLog._count
         };
       })
     );
