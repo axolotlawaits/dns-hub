@@ -8,7 +8,6 @@ import {
   SimpleGrid, 
   Text,
   Badge,
-  Switch,
   Box,
   Paper,
   Loader
@@ -316,14 +315,6 @@ function Card({ cardData, onEdit, onDelete, onToggleActive, searchQuery = '', co
 
         {/* Кнопки действий */}
         <Group justify="flex-end" gap="xs" mt="auto">
-          {onToggleActive && (
-            <Switch
-              checked={cardData.isActive}
-              onChange={(event) => handleToggleActive(event.currentTarget.checked)}
-              disabled={isActiveLoading}
-              size="xs"
-            />
-          )}
           {onEdit && (
             <ActionIcon 
               variant="subtle" 
@@ -403,17 +394,6 @@ function Card({ cardData, onEdit, onDelete, onToggleActive, searchQuery = '', co
         </Group>
         
         <Group gap="xs">
-          {onToggleActive && (
-            <Tooltip label="Переключить активность" withArrow>
-              <Switch
-                checked={cardData.isActive}
-                onChange={(event) => handleToggleActive(event.currentTarget.checked)}
-                disabled={isActiveLoading}
-                size="sm"
-              />
-            </Tooltip>
-          )}
-          
           {onEdit && (
             <Tooltip label="Редактировать" withArrow>
               <ActionIcon 
