@@ -31,7 +31,7 @@ interface AuthImageProps {
   className?: string;
 }
 
-// Компонент для загрузки файлов с заголовками авторизации
+// Компонент для загрузки файлов с заголовками авторизации. Исправить зависимости
 const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: AuthFileLoaderProps) => {
     const [blobUrl, setBlobUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
@@ -125,7 +125,8 @@ const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: 
           }
         }
       };
-    }, [src, onMimeTypeDetected, onLoad, onError]);
+    }, [src]);
+    // массив зависимостей [src, onMimeTypeDetected, onLoad, onError]
 
     // Очистка при размонтировании компонента
     useEffect(() => {
@@ -891,7 +892,7 @@ export const FilePreviewModal = ({
     }
   }, [opened, initialIndex]);
 
-  // Измеряем размеры контейнера для правильного расчета размеров при повороте
+  // Измеряем размеры контейнера для правильного расчета размеров при повороте. Исправить зависимости
   useEffect(() => {
     const updateSize = () => {
       const target = rotationContainerRef.current || imageContainerRef.current;
@@ -969,7 +970,8 @@ export const FilePreviewModal = ({
     }
     
     return () => window.removeEventListener('resize', updateSize);
-  }, [opened, currentIndex, normalizedRotation, isImage, isPdf, containerSize, overlayHeights, baseScale, displayedWidth, displayedHeight]);
+  }, [opened, currentIndex, normalizedRotation]);
+  // массив зависимостей [opened, currentIndex, normalizedRotation, isImage, isPdf, containerSize, overlayHeights, baseScale, displayedWidth, displayedHeight]
 
   useEffect(() => {
     if (!currentAttachment) return;
