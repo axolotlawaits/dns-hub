@@ -1834,20 +1834,20 @@ class MerchBotService {
       console.log(`📋 Найден элемент: ${item.name}, attachments: ${item.attachments.length}`);
       
       const paths: string[] = [];
-      const addedFiles = new Set<string>(); // Для отслеживания уже добавленных файлов
+      const retailedFiles = new Set<string>(); // Для отслеживания уже добавленных файлов
       
       // Путь к директории с изображениями
-      const merchDir = path.join(process.cwd(), 'public', 'add', 'merch');
+      const merchDir = path.join(process.cwd(), 'public', 'retail', 'merch');
       
       // Изображения из attachments
       for (const attachment of item.attachments) {
-        if (!addedFiles.has(attachment.source)) { // Проверяем, не добавлен ли уже этот файл
+        if (!retailedFiles.has(attachment.source)) { // Проверяем, не добавлен ли уже этот файл
           const filePath = path.join(merchDir, attachment.source);
           
           // Проверяем, существует ли файл
           if (fs.existsSync(filePath)) {
             paths.push(filePath);
-          addedFiles.add(attachment.source);
+          retailedFiles.add(attachment.source);
             console.log(`📎 Добавлено изображение: ${filePath}`);
           } else {
             console.warn(`⚠️ Файл не найден: ${filePath}`);
@@ -2084,10 +2084,10 @@ class MerchBotService {
       console.log(`📁 [getImageUrl] Убран префикс public/retail/merch/: ${fileName}`);
     }
     
-    // Убираем старый префикс "public/add/merch/" если он есть (для совместимости)
-    if (fileName.startsWith('public/add/merch/')) {
-      fileName = fileName.replace('public/add/merch/', '');
-      console.log(`📁 [getImageUrl] Убран префикс public/add/merch/: ${fileName}`);
+    // Убираем старый префикс "public/retail/merch/" если он есть (для совместимости)
+    if (fileName.startsWith('public/retail/merch/')) {
+      fileName = fileName.replace('public/retail/merch/', '');
+      console.log(`📁 [getImageUrl] Убран префикс public/retail/merch/: ${fileName}`);
     }
     
     // Убираем префикс "retail/merch/" если он есть
@@ -2096,10 +2096,10 @@ class MerchBotService {
       console.log(`📁 [getImageUrl] Убран префикс retail/merch/: ${fileName}`);
     }
     
-    // Убираем старый префикс "add/merch/" если он есть (для совместимости)
-    if (fileName.startsWith('add/merch/')) {
-      fileName = fileName.replace('add/merch/', '');
-      console.log(`📁 [getImageUrl] Убран префикс add/merch/: ${fileName}`);
+    // Убираем старый префикс "retail/merch/" если он есть (для совместимости)
+    if (fileName.startsWith('retail/merch/')) {
+      fileName = fileName.replace('retail/merch/', '');
+      console.log(`📁 [getImageUrl] Убран префикс retail/merch/: ${fileName}`);
     }
     
     // Формируем правильный URL (новый путь retail/merch)
