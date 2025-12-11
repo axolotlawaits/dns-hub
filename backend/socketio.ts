@@ -110,7 +110,6 @@ export class SocketIOService {
 
       socket.on('disconnect', (reason) => {
         this.unregisterSocket(socket.id);
-        console.log(`[Socket.IO] Disconnected: ${reason}`);
       });
 
       socket.on('error', (err) => {
@@ -149,8 +148,6 @@ export class SocketIOService {
       lastActivity: new Date()
     };
     this.connections.set(socketId, info);
-
-    console.log(`[Socket.IO] Registered: userId=${userId || '-'} deviceId=${deviceId || '-'}`);
   }
 
   private registerDeviceSocket(deviceId: string, socketId: string) {
@@ -190,7 +187,6 @@ export class SocketIOService {
         if (inactiveDuration > 5 * 60 * 1000) {
           this.io?.sockets.sockets.get(socketId)?.disconnect(true);
           this.unregisterSocket(socketId);
-          console.log(`[Socket.IO] Cleaned up inactive connection`);
         }
       });
     }, 60000);
