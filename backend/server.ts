@@ -125,6 +125,7 @@ const corsOptions: cors.CorsOptions = {
 }
 
 const metricsMiddleware = promBundle({
+  metricsPath: '/hub-api/metrics',
   includeMethod: true,
   includePath: true
 });
