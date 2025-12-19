@@ -55,7 +55,7 @@ interface NetworkScanResult {
 
 // Сканирование сети на наличие принтеров со сканерами
 // Поддерживает Linux и Docker окружения
-export const scanNetworkForPrinters = async (req: Request, res: Response): Promise<void> => {
+export const scanNetworkForPrinters = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const { networkRange, startIp, endIp, ports } = networkScanSchema.parse(req.body);
     
@@ -204,13 +204,13 @@ export const scanNetworkForPrinters = async (req: Request, res: Response): Promi
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({
+      return res.status(400).json({
         success: false,
         error: 'Ошибка валидации',
         details: error.issues
       });
     } else {
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: 'Ошибка сканирования сети',
         message: error instanceof Error ? error.message : 'Неизвестная ошибка'
@@ -220,7 +220,7 @@ export const scanNetworkForPrinters = async (req: Request, res: Response): Promi
 };
 
 // Получение списка известных принтеров
-export const getKnownPrinters = async (req: Request, res: Response): Promise<void> => {
+export const getKnownPrinters = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const printers = await prisma.printer.findMany({
       where: {
@@ -235,7 +235,16 @@ export const getKnownPrinters = async (req: Request, res: Response): Promise<voi
 
     res.json({
       success: true,
-      printers: printers.map(p => ({
+      printers: printers.map((p: {
+        id: string;
+        ip: string;
+        port: number;
+        name: string | null;
+        vendor: string | null;
+        model: string | null;
+        hasScanner: boolean;
+        scannerType: string | null;
+      }) => ({
         id: p.id,
         ip: p.ip,
         port: p.port,
@@ -249,7 +258,7 @@ export const getKnownPrinters = async (req: Request, res: Response): Promise<voi
     });
   } catch (error) {
     console.error('[Scanner] Ошибка получения списка принтеров:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Ошибка получения списка принтеров',
       message: error instanceof Error ? error.message : 'Неизвестная ошибка'
@@ -258,7 +267,7 @@ export const getKnownPrinters = async (req: Request, res: Response): Promise<voi
 };
 
 // Добавление принтера в список известных
-export const addPrinter = async (req: Request, res: Response): Promise<void> => {
+export const addPrinter = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const token = (req as any).token;
     const userId = token?.userId;
@@ -320,7 +329,7 @@ export const addPrinter = async (req: Request, res: Response): Promise<void> => 
     });
   } catch (error) {
     console.error('[Scanner] Ошибка добавления принтера:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Ошибка добавления принтера',
       message: error instanceof Error ? error.message : 'Неизвестная ошибка'
@@ -336,7 +345,7 @@ const activeScans = new Map<string, {
 }>();
 
 // Запуск автоматического сканирования документов
-export const startDocumentScanning = async (req: Request, res: Response): Promise<void> => {
+export const startDocumentScanning = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const token = (req as any).token;
     const userId = token?.userId;
@@ -481,7 +490,7 @@ export const startDocumentScanning = async (req: Request, res: Response): Promis
     });
   } catch (error) {
     console.error('[Scanner] Ошибка запуска сканирования:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Ошибка запуска сканирования',
       message: error instanceof Error ? error.message : 'Неизвестная ошибка'
@@ -490,7 +499,7 @@ export const startDocumentScanning = async (req: Request, res: Response): Promis
 };
 
 // Остановка автоматического сканирования
-export const stopDocumentScanning = async (req: Request, res: Response): Promise<void> => {
+export const stopDocumentScanning = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const token = (req as any).token;
     const userId = token?.userId;
@@ -520,7 +529,7 @@ export const stopDocumentScanning = async (req: Request, res: Response): Promise
     }
   } catch (error) {
     console.error('[Scanner] Ошибка остановки сканирования:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Ошибка остановки сканирования',
       message: error instanceof Error ? error.message : 'Неизвестная ошибка'
@@ -529,7 +538,7 @@ export const stopDocumentScanning = async (req: Request, res: Response): Promise
 };
 
 // Получение статуса сканирования
-export const getScanningStatus = async (req: Request, res: Response): Promise<void> => {
+export const getScanningStatus = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const token = (req as any).token;
     const userId = token?.userId;
@@ -565,7 +574,7 @@ export const getScanningStatus = async (req: Request, res: Response): Promise<vo
     });
   } catch (error) {
     console.error('[Scanner] Ошибка получения статуса:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Ошибка получения статуса',
       message: error instanceof Error ? error.message : 'Неизвестная ошибка'
@@ -574,7 +583,7 @@ export const getScanningStatus = async (req: Request, res: Response): Promise<vo
 };
 
 // Получение истории сканирований
-export const getScanHistory = async (req: Request, res: Response): Promise<void> => {
+export const getScanHistory = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const token = (req as any).token;
     const userId = token?.userId;
@@ -602,7 +611,7 @@ export const getScanHistory = async (req: Request, res: Response): Promise<void>
     });
   } catch (error) {
     console.error('[Scanner] Ошибка получения истории:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Ошибка получения истории',
       message: error instanceof Error ? error.message : 'Неизвестная ошибка'
@@ -611,7 +620,7 @@ export const getScanHistory = async (req: Request, res: Response): Promise<void>
 };
 
 // Получение файлов сессии
-export const getSessionFiles = async (req: Request, res: Response): Promise<void> => {
+export const getSessionFiles = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const token = (req as any).token;
     const userId = token?.userId;
@@ -648,7 +657,7 @@ export const getSessionFiles = async (req: Request, res: Response): Promise<void
     });
   } catch (error) {
     console.error('[Scanner] Ошибка получения файлов сессии:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Ошибка получения файлов',
       message: error instanceof Error ? error.message : 'Неизвестная ошибка'
@@ -657,7 +666,7 @@ export const getSessionFiles = async (req: Request, res: Response): Promise<void
 };
 
 // Скачивание отдельного файла
-export const downloadFile = async (req: Request, res: Response): Promise<void> => {
+export const downloadFile = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const token = (req as any).token;
     const userId = token?.userId;
@@ -707,7 +716,7 @@ export const downloadFile = async (req: Request, res: Response): Promise<void> =
     });
   } catch (error) {
     console.error('[Scanner] Ошибка скачивания файла:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Ошибка скачивания файла',
       message: error instanceof Error ? error.message : 'Неизвестная ошибка'
@@ -716,7 +725,7 @@ export const downloadFile = async (req: Request, res: Response): Promise<void> =
 };
 
 // Скачивание всех файлов сессии в zip архиве
-export const downloadSessionZip = async (req: Request, res: Response): Promise<void> => {
+export const downloadSessionZip = async (req: Request, res: Response): Promise<Response | void> => {
   try {
     const token = (req as any).token;
     const userId = token?.userId;
@@ -779,7 +788,7 @@ export const downloadSessionZip = async (req: Request, res: Response): Promise<v
   } catch (error) {
     console.error('[Scanner] Ошибка создания zip архива:', error);
     if (!res.headersSent) {
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: 'Ошибка создания архива',
         message: error instanceof Error ? error.message : 'Неизвестная ошибка'

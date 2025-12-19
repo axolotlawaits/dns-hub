@@ -1,7 +1,7 @@
 import { Bot, Context, session, SessionFlavor, Keyboard } from 'grammy';
-import { Notifications } from '@prisma/client';
 import axios from 'axios';
 import { prisma, API } from '../../server.js';
+import type { NotificationWithRelations } from './notification.js';
 import { getDoors, openDoor, findDoorByName, isTrassirConfigured, getFloorsSubmenuDoors, isSubmenuTrigger } from './trassirService.js';
 
 // 1. Типизация сессии (если нужно хранить состояние)
@@ -418,7 +418,7 @@ class TelegramService {
 
   // 8. Отправка уведомлений
   public async sendNotification(
-    notification: Notifications,
+    notification: NotificationWithRelations,
     chatId: string
   ): Promise<boolean> {
     // Проверяем настройку пользователя для Telegram уведомлений
