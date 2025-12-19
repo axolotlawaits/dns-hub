@@ -59,7 +59,7 @@ const TEMPLATES: PriceTagTemplate[] = [
   { value: 'StandardAutoprinter-Atol', label: 'Стандартный ценник (Атол)', numericFormat: 25 },
   { value: 'BigAutoprinter-Atol', label: 'Большой ценник (Атол)', numericFormat: 26 },
   { value: 'Termo', label: 'Термоэтикетка', numericFormat: 99 },
-  { value: 'Standart', label: 'Стандартный ценник', numericFormat: 1 },
+  { value: 'Standard', label: 'Стандартный ценник', numericFormat: 1 },
 ];
 
 // Компонент для отображения элемента списка
@@ -125,7 +125,7 @@ const PrintItemCard = ({
 
       {/* Центральная часть - информация о товаре */}
       <Stack gap="xs" style={{ flex: 1, minWidth: 0 }}>
-        <Text fw={600} size="md" c="white" lineClamp={2}>
+        <Text fw={600} size="md" c="var(--theme-text-primary)" lineClamp={2}>
           {item.tovarName}
         </Text>
         
@@ -197,7 +197,7 @@ const PriceTagPrinting = () => {
     setHeader({
       title: 'Печать ценников',
       subtitle: 'Управление печатью ценников для розничной сети',
-      icon: <Text size="xl" fw={700} c="white">🖨️</Text>
+      icon: <Text size="xl" fw={700} c="var(--theme-text-primary)">🖨️</Text>
     });
 
     return () => clearHeader();
@@ -224,11 +224,22 @@ const PriceTagPrinting = () => {
       }
 
       const data = await response.json();
+      console.log('Auth response data:', {
+        hasTokens: !!data.tokens,
+        hasAuth: !!data.tokens?.auth,
+        hasTokenAuth: !!data.tokens?.tokenAuth,
+        tokens: data.tokens
+      });
+      
       if (data.tokens?.auth && data.tokens?.tokenAuth) {
         setAuthTokens(data.tokens);
         closeModal();
         setErrorMessage(null);
         showNotification('success', 'Авторизация успешна');
+        console.log('Tokens saved:', {
+          hasAuth: !!data.tokens.auth,
+          hasTokenAuth: !!data.tokens.tokenAuth
+        });
       } else {
         throw new Error('Неверные данные авторизации');
       }
@@ -307,6 +318,15 @@ const PriceTagPrinting = () => {
       for (const [size, items] of Object.entries(groupedBySize)) {
         if (items.length === 0) continue;
 
+        console.log('Sending print request:', {
+          size,
+          itemsCount: items.length,
+          hasAuthTokens: !!authTokens,
+          hasTokenAuth: !!authTokens?.tokenAuth,
+          hasAuth: !!authTokens?.auth,
+          tokens: authTokens
+        });
+
         const response = await fetch(`${API}/retail/print-service/print`, {
           method: 'POST',
           headers: {
@@ -321,7 +341,23 @@ const PriceTagPrinting = () => {
           }),
         });
 
-        if (!response.ok) throw new Error(`Ошибка печати для размера ${size}`);
+        if (!response.ok) {
+          let errorMessage = `Ошибка печати для размера ${size}`;
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.message || errorData.error || errorMessage;
+            if (errorData.details) {
+              console.error('Print error details:', errorData.details);
+            }
+          } catch (e) {
+            // Если не удалось распарсить JSON, используем текст ответа
+            const text = await response.text();
+            if (text) {
+              errorMessage = `${errorMessage}: ${text}`;
+            }
+          }
+          throw new Error(errorMessage);
+        }
 
         const blob = await response.blob();
         window.open(URL.createObjectURL(blob), '_blank');
@@ -331,11 +367,19 @@ const PriceTagPrinting = () => {
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Ошибка при печати';
       console.error('Print error:', errorMsg);
-      showNotification('error', errorMsg);
+      
+      // Если ошибка связана с авторизацией, предлагаем повторно авторизоваться
+      if (errorMsg.includes('токены') || errorMsg.includes('авторизац') || errorMsg.includes('недействительны') || errorMsg.includes('истекли')) {
+        setAuthTokens(null);
+        showNotification('error', 'Токены авторизации истекли. Необходимо повторно авторизоваться.');
+        openModal();
+      } else {
+        showNotification('error', errorMsg);
+      }
     } finally {
       setLoading(false);
     }
-  }, [dateFrom, authTokens, previewData, brand, showNotification]);
+  }, [dateFrom, authTokens, previewData, brand, showNotification, openModal]);
 
   const handleRemoveItem = useCallback((id: string) => {
     if (!previewData) return;
@@ -393,7 +437,7 @@ const PriceTagPrinting = () => {
             </ThemeIcon>
             
             <Stack align="center" gap="md">
-              <Title order={1} ta="center" c="white">
+              <Title order={1} ta="center" c="var(--theme-text-primary)">
                 Печать ценников
               </Title>
               <Text size="lg" c="dimmed" ta="center" maw={500}>
@@ -583,7 +627,7 @@ const PriceTagPrinting = () => {
                     <IconCheck size={20} />
                   </ThemeIcon>
                   <div>
-                    <Title order={3} c="white">Список на печать</Title>
+                    <Title order={3} c="var(--theme-text-primary)">Список на печать</Title>
                     <Text c="dimmed">Настроить параметры печати для каждого товара</Text>
                   </div>
                 </Group>
