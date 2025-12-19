@@ -22,12 +22,11 @@ import {
   Alert,
   Modal
 } from '@mantine/core';
-import { IconSend, IconAlertCircle, IconCheck, IconChartBar, IconUsers, IconClock, IconSearch, IconThumbUp, IconDownload, IconFileSpreadsheet } from '@tabler/icons-react';
+import { IconSend, IconAlertCircle, IconCheck, IconChartBar, IconUsers, IconClock, IconSearch, IconThumbUp } from '@tabler/icons-react';
 import { ActivityChart } from './charts/ActivityChart';
 import { HeatmapChart } from './charts/HeatmapChart';
 import { FunnelChart } from './charts/FunnelChart';
 import { TrendChart } from './charts/TrendChart';
-import { exportStatsToExcel, exportStatsToCSV } from './utils/exportStats';
 import dayjs from 'dayjs';
 import { fetchMerchStats, MerchStatsResponse } from '../../data/MerchStatsData';
 import { API } from '../../../../../config/constants';
@@ -292,22 +291,7 @@ function MerchStats() {
       <Group justify="space-between" align="flex-end">
         <Title order={2}>Статистика бота</Title>
         <Group align="flex-end">
-          <Button
-            leftSection={<IconFileSpreadsheet size={16} />}
-            onClick={() => stats && exportStatsToExcel(stats, parseInt(period, 10))}
-            variant="light"
-            color="green"
-          >
-            Экспорт Excel
-          </Button>
-          <Button
-            leftSection={<IconDownload size={16} />}
-            onClick={() => stats && exportStatsToCSV(stats, parseInt(period, 10))}
-            variant="light"
-            color="blue"
-          >
-            Экспорт CSV
-          </Button>
+
           <Button
             leftSection={<IconSend size={16} />}
             onClick={() => setSendModalOpened(true)}

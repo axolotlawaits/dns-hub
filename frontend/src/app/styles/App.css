@@ -142,15 +142,6 @@ a:active {
   padding: 0px 5px;
 }
 
-#content {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  background-color: var(--bg);
-  border-radius: 10px;
-  color: var(--font);
-}
-
 #search {
   background-color: #bcaaa4;
   height: 30px;
@@ -232,24 +223,6 @@ a:active {
   -webkit-backdrop-filter: blur(25px);
 }
 
-/* Дополнительный отступ для контента */
-#content {
-  min-height: calc(100vh - 80px);
-}
-
-/* Дополнительный отступ для страниц с длинным контентом */
-body {
-  padding-bottom: 0px !important;
-  margin-bottom: 0px !important;
-}
-
-/* Принудительный отступ для основного контента */
-#content {
-  padding-bottom: 120px !important;
-  margin-bottom: 0px !important;
-  min-height: calc(100vh - 80px) !important;
-}
-
 /* Дополнительный отступ для всех основных контейнеров с p="xl" */
 [data-mantine-component="Box"][style*="padding: var(--mantine-spacing-xl)"] {
   padding-bottom: calc(var(--mantine-spacing-xl) + 80px) !important;
@@ -271,16 +244,8 @@ div[style*="padding: var(--mantine-spacing-xl)"] {
   padding-bottom: calc(var(--mantine-spacing-xl) + 80px) !important;
 }
 
-/* Специфичное правило для SafetyJournal */
-#content > div[style*="padding: var(--mantine-spacing-xl)"] {
-  padding-bottom: calc(var(--mantine-spacing-xl) + 100px) !important;
-}
-
 /* Адаптивные отступы для мобильных устройств */
 @media (max-width: 768px) {
-  #content {
-    padding-bottom: 140px !important;
-  }
   
   [data-mantine-component="Box"][style*="padding: var(--mantine-spacing-xl)"],
   .mantine-Box-root[style*="padding: var(--mantine-spacing-xl)"],
@@ -296,9 +261,6 @@ div[style*="padding: var(--mantine-spacing-xl)"] {
 }
 
 @media (max-width: 480px) {
-  #content {
-    padding-bottom: 160px !important;
-  }
   
   [data-mantine-component="Box"][style*="padding: var(--mantine-spacing-xl)"],
   .mantine-Box-root[style*="padding: var(--mantine-spacing-xl)"],
@@ -371,7 +333,6 @@ div[style*="padding: var(--mantine-spacing-xl)"] {
   padding: 6px 8px;
   transition: all 0.3s ease;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1);
   position: relative;
   flex-shrink: 0;
 }

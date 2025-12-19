@@ -70,6 +70,10 @@ const ProfileInfo = () => {
   const [telegramUserName, setTelegramUserName] = useState('');
   const [telegramLoading, setTelegramLoading] = useState(true);
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(true);
+  // Настройки Telegram бота
+  const [telegramDoorOpeningEnabled, setTelegramDoorOpeningEnabled] = useState(true);
+  const [telegramNotificationsEnabled, setTelegramNotificationsEnabled] = useState(true);
+  const [telegramAdditionalDoorsEnabled, setTelegramAdditionalDoorsEnabled] = useState(false);
   const [notificationSoundEnabled, setNotificationSoundEnabled] = useState(true);
   const [notificationSound, setNotificationSound] = useState<string>('default');
   const [bookmarksCardsPerRow, setBookmarksCardsPerRow] = useState<3 | 6 | 9>(6);
@@ -147,11 +151,6 @@ const ProfileInfo = () => {
         }
       } catch (error) {
         console.error('Telegram status check error:', error);
-        notificationSystem.addNotification(
-          'Ошибка',
-          error instanceof Error ? error.message : 'Не удалось проверить статус Telegram',
-          'error'
-        );
       } finally {
         setTelegramLoading(false);
       }
@@ -445,6 +444,72 @@ const ProfileInfo = () => {
     }
   }, [user?.id]);
 
+  // Загрузка настроек Telegram
+  useEffect(() => {
+    const loadTelegramSettings = async () => {
+      if (!user?.id) return;
+      
+      const doorOpening = await loadUserSetting('telegram_door_opening_enabled');
+      const notifications = await loadUserSetting('telegram_notifications_enabled');
+      const additionalDoors = await loadUserSetting('telegram_additional_doors_enabled');
+      
+      if (doorOpening !== null) {
+        setTelegramDoorOpeningEnabled(doorOpening === 'true');
+      } else {
+        // По умолчанию включено
+        setTelegramDoorOpeningEnabled(true);
+      }
+      
+      if (notifications !== null) {
+        setTelegramNotificationsEnabled(notifications === 'true');
+      } else {
+        // По умолчанию включено
+        setTelegramNotificationsEnabled(true);
+      }
+      
+      if (additionalDoors !== null) {
+        setTelegramAdditionalDoorsEnabled(additionalDoors === 'true');
+      } else {
+        // По умолчанию отключено
+        setTelegramAdditionalDoorsEnabled(false);
+      }
+    };
+
+    if (user?.id) {
+      loadTelegramSettings();
+    }
+  }, [user?.id]);
+
+  const handleTelegramDoorOpeningToggle = async (enabled: boolean) => {
+    setTelegramDoorOpeningEnabled(enabled);
+    await saveUserSetting('telegram_door_opening_enabled', enabled.toString());
+    notificationSystem.addNotification(
+      'Успех',
+      `Открытие дверей через Telegram ${enabled ? 'включено' : 'отключено'}`,
+      'success'
+    );
+  };
+
+  const handleTelegramNotificationsToggle = async (enabled: boolean) => {
+    setTelegramNotificationsEnabled(enabled);
+    await saveUserSetting('telegram_notifications_enabled', enabled.toString());
+    notificationSystem.addNotification(
+      'Успех',
+      `Оповещения в Telegram ${enabled ? 'включены' : 'отключены'}`,
+      'success'
+    );
+  };
+
+  const handleTelegramAdditionalDoorsToggle = async (enabled: boolean) => {
+    setTelegramAdditionalDoorsEnabled(enabled);
+    await saveUserSetting('telegram_additional_doors_enabled', enabled.toString());
+    notificationSystem.addNotification(
+      'Успех',
+      `Дополнительные двери в Telegram ${enabled ? 'включены' : 'отключены'}`,
+      'success'
+    );
+  };
+
   const generateTelegramLink = async () => {
     setIsGeneratingLink(true);
     try {
@@ -490,7 +555,6 @@ const ProfileInfo = () => {
       );
     }
   };
-
 
   const handlePhotoSelect = async (values: Record<string, any>) => {
     const photoValue = values.photo;
@@ -843,7 +907,7 @@ const ProfileInfo = () => {
                 background: 'var(--theme-bg-secondary)',
                 border: '1px solid var(--theme-border)',
                 transition: 'var(--transition-all)',
-                height: '140px',
+                minHeight: '250px',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between'
@@ -886,6 +950,43 @@ const ProfileInfo = () => {
                           @{telegramUserName}
                         </Text>
                       )}
+                      
+                      {/* Переключатели настроек Telegram */}
+                      <Stack gap="xs">
+                        <Group justify="space-between">
+                          <Text size="sm" style={{ color: 'var(--theme-text-primary)' }}>
+                            Открытие дверей
+                          </Text>
+                          <Switch
+                            checked={telegramDoorOpeningEnabled}
+                            onChange={(e) => handleTelegramDoorOpeningToggle(e.currentTarget.checked)}
+                            size="sm"
+                          />
+                        </Group>
+                        
+                        <Group justify="space-between">
+                          <Text size="sm" style={{ color: 'var(--theme-text-primary)' }}>
+                            Оповещения
+                          </Text>
+                          <Switch
+                            checked={telegramNotificationsEnabled}
+                            onChange={(e) => handleTelegramNotificationsToggle(e.currentTarget.checked)}
+                            size="sm"
+                          />
+                        </Group>
+                        
+                        <Group justify="space-between">
+                          <Text size="sm" style={{ color: 'var(--theme-text-primary)' }}>
+                            Дополнительные двери
+                          </Text>
+                          <Switch
+                            checked={telegramAdditionalDoorsEnabled}
+                            onChange={(e) => handleTelegramAdditionalDoorsToggle(e.currentTarget.checked)}
+                            size="sm"
+                          />
+                        </Group>
+                      </Stack>
+                      
                       <Button
                         leftSection={<IconUnlink size={16} />}
                         variant="outline"
@@ -924,7 +1025,7 @@ const ProfileInfo = () => {
                 background: 'var(--theme-bg-secondary)',
                 border: '1px solid var(--theme-border)',
                 transition: 'var(--transition-all)',
-                height: '140px',
+                minHeight: '250px',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between'
@@ -946,6 +1047,7 @@ const ProfileInfo = () => {
                   color={emailNotificationsEnabled ? "green" : "gray"} 
                   variant="light"
                   size="sm"
+                  
                 >
                   {emailNotificationsEnabled ? "Включены" : "Отключены"}
                 </Badge>
@@ -967,7 +1069,7 @@ const ProfileInfo = () => {
               </Group>
             </Card>
           </Grid.Col>
-          
+
           {/* Настройка звука уведомлений */}
           <Grid.Col span={12}>
             <Card 
@@ -1357,6 +1459,7 @@ const ProfileInfo = () => {
           </Alert>
         </Stack>
       </Modal>
+
       <DynamicFormModal
         opened={photoModalOpened}
         onClose={closePhotoModal}

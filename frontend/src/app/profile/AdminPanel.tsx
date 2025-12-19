@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Tabs, Box, Card } from '@mantine/core';
-import { IconTerminal, IconMessageCircle, IconBug, IconTags, IconMenu2, IconBuilding, IconUsers, IconActivity, IconChartBar, IconShield } from '@tabler/icons-react';
+import { IconTerminal, IconMessageCircle, IconBug, IconTags, IconMenu2, IconBuilding, IconUsers, IconChartBar, IconShield } from '@tabler/icons-react';
 import LogViewer from '../../components/LogViewer';
 import FeedbackModule from '../../features/Feedback/Feedback';
 import BugReports from '../../features/Retail/BugReports/BugReports';
@@ -8,7 +8,6 @@ import TypesManagement from './components/TypesManagement';
 import NavigationManagement from './components/NavigationManagement';
 import BranchesManagement from './components/BranchesManagement';
 import UsersManagement from './components/UsersManagement';
-import SystemLoad from './components/SystemLoad';
 import Analytics from './components/Analytics';
 import Audit from './components/Audit';
 
@@ -77,12 +76,6 @@ function AdminPanel({ initialTab = 'logs' }: AdminPanelProps) {
               Пользователи
             </Tabs.Tab>
             <Tabs.Tab 
-              value="system" 
-              leftSection={<IconActivity size={18} />}
-            >
-              Нагрузка на систему
-            </Tabs.Tab>
-            <Tabs.Tab 
               value="analytics" 
               leftSection={<IconChartBar size={18} />}
             >
@@ -133,11 +126,6 @@ function AdminPanel({ initialTab = 'logs' }: AdminPanelProps) {
           {activeTab === 'users' && (
             <Tabs.Panel value="users">
               <UsersManagement />
-            </Tabs.Panel>
-          )}
-          {activeTab === 'system' && (
-            <Tabs.Panel value="system">
-              <SystemLoad />
             </Tabs.Panel>
           )}
           {activeTab === 'analytics' && (

@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { API } from '../../../config/constants';
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
-import {  Button,  Title,  LoadingOverlay,  Group,  Select,  TextInput,  Text,  ActionIcon,  Badge,  Stack,  MultiSelect,  Alert, Container, Paper, Grid, ThemeIcon, Tooltip, Divider, ScrollArea } from '@mantine/core';
+import {  Button,  Title,  LoadingOverlay,  Group,  Select,  TextInput,  Text,  ActionIcon,  Badge,  Stack,  MultiSelect,  Alert, Paper, Grid, ThemeIcon, Tooltip, Divider, ScrollArea, Box } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { notificationSystem } from '../../../utils/Push';
 import { formatPrice } from '../../../utils/format';
@@ -376,7 +376,7 @@ const PriceTagPrinting = () => {
 
   if (!authTokens) {
     return (
-      <Container size="xl" py="xl">
+      <Box size="xl">
         <Paper 
           shadow="xl" 
           radius="xl" 
@@ -473,12 +473,12 @@ const PriceTagPrinting = () => {
             error={errorMessage}
           />
         </Paper>
-      </Container>
+      </Box>
     );
   }
 
   return (
-    <Container size="xl" py="xl">
+    <Box size="xl">
       <Stack gap="xl">
         {/* Заголовок и предупреждение */}
         <Paper 
@@ -655,7 +655,7 @@ const PriceTagPrinting = () => {
 
         <LoadingOverlay visible={loading} />
       </Stack>
-    </Container>
+    </Box>
   );
 };
 

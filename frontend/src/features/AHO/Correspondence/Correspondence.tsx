@@ -622,7 +622,7 @@ export default function CorrespondenceList() {
 
   return (
     <DndProviderWrapper>
-      <Box p="md" style={{ background: 'var(--theme-bg-primary)', minHeight: '100vh' }}>
+      <Box style={{ background: 'var(--theme-bg-primary)', minHeight: '100vh' }}>
           {/* Фильтры */}
             <FilterGroup
               filters={filters}

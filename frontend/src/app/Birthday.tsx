@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { API } from '../config/constants';
-import { Box, Text, Group, LoadingOverlay, Badge, ThemeIcon, Avatar, ScrollArea, Alert,Card,Stack } from '@mantine/core';
+import { Box, Text, Group, LoadingOverlay, Badge, ThemeIcon, Avatar, ScrollArea, Alert, Card, Stack } from '@mantine/core';
 import dayjs from 'dayjs';
 import { IconCalendar, IconGift, IconAlertCircle, IconClock, IconCake } from '@tabler/icons-react';
 import { useUserContext } from '../hooks/useUserContext';
@@ -18,6 +18,7 @@ type UserData = {
   branch: {
     uuid: string;
     type: string;
+    name?: string;
   };
 };
 
@@ -37,18 +38,16 @@ export default function BirthdayList() {
       try {
         setLoading(true);
         setError(null);
-        console.log('Текущий пользователь:', user);
-        
+
         const response = await fetch(`${API}/birthday/upcoming-birthdays/${user.email}`);
         if (!response.ok) {
           throw new Error(`Ошибка загрузки данных: ${response.status}`);
         }
-        
+
         const data = await response.json();
         setUsersData(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Неизвестная ошибка');
-        console.error('Ошибка загрузки дней рождения:', err);
       } finally {
         setLoading(false);
       }
@@ -62,20 +61,34 @@ export default function BirthdayList() {
       return { text: 'Сегодня!', color: 'red', variant: 'filled' as const };
     } else if (userData.daysUntil === 1) {
       return { text: 'Завтра', color: 'orange', variant: 'light' as const };
-    } else if (userData.daysUntil <= 7) {
+    } else if (userData.daysUntil > 1 && userData.daysUntil <= 7) {
       return { text: `Через ${userData.daysUntil} дн.`, color: 'yellow', variant: 'light' as const };
     } else if (userData.isWeekendBirthday) {
-      // Для дней рождения в выходные показываем напоминание о поздравлении
-      if (userData.daysSince !== undefined && userData.daysSince <= 3) {
-        return { 
-          text: `Не забудьте поздравить! Было в ${userData.weekendDayName}`, 
-          color: 'blue', 
-          variant: 'light' as const 
+      if (
+        userData.daysSince !== undefined &&
+        (userData.daysSince === 1 || userData.daysSince === 0)
+      ) {
+        return {
+          text: 'Вчера (выходной)',
+          color: 'blue',
+          variant: 'light' as const,
+        };
+      } else if (
+        userData.daysSince !== undefined &&
+        userData.daysSince <= 3 &&
+        userData.daysSince > 1
+      ) {
+        return {
+          text: `Не забудьте поздравить! Было в ${userData.weekendDayName}`,
+          color: 'blue',
+          variant: 'light' as const,
         };
       } else {
         return { text: `Выходной (${userData.weekendDayName})`, color: 'blue', variant: 'light' as const };
       }
-    } else if (userData.daysSince !== undefined && userData.daysSince > 0) {
+    } else if (userData.daysSince !== undefined && userData.daysSince === 1) {
+      return { text: `Вчера`, color: 'gray', variant: 'light' as const };
+    } else if (userData.daysSince !== undefined && userData.daysSince > 1) {
       return { text: `Прошло ${userData.daysSince} дн.`, color: 'gray', variant: 'light' as const };
     } else {
       return { text: `Через ${userData.daysUntil} дн.`, color: 'green', variant: 'light' as const };
@@ -140,6 +153,12 @@ export default function BirthdayList() {
             const isToday = userData.daysUntil === 0;
             const isTomorrow = userData.daysUntil === 1;
 
+            // Получение названия подразделения, если оно есть
+            const branchName =
+              userData.branch && 'name' in userData.branch
+                ? (userData.branch.name as string)
+                : '';
+
             return (
               <Card
                 key={userData.id || `birthday-${index}`}
@@ -147,6 +166,7 @@ export default function BirthdayList() {
                 shadow="sm"
                 radius="md"
                 padding="md"
+                style={{ position: 'relative' }}
               >
                 <Group justify="space-between" align="flex-start">
                   <Group gap="sm" style={{ flex: 1 }}>
@@ -160,7 +180,8 @@ export default function BirthdayList() {
                       <Text size="sm" fw={600} c="var(--theme-text-primary)" mb={4}>
                         {userData.fio}
                       </Text>
-                      <Text size="xs" c="var(--theme-text-secondary)" mb="xs">
+                      {/* Форматирование branch.name жирным и вправо вниз в карточке */}
+                      <Text size="xs" c="var(--theme-text-secondary)" mb="xs" mt={branchName ? 0 : 4} style={{ fontStyle: 'italic' }}>
                         {dayjs(userData.birthday).format('DD MMMM')}
                       </Text>
                       <Group gap="xs" mb="xs">
@@ -169,9 +190,9 @@ export default function BirthdayList() {
                           color={status.color}
                           variant={status.variant}
                           leftSection={
-                            isToday ? <IconGift size={12} /> : 
-                            isTomorrow ? <IconClock size={12} /> : 
-                            <IconCalendar size={12} />
+                            isToday ? <IconGift size={12} /> :
+                              isTomorrow ? <IconClock size={12} /> :
+                                <IconCalendar size={12} />
                           }
                         >
                           {status.text}
@@ -179,13 +200,28 @@ export default function BirthdayList() {
                       </Group>
                     </Box>
                   </Group>
-                  
+
                   {isToday && (
                     <ThemeIcon size="lg" color="red" variant="light">
                       <IconGift size={20} />
                     </ThemeIcon>
                   )}
                 </Group>
+                {/* Display branch name bold and in the bottom right of the card */}
+                {branchName && (
+                  <Box
+                    style={{
+                      position: 'absolute',
+                      right: 12,
+                      bottom: 10,
+                      zIndex: 2,
+                    }}
+                  >
+                    <Text size="xs" fw={700} style={{ color: 'var(--theme-text-primary)', textAlign: 'right' }}>
+                      {branchName}
+                    </Text>
+                  </Box>
+                )}
               </Card>
             );
           })}

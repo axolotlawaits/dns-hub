@@ -22,19 +22,16 @@ import {
   IconFileTypePdf,
 } from '@tabler/icons-react';
 import { Document, Page, pdfjs } from 'react-pdf';
-import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
-import 'react-pdf/dist/esm/Page/TextLayer.css';
 import type { CardItem } from '../../data/CardData';
-import { toggleCardActive } from '../../data/CardData';
 import { FilePreviewModal } from '../../../../../utils/FilePreviewModal';
 import { API } from '../../../../../config/constants';
 import { truncateText } from '../../../../../utils/format';
 import { formatDescriptionForTelegram } from '../../../../../utils/telegramFormatter';
 import './Card.css';
 
-// Настройка worker для PDF.js - используем локальный worker из node_modules
+// Настройка worker для PDF.js - используем unpkg вместо cdnjs
 if (typeof window !== 'undefined') {
-  pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
+  pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 }
 // Теперь description уже в формате HTML
 
@@ -107,10 +104,9 @@ interface CardProps {
   compact?: boolean;
 }
 
-function Card({ cardData, onEdit, onDelete, onToggleActive, searchQuery = '', compact = false }: CardProps) {
+function Card({ cardData, onEdit, onDelete, searchQuery = '', compact = false }: CardProps) {
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [zoomModalOpened, setZoomModalOpened] = useState(false);
-  const [isActiveLoading, setIsActiveLoading] = useState(false);
 
   const CardEdit = () => {
     if (onEdit) {
@@ -121,21 +117,6 @@ function Card({ cardData, onEdit, onDelete, onToggleActive, searchQuery = '', co
   const CardDelete = () => {
     if (onDelete) {
       onDelete(cardData.id);
-    }
-  };
-
-  const handleToggleActive = async (checked: boolean) => {
-    if (onToggleActive) {
-      onToggleActive(cardData.id, checked);
-    } else {
-      try {
-        setIsActiveLoading(true);
-        await toggleCardActive(cardData.id, checked);
-      } catch (error) {
-        console.error('Ошибка при переключении статуса:', error);
-      } finally {
-        setIsActiveLoading(false);
-      }
     }
   };
 

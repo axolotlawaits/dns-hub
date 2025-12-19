@@ -660,6 +660,61 @@ export const getAllMerchCards = async (req: Request, res: Response, next: NextFu
   }
 };
 
+// Получить карточку по ID
+export const getMerchCardById = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+
+    const card = await prisma.merch.findUnique({
+      where: { id },
+      include: {
+        attachments: {
+          select: {
+            id: true,
+            source: true,
+            type: true,
+            sortOrder: true
+          },
+          orderBy: {
+            sortOrder: 'asc'
+          }
+        }
+      }
+    });
+
+    if (!card) {
+      return res.status(404).json({ error: 'Карточка не найдена' });
+    }
+
+    // Находим родительскую категорию
+    const category = card.parentId 
+      ? await prisma.merch.findUnique({
+          where: { id: card.parentId },
+          select: { id: true, name: true }
+        })
+      : null;
+
+    const imageUrls = card.attachments
+      .map(att => `${API}/public/retail/merch/${att.source}`);
+
+    res.json({
+      id: card.id,
+      name: card.name,
+      description: card.description || '',
+      isActive: card.isActive,
+      categoryId: card.parentId || '',
+      createdAt: card.createdAt.toISOString(),
+      updatedAt: card.updatedAt?.toISOString() || null,
+      category: category ? { id: category.id, name: category.name } : null,
+      imageUrls,
+      attachments: card.attachments
+    });
+  } catch (error) {
+    console.error('❌ Ошибка при получении карточки:', error);
+    next(error);
+  }
+};
+
 // Обновить карточку (layer = 0)
 export const updateMerchCard = [
   uploadMerch.single('image'),

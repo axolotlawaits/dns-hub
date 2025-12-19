@@ -1,11 +1,12 @@
-import { Modal, TextInput, Select, Button, Alert, Stack, Textarea, Text, Group, Card, Paper, ActionIcon, MultiSelect, Badge, Anchor, Switch } from '@mantine/core';
+import { Modal, TextInput, Select, Button, Alert, Stack, Textarea, Text, Group, Card, Paper, ActionIcon, MultiSelect, Badge, Switch } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useState, useEffect, useCallback, useMemo, useRef, JSX, memo } from 'react';
 import dayjs from 'dayjs';
-import { API } from '../config/constants';
 import { FileDropZone } from './dnd';
 import { IconFile, IconFileTypePdf, IconFileTypeDoc, IconFileTypeXls, IconFileTypePpt, IconFileTypeZip, IconPhoto, IconFileTypeJs, IconFileTypeHtml, IconFileTypeCss, IconFileTypeTxt, IconFileTypeCsv, IconX, IconUpload, IconVideo, IconMusic, IconFileText } from '@tabler/icons-react';
+import * as TablerIcons from '@tabler/icons-react';
 import { FilePreviewModal } from './FilePreviewModal';
+import { IconPicker } from '../components/IconPicker';
 import './styles/formModal.css';
 import { saveAs } from 'file-saver'
 
@@ -122,21 +123,11 @@ const COMMON_FIELD_PROPS = {
   }
 };
 
-// Мемоизированные стили для оптимизации
-
-const DECORATIVE_STYLES = {
-  position: 'absolute' as const,
-  top: 0,
-  right: 0,
-  width: '50px',
-  height: '50px',
-  background: 'linear-gradient(135deg, var(--color-blue-500) 0%, var(--color-blue-600) 100%)',
-  borderRadius: '0 0 0 100px',
-  opacity: 0.1
-};
+// CSS класс для декоративного элемента - стили в formModal.css
+const DECORATIVE_CLASS = 'decorative-element';
 
 // Types and interfaces
-export type FieldType = 'text' | 'number' | 'select' | 'selectSearch' | 'date' | 'datetime' | 'textarea' | 'file' | 'boolean' | 'multiselect';
+export type FieldType = 'text' | 'number' | 'select' | 'selectSearch' | 'date' | 'datetime' | 'textarea' | 'file' | 'boolean' | 'multiselect' | 'icon';
 
 interface FileFieldConfig {
   name: string;
@@ -183,6 +174,7 @@ export interface FormField {
   renderFileList?: (values: any, setFieldValue: (path: string, val: any) => void) => JSX.Element;
   mask?: (value: string) => string;
   placeholder?: string;
+  description?: string; // Описание поля
   mb?: string | number; // Отступ снизу для поля
   onKeyDown?: (e: React.KeyboardEvent) => void; // Обработчик нажатия клавиш
 }
@@ -251,6 +243,8 @@ interface DynamicFormModalProps {
   onDeleteExistingDocument?: (fileId: string, documentId: string) => void;
   // Настройка заголовка карточки файла
   fileCardTitle?: string;
+  // Ключ для получения вложений из initialValues (по умолчанию 'attachments')
+  attachmentsKey?: string;
 }
 
 // Helper functions
@@ -275,10 +269,11 @@ const FilePreview = memo(({
   onRemove: () => void;
 }) => {
   const originalName = typeof attachment.source === 'string'
-    ? attachment.source.split('\\').pop() || 'Файл'
+    ? attachment.source.split('\\').pop()?.split('/').pop() || 'Файл'
     : (attachment.source as File).name;
+  // Используем previewUrl из attachment (должен передаваться из инструмента)
   const previewUrl = typeof attachment.source === 'string' 
-    ? `${API}/public/add/media/${attachment.source}` 
+    ? ((attachment as any).previewUrl || '')
     : '';
   const file = typeof attachment.source === 'string' ? null : attachment.source;
   const blobUrl = useBlobUrl(file);
@@ -299,16 +294,7 @@ const FilePreview = memo(({
       }}
     >
       {/* Декоративный элемент */}
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        right: 0,
-        width: '60px',
-        height: '60px',
-        background: 'linear-gradient(135deg, var(--color-green-500) 0%, var(--color-green-600) 100%)',
-        borderRadius: '0 0 0 60px',
-        opacity: 0.1,
-      }} />
+      <div className="decorative-element-green" />
       
       <Group justify="space-between" align="center" wrap="wrap" style={{ position: 'relative' }}>
         <Group gap="md" align="center">
@@ -466,28 +452,10 @@ const FileUploadComponent = memo(({
         className="file-upload-area"
       >
         {/* Декоративный элемент */}
-        <div style={{
-          position: 'absolute',
-          top: '-20px',
-          right: '-20px',
-          width: '80px',
-          height: '80px',
-          background: 'linear-gradient(135deg, var(--color-blue-500) 0%, var(--color-blue-600) 100%)',
-          borderRadius: '50%',
-          opacity: 0.1,
-        }} />
+        <div className="decorative-element-circle" />
         
         <Stack align="center" gap="md">
-          <div style={{
-            width: '60px',
-            height: '60px',
-            background: 'linear-gradient(135deg, var(--color-blue-500) 0%, var(--color-blue-600) 100%)',
-            borderRadius: '50%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
-          }}>
+          <div className="icon-container">
             <IconUpload size={24} color="white" />
           </div>
           
@@ -545,7 +513,8 @@ const FileFieldsCard = memo(({
   existingDocuments,
   onDeleteExistingDocument,
   fileCardTitle = "Файл",
-  handleMetaChangeFor
+  handleMetaChangeFor,
+  onRemove
 }: { 
   file: FileAttachment & { fileName?: string; source?: File | string }; 
   index: number; 
@@ -560,6 +529,7 @@ const FileFieldsCard = memo(({
   onDeleteExistingDocument?: (fileId: string, documentId: string) => void;
   fileCardTitle?: string;
   handleMetaChangeFor?: (fieldName: string) => (id: string | undefined, meta: Record<string, any>) => void;
+  onRemove?: () => void;
 }) => {
   const fileSource = file.source;
   const fileForBlob = typeof fileSource === 'string' ? null : fileSource;
@@ -684,7 +654,7 @@ const FileFieldsCard = memo(({
 
   const fileId = file.id || `file-${index}`;
   const fileAttachmentsList = fileAttachments?.[fileId] || [];
-  // existingDocuments может быть объектом {constructionId: [documents]} или массивом
+  // existingDocuments может быть объектом {fileId: [documents]} или массивом
   const existingDocsList = Array.isArray(existingDocuments) 
     ? existingDocuments 
     : existingDocuments?.[fileId] || [];
@@ -696,24 +666,35 @@ const FileFieldsCard = memo(({
       withBorder 
       shadow="lg" 
       radius="sm"
-      className="construction-card"
+      className="file-fields-card"
     >
       {/* Декоративный элемент */}
-      <div style={DECORATIVE_STYLES} />
+      <div className={DECORATIVE_CLASS} />
       
       <Stack gap="md" style={{ position: 'relative' }}>
         {/* Заголовок с иконкой */}
-        <Group gap="sm" align="center">
-          <div style={{
-            width: '8px',
-            height: '8px',
-            borderRadius: '50%',
-            background: 'linear-gradient(135deg, var(--color-blue-500) 0%, var(--color-blue-600) 100%)',
-            boxShadow: '0 0 8px rgba(59, 130, 246, 0.5)'
-          }} />
-          <Text size="lg" fw={700} c="var(--theme-text-primary)" style={{ letterSpacing: '0.5px' }}>
-            {file.fileName || (file.source instanceof File ? file.source.name : (typeof file.source === 'string' ? file.source.split('\\').pop() || file.source.split('/').pop() : '')) || `${fileCardTitle} #${index + 1}`}
-          </Text>
+        <Group gap="sm" align="center" justify="space-between">
+          <Group gap="sm" align="center">
+            <div className="status-indicator" />
+            <Text size="lg" fw={700} c="var(--theme-text-primary)" style={{ letterSpacing: '0.5px' }}>
+              {file.fileName || (file.source instanceof File ? file.source.name : (typeof file.source === 'string' ? file.source.split('\\').pop() || file.source.split('/').pop() : '')) || `${fileCardTitle} #${index + 1}`}
+            </Text>
+          </Group>
+          {onRemove && (
+            <ActionIcon
+              size="lg"
+              variant="light"
+              color="red"
+              radius="md"
+              onClick={onRemove}
+              title="Удалить конструкцию"
+              style={{
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+              }}
+            >
+              <IconX size={18} />
+            </ActionIcon>
+          )}
         </Group>
         
         {/* Preview файла */}
@@ -729,14 +710,7 @@ const FileFieldsCard = memo(({
             }}
           >
             {/* Декоративная полоска */}
-            <div style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              height: '3px',
-              background: 'linear-gradient(90deg, var(--color-blue-500) 0%, var(--color-blue-600) 100%)'
-            }} />
+            <div className="decorative-stripe" />
             
             <Group gap="md" wrap='nowrap' align="center" style={{ position: 'relative' }}>
               {/* Красивая рамка для превью */}
@@ -753,8 +727,9 @@ const FileFieldsCard = memo(({
                     ? String(fileSource).split('\\').pop() || String(fileSource).split('/').pop() || ''
                     : (fileSource instanceof File ? fileSource.name : '');
                   const isImage = isImageFile(fileName);
+                  // Используем previewUrl из file (должен передаваться из инструмента)
                   const imageUrl = typeof fileSource === 'string'
-                    ? `${API}/public/add/media/${String(fileSource).split('\\').pop() || String(fileSource).split('/').pop()}`
+                    ? ((file as any).previewUrl || '')
                     : (blobUrl || '');
 
                   return isImage ? (
@@ -822,8 +797,8 @@ const FileFieldsCard = memo(({
           </Card>
         )}
         
-        <div className="construction-fields-grid">
-          {/* Левая колонка - поля конструкции */}
+        <div className="file-fields-grid">
+          {/* Левая колонка */}
           <Stack gap="lg">
             {fileFields.slice(0, Math.ceil(fileFields.length / 2)).map((field, fieldIndex) => (
               <div key={fieldIndex} style={{ position: 'relative' }}>
@@ -840,7 +815,7 @@ const FileFieldsCard = memo(({
               </div>
             ))}
             
-            {/* Документы к конструкции */}
+            {/* Дополнительные документы */}
             {fileAttachments && onFileAttachmentsChange && (
               <Card 
                 p="md" 
@@ -853,15 +828,8 @@ const FileFieldsCard = memo(({
                   overflow: 'hidden'
                 }}
               >
-                {/* Декоративная полоска */}
-                <div style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: '3px',
-                  background: 'linear-gradient(90deg, var(--color-blue-500) 0%, var(--color-blue-600) 100%)'
-                }} />
+            {/* Декоративная полоска */}
+            <div className="decorative-stripe" />
                 
                 <Stack gap="md" style={{ position: 'relative' }}>
                   <Group gap="sm" align="center">
@@ -872,7 +840,7 @@ const FileFieldsCard = memo(({
                       background: 'var(--color-blue-500)'
                     }} />
                     <Text size="sm" fw={600} c="var(--theme-text-primary)">
-                      {attachmentLabel || "📎 Документы к конструкциям"}
+                      {attachmentLabel || "📎 Дополнительные документы"}
                     </Text>
                   </Group>
                   
@@ -880,50 +848,26 @@ const FileFieldsCard = memo(({
                     <Text size="xs" c="dimmed" fw={500}>
                       {fileAttachmentsList.length + existingDocsList.length} вложений
                     </Text>
-                    <Group gap="xs">
+                    {fileAttachmentsList.length > 0 && (
                       <Button
                         size="xs"
-                        variant="gradient"
-                        gradient={{ from: 'blue', to: 'cyan', deg: 45 }}
-                        leftSection={<IconUpload size={12} />}
+                        variant="light"
+                        color="red"
+                        leftSection={<IconX size={12} />}
                         radius="md"
-                        onClick={() => {
-                          const input = document.createElement('input');
-                          input.type = 'file';
-                          input.multiple = true;
-                          input.accept = attachmentAccept || "*";
-                          input.onchange = (e) => {
-                            const files = Array.from((e.target as HTMLInputElement).files || []);
-                            if (files.length > 0) {
-                              onFileAttachmentsChange(fileId, [...fileAttachmentsList, ...files]);
-                            }
-                          };
-                          input.click();
-                        }}
-                        style={{ 
-                          boxShadow: '0 2px 4px rgba(59, 130, 246, 0.3)',
-                          transition: 'all 0.2s ease'
-                        }}
+                        onClick={() => onFileAttachmentsChange(fileId, [])}
+                        style={{ transition: 'all 0.2s ease' }}
                       >
-                        Добавить
+                        Очистить
                       </Button>
-                      {fileAttachmentsList.length > 0 && (
-                        <Button
-                          size="xs"
-                          variant="light"
-                          color="red"
-                          leftSection={<IconX size={12} />}
-                          radius="md"
-                          onClick={() => onFileAttachmentsChange(fileId, [])}
-                          style={{ 
-                            transition: 'all 0.2s ease'
-                          }}
-                        >
-                          Очистить
-                        </Button>
-                      )}
-                    </Group>
+                    )}
                   </Group>
+                  
+                  {/* DnD зона для документов */}
+                  <FileDropZone 
+                    onFilesDrop={(files) => onFileAttachmentsChange(fileId, [...fileAttachmentsList, ...files])} 
+                    acceptedTypes={attachmentAccept || "*"} 
+                  />
                   
                   {(fileAttachmentsList.length > 0 || existingDocsList.length > 0) && (
                     <Stack gap="xs" mt="sm">
@@ -1086,12 +1030,19 @@ export const DynamicFormModal = ({
   attachmentAccept,
   existingDocuments,
   onDeleteExistingDocument,
-  fileCardTitle = 'Файл'
+  fileCardTitle = 'Файл',
+  attachmentsKey = 'attachments'
 }: DynamicFormModalProps) => {
   const [previewId, setPreviewId] = useState<string | null>(null);
   const form = useForm({ initialValues });
   const [attachmentsMap, setAttachmentsMap] = useState<Record<string, FileAttachment[]>>({});
   const initializedRef = useRef(false);
+  
+  // Ref для актуального значения fileAttachments (решает проблему замыкания)
+  const fileAttachmentsRef = useRef(fileAttachments);
+  useEffect(() => {
+    fileAttachmentsRef.current = fileAttachments;
+  }, [fileAttachments]);
 
   // Оптимизированная функция нормализации данных
   const buildNormalizedAttachments = useCallback((arr: unknown): FileAttachment[] => {
@@ -1146,11 +1097,10 @@ export const DynamicFormModal = ({
         // Backward-compat: if generic attachments provided but no specific field had values, map to first file field
         if (fileFieldNames.length > 0) {
           const attachmentsValue = initialValues.attachments;
-          const rkAttachmentValue = initialValues.rkAttachment;
-          const rocAttachmentValue = initialValues.rocAttachment;
+          // Поддержка различных ключей для вложений
+          const altAttachmentValue = initialValues[attachmentsKey];
           const generic: unknown[] = (Array.isArray(attachmentsValue) ? attachmentsValue : [])
-            || (Array.isArray(rkAttachmentValue) ? rkAttachmentValue : [])
-            || (Array.isArray(rocAttachmentValue) ? rocAttachmentValue : [])
+            || (Array.isArray(altAttachmentValue) ? altAttachmentValue : [])
             || [];
           if (generic.length && (!nextMap[fileFieldNames[0]] || nextMap[fileFieldNames[0]].length === 0)) {
             nextMap[fileFieldNames[0]] = buildNormalizedAttachments(generic);
@@ -1174,13 +1124,14 @@ export const DynamicFormModal = ({
 
   const handleMetaChangeFor = useCallback(
     (fieldName: string) => (id: string | undefined, meta: Record<string, any>) => {
+      console.log('[FormModal] handleMetaChangeFor:', { fieldName, id, meta });
       setAttachmentsMap(prev => {
         const current = prev[fieldName] || [];
         const updated = current.map(att => 
           att.id === id ? { ...att, meta: { ...att.meta, ...meta } } : att
         );
         const next = { ...prev, [fieldName]: updated };
-        
+        console.log('[FormModal] Updated attachments:', updated);
         
         form.setFieldValue(fieldName, updated);
         return next;
@@ -1201,25 +1152,39 @@ export const DynamicFormModal = ({
       const fileField = fields.find(f => f.name === fieldName && f.type === 'file');
       const fileFields = fileField?.fileFields || [];
       
-      const newAttachments = files.map((file, idx) => {
-        // Инициализируем мета-данные с пустыми значениями для всех полей
-        const initialMeta: Record<string, any> = {};
-        fileFields.forEach(field => {
-          initialMeta[field.name] = '';
-        });
-        
-        const newAttachment: FileAttachment = {
-          id: `temp-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 8)}`,
-          userAdd: initialValues?.userAdd || '',
-          source: file,
-          meta: initialMeta,
-        };
-        
-        return newAttachment;
-      });
-      
       setAttachmentsMap(prev => {
         const current = prev[fieldName] || [];
+        
+        // Если уже есть файл и есть fileFields (карточка с доп. документами),
+        // то новые файлы добавляем как документы к первому файлу
+        if (current.length > 0 && fileFields.length > 0 && onFileAttachmentsChange) {
+          const firstFileId = current[0].id;
+          if (firstFileId) {
+            // Используем ref для актуального значения (решает проблему замыкания)
+            const existingDocs = fileAttachmentsRef.current?.[firstFileId] || [];
+            onFileAttachmentsChange(firstFileId, [...existingDocs, ...files]);
+          }
+          return prev; // Не добавляем в основной список
+        }
+        
+        // Если это первый файл - добавляем как обычно
+        const newAttachments = files.map((file, idx) => {
+          // Инициализируем мета-данные с пустыми значениями для всех полей
+          const initialMeta: Record<string, any> = {};
+          fileFields.forEach(field => {
+            initialMeta[field.name] = '';
+          });
+          
+          const newAttachment: FileAttachment = {
+            id: `temp-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 8)}`,
+            userAdd: initialValues?.userAdd || '',
+            source: file,
+            meta: initialMeta,
+          };
+          
+          return newAttachment;
+        });
+        
         const nextList = [...current, ...newAttachments];
         const next = { ...prev, [fieldName]: nextList };
         
@@ -1233,7 +1198,7 @@ export const DynamicFormModal = ({
     } catch (error) {
       console.error('Error handling file drop:', error);
     }
-  }, [initialValues?.userAdd, form, fields]);
+  }, [initialValues?.userAdd, form, fields, onFileAttachmentsChange]);
 
   const handleRemoveAttachmentFor = useCallback((fieldName: string) => (id: string | undefined) => {
     try {
@@ -1438,7 +1403,7 @@ export const DynamicFormModal = ({
               withDnd={field.withDnd}
               fileFields={field.fileFields || []}
               onMetaChange={handleMetaChangeFor(field.name)}
-              hidePreview={false}
+              hidePreview={!!(field.fileFields && field.fileFields.length > 0)}
               accept={field.accept || "*"}
             />
           </div>
@@ -1458,6 +1423,77 @@ export const DynamicFormModal = ({
             mb={field.mb}
           />
         );
+      case 'icon': {
+        const IconPickerFieldComponent = memo(({ field }: { field: FormField }) => {
+          const [pickerOpened, setPickerOpened] = useState(false);
+          const iconValue = (form.getInputProps(field.name) as any)?.value || '';
+          
+          const getIconComponent = (iconName: string) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const IconComponent = (TablerIcons as any)[iconName] as React.ComponentType<{
+              size?: number;
+              stroke?: number;
+            }>;
+            return IconComponent ? <IconComponent size={20} stroke={1.5} /> : null;
+          };
+
+          return (
+            <>
+              <Group gap="xs" align="flex-end">
+                <TextInput
+                  key={field.name}
+                  label={field.label}
+                  value={iconValue}
+                  readOnly
+                  placeholder={field.placeholder || 'Выберите иконку'}
+                  required={field.required}
+                  disabled={field.disabled}
+                  mb={field.mb}
+                  rightSection={
+                    iconValue ? (
+                      <Group gap="xs">
+                        {getIconComponent(iconValue)}
+                        <ActionIcon
+                          size="sm"
+                          variant="subtle"
+                          onClick={() => {
+                            form.setFieldValue(field.name, '');
+                            field.onChange?.('', form.setFieldValue);
+                          }}
+                        >
+                          <IconX size={16} />
+                        </ActionIcon>
+                      </Group>
+                    ) : null
+                  }
+                />
+                <Button
+                  onClick={() => setPickerOpened(true)}
+                  variant="light"
+                  style={{ marginBottom: field.mb || '1rem' }}
+                >
+                  Выбрать
+                </Button>
+              </Group>
+              {field.description && (
+                <Text size="xs" c="dimmed" mt={-(typeof field.mb === 'number' ? field.mb : 16)} mb={field.mb || 'md'}>
+                  {field.description}
+                </Text>
+              )}
+              <IconPicker
+                opened={pickerOpened}
+                onClose={() => setPickerOpened(false)}
+                onSelect={(iconName) => {
+                  form.setFieldValue(field.name, iconName);
+                  field.onChange?.(iconName, form.setFieldValue);
+                }}
+                currentIcon={iconValue}
+              />
+            </>
+          );
+        });
+        return <IconPickerFieldComponent key={field.name} field={field} />;
+      }
       default:
         return null;
     }
@@ -1503,7 +1539,8 @@ export const DynamicFormModal = ({
     const fileName = typeof attachment.source === 'string'
       ? attachment.source.split('\\').pop() || 'Файл'
       : attachment.source.name;
-    const fileUrl = `${API}/public/add/media/${attachment.source}`;
+    // Используем previewUrl из attachment (должен передаваться из инструмента)
+    const fileUrl = (attachment as any).previewUrl || '';
     const isImage = isImageFile(fileName);
     const fileId = attachment.id || `temp-${fileName}-${Math.random().toString(36).slice(2, 11)}`;
     return (
@@ -1607,14 +1644,11 @@ export const DynamicFormModal = ({
               {viewFieldsConfig.map(config => renderViewField(config, initialValues))}
             </Stack>
             
-            {!hideDefaultViewAttachments && (((initialValues as any).attachments?.length || (initialValues as any).rkAttachment?.length || (initialValues as any).rocAttachment?.length) > 0) && (
+            {!hideDefaultViewAttachments && ((initialValues as any)[attachmentsKey]?.length > 0) && (
               <div style={{ width: '100%' }}>
                 <Text fw={500} mb="sm" c="var(--theme-text-primary)">Приложения</Text>
                 <Stack gap="xs" style={{ width: '100%' }}>
-                  {(((initialValues as any).attachments
-                    || (initialValues as any).rkAttachment
-                    || (initialValues as any).rocAttachment
-                    || []) as any[]).map(renderAttachmentCard)}
+                  {((initialValues as any)[attachmentsKey] || []).map(renderAttachmentCard)}
                 </Stack>
               </div>
             )}
@@ -1689,11 +1723,11 @@ export const DynamicFormModal = ({
               )}
               {error && <Alert color="red">{error}</Alert>}
               
-              {/* Рендерим карточки конструкций в нижней части формы */}
-              {fields.some(field => field.type === 'file') && (
-                <div className="construction-cards-section">
+              {/* Рендерим карточки файлов в нижней части формы (только если есть fileFields) */}
+              {fields.some(field => field.type === 'file' && field.fileFields && field.fileFields.length > 0) && (
+                <div className="file-cards-section">
                   {fields
-                    .filter(field => field.type === 'file')
+                    .filter(field => field.type === 'file' && field.fileFields && field.fileFields.length > 0)
                     .map(field => (
                       attachmentsMap[field.name] && attachmentsMap[field.name].length > 0 && (
                         <div key={`${field.name}-cards`} style={{ marginBottom: '24px' }}>
@@ -1707,7 +1741,7 @@ export const DynamicFormModal = ({
                               gap: '16px',
                               padding: '8px 0 16px 0',
                             }}
-                            className="construction-cards-vertical"
+                            className="file-cards-vertical"
                           >
                             {attachmentsMap[field.name].map((file: any, index: number) => (
                               <div
@@ -1730,6 +1764,7 @@ export const DynamicFormModal = ({
                                   existingDocuments={existingDocuments?.[file.id] || []}
                                   onDeleteExistingDocument={onDeleteExistingDocument}
                                   handleMetaChangeFor={handleMetaChangeFor}
+                                  onRemove={() => handleRemoveAttachmentFor(field.name)(file.id)}
                                 />
                               </div>
                             ))}
@@ -1764,7 +1799,6 @@ export const DynamicFormModal = ({
   }, [handleClose]);
 
   // Focus management - фокус на первый инпут при открытии
-  const firstInputRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => {
     if (opened && mode !== 'view') {
       // Небольшая задержка для корректного фокуса
@@ -1892,18 +1926,14 @@ export const DynamicFormModal = ({
           if (!previewId) {
             return [];
           }
-          const base: any[] = (initialValues as any).attachments
-            || (initialValues as any).rkAttachment
-            || (initialValues as any).rocAttachment
-            || [];
+          const base: any[] = (initialValues as any)[attachmentsKey] || [];
           const extras: any[] = (viewSecondaryAttachments || []).flatMap(s => s.list || []);
           const all = [...base, ...extras];
           const mapped = all.map((a: any) => ({
             id: String(a.id || `temp-${Math.random().toString(36).slice(2, 11)}`),
             name: typeof a.source === 'string' ? (a.source.split('\\').pop() || 'Файл') : (a.source?.name || 'Файл'),
-            source: typeof a.source === 'string' ? 
-              (a.source.startsWith('http') ? a.source : `${API}/public/add/media/${a.source}`) : 
-              (a.source ? a.source : ''),
+            // Используем previewUrl из attachment (должен передаваться из инструмента)
+            source: (a as any).previewUrl || (typeof a.source === 'string' ? a.source : ''),
           }));
           return mapped;
         })()}

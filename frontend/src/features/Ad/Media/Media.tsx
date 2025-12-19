@@ -509,6 +509,7 @@ export default function MediaList() {
             id: a.id,
             userAdd: a.userAdd,
             source: a.source,
+            previewUrl: `${API}/public/add/media/${a.source}`,
           })),
         }
       }));
@@ -642,7 +643,6 @@ export default function MediaList() {
         style={{
           background: 'var(--theme-bg-primary)',
           minHeight: '100vh',
-          padding: '20px'
         }}
       >
         {state.loading && <LoadingOverlay visible />}
@@ -694,7 +694,10 @@ export default function MediaList() {
           mode="view"
           initialValues={{
             ...state.selectedMedia,
-            attachments: state.selectedMedia?.MediaAttachment || [],
+            attachments: (state.selectedMedia?.MediaAttachment || []).map(a => ({
+              ...a,
+              previewUrl: `${API}/public/add/media/${a.source}`,
+            })),
           }}
           viewFieldsConfig={viewFieldsConfig}
         />

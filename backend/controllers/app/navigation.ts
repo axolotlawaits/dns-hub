@@ -178,7 +178,7 @@ export const createMenuItem = async (
     res.status(201).json(menuItem);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ errors: error.errors });
+      res.status(400).json({ errors: error.issues });
       return;
     }
     next(error);
@@ -231,7 +231,7 @@ export const updateMenuItem = async (
     res.status(200).json(menuItem);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ errors: error.errors });
+      res.status(400).json({ errors: error.issues });
       return;
     }
     if (error instanceof Error && error.message.includes('Record to update not found')) {

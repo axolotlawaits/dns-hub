@@ -440,7 +440,7 @@ function Management() {
   if (loading) return <LoadingOverlay visible />
 
   return (
-    <Box p="md" style={{ background: 'var(--theme-bg-primary)', minHeight: '100vh' }}>
+    <Box style={{ background: 'var(--theme-bg-primary)', minHeight: '100vh' }}>
       {/* Современный заголовок */}
       <Box mb="xl" style={{ 
         background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',

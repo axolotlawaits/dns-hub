@@ -1800,10 +1800,10 @@ class MerchBotService {
     }
   }
 
-  // Получение локальных путей к изображениям
+  // Получение локальных путей к файлам (изображения и PDF)
   private async getPhotoPaths(itemId: string): Promise<string[]> {
     try {
-      console.log(`🔍 Ищем изображения для элемента ${itemId}`);
+      console.log(`🔍 Ищем файлы для элемента ${itemId}`);
       const item = await prisma.merch.findUnique({
         where: { id: itemId },
         select: {
@@ -1811,10 +1811,11 @@ class MerchBotService {
           name: true,
           isActive: true,
           attachments: {
-            where: { type: 'image' },
+            where: { type: { in: ['image', 'pdf'] } },
             orderBy: { sortOrder: 'asc' },
             select: {
-              source: true
+              source: true,
+              type: true
             }
           }
         }
@@ -1836,10 +1837,10 @@ class MerchBotService {
       const paths: string[] = [];
       const retailedFiles = new Set<string>(); // Для отслеживания уже добавленных файлов
       
-      // Путь к директории с изображениями
+      // Путь к директории с файлами
       const merchDir = path.join(process.cwd(), 'public', 'retail', 'merch');
       
-      // Изображения из attachments
+      // Файлы из attachments (изображения и PDF)
       for (const attachment of item.attachments) {
         if (!retailedFiles.has(attachment.source)) { // Проверяем, не добавлен ли уже этот файл
           const filePath = path.join(merchDir, attachment.source);
@@ -1847,17 +1848,17 @@ class MerchBotService {
           // Проверяем, существует ли файл
           if (fs.existsSync(filePath)) {
             paths.push(filePath);
-          retailedFiles.add(attachment.source);
-            console.log(`📎 Добавлено изображение: ${filePath}`);
+            retailedFiles.add(attachment.source);
+            console.log(`📎 Добавлен файл (${attachment.type}): ${filePath}`);
           } else {
             console.warn(`⚠️ Файл не найден: ${filePath}`);
           }
         } else {
-          console.log(`⏭️ Пропущено дублирующее изображение: ${attachment.source}`);
+          console.log(`⏭️ Пропущен дублирующий файл: ${attachment.source}`);
         }
       }
       
-      console.log(`📸 Итого найдено изображений: ${paths.length}`);
+      console.log(`📸 Итого найдено файлов: ${paths.length}`);
       return paths;
     } catch (error) {
       console.error('Error getting photo paths:', error);

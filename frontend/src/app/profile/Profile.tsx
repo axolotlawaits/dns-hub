@@ -36,7 +36,7 @@ function Profile() {
   }, [setHeader, clearHeader]);
 
   return (
-    <Box className="profile-container" style={{ paddingRight: 'var(--mantine-spacing-md)' }}>
+    <Box className="profile-container">
       <Stack gap="lg">
 
         {/* Навигация по вкладкам */}

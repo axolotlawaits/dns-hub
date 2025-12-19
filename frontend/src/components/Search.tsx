@@ -499,16 +499,12 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
                     }}
                     leftSection={<IconSearch size={18} />}
                     size="md"
-                    style={{
-                      '& .mantine-Input-input': {
+                    styles={{
+                      input: {
                         background: 'rgba(255, 255, 255, 0.9)',
                         border: '1px solid rgba(255, 255, 255, 0.3)',
                         borderRadius: 'var(--radius-md)',
                         color: 'var(--theme-text-primary)',
-                        '&:focus': {
-                          borderColor: 'rgba(255, 255, 255, 0.6)',
-                          boxShadow: '0 0 0 2px rgba(255, 255, 255, 0.2)'
-                        }
                       }
                     }}
                   />

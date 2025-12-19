@@ -105,7 +105,7 @@ export const createMeterReading = async (
     if (error instanceof z.ZodError) {
       res.status(400).json({
         error: 'Ошибка валидации',
-        details: error.errors,
+        details: error.issues,
       });
       return;
     }
@@ -150,7 +150,7 @@ export const updateMeterReading = async (
     if (error instanceof z.ZodError) {
       res.status(400).json({
         error: 'Ошибка валидации',
-        details: error.errors,
+        details: error.issues,
       });
       return;
     }

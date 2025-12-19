@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
-import { prisma } from '../../server.js';
+import { prisma, accessPrivateKey, refreshPrivateKey } from '../../server.js';
 import { z } from 'zod';
+import jwt from 'jsonwebtoken';
 
 // Проверка роли DEVELOPER
 const checkDeveloperRole = async (req: Request, res: Response): Promise<boolean> => {
@@ -243,7 +244,7 @@ export const createUser = async (req: Request, res: Response): Promise<any> => {
       return res.status(400).json({
         success: false,
         error: 'Validation error',
-        details: error.errors
+        details: error.issues
       });
     }
     console.error('❌ [Users] Error creating user:', error);
@@ -315,7 +316,7 @@ export const updateUser = async (req: Request, res: Response): Promise<any> => {
       return res.status(400).json({
         success: false,
         error: 'Validation error',
-        details: error.errors
+        details: error.issues
       });
     }
     console.error('❌ [Users] Error updating user:', error);
@@ -359,6 +360,116 @@ export const deleteUser = async (req: Request, res: Response): Promise<any> => {
     });
   } catch (error) {
     console.error('❌ [Users] Error deleting user:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Internal server error'
+    });
+  }
+};
+
+// Войти как пользователь (только для ADMIN и DEVELOPER)
+export const loginAsUser = async (req: Request, res: Response): Promise<any> => {
+  try {
+    // Проверяем роль текущего пользователя
+    const hasAccess = await checkDeveloperRole(req, res);
+    if (!hasAccess) {
+      return; // checkDeveloperRole уже отправил ответ
+    }
+
+    // Проверяем, что текущий пользователь ADMIN или DEVELOPER
+    const token = (req as any).token;
+    const currentUser = await prisma.user.findUnique({
+      where: { id: token.userId },
+      select: { role: true }
+    });
+
+    if (!currentUser || !['ADMIN', 'DEVELOPER'].includes(currentUser.role || '')) {
+      return res.status(403).json({
+        success: false,
+        error: 'Доступ запрещен. Требуется роль ADMIN или DEVELOPER'
+      });
+    }
+
+    const { userId } = req.params;
+
+    // Получаем пользователя, под которого нужно войти
+    const targetUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        position: true,
+        branch: true,
+        role: true
+      }
+    });
+
+    if (!targetUser) {
+      return res.status(404).json({
+        success: false,
+        error: 'Пользователь не найден'
+      });
+    }
+
+    // Получаем groupName и userUuid для токена
+    const getGroupName = await prisma.position.findUnique({
+      where: { name: targetUser.position },
+      select: { group: { select: { name: true } } }
+    });
+
+    const getUserUuid = await prisma.userData.findUnique({
+      where: { email: targetUser.email },
+      select: { uuid: true }
+    });
+
+    const groupName = getGroupName?.group?.name;
+    const userUuid = getUserUuid?.uuid;
+
+    // Сохраняем токен администратора в localStorage перед входом под пользователем
+    // В реальности нужно сохранить его на клиенте перед заменой токена
+    // Генерируем токены для целевого пользователя
+    const payload = {
+      userId: targetUser.id,
+      userUuid,
+      positionName: targetUser.position,
+      groupName,
+      userRole: targetUser.role,
+      impersonatedBy: token.userId, // Сохраняем ID администратора, который вошел как пользователь
+      originalToken: token.userId // Сохраняем ID администратора для возврата
+    };
+
+    const accessToken = jwt.sign(payload, accessPrivateKey, { algorithm: 'RS256', expiresIn: '30m' });
+    const refreshToken = jwt.sign(payload, refreshPrivateKey, { algorithm: 'RS256', expiresIn: '90d' });
+
+    // Логируем действие
+    try {
+      await prisma.auditLog.create({
+        data: {
+          userId: token.userId,
+          action: 'IMPERSONATE_USER',
+          entityType: 'User',
+          entityId: targetUser.id,
+          details: {
+            targetUserId: targetUser.id,
+            targetUserName: targetUser.name,
+            targetUserEmail: targetUser.email
+          }
+        }
+      });
+    } catch (auditError) {
+      console.error('❌ [Users] Error creating audit log:', auditError);
+      // Не прерываем выполнение, если логирование не удалось
+    }
+
+    return res.json({
+      success: true,
+      token: accessToken,
+      refreshToken: refreshToken,
+      user: targetUser
+    });
+  } catch (error) {
+    console.error('❌ [Users] Error logging in as user:', error);
     return res.status(500).json({
       success: false,
       error: 'Internal server error'

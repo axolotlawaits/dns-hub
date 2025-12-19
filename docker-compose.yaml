@@ -3,7 +3,9 @@ services:
   backend:
     build: ./backend
     image: axolotlawaits/hub:backend
-    network_mode: "host"  # Доступ к хостовой сети
+    network_mode: "host"  # Доступ к хостовой сети для сканирования принтеров и работы с сетью
+    # Примечание: host network mode необходим для работы инструмента сканирования документов,
+    # так как он должен иметь доступ к сетевому стеку хоста Ubuntu для обнаружения устройств
     environment:
       - NODE_ENV=production
     volumes:

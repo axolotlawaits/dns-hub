@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {  ActionIcon,  AppShell,  Avatar,  Menu,  Divider,  Group,  Text,  Tooltip, Transition, Box, Button } from '@mantine/core';
 import {  IconBrightnessDown,  IconLogin,  IconLogout,  IconMoon,  IconUser, IconSearch } from '@tabler/icons-react';
 import { useNavigate } from 'react-router';
@@ -19,11 +19,80 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ navOpened }) => {
   const navigate = useNavigate();
-  const { user, logout } = useUserContext();
+  const { user, logout, token } = useUserContext();
   const { isDark, toggleTheme } = useTheme();
   const { header } = usePageHeader();
   const [searchOpened, { open: openSearch, close: closeSearch }] = useDisclosure(false);
 
+  // Декодируем токен для проверки impersonatedBy
+  const decodeToken = (token: string | null): any => {
+    if (!token) return null;
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(atob(base64).split('').map((c) => {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+      return JSON.parse(jsonPayload);
+    } catch (error) {
+      return null;
+    }
+  };
+
+  const [isImpersonated, setIsImpersonated] = useState(false);
+
+  useEffect(() => {
+    if (!token) {
+      setIsImpersonated(false);
+      return;
+    }
+    
+    const tokenData = decodeToken(token);
+    const impersonated = tokenData?.impersonatedBy !== undefined && tokenData?.impersonatedBy !== null;
+    setIsImpersonated(impersonated);
+    
+    // Для отладки
+    console.log('[Header] Raw token:', token?.substring(0, 50) + '...');
+    console.log('[Header] Token data:', tokenData);
+    console.log('[Header] impersonatedBy:', tokenData?.impersonatedBy);
+    console.log('[Header] isImpersonated:', impersonated);
+    
+    // Также проверяем localStorage напрямую
+    const localStorageToken = localStorage.getItem('token');
+    if (localStorageToken && localStorageToken !== token) {
+      console.warn('[Header] Token mismatch! Context token differs from localStorage token');
+      const localStorageTokenData = decodeToken(localStorageToken);
+      console.log('[Header] localStorage token data:', localStorageTokenData);
+      console.log('[Header] localStorage impersonatedBy:', localStorageTokenData?.impersonatedBy);
+    }
+  }, [token]);
+
+  const handleReturnToMyAccount = async () => {
+    try {
+      // Получаем токен и данные администратора из localStorage
+      const adminToken = localStorage.getItem('adminToken');
+      const adminUser = localStorage.getItem('adminUser');
+      
+      if (adminToken && adminUser) {
+        // Восстанавливаем токен и данные администратора
+        localStorage.setItem('token', adminToken);
+        localStorage.setItem('user', adminUser);
+        localStorage.removeItem('adminToken');
+        localStorage.removeItem('adminUser');
+        // Перезагружаем страницу для применения токена администратора
+        window.location.href = '/profile/admin?tab=users';
+      } else {
+        // Если токен администратора не найден, просто переходим на страницу логина
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        localStorage.removeItem('adminToken');
+        localStorage.removeItem('adminUser');
+        window.location.href = '/login';
+      }
+    } catch (error) {
+      console.error('Error returning to account:', error);
+    }
+  };
 
   const onLogout = () => {
     localStorage.removeItem('user');
@@ -162,6 +231,23 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
         {/* Правая часть */}
         <div className="header-right">
           <Group gap="xs">
+            {/* Кнопка возврата к администратору */}
+            {isImpersonated && (
+              <Tooltip label="Вернуться в свой профиль" position="bottom">
+                <ActionIcon
+                  variant="subtle"
+                  size="lg"
+                  radius="md"
+                  className="header-action"
+                  onClick={handleReturnToMyAccount}
+                  aria-label="Вернуться в свой профиль"
+                  color="orange"
+                >
+                  <IconLogin size={20} style={{ transform: 'scaleX(-1)' }} />
+                </ActionIcon>
+              </Tooltip>
+            )}
+
             {/* Переключатель темы */}
             <Tooltip 
               label={isDark ? 'Переключить на светлую тему' : 'Переключить на темную тему'} 

@@ -147,7 +147,8 @@ const deleteRKAttachments = async (attachmentIds: string[], rkId: string) => {
 
   await Promise.all(
     attachments.map(async (attachment: { source: string; id: any; }) => {
-      await deleteFileSafely(path.join(attachment.source));
+      const filePath = path.join(__dirname, '..', 'public', 'add', 'RK', attachment.source);
+      await deleteFileSafely(filePath);
       await prisma.rKAttachment.delete({ where: { id: attachment.id } });
     })
   );
@@ -788,7 +789,10 @@ export const deleteRK = async (req: Request, res: Response, next: NextFunction):
     });
 
     await Promise.all(
-      attachments.map((attachment: { source: string; }) => deleteFileSafely(attachment.source))
+      attachments.map((attachment: { source: string; }) => {
+        const filePath = path.join(__dirname, '..', 'public', 'add', 'RK', attachment.source);
+        return deleteFileSafely(filePath);
+      })
     );
 
     await prisma.$transaction([
@@ -863,6 +867,189 @@ export const getBranchesList = async (req: Request, res: Response, next: NextFun
 };
 
 // Настройка роутов
+// Добавить конструкцию к существующей записи RK
+export const addConstruction = async (req: Request, res: Response, next: NextFunction): Promise<any> => {
+  try {
+    const { rkId } = req.params;
+    const files = req.files as Express.Multer.File[];
+    
+    // Проверяем существование записи RK
+    const existingRK = await prisma.rK.findUnique({ where: { id: rkId } });
+    if (!existingRK) {
+      return res.status(404).json({ error: 'RK record not found' });
+    }
+
+    const userAddId = req.body.userAddId || req.body.userAdd || (req as any).user?.id;
+    if (!userAddId) {
+      return res.status(400).json({ error: 'userAddId is required' });
+    }
+    
+    console.log('[RK] addConstruction - files:', files?.map(f => ({ fieldname: f.fieldname, originalname: f.originalname })));
+    console.log('[RK] addConstruction - body keys:', Object.keys(req.body));
+
+    // Парсим мета-данные вложений
+    let attachmentsMeta: Array<any> = [];
+    
+    // Вариант 1: attachmentsMeta[0], attachmentsMeta[1], ...
+    Object.keys(req.body).forEach(key => {
+      const match = key.match(/^attachmentsMeta\[(\d+)\]$/);
+      if (match) {
+        try {
+          attachmentsMeta[parseInt(match[1])] = JSON.parse(req.body[key]);
+        } catch {
+          attachmentsMeta[parseInt(match[1])] = {};
+        }
+      }
+    });
+    
+    // Вариант 2: attachmentsMeta как массив строк (multer парсит так)
+    if (attachmentsMeta.length === 0 && req.body.attachmentsMeta) {
+      const rawMeta = Array.isArray(req.body.attachmentsMeta) 
+        ? req.body.attachmentsMeta 
+        : [req.body.attachmentsMeta];
+      attachmentsMeta = rawMeta.map((m: string) => {
+        try {
+          return JSON.parse(m);
+        } catch {
+          return {};
+        }
+      });
+    }
+    
+    console.log('[RK] addConstruction - parsed attachmentsMeta:', attachmentsMeta);
+
+    // Обрабатываем основные файлы (конструкции)
+    const constructionFiles = (files || []).filter(f => f.fieldname === 'attachments');
+    
+    if (constructionFiles.length > 0) {
+      // Помечаем все файлы как конструкции
+      const constructionMeta = constructionFiles.map((_, index) => ({
+        ...attachmentsMeta[index],
+        typeAttachment: 'CONSTRUCTION' as const
+      }));
+
+      await processRKAttachments(
+        constructionFiles,
+        rkId,
+        userAddId,
+        constructionMeta,
+        {
+          typeStructureId: req.body.typeStructureId,
+          approvalStatusId: req.body.approvalStatusId
+        }
+      );
+    }
+
+    // Обрабатываем документы к конструкциям (включая documents_auto)
+    const documentFiles = (files || []).filter(f => f.fieldname.startsWith('documents_'));
+    
+    if (documentFiles.length > 0) {
+      // Получаем последнюю созданную конструкцию (ту что только что создали)
+      const lastConstruction = await prisma.rKAttachment.findFirst({
+        where: { recordId: rkId, typeAttachment: 'CONSTRUCTION' },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      console.log('[RK] Adding documents to construction:', lastConstruction?.id, 'count:', documentFiles.length);
+      
+      for (const docFile of documentFiles) {
+        await prisma.rKAttachment.create({
+          data: {
+            userAddId,
+            source: docFile.filename,
+            type: docFile.mimetype,
+            typeAttachment: 'DOCUMENT',
+            sizeXY: '',
+            clarification: '',
+            recordId: rkId,
+            parentAttachmentId: lastConstruction?.id
+          }
+        });
+      }
+    }
+
+    // Возвращаем обновленную запись
+    const updatedRK = await prisma.rK.findUnique({
+      where: { id: rkId },
+      include: {
+        branch: true,
+        rkAttachment: {
+          include: {
+            typeStructure: true,
+            approvalStatus: true,
+            parentAttachment: true,
+            childAttachments: true
+          }
+        }
+      }
+    });
+
+    res.json(updatedRK);
+  } catch (error) {
+    console.error('[RK] Error adding construction:', error);
+    next(error);
+  }
+};
+
+// Добавить документы к существующей конструкции
+export const addDocuments = async (req: Request, res: Response, next: NextFunction): Promise<any> => {
+  try {
+    const { rkId } = req.params;
+    const files = req.files as Express.Multer.File[];
+    const { parentAttachmentId } = req.body;
+    
+    // Проверяем существование записи RK
+    const existingRK = await prisma.rK.findUnique({ where: { id: rkId } });
+    if (!existingRK) {
+      return res.status(404).json({ error: 'RK record not found' });
+    }
+
+    const userAddId = req.body.userAddId || req.body.userAdd || (req as any).user?.id;
+    if (!userAddId) {
+      return res.status(400).json({ error: 'userAddId is required' });
+    }
+
+    // Создаём документы
+    const documentFiles = (files || []).filter(f => f.fieldname === 'attachments');
+    
+    for (const docFile of documentFiles) {
+      await prisma.rKAttachment.create({
+        data: {
+          userAddId,
+          source: docFile.filename,
+          type: docFile.mimetype,
+          typeAttachment: 'DOCUMENT',
+          sizeXY: '',
+          clarification: '',
+          recordId: rkId,
+          parentAttachmentId: parentAttachmentId || undefined
+        }
+      });
+    }
+
+    // Возвращаем обновленную запись
+    const updatedRK = await prisma.rK.findUnique({
+      where: { id: rkId },
+      include: {
+        branch: true,
+        rkAttachment: {
+          include: {
+            typeStructure: true,
+            approvalStatus: true,
+            parentAttachment: true,
+            childAttachments: true
+          }
+        }
+      }
+    });
+
+    res.json(updatedRK);
+  } catch (error) {
+    console.error('[RK] Error adding documents:', error);
+    next(error);
+  }
+};
+
 export const setupRKRoutes = (router: any) => {
   // RK routes
   router.get('/rk', getRKList);
@@ -870,6 +1057,7 @@ export const setupRKRoutes = (router: any) => {
   router.post('/rk', upload.array('files'), createRK);
   router.put('/rk/:id', upload.array('files'), updateRK);
   router.delete('/rk/:id', deleteRK);
+  router.post('/rk/:rkId/construction', upload.any(), addConstruction);
 
   // Справочники
   router.get('/rk/types', getRKTypes);

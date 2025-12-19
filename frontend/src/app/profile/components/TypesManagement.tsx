@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from 'react';
 import React from 'react';
 import { ColumnFiltersState } from '@tanstack/react-table';
 import {
-  Container,
   Paper,
   Title,
   Table,
@@ -32,10 +31,18 @@ interface Type {
   chapter: string;
   name: string;
   colorHex?: string;
+  parent_type?: string | null;
+  sortOrder?: number;
   Tool: {
     id: string;
     name: string;
   };
+  parent?: {
+    id: string;
+    name: string;
+    colorHex?: string;
+  } | null;
+  children?: Type[];
 }
 
 interface Tool {
@@ -109,31 +116,37 @@ export default function TypesManagement() {
   const handleSave = async (formData: any) => {
     try {
       setError(null);
+      const data = {
+        ...formData,
+        parent_type: formData.parent_type || null,
+        sortOrder: formData.sortOrder ?? 0,
+      };
+      
       if (selectedType) {
         // Обновление
         const response = await authFetch(`${API}/type/${selectedType.id}`, {
           method: 'PATCH',
-          body: JSON.stringify(formData),
+          body: JSON.stringify(data),
         });
         if (response && response.ok) {
           await fetchTypes();
           setModalOpened(false);
         } else {
           const errorData = await response?.json();
-          setError(errorData?.error || 'Ошибка обновления типа');
+          setError(errorData?.error || errorData?.errors?.[0]?.message || 'Ошибка обновления типа');
         }
       } else {
         // Создание
         const response = await authFetch(`${API}/type`, {
           method: 'POST',
-          body: JSON.stringify(formData),
+          body: JSON.stringify(data),
         });
         if (response && response.ok) {
           await fetchTypes();
           setModalOpened(false);
         } else {
           const errorData = await response?.json();
-          setError(errorData?.error || 'Ошибка создания типа');
+          setError(errorData?.error || errorData?.errors?.[0]?.message || 'Ошибка создания типа');
         }
       }
     } catch (error) {
@@ -164,6 +177,23 @@ export default function TypesManagement() {
     }
   };
 
+  // Получаем доступные типы для выбора родителя (только из того же инструмента и раздела)
+  const parentTypeOptions = useMemo(() => {
+    if (!selectedType && !selectedToolId || !selectedChapter) return [];
+    
+    const toolId = selectedType?.model_uuid || selectedToolId;
+    const chapter = selectedType?.chapter || selectedChapter;
+    
+    return types
+      .filter(type => 
+        type.model_uuid === toolId && 
+        type.chapter === chapter &&
+        type.id !== selectedType?.id &&
+        !type.parent_type // Только корневые типы могут быть родителями
+      )
+      .map(type => ({ value: type.id, label: type.name }));
+  }, [types, selectedType, selectedToolId, selectedChapter]);
+
   const formFields = useMemo(() => [
     {
       name: 'model_uuid',
@@ -179,6 +209,13 @@ export default function TypesManagement() {
       required: true,
     },
     {
+      name: 'parent_type',
+      label: 'Родительский тип',
+      type: 'select' as const,
+      required: false,
+      options: [{ value: '', label: 'Нет (корневой тип)' }, ...parentTypeOptions],
+    },
+    {
       name: 'name',
       label: 'Название',
       type: 'text' as const,
@@ -191,13 +228,23 @@ export default function TypesManagement() {
       required: false,
       placeholder: '#000000',
     },
-  ], [tools]);
+    {
+      name: 'sortOrder',
+      label: 'Порядок сортировки',
+      type: 'number' as const,
+      required: false,
+      min: 0,
+      placeholder: '0',
+    },
+  ], [tools, parentTypeOptions]);
 
   const initialValues = useMemo(() => selectedType ? {
     model_uuid: selectedType.model_uuid,
     chapter: selectedType.chapter,
+    parent_type: selectedType.parent_type || '',
     name: selectedType.name,
     colorHex: selectedType.colorHex || '',
+    sortOrder: selectedType.sortOrder || 0,
   } : undefined, [selectedType]);
 
   // Получаем значения фильтров
@@ -277,7 +324,7 @@ export default function TypesManagement() {
   ], []);
 
   return (
-    <Container size="xl">
+    <Box size="xl">
       <Stack gap="md">
         <Group justify="space-between">
           <Title order={2}>Управление типами</Title>
@@ -488,52 +535,73 @@ export default function TypesManagement() {
                       <Table.Thead>
                         <Table.Tr>
                           <Table.Th>Название</Table.Th>
+                          <Table.Th>Родитель</Table.Th>
+                          <Table.Th>Порядок</Table.Th>
                           <Table.Th>Цвет</Table.Th>
                           <Table.Th>Действия</Table.Th>
                         </Table.Tr>
                       </Table.Thead>
                       <Table.Tbody>
-                        {selectedChapterTypes.map((type) => (
-                          <Table.Tr key={type.id}>
-                            <Table.Td>
-                              <Text>{type.name}</Text>
-                            </Table.Td>
-                            <Table.Td>
-                              {type.colorHex ? (
-                                <Badge
-                                  color={type.colorHex}
-                                  style={{ backgroundColor: type.colorHex }}
-                                >
-                                  {type.colorHex}
-                                </Badge>
-                              ) : (
-                                <Text c="dimmed">—</Text>
-                              )}
-                            </Table.Td>
-                            <Table.Td>
-                              <Group gap="xs">
-                                <Tooltip label="Редактировать">
-                                  <ActionIcon
-                                    variant="light"
-                                    color="blue"
-                                    onClick={() => handleEdit(type)}
+                        {selectedChapterTypes.map((type: any) => {
+                          const level = type.level || 0;
+                          const parentType = types.find(t => t.id === type.parent_type);
+                          return (
+                            <Table.Tr key={type.id}>
+                              <Table.Td>
+                                <Group gap="xs" style={{ paddingLeft: `${level * 24}px` }}>
+                                  {level > 0 && <IconChevronRight size={14} style={{ opacity: 0.5 }} />}
+                                  <Text>{type.name}</Text>
+                                </Group>
+                              </Table.Td>
+                              <Table.Td>
+                                {parentType ? (
+                                  <Badge variant="light" size="sm">
+                                    {parentType.name}
+                                  </Badge>
+                                ) : (
+                                  <Text c="dimmed" size="sm">—</Text>
+                                )}
+                              </Table.Td>
+                              <Table.Td>
+                                <Text size="sm">{type.sortOrder ?? 0}</Text>
+                              </Table.Td>
+                              <Table.Td>
+                                {type.colorHex ? (
+                                  <Badge
+                                    color={type.colorHex}
+                                    style={{ backgroundColor: type.colorHex }}
                                   >
-                                    <IconEdit size={18} />
-                                  </ActionIcon>
-                                </Tooltip>
-                                <Tooltip label="Удалить">
-                                  <ActionIcon
-                                    variant="light"
-                                    color="red"
-                                    onClick={() => handleDelete(type)}
-                                  >
-                                    <IconTrash size={18} />
-                                  </ActionIcon>
-                                </Tooltip>
-                              </Group>
-                            </Table.Td>
-                          </Table.Tr>
-                        ))}
+                                    {type.colorHex}
+                                  </Badge>
+                                ) : (
+                                  <Text c="dimmed">—</Text>
+                                )}
+                              </Table.Td>
+                              <Table.Td>
+                                <Group gap="xs">
+                                  <Tooltip label="Редактировать">
+                                    <ActionIcon
+                                      variant="light"
+                                      color="blue"
+                                      onClick={() => handleEdit(type)}
+                                    >
+                                      <IconEdit size={18} />
+                                    </ActionIcon>
+                                  </Tooltip>
+                                  <Tooltip label="Удалить">
+                                    <ActionIcon
+                                      variant="light"
+                                      color="red"
+                                      onClick={() => handleDelete(type)}
+                                    >
+                                      <IconTrash size={18} />
+                                    </ActionIcon>
+                                  </Tooltip>
+                                </Group>
+                              </Table.Td>
+                            </Table.Tr>
+                          );
+                        })}
                       </Table.Tbody>
                     </Table>
                   </ScrollArea>
@@ -590,7 +658,7 @@ export default function TypesManagement() {
           </Group>
         </Modal>
       </Stack>
-    </Container>
+    </Box>
   );
 }
 

@@ -934,7 +934,7 @@ export default function SafetyJournal() {
         {loading && <LoadingOverlay visible />}
 
       {/* Контент */}
-      <Box p="xl">
+      <Box>
         {/* Закрепленные фильтры - показываем только если филиалов больше одного */}
         {branches.length > 1 && (
         <Box
@@ -947,7 +947,6 @@ export default function SafetyJournal() {
             borderBottom: '1px solid var(--theme-border-primary)',
             boxShadow: 'var(--theme-shadow-md)',
             padding: 'var(--space-md)',
-            marginBottom: '32px'
           }}
         >
           {/* Зафиксированное меню с вкладками и фильтрами */}

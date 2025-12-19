@@ -10,7 +10,6 @@ function Home() {
       display: 'flex', 
       width: '100%',
       minHeight: '100vh',
-      padding: '20px',
       gap: '20px',
       background: 'var(--theme-bg-primary)'
     }}>

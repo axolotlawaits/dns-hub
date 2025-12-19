@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { prisma } from '../../server.js';
-import { SocketIOService } from '../../socketio.js'; // Измененный импорт
+import { SocketIOService } from '../../socketio.js';
 import { emailService } from '../../services/email.js';
 import { telegramService } from '../../controllers/app/telegram.js';
 import { Notifications, NotificationType, NotificationChannel, NotificationPriority } from '@prisma/client';
@@ -27,12 +27,12 @@ export type NotificationWithRelations = Notifications & {
 
 const createNotificationSchema = z.object({
   type: z.nativeEnum(NotificationType),
-  channels: z.array(z.nativeEnum(NotificationChannel)).min(1),
-  action: z.record(z.any()).optional(),
-  title: z.string().min(1).max(100),
-  message: z.string().min(1).max(500),
-  senderId: z.string().uuid(),
-  receiverId: z.string().uuid(),
+  channels: z.array(z.nativeEnum(NotificationChannel)).min(1, { message: "At least one channel is required" }),
+  action: z.any().optional(),
+  title: z.string().min(1, { message: "Title is required" }).max(100, { message: "Title too long (max 100 chars)" }),
+  message: z.string().min(1, { message: "Message is required" }).max(500, { message: "Message too long (max 500 chars)" }),
+  senderId: z.string().uuid({ message: "Invalid sender UUID" }),
+  receiverId: z.string().uuid({ message: "Invalid receiver UUID" }),
   toolId: z.string().uuid().optional(),
   priority: z.nativeEnum(NotificationPriority).optional().default('MEDIUM'),
   expiresAt: z.date().optional(),
@@ -52,8 +52,7 @@ const getNotificationsSchema = z.object({
 });
 
 // Initialize services
-const socketService = SocketIOService.getInstance(); // Изменено на SocketIOService
-
+const socketService = SocketIOService.getInstance();
 
 const buildIncludeOptions = (include?: string[]) => {
   return {
@@ -96,7 +95,6 @@ const dispatchNotification = async (notification: NotificationWithRelations) => 
     },
   });
 
-  // Отправляем IN_APP уведомления, если канал указан
   const shouldSendInApp = notification.channel.includes('IN_APP');
   const wantsEmail = userSettings ? userSettings.value === 'true' : true;
 
@@ -154,11 +152,12 @@ const createNotification = async (data: z.infer<typeof createNotificationSchema>
     receiverId: data.receiverId
   });
 
+  // Создаем уведомление
   const notification = await prisma.notifications.create({
     data: {
       type: data.type,
       channel: data.channels,
-      action: data.action,
+      action: data.action as any,
       title: data.title,
       message: data.message,
       senderId: data.senderId,
@@ -167,6 +166,13 @@ const createNotification = async (data: z.infer<typeof createNotificationSchema>
       priority: data.priority,
       expiresAt: data.expiresAt,
     },
+  });
+
+  console.log(`[NotificationController] Notification created with ID: ${notification.id}`);
+
+  // Получаем полные данные с отношениями
+  const notificationWithRelations = await prisma.notifications.findUnique({
+    where: { id: notification.id },
     include: {
       sender: { select: { id: true, name: true, email: true, telegramChatId: true } },
       receiver: { select: { id: true, name: true, email: true, telegramChatId: true } },
@@ -174,15 +180,18 @@ const createNotification = async (data: z.infer<typeof createNotificationSchema>
     },
   });
 
-  console.log(`[NotificationController] Notification created with ID: ${notification.id}`);
+  if (!notificationWithRelations) {
+    throw new Error(`Failed to retrieve created notification ${notification.id}`);
+  }
+
   console.log(`[NotificationController] Receiver data:`, {
-    id: notification.receiver?.id,
-    email: notification.receiver?.email,
-    telegramChatId: notification.receiver?.telegramChatId
+    id: notificationWithRelations.receiver?.id ?? notification.receiverId,
+    email: notificationWithRelations.receiver?.email ?? null,
+    telegramChatId: notificationWithRelations.receiver?.telegramChatId ?? null
   });
 
-  await dispatchNotification(notification);
-  return notification;
+  await dispatchNotification(notificationWithRelations as NotificationWithRelations);
+  return notificationWithRelations;
 };
 
 const markAsRead = async (params: z.infer<typeof markAsReadSchema>) => {

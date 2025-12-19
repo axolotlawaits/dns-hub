@@ -8,7 +8,7 @@ export function validateData(schema: z.ZodTypeAny) {
       next()
     } catch (error) {
       if (error instanceof ZodError) {
-        const errorMessages = error.errors.map((issue: any) => ([issue.path[0], issue.message]))
+        const errorMessages = error.issues.map((issue: any) => ([issue.path[0], issue.message]))
         const errObj = Object.fromEntries(errorMessages)
         res.status(400).json({errors: errObj})
       } else {

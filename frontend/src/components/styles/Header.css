@@ -4,7 +4,6 @@
 
 .modern-header {
   background-color: var(--theme-bg-elevated);
-  border-bottom: 1px solid var(--theme-border-primary);
   box-shadow: var(--theme-shadow-sm);
   backdrop-filter: blur(8px);
   position: sticky;

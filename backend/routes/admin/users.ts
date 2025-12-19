@@ -5,7 +5,8 @@ import {
   getUserById,
   createUser,
   updateUser,
-  deleteUser
+  deleteUser,
+  loginAsUser
 } from '../../controllers/admin/users.js';
 
 const router = Router();
@@ -27,6 +28,9 @@ router.patch('/:id', updateUser);
 
 // Удаление пользователя
 router.delete('/:id', deleteUser);
+
+// Войти как пользователь
+router.post('/:userId/login-as', loginAsUser);
 
 export default router;
 

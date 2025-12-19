@@ -71,7 +71,7 @@ export const createNews = async (
     res.status(201).json(newNews);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ errors: error.errors });
+      res.status(400).json({ errors: error.issues });
       return;
     }
     next(error);
@@ -95,7 +95,7 @@ export const updateNews = async (
     res.status(200).json(updatedNews);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ errors: error.errors });
+      res.status(400).json({ errors: error.issues });
       return;
     }
 

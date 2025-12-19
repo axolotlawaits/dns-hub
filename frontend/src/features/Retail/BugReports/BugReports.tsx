@@ -209,7 +209,7 @@ const BugReports: React.FC = () => {
   };
 
   return (
-    <Box style={{ width: '100%', padding: 'var(--mantine-spacing-md)' }}>
+    <Box style={{ width: '100%'}}>
       <Stack gap="lg">
         <Title order={1} mb="lg" c="var(--theme-text-primary)">
           <Group>

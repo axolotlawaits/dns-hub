@@ -1,3 +1,7 @@
+// ========================================
+// ГЕНЕРАТОР И ДАННЫЕ - Generator & Datasource
+// ========================================
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -131,6 +135,8 @@ model Branch {
   rk            RK[]
   supplyDocs    SupplyDocs[]   @relation("SupplyDocs_Branch")
   userData      UserData[]
+  shops         Shop[]
+  shopRequests  ShopRequest[]  @relation("ShopRequestRequesterBranch")
 }
 
 model Group {
@@ -157,6 +163,10 @@ model Type {
   chapter                String
   name                   String
   colorHex               String?
+  parent_type            String?
+  parent                 Type?          @relation("TypeHierarchy", fields: [parent_type], references: [id], onDelete: Cascade)
+  children               Type[]          @relation("TypeHierarchy")
+  sortOrder              Int            @default(0)
   Media                  Media[]        @relation("TypeMedia")
   rk_approvalStatus      RKAttachment[] @relation("RK_approvalStatus")
   rk_typeStructure       RKAttachment[] @relation("RK_typeStructure")
@@ -165,6 +175,12 @@ model Type {
   SupplyDocsPTiU         SupplyDocs[]   @relation("SupplyDocs_PTiU")
   SupplyDocsRequirements SupplyDocs[]   @relation("SupplyDocs_Requirements")
   Tool                   Tool           @relation(fields: [model_uuid], references: [id])
+  shops                  Shop[]
+
+  @@index([parent_type])
+  @@index([model_uuid, chapter])
+  @@index([model_uuid, chapter, sortOrder])
+  @@index([parent_type, sortOrder])
 }
 
 // Инструменты и доступы
@@ -201,6 +217,7 @@ model User {
   role                   Role                       @default(EMPLOYEE)
   telegramChatId         String?                    @unique
   telegramLinkToken      String?                    @unique
+  telegramUsername       String?
   bookmarks              Bookmarks[]
   correspondences        Correspondence[]
   attachments            CorrespondenceAttachment[]
@@ -226,6 +243,9 @@ model User {
   userToolAccesses       UserToolAccess[]
   MerchAttachments       MerchAttachment[]
   auditLogs              AuditLog[]
+  shops                  Shop[]
+  shopRequests           ShopRequest[] @relation("ShopRequestRequester")
+  scanSessions           ScanSession[]
 }
 
 model UserData {
@@ -253,6 +273,52 @@ model UserSettings {
   user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, parameter])
+}
+
+model ScanSession {
+  id          String       @id @default(uuid())
+  userId      String
+  printerIp   String
+  printerPort Int
+  folderName  String
+  startedAt   DateTime     @default(now())
+  stoppedAt   DateTime?
+  status      String       @default("active") // active, completed, stopped
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  files       ScannedFile[]
+
+  @@index([userId])
+  @@index([startedAt])
+}
+
+model ScannedFile {
+  id            String      @id @default(uuid())
+  scanSessionId String
+  fileName      String
+  filePath      String
+  fileSize      Int
+  scannedAt     DateTime    @default(now())
+  scanSession   ScanSession @relation(fields: [scanSessionId], references: [id], onDelete: Cascade)
+
+  @@index([scanSessionId])
+}
+
+model Printer {
+  id          String   @id @default(uuid())
+  ip          String
+  port        Int      @default(9100)
+  name        String?
+  vendor      String?
+  model       String?
+  hasScanner  Boolean  @default(false)
+  scannerType String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([ip, port])
+  @@index([ip])
+  @@index([hasScanner])
 }
 
 // ========================================
@@ -821,6 +887,133 @@ model MerchTgUserStats {
   @@index([action, timestamp])
 }
 
+// ========================================
+// ДОСКА ОБЪЯВЛЕНИЙ (AVITO-подобная)
+// ========================================
+
+enum ShopStatus {
+  ACTIVE     // Активно
+  SOLD       // Продано
+  ARCHIVED   // Архивировано
+  MODERATION // На модерации
+}
+
+enum ItemCondition {
+  NEW        // Новое
+  EXCELLENT  // Отличное
+  GOOD       // Хорошее
+  SATISFACTORY // Удовлетворительное
+  POOR       // Плохое
+}
+
+model Shop {
+  id          String      @id @default(uuid())
+  title       String
+  description String?     @db.Text
+  categoryId  String
+  category    Type        @relation(fields: [categoryId], references: [id])
+  branchId    String
+  branch      Branch      @relation(fields: [branchId], references: [uuid])
+  status      ShopStatus  @default(ACTIVE)
+  userId      String
+  user        User        @relation(fields: [userId], references: [id])
+  contactName String?
+  contactPhone String?
+  contactEmail String?
+  views       Int         @default(0)
+  isPromoted  Boolean     @default(false) // Платное продвижение
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  publishedAt DateTime?   // Дата публикации
+  images      ShopImage[]
+  items       ShopItem[]
+  requests    ShopRequest[]
+
+  @@index([categoryId])
+  @@index([branchId])
+  @@index([status])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([isPromoted, status])
+}
+
+model ShopItem {
+  id          String        @id @default(uuid())
+  shopId      String
+  shop        Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  name        String        // Наименование
+  quantity    Int           @default(1) // Количество
+  article     String?       // Артикул (необязателен)
+  description String?       @db.Text // Описание
+  condition   ItemCondition @default(GOOD) // Состояние
+  sortOrder   Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  reserves    ShopItemReserve[] // Резервы по этому товару
+
+  @@index([shopId])
+  @@index([shopId, sortOrder])
+}
+
+model ShopImage {
+  id        String   @id @default(uuid())
+  shopId    String
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  source    String   // Путь к файлу
+  sortOrder Int      @default(0)
+  isMain    Boolean  @default(false) // Главное изображение
+  createdAt DateTime @default(now())
+
+  @@index([shopId])
+  @@index([shopId, sortOrder])
+}
+
+enum ShopRequestStatus {
+  PENDING   // Ожидает подтверждения
+  APPROVED // Подтвержден
+  REJECTED // Отклонен
+  COMPLETED // Завершен (документ отгрузки добавлен)
+}
+
+model ShopRequest {
+  id              String          @id @default(uuid())
+  shopId          String
+  shop            Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  requesterId     String          // Кто запросил
+  requester       User            @relation("ShopRequestRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  requesterBranchId String?       // Филиал запросившего
+  requesterBranch Branch?         @relation("ShopRequestRequesterBranch", fields: [requesterBranchId], references: [uuid], onDelete: SetNull)
+  status          ShopRequestStatus @default(PENDING)
+  shipmentDocNumber String?       // Номер документа отгрузки
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  approvedAt      DateTime?       // Дата подтверждения
+  completedAt     DateTime?       // Дата завершения (когда добавлен номер документа)
+  reserves        ShopItemReserve[] // Резервы по товарам
+
+  @@index([shopId])
+  @@index([requesterId])
+  @@index([requesterBranchId])
+  @@index([status])
+  @@index([shopId, status])
+}
+
+model ShopItemReserve {
+  id          String      @id @default(uuid())
+  requestId   String
+  request     ShopRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  itemId      String
+  item        ShopItem    @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  quantity    Int         // Количество в резерве
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([requestId, itemId])
+  @@index([requestId])
+  @@index([itemId])
+}
+
 // Универсальная таблица обратной связи
 enum FeedbackStatus {
   NEW         // Новое
@@ -949,4 +1142,19 @@ model AuditLog {
   @@index([entityType])
   @@index([timestamp])
   @@index([userId, timestamp])
+}
+
+// Логи открытия дверей Trassir
+model TrassirDoorLog {
+  id        String   @id @default(uuid())
+  doorId    Int
+  doorName  String?
+  personName String?
+  tgId      Int?
+  openedAt  DateTime @default(now())
+
+  @@index([doorId])
+  @@index([tgId])
+  @@index([openedAt])
+  @@map("TrassirDoorLog")
 }

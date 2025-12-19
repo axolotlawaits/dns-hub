@@ -130,6 +130,12 @@ export const refreshToken = async (req: Request, res: Response): Promise<any> =>
     }
     const { exp, iat, ...newPayload } = payload 
     
+    // Сохраняем impersonatedBy, если он есть в refresh token
+    if (payload.impersonatedBy) {
+      newPayload.impersonatedBy = payload.impersonatedBy;
+      console.log('[refreshToken] Сохраняем impersonatedBy:', payload.impersonatedBy);
+    }
+    
     const newAccessToken = jwt.sign(newPayload, accessPrivateKey, { algorithm: 'RS256', expiresIn: '30m' })
     const newRefreshToken = jwt.sign(newPayload, refreshPrivateKey, { algorithm: 'RS256', expiresIn: '90d' })
 

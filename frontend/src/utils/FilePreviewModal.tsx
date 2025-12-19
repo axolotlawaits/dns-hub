@@ -3,13 +3,13 @@ import { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } fr
 import { API } from '../config/constants';
 import { IconFile, IconFileText, IconFileTypePdf, IconPhoto, IconMusic, IconVideo, IconDownload, IconChevronLeft, IconChevronRight, IconX, IconTrash, IconExternalLink, IconRotate2, IconRotateClockwise2, IconZoomIn, IconZoomOut } from '@tabler/icons-react';
 import { Document, Page, pdfjs } from 'react-pdf';
-import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
-import 'react-pdf/dist/esm/Page/TextLayer.css';
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+import 'react-pdf/dist/Page/TextLayer.css';
 import './styles/FilePreviewModal.css';
 
-// Настройка worker для PDF.js - используем локальный worker из node_modules
+// Настройка worker для PDF.js - используем unpkg
 if (typeof window !== 'undefined') {
-  pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
+  pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 }
 
 // Интерфейсы для типизации
@@ -125,8 +125,7 @@ const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: 
           }
         }
       };
-    }, [src]);
-    // массив зависимостей [src, onMimeTypeDetected, onLoad, onError]
+    }, [src, onMimeTypeDetected, onLoad, onError]);
 
     // Очистка при размонтировании компонента
     useEffect(() => {
@@ -970,8 +969,7 @@ export const FilePreviewModal = ({
     }
     
     return () => window.removeEventListener('resize', updateSize);
-  }, [opened, currentIndex, normalizedRotation]);
-  // массив зависимостей [opened, currentIndex, normalizedRotation, isImage, isPdf, containerSize, overlayHeights, baseScale, displayedWidth, displayedHeight]
+  }, [opened, currentIndex, isImage, isPdf]);
 
   useEffect(() => {
     if (!currentAttachment) return;

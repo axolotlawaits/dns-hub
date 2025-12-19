@@ -3,6 +3,7 @@ import { validateData } from '../../middleware/validation.js';
 import { z } from 'zod';
 import { getLastUser, login, updateUserSettings, getUserSettings, updateUser, getUserData } from '../../controllers/app/user.js';
 import { ldapAuth, updateUserPhoto } from '../../utils/ldap.js';
+import { authenticateToken } from '../../middleware/auth.js';
 
 const ldapLoginSchema = z.object({
   login: z.string().min(1, 'введите логин').transform(val => val.trim()),
@@ -17,7 +18,7 @@ const updatePhotoSchema = z.object({
 
 const router = express.Router();
 
-router.get('/:id', getUserData)
+router.get('/:id', authenticateToken, getUserData)
 router.post('/login', validateData(ldapLoginSchema), ldapAuth, login);
 router.get('/last-user/:login', getLastUser);
 router.patch('/:id', updateUser)

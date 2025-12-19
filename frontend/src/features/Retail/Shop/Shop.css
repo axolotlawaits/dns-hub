@@ -1,0 +1,21 @@
+.ads-container {
+  padding: var(--mantine-spacing-md);
+}
+
+.ad-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ad-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--mantine-shadow-md);
+}
+
+.ad-image-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--mantine-color-gray-1);
+  color: var(--mantine-color-gray-5);
+}
+

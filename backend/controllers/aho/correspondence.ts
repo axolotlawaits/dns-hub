@@ -149,7 +149,7 @@ export const createCorrespondence = async (
     res.status(201).json(result);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ errors: error.errors });
+      return res.status(400).json({ errors: error.issues });
     }
     next(error);
   }

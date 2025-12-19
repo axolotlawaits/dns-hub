@@ -55,7 +55,9 @@ import NoAccess from '../components/NoAccess';
 import Bookmarks from './Bookmarks';
 import Notification from './Notification';
 import Radio from '../features/Retail/Radio/Radio';
+import Trassir from '../features/Retail/Trassir/Trassir';
 import AppStore from '../features/Retail/AppStore/AppStore';
+import Shop from '../features/Retail/Shop/Shop';
 import FeedbackModule from '../features/Feedback/Feedback';
 import BugReports from '../features/Retail/BugReports/BugReports';
 import LogViewer from '../components/LogViewer';
@@ -63,6 +65,8 @@ import AdminPanel from './profile/AdminPanel';
 import { useNotifications } from '../hooks/useNotifications';
 import { useEffect, useState } from 'react';
 import { API } from '../config/constants';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 
 function App() {
   const { user } = useUserContext();
@@ -146,6 +150,7 @@ function App() {
 
   return (
     <ErrorBoundary>
+      <DndProvider backend={HTML5Backend}>
       <BrowserRouter>
         <PageHeaderProvider>
           <Notifications />
@@ -154,44 +159,29 @@ function App() {
           <Navigate to='/login' />
           :
           <AppShell
-            layout="alt"
             header={{ height: 64 }}
             footer={{ height: 65 }}
+            padding="md"
             navbar={{
-              width: navOpened ? 225 : 55,
+              width: navOpened ? 225 : 80,
               breakpoint: 'sm',
             }}
-            padding={0}
+        
             id='page'
             styles={{
               header: {
-                border: 'none',
                 position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
               },
               navbar: {
-                border: 'none',
                 position: 'fixed',
-                top: '64px',
-                left: 0,
-                bottom: '65px',
+
               },
-              main: {
-                padding: '15px',
-                margin: 0,
-                marginTop: '64px',
-                marginLeft: navOpened ? '225px' : '80px',
-                marginBottom: '65px',
-                height: 'calc(100vh - 64px - 65px)',
+              main: { 
                 overflow: 'auto',
-                transition: 'margin-left 0.2s ease',
-                position: 'relative',
+                transition: 'margin-left 0.2s ease',  
                 backgroundColor: 'var(--theme-bg-primary)'
               },
               footer: {
-                border: 'none',
                 position: 'fixed',
                 bottom: 0,
                 left: 0,
@@ -204,7 +194,7 @@ function App() {
               navOpened={navOpened} 
               toggleNav={handleToggleNav} 
             />
-            <AppShell.Main id='content' style={{ paddingBottom: '80px' }}>
+            <AppShell.Main id='content'>
               <Routes>
                 <Route path='/' element={<Home />} />
                 <Route path='/profile' element={<Profile />} />
@@ -245,6 +235,8 @@ function App() {
                   <Route path='/jurists/safety' element={<Safety />} />
                   <Route path="/add/rk" element={<RK />} />
                   <Route path='/retail/radio' element={<Radio />} />
+                  <Route path='/retail/trassir' element={<Trassir />} />
+                  <Route path='/retail/shop' element={<Shop />} />
                   <Route path='/retail/bug-reports' element={<BugReports />} />
                   <Route path='/logs' element={<LogViewer />} />
                   <Route path='/feedback' element={<FeedbackModule />} />
@@ -269,6 +261,7 @@ function App() {
           </Routes>
         </PageHeaderProvider>
       </BrowserRouter>
+      </DndProvider>
     </ErrorBoundary>
   );
 }

@@ -473,15 +473,6 @@ const Navigation: React.FC<NavigationProps> = ({ navOpened, toggleNav }) => {
             </>
           )}
         </div>
-
-        {/* Нижняя часть навигации */}
-        <div className="navbar-footer">
-          <div className="navbar-footer-content">
-            <Text size="xs" c="var(--theme-text-tertiary)" ta="center">
-              {navOpened ? `DNS Hub ${APP_VERSION}` : `v${APP_VERSION}`}
-            </Text>
-          </div>
-        </div>
       </div>
 
       {/* Модальное окно обратной связи */}

@@ -1,7 +1,8 @@
-import { Bot, Context, session, SessionFlavor } from 'grammy';
+import { Bot, Context, session, SessionFlavor, Keyboard } from 'grammy';
 import { Notifications } from '@prisma/client';
 import axios from 'axios';
 import { prisma, API } from '../../server.js';
+import { getDoors, openDoor, findDoorByName, isTrassirConfigured, getFloorsSubmenuDoors, isSubmenuTrigger } from './trassirService.js';
 
 // 1. Типизация сессии (если нужно хранить состояние)
 interface SessionData {
@@ -9,7 +10,8 @@ interface SessionData {
     id: string;
     name: string;
   };
-  // ... другие поля сессии
+  waitingForDoor?: boolean; // Ожидаем выбор двери
+  inSubmenu?: boolean; // Находимся в подменю "3-6 Этаж"
 }
 
 type MyContext = Context & SessionFlavor<SessionData>;
@@ -71,18 +73,69 @@ class TelegramService {
     // 4. Обработка команды /start
     this.bot.command('start', async (ctx) => {
       const match = ctx.match;
-      if (!match || typeof match !== 'string') {
-        return ctx.reply('Для привязки аккаунта используйте ссылку из приложения');
+      const chatId = ctx.chat.id.toString();
+
+      // Проверяем, уже привязан ли пользователь
+      const existingUser = await prisma.user.findFirst({
+        where: { telegramChatId: chatId },
+        select: { id: true, name: true }
+      });
+
+      // Если нет токена - показываем приветствие для уже привязанных
+      if (!match || typeof match !== 'string' || !match.trim()) {
+        if (existingUser) {
+          // Проверяем настройку открытия дверей
+          const doorOpeningSetting = await prisma.userSettings.findUnique({
+            where: {
+              userId_parameter: {
+                userId: existingUser.id,
+                parameter: 'telegram_door_opening_enabled'
+              }
+            }
+          });
+          
+          const showDoorButton = !doorOpeningSetting || doorOpeningSetting.value !== 'false';
+          const keyboard = showDoorButton 
+            ? new Keyboard().text('🚪 Открыть дверь').resized()
+            : new Keyboard().resized();
+          
+          let message = `Привет, ${existingUser.name}! 👋\n\nДоступные команды:\n`;
+          if (showDoorButton) {
+            message += `🚪 /open - открыть дверь\n`;
+          }
+          message += `❓ /help - справка`;
+          
+          return ctx.reply(message, { reply_markup: keyboard });
+        }
+        
+        // Инструкция для неавторизованных пользователей
+        const instructionMessage = 
+          `👋 Добро пожаловать!\n\n` +
+          `Для подключения бота к вашему аккаунту:\n\n` +
+          `1️⃣ Откройте свой профиль на портале DNS HUB\n` +
+          `2️⃣ Нажмите "Подключить Telegram"\n` +
+          `3️⃣ Отсканируйте QR-код или перейдите по ссылке\n` +
+          `4️⃣ После перехода в бот, нажмите "Запустить" или отправьте команду /start\n\n` +
+          `После подключения вы сможете:\n` +
+          `🔔 Получать уведомления из системы\n` +
+          `🚪 Открывать двери (если включено в настройках профиля)\n` +
+          `⚙️ Управлять настройками в профиле на портале\n\n` +
+          `❓ Используйте /help для получения справки`;
+        
+        return ctx.reply(instructionMessage);
       }
 
       const token = match.trim();
-      if (!token) {
-        return ctx.reply('Для привязки аккаунта используйте ссылку из приложения');
-      }
 
       // Валидация формата токена
       if (token.length < 10 || token.length > 100) {
-        return ctx.reply('❌ Неверный формат ссылки');
+        const errorMessage = 
+          `❌ Неверный формат ссылки\n\n` +
+          `Для подключения бота:\n` +
+          `1️⃣ Откройте профиль на портале\n` +
+          `2️⃣ Перейдите в раздел "Telegram"\n` +
+          `3️⃣ Нажмите "Подключить Telegram" и используйте полученную ссылку`;
+        return ctx.reply(errorMessage);
       }
 
       try {
@@ -97,39 +150,72 @@ class TelegramService {
         });
 
         if (!user) {
-          return ctx.reply('❌ Ссылка недействительна или истекла');
+          const errorMessage = 
+            `❌ Ссылка недействительна или истекла\n\n` +
+            `Для подключения бота:\n` +
+            `1️⃣ Откройте профиль на портале\n` +
+            `2️⃣ Перейдите в раздел "Telegram"\n` +
+            `3️⃣ Нажмите "Подключить Telegram" и сгенерируйте новую ссылку`;
+          return ctx.reply(errorMessage);
         }
 
         // Проверяем срок действия токена (15 минут)
-        const TOKEN_EXPIRY_TIME = 15 * 60 * 1000; // 15 минут в миллисекундах
+        const TOKEN_EXPIRY_TIME = 15 * 60 * 1000;
         const tokenAge = Date.now() - user.updatedAt.getTime();
         
         if (tokenAge > TOKEN_EXPIRY_TIME) {
-          // Удаляем истекший токен
           await prisma.user.update({
             where: { id: user.id },
             data: { telegramLinkToken: null },
           });
-          return ctx.reply('❌ Ссылка истекла. Пожалуйста, сгенерируйте новую ссылку в приложении');
+          const errorMessage = 
+            `❌ Ссылка истекла (действительна 15 минут)\n\n` +
+            `Для подключения бота:\n` +
+            `1️⃣ Откройте профиль на портале\n` +
+            `2️⃣ Перейдите в раздел "Telegram"\n` +
+            `3️⃣ Нажмите "Подключить Telegram" и сгенерируйте новую ссылку`;
+          return ctx.reply(errorMessage);
         }
 
         // Проверяем, не привязан ли уже аккаунт к другому чату
-        if (user.telegramChatId && user.telegramChatId !== ctx.chat.id.toString()) {
+        if (user.telegramChatId && user.telegramChatId !== chatId) {
           return ctx.reply('❌ Этот аккаунт уже привязан к другому чату Telegram');
         }
 
         await prisma.user.update({
           where: { id: user.id },
           data: {
-            telegramChatId: ctx.chat.id.toString(),
+            telegramChatId: chatId,
             telegramLinkToken: null,
+            telegramUsername: ctx.from?.username || null,
           },
         });
 
         await this.notifyFrontend(user.id);
-        await ctx.reply(`✅ Аккаунт привязан!\nДобро пожаловать, ${user.name}!`);
+        
+        // Проверяем настройку открытия дверей
+        const doorOpeningSetting = await prisma.userSettings.findUnique({
+          where: {
+            userId_parameter: {
+              userId: user.id,
+              parameter: 'telegram_door_opening_enabled'
+            }
+          }
+        });
+        
+        const showDoorButton = !doorOpeningSetting || doorOpeningSetting.value !== 'false';
+        const keyboard = showDoorButton 
+          ? new Keyboard().text('🚪 Открыть дверь').resized()
+          : new Keyboard().resized();
+        
+        let message = `✅ Аккаунт привязан!\nДобро пожаловать, ${user.name}! 👋\n\nДоступные команды:\n`;
+        if (showDoorButton) {
+          message += `🚪 /open - открыть дверь\n`;
+        }
+        message += `❓ /help - справка`;
+        
+        await ctx.reply(message, { reply_markup: keyboard });
 
-        // Сохраняем данные в сессию (пример)
         ctx.session.userData = {
           id: user.id,
           name: user.name,
@@ -137,6 +223,137 @@ class TelegramService {
       } catch (error) {
         console.error('[Telegram] Link error:', error);
         await ctx.reply('❌ Ошибка привязки. Пожалуйста, попробуйте снова');
+      }
+    });
+
+    // Команда /help
+    this.bot.command('help', async (ctx) => {
+      const chatId = ctx.chat?.id.toString();
+      if (!chatId) return;
+      
+      const user = await prisma.user.findFirst({
+        where: { telegramChatId: chatId },
+        select: { id: true }
+      });
+      
+      let message = `📋 Доступные команды:\n\n`;
+      
+      if (user) {
+        const doorOpeningSetting = await prisma.userSettings.findUnique({
+          where: {
+            userId_parameter: {
+              userId: user.id,
+              parameter: 'telegram_door_opening_enabled'
+            }
+          }
+        });
+        
+        if (!doorOpeningSetting || doorOpeningSetting.value !== 'false') {
+          message += `🚪 /open - открыть дверь\n`;
+        }
+        
+        message += `🔄 /start - главное меню\n`;
+        message += `❓ /help - эта справка\n\n`;
+        message += `Также вы получаете уведомления из системы.`;
+      } else {
+        message += `🔄 /start - главное меню\n`;
+        message += `❓ /help - эта справка\n\n`;
+        message += `🔗 Как подключить бота:\n`;
+        message += `1. Откройте профиль на сайте\n`;
+        message += `2. В разделе "Telegram" нажмите "Подключить Telegram"\n`;
+        message += `3. Отсканируйте QR-код или перейдите по ссылке\n`;
+        message += `4. Нажмите /start в этом чате\n\n`;
+        message += `После подключения вы сможете:\n`;
+        message += `• Получать уведомления из системы\n`;
+        message += `• Открывать двери через бота\n`;
+        message += `• Управлять настройками в профиле на сайте`;
+      }
+      
+      await ctx.reply(message);
+    });
+
+    // Команда /open - открытие двери
+    this.bot.command('open', async (ctx) => {
+      await this.handleOpenDoor(ctx);
+    });
+
+    // Обработка текстовых сообщений (выбор двери)
+    this.bot.on('message:text', async (ctx) => {
+      const text = ctx.message.text;
+      const chatId = ctx.chat.id.toString();
+
+      // Кнопка "Открыть дверь"
+      if (text === '🚪 Открыть дверь') {
+        await this.handleOpenDoor(ctx);
+        return;
+      }
+
+      // Кнопка "Назад" из подменю
+      if (text === '◀️ Назад') {
+        await this.handleOpenDoor(ctx);
+        return;
+      }
+
+      // Проверяем, авторизован ли пользователь
+      const user = await prisma.user.findFirst({
+        where: { telegramChatId: chatId },
+        select: { id: true, name: true }
+      });
+
+      if (!user) {
+        return; // Игнорируем сообщения от неавторизованных
+      }
+
+      // Проверяем настройку пользователя для открытия дверей
+      const doorOpeningSetting = await prisma.userSettings.findUnique({
+        where: {
+          userId_parameter: {
+            userId: user.id,
+            parameter: 'telegram_door_opening_enabled'
+          }
+        }
+      });
+      
+      // Если настройка существует и отключена, запрещаем открытие дверей
+      if (doorOpeningSetting && doorOpeningSetting.value === 'false') {
+        await ctx.reply('❌ Открытие дверей через Telegram отключено в настройках профиля');
+        return;
+      }
+
+      // Проверяем настройку для дополнительных дверей
+      const additionalDoorsSetting = await prisma.userSettings.findUnique({
+        where: {
+          userId_parameter: {
+            userId: user.id,
+            parameter: 'telegram_additional_doors_enabled'
+          }
+        }
+      });
+      
+      const showAdditionalDoors = additionalDoorsSetting?.value === 'true';
+
+      // Проверяем, выбрано ли подменю "3-6 Этаж"
+      if (isSubmenuTrigger(text)) {
+        await this.handleFloorsSubmenu(ctx);
+        return;
+      }
+
+      // Проверяем, выбрана ли дверь
+      const door = await findDoorByName(text, showAdditionalDoors);
+      if (door) {
+        const opened = await openDoor(door.id, user.name, ctx.from?.id);
+        if (opened) {
+          const firstName = user.name.split(' ')[1] || user.name;
+          await ctx.reply(`✅ ${firstName}, дверь "${door.name}" открыта!`);
+        } else {
+          await ctx.reply(`❌ Не удалось открыть дверь "${door.name}"`);
+        }
+        // Если мы в подменю, остаемся в подменю
+        if (ctx.session.inSubmenu) {
+          // Пересоздаем подменю, чтобы оно осталось активным
+          await this.handleFloorsSubmenu(ctx);
+        }
+        // Меню с дверьми остаётся - не меняем клавиатуру
       }
     });
 
@@ -204,6 +421,34 @@ class TelegramService {
     notification: Notifications,
     chatId: string
   ): Promise<boolean> {
+    // Проверяем настройку пользователя для Telegram уведомлений
+    try {
+      const user = await prisma.user.findFirst({
+        where: { telegramChatId: chatId },
+        select: { id: true }
+      });
+      
+      if (user) {
+        const telegramNotificationsSetting = await prisma.userSettings.findUnique({
+          where: {
+            userId_parameter: {
+              userId: user.id,
+              parameter: 'telegram_notifications_enabled'
+            }
+          }
+        });
+        
+        // Если настройка существует и отключена, не отправляем уведомление
+        if (telegramNotificationsSetting && telegramNotificationsSetting.value === 'false') {
+          console.log(`[Telegram] Уведомления отключены для пользователя ${user.id}`);
+          return false;
+        }
+      }
+    } catch (error) {
+      console.error('[Telegram] Error checking notification settings:', error);
+      // Продолжаем отправку в случае ошибки проверки настроек
+    }
+    
     // Если бот не запущен, пытаемся запустить его
     if (!this.isRunning || !this.bot) {
       console.warn('[Telegram] Bot is not running, attempting to start...');
@@ -294,7 +539,169 @@ class TelegramService {
     );
   }
 
-  // 9. Вспомогательные методы
+  // 9. Обработка открытия двери
+  private async handleOpenDoor(ctx: MyContext): Promise<void> {
+    const chatId = ctx.chat?.id.toString();
+    if (!chatId) return;
+
+    // Проверяем авторизацию
+    const user = await prisma.user.findFirst({
+      where: { telegramChatId: chatId },
+      select: { id: true, name: true }
+    });
+
+    if (!user) {
+      await ctx.reply('❌ Сначала привяжите аккаунт через профиль на сайте');
+      return;
+    }
+
+    // Проверяем настройку пользователя для открытия дверей
+    const doorOpeningSetting = await prisma.userSettings.findUnique({
+      where: {
+        userId_parameter: {
+          userId: user.id,
+          parameter: 'telegram_door_opening_enabled'
+        }
+      }
+    });
+    
+    // Если настройка существует и отключена, запрещаем открытие дверей
+    if (doorOpeningSetting && doorOpeningSetting.value === 'false') {
+      await ctx.reply('❌ Открытие дверей через Telegram отключено в настройках профиля');
+      return;
+    }
+
+    // Проверяем, настроен ли Trassir
+    if (!isTrassirConfigured()) {
+      await ctx.reply('❌ Система управления дверьми не настроена');
+      return;
+    }
+
+    // Проверяем настройку для дополнительных дверей
+    const additionalDoorsSetting = await prisma.userSettings.findUnique({
+      where: {
+        userId_parameter: {
+          userId: user.id,
+          parameter: 'telegram_additional_doors_enabled'
+        }
+      }
+    });
+    
+    const showAdditionalDoors = additionalDoorsSetting?.value === 'true';
+
+    // Получаем список дверей (с учетом настройки дополнительных дверей)
+    const doors = await getDoors(showAdditionalDoors);
+    if (doors.size === 0) {
+      await ctx.reply('❌ Не удалось получить список дверей');
+      return;
+    }
+
+    // Создаем клавиатуру с дверьми
+    // Двери 13-16 группируем в подменю "3-6 Этаж"
+    const keyboard = new Keyboard();
+    const floorsSubmenuDoors = [13, 14, 15, 16];
+    let hasFloorsSubmenu = false;
+
+    // Собираем обычные двери (не 13-16) в массив
+    const regularDoors: Array<{ id: number; name: string }> = [];
+    doors.forEach((name, id) => {
+      // Пропускаем двери 13-16, они будут в подменю
+      if (floorsSubmenuDoors.includes(id)) {
+        hasFloorsSubmenu = true;
+        return;
+      }
+      regularDoors.push({ id, name });
+    });
+
+    // Добавляем обычные двери в два столбца
+    for (let i = 0; i < regularDoors.length; i += 2) {
+      if (i + 1 < regularDoors.length) {
+        // Две кнопки в ряд
+        keyboard.text(regularDoors[i].name).text(regularDoors[i + 1].name).row();
+      } else {
+        // Одна кнопка в ряд (если нечетное количество)
+        keyboard.text(regularDoors[i].name).row();
+      }
+    }
+
+    // Проверяем, есть ли двери 13-16 в основном списке (без дополнительных)
+    const basicDoors = await getDoors(false);
+    const hasFloorsInBasic = floorsSubmenuDoors.some(id => basicDoors.has(id));
+
+    // Добавляем кнопку подменю "3-6 Этаж" если:
+    // 1. Есть такие двери в списке
+    // 2. И (они в основном списке ИЛИ дополнительные двери включены)
+    if (hasFloorsSubmenu && (hasFloorsInBasic || showAdditionalDoors)) {
+      keyboard.text('3-6 Этаж').row();
+    }
+
+    keyboard.resized();
+
+    ctx.session.waitingForDoor = true;
+    ctx.session.inSubmenu = false;
+    await ctx.reply('🚪 Какую дверь открыть?', { reply_markup: keyboard });
+  }
+
+  // Обработка подменю "3-6 Этаж"
+  private async handleFloorsSubmenu(ctx: MyContext): Promise<void> {
+    const chatId = ctx.chat?.id.toString();
+    if (!chatId) return;
+
+    // Проверяем авторизацию
+    const user = await prisma.user.findFirst({
+      where: { telegramChatId: chatId },
+      select: { id: true, name: true }
+    });
+
+    if (!user) {
+      await ctx.reply('❌ Сначала привяжите аккаунт через профиль на сайте');
+      return;
+    }
+
+    // Проверяем настройку для дополнительных дверей
+    const additionalDoorsSetting = await prisma.userSettings.findUnique({
+      where: {
+        userId_parameter: {
+          userId: user.id,
+          parameter: 'telegram_additional_doors_enabled'
+        }
+      }
+    });
+    
+    const showAdditionalDoors = additionalDoorsSetting?.value === 'true';
+
+    // Получаем двери для подменю с учетом настройки дополнительных дверей
+    const submenuDoors = await getFloorsSubmenuDoors(showAdditionalDoors);
+    if (submenuDoors.size === 0) {
+      await ctx.reply('❌ Не удалось получить список дверей');
+      return;
+    }
+
+    // Создаем клавиатуру с дверьми подменю в два столбца
+    const keyboard = new Keyboard();
+    const submenuDoorsArray = Array.from(submenuDoors.entries());
+    
+    // Добавляем двери в два столбца
+    for (let i = 0; i < submenuDoorsArray.length; i += 2) {
+      const [id1, name1] = submenuDoorsArray[i];
+      if (i + 1 < submenuDoorsArray.length) {
+        // Две кнопки в ряд
+        const [id2, name2] = submenuDoorsArray[i + 1];
+        keyboard.text(name1).text(name2).row();
+      } else {
+        // Одна кнопка в ряд (если нечетное количество)
+        keyboard.text(name1).row();
+      }
+    }
+    
+    keyboard.text('◀️ Назад').row();
+    keyboard.resized();
+
+    ctx.session.inSubmenu = true;
+    await ctx.reply('🏢 Выберите этаж:', { reply_markup: keyboard });
+  }
+
+  // Вспомогательные методы
   private async notifyFrontend(userId: string): Promise<void> {
     try {
       await axios.post(`${API}/telegram/status/${userId}`, { userId });

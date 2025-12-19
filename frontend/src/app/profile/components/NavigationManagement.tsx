@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ColumnFiltersState } from '@tanstack/react-table';
 import {
-  Container,
   Paper,
   Title,
   Table,
@@ -48,6 +47,7 @@ export default function NavigationManagement() {
   const [deleteModalOpened, setDeleteModalOpened] = useState(false);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [selectedRootItem, setSelectedRootItem] = useState<string | null>(null);
+  const [isChildMode, setIsChildMode] = useState(false); // Режим создания дочернего элемента
   const [error, setError] = useState<string | null>(null);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
@@ -73,13 +73,18 @@ export default function NavigationManagement() {
     }
   };
 
-  const handleCreate = () => {
+  const handleCreate = (childMode: boolean = false, parentId: string | null = null) => {
     setSelectedItem(null);
+    setIsChildMode(childMode);
+    if (childMode && parentId) {
+      setSelectedRootItem(parentId);
+    }
     setModalOpened(true);
   };
 
   const handleEdit = (item: MenuItem) => {
     setSelectedItem(item);
+    setIsChildMode(!!item.parent_id);
     setModalOpened(true);
   };
 
@@ -91,19 +96,80 @@ export default function NavigationManagement() {
   const handleSave = async (formData: any) => {
     try {
       setError(null);
+      
+      // Автоматически определяем порядок сортировки
+      let order = formData.order;
+      if (!order || order === 0) {
+        if (isChildMode && selectedRootItem) {
+          // Для дочернего элемента - максимальный order среди дочерних + 1
+          const siblings = menuItems.filter(item => item.parent_id === selectedRootItem);
+          order = siblings.length > 0 
+            ? Math.max(...siblings.map(s => s.order)) + 1 
+            : 1;
+        } else {
+          // Для корневого элемента - максимальный order среди корневых + 1
+          const rootItems = menuItems.filter(item => !item.parent_id);
+          order = rootItems.length > 0 
+            ? Math.max(...rootItems.map(r => r.order)) + 1 
+            : 1;
+        }
+      }
+
+      // Автоматически подписываем endpoint для дочерних элементов
+      let link = formData.link;
+      if (isChildMode && selectedRootItem) {
+        const parentItem = menuItems.find(item => item.id === selectedRootItem);
+        if (parentItem && link) {
+          // Всегда добавляем link родителя к дочернему элементу
+          const parentLink = parentItem.link.endsWith('/') 
+            ? parentItem.link.slice(0, -1) 
+            : parentItem.link;
+          // Убираем ведущий слэш из link дочернего элемента, если есть
+          const childLink = link.startsWith('/') ? link.slice(1) : link;
+          link = `${parentLink}/${childLink}`;
+        }
+      } else if (selectedItem?.parent_id) {
+        // При редактировании дочернего элемента также добавляем родительский link
+        const parentItem = menuItems.find(item => item.id === selectedItem.parent_id);
+        if (parentItem && link && !link.startsWith(parentItem.link)) {
+          const parentLink = parentItem.link.endsWith('/') 
+            ? parentItem.link.slice(0, -1) 
+            : parentItem.link;
+          const childLink = link.startsWith('/') ? link.slice(1) : link;
+          link = `${parentLink}/${childLink}`;
+        }
+      }
+
+      // Определяем parent_id
+      let parentId = null;
+      if (isChildMode && selectedRootItem) {
+        parentId = selectedRootItem;
+      } else if (selectedItem) {
+        // При редактировании используем существующий parent_id или из формы
+        parentId = formData.parent_id || selectedItem.parent_id || null;
+      } else {
+        // При создании корневого элемента parent_id = null
+        parentId = null;
+      }
+
+      const data = {
+        ...formData,
+        link,
+        order,
+        parent_id: parentId,
+        included: formData.included !== undefined ? formData.included : true,
+      };
+
       if (selectedItem) {
         // Обновление
         const response = await authFetch(`${API}/navigation/${selectedItem.id}`, {
           method: 'PATCH',
-          body: JSON.stringify({
-            ...formData,
-            parent_id: formData.parent_id || null,
-            included: formData.included !== undefined ? formData.included : true,
-          }),
+          body: JSON.stringify(data),
         });
         if (response && response.ok) {
           await fetchMenuItems();
           setModalOpened(false);
+          setIsChildMode(false);
         } else {
           const errorData = await response?.json();
           setError(errorData?.error || 'Ошибка обновления пункта меню');
@@ -112,15 +178,12 @@ export default function NavigationManagement() {
         // Создание
         const response = await authFetch(`${API}/navigation`, {
           method: 'POST',
-          body: JSON.stringify({
-            ...formData,
-            parent_id: formData.parent_id || null,
-            included: formData.included !== undefined ? formData.included : true,
-          }),
+          body: JSON.stringify(data),
         });
         if (response && response.ok) {
           await fetchMenuItems();
           setModalOpened(false);
+          setIsChildMode(false);
         } else {
           const errorData = await response?.json();
           setError(errorData?.error || 'Ошибка создания пункта меню');
@@ -154,69 +217,127 @@ export default function NavigationManagement() {
     }
   };
 
-  // Получаем список родительских элементов для селекта
+  // Получаем список родительских элементов для селекта (только корневые)
   const parentOptions = useMemo(() => menuItems
-    .filter(item => item.id !== selectedItem?.id)
+    .filter(item => item.id !== selectedItem?.id && !item.parent_id)
     .map(item => ({ value: item.id, label: item.name })), [menuItems, selectedItem]);
 
-  const formFields = useMemo(() => [
-    {
-      name: 'parent_id',
-      label: 'Родительский пункт',
-      type: 'select' as const,
-      required: false,
-      options: [{ value: '', label: 'Нет (корневой элемент)' }, ...parentOptions],
-    },
-    {
-      name: 'name',
-      label: 'Название',
-      type: 'text' as const,
-      required: true,
-    },
-    {
-      name: 'icon',
-      label: 'Иконка (Tabler Icons)',
-      type: 'text' as const,
-      required: true,
-      placeholder: 'IconHome',
-    },
-    {
-      name: 'link',
-      label: 'Ссылка',
-      type: 'text' as const,
-      required: true,
-      placeholder: '/path/to/page',
-    },
-    {
-      name: 'description',
-      label: 'Описание',
-      type: 'textarea' as const,
-      required: false,
-    },
-    {
-      name: 'order',
-      label: 'Порядок сортировки',
-      type: 'number' as const,
-      required: true,
-      min: 1,
-    },
-    {
+  // Получаем родительский элемент для подсказки endpoint
+  const parentItemForHint = useMemo(() => {
+    if (isChildMode && selectedRootItem) {
+      return menuItems.find(item => item.id === selectedRootItem);
+    }
+    if (selectedItem?.parent_id) {
+      return menuItems.find(item => item.id === selectedItem.parent_id);
+    }
+    return null;
+  }, [isChildMode, selectedRootItem, selectedItem, menuItems]);
+
+  const formFields = useMemo(() => {
+    const fields: any[] = [];
+    
+    // Показываем parent_id только при редактировании (не при создании)
+    if (selectedItem) {
+      fields.push({
+        name: 'parent_id',
+        label: 'Родительский пункт',
+        type: 'select' as const,
+        required: false,
+        options: [{ value: '', label: 'Нет (корневой элемент)' }, ...parentOptions],
+      });
+    }
+
+    fields.push(
+      {
+        name: 'name',
+        label: 'Название',
+        type: 'text' as const,
+        required: true,
+      },
+      {
+        name: 'icon',
+        label: 'Иконка (Tabler Icons)',
+        type: 'icon' as const,
+        required: true,
+        placeholder: 'Выберите иконку',
+      },
+      {
+        name: 'link',
+        label: 'Ссылка',
+        type: 'text' as const,
+        required: true,
+        placeholder: isChildMode && parentItemForHint 
+          ? `your-path (будет: ${parentItemForHint.link}/your-path)` 
+          : '/path/to/page',
+        description: isChildMode && parentItemForHint 
+          ? `Будет автоматически добавлен к: ${parentItemForHint.link}/` 
+          : undefined,
+      },
+      {
+        name: 'description',
+        label: 'Описание',
+        type: 'textarea' as const,
+        required: false,
+      }
+    );
+
+    // Порядок сортировки скрыт - определяется автоматически
+
+    fields.push({
       name: 'included',
       label: 'Включен в меню',
       type: 'boolean' as const,
       required: false,
-    },
-  ], [parentOptions]);
+    });
 
-  const initialValues = useMemo(() => selectedItem ? {
-    parent_id: selectedItem.parent_id || '',
-    name: selectedItem.name,
-    icon: selectedItem.icon,
-    link: selectedItem.link,
-    description: selectedItem.description || '',
-    order: selectedItem.order,
-    included: selectedItem.included,
-  } : undefined, [selectedItem]);
+    return fields;
+  }, [parentOptions, isChildMode, parentItemForHint, selectedItem]);
+
+  const initialValues = useMemo(() => {
+    if (selectedItem) {
+      // При редактировании
+      const parentItem = selectedItem.parent_id 
+        ? menuItems.find(item => item.id === selectedItem.parent_id)
+        : null;
+      
+      // Если это дочерний элемент, показываем только дочернюю часть ссылки
+      let linkValue = selectedItem.link;
+      if (parentItem && linkValue.startsWith(parentItem.link)) {
+        // Извлекаем только дочернюю часть
+        linkValue = linkValue.substring(parentItem.link.length);
+        if (linkValue.startsWith('/')) {
+          linkValue = linkValue.substring(1);
+        }
+      }
+      
+      return {
+        parent_id: selectedItem.parent_id || '',
+        name: selectedItem.name,
+        icon: selectedItem.icon,
+        link: linkValue,
+        description: selectedItem.description || '',
+        included: selectedItem.included,
+      };
+    }
+    if (isChildMode && selectedRootItem) {
+      // При создании дочернего элемента - пустая строка, будет добавлена родительская часть
+      return {
+        name: '',
+        icon: '',
+        link: '',
+        description: '',
+        included: true,
+      };
+    }
+    // Корневой элемент - без parent_id
+    return {
+      name: '',
+      icon: '',
+      link: '',
+      description: '',
+      included: true,
+    };
+  }, [selectedItem, isChildMode, selectedRootItem, menuItems]);
 
   const handleColumnFiltersChange = (columnId: string, value: any) => {
     setColumnFilters(prev => {
@@ -320,13 +441,28 @@ export default function NavigationManagement() {
   ], [rootItems]);
 
   return (
-    <Container size="xl">
+    <Box size="xl">
       <Stack gap="md">
         <Group justify="space-between">
           <Title order={2}>Управление пунктами меню</Title>
-          <Button leftSection={<IconPlus size={18} />} onClick={handleCreate}>
-            Добавить пункт меню
-          </Button>
+          <Group>
+            <Button 
+              leftSection={<IconPlus size={18} />} 
+              onClick={() => handleCreate(false)}
+              variant="filled"
+            >
+              Добавить корневой пункт
+            </Button>
+            {selectedRootItem && (
+              <Button 
+                leftSection={<IconPlus size={18} />} 
+                onClick={() => handleCreate(true, selectedRootItem)}
+                variant="light"
+              >
+                Добавить дочерний пункт
+              </Button>
+            )}
+          </Group>
         </Group>
 
         {error && (
@@ -446,9 +582,21 @@ export default function NavigationManagement() {
                       </Text>
                     )}
                   </Title>
-                  {childItems.length > 0 && (
-                    <Badge variant="light">{childItems.length}</Badge>
-                  )}
+                  <Group>
+                    {childItems.length > 0 && (
+                      <Badge variant="light">{childItems.length}</Badge>
+                    )}
+                    {selectedRootItem && (
+                      <Button 
+                        size="xs"
+                        leftSection={<IconPlus size={14} />} 
+                        onClick={() => handleCreate(true, selectedRootItem)}
+                        variant="light"
+                      >
+                        Добавить дочерний
+                      </Button>
+                    )}
+                  </Group>
                 </Group>
                 {loading ? (
                   <Text c="dimmed">Загрузка...</Text>
@@ -564,9 +712,16 @@ export default function NavigationManagement() {
           onClose={() => {
             setModalOpened(false);
             setSelectedItem(null);
+            setIsChildMode(false);
             setError(null);
           }}
-          title={selectedItem ? 'Редактировать пункт меню' : 'Добавить пункт меню'}
+          title={
+            selectedItem 
+              ? 'Редактировать пункт меню' 
+              : isChildMode 
+                ? 'Добавить дочерний пункт меню' 
+                : 'Добавить корневой пункт меню'
+          }
           mode={selectedItem ? 'edit' : 'create'}
           fields={formFields}
           initialValues={initialValues || {}}
@@ -611,7 +766,7 @@ export default function NavigationManagement() {
           </Group>
         </Modal>
       </Stack>
-    </Container>
+    </Box>
   );
 }
 

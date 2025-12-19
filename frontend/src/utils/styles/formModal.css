@@ -378,7 +378,8 @@
   border-color: var(--color-blue-400) !important;
 }
 
-/* Адаптивная сетка для полей конструкции */
+/* Адаптивная сетка для полей файла */
+.file-fields-grid,
 .construction-fields-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -386,6 +387,7 @@
 }
 
 @media (max-width: 768px) {
+  .file-fields-grid,
   .construction-fields-grid {
     grid-template-columns: 1fr;
   }
@@ -402,16 +404,19 @@
 }
 
 /* Анимация для кнопок */
+.file-fields-card button,
 .construction-card button {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.file-fields-card button:hover,
 .construction-card button:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
 /* Градиентные границы */
+.file-fields-card::before,
 .construction-card::before {
   content: '';
   position: absolute;
@@ -428,16 +433,19 @@
   transition: opacity 0.3s ease;
 }
 
+.file-fields-card:hover::before,
 .construction-card:hover::before {
   opacity: 1;
 }
 
 /* Темная тема */
+[data-mantine-color-scheme="dark"] .file-fields-card,
 [data-mantine-color-scheme="dark"] .construction-card {
   background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(51, 65, 85, 0.6) 100%);
   border: 1px solid var(--color-accent-20);
 }
 
+[data-mantine-color-scheme="dark"] .file-fields-card:hover,
 [data-mantine-color-scheme="dark"] .construction-card:hover {
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3), 0 0 0 1px var(--color-accent-30);
 }
@@ -447,7 +455,10 @@
   box-shadow: 0 4px 12px var(--color-accent-20);
 }
 
-/* Стили для полей в карточках конструкций */
+/* Стили для полей в карточках файлов */
+.file-fields-card .mantine-TextInput-input,
+.file-fields-card .mantine-Select-input,
+.file-fields-card .mantine-NumberInput-input,
 .construction-card .mantine-TextInput-input,
 .construction-card .mantine-Select-input,
 .construction-card .mantine-NumberInput-input {
@@ -457,6 +468,9 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
 }
 
+.file-fields-card .mantine-TextInput-input:focus,
+.file-fields-card .mantine-Select-input:focus,
+.file-fields-card .mantine-NumberInput-input:focus,
 .construction-card .mantine-TextInput-input:focus,
 .construction-card .mantine-Select-input:focus,
 .construction-card .mantine-NumberInput-input:focus {
@@ -465,6 +479,9 @@
   transform: translateY(-1px) !important;
 }
 
+.file-fields-card .mantine-TextInput-label,
+.file-fields-card .mantine-Select-label,
+.file-fields-card .mantine-NumberInput-label,
 .construction-card .mantine-TextInput-label,
 .construction-card .mantine-Select-label,
 .construction-card .mantine-NumberInput-label {
@@ -485,6 +502,7 @@
   }
 }
 
+.file-fields-card,
 .construction-card {
   animation: slideInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -545,6 +563,7 @@
 }
 
 /* Убираем overflow только там, где нужно */
+.file-fields-card,
 .construction-card {
   overflow: visible !important;
 }
@@ -1143,41 +1162,48 @@
 }
 
 /* ========================================
-   СЛАЙДЕР КОНСТРУКЦИЙ
+   СЛАЙДЕР КАРТОЧЕК ФАЙЛОВ
    ======================================== */
 
+.file-cards-slider,
 .construction-cards-slider {
   /* Webkit браузеры (Chrome, Safari, Edge) */
   scrollbar-width: thin;
   scrollbar-color: var(--color-accent-60) rgba(0, 0, 0, 0.1);
 }
 
+.file-cards-slider::-webkit-scrollbar,
 .construction-cards-slider::-webkit-scrollbar {
   height: 8px;
 }
 
+.file-cards-slider::-webkit-scrollbar-track,
 .construction-cards-slider::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0.05);
   border-radius: 4px;
   margin: 0 8px;
 }
 
+.file-cards-slider::-webkit-scrollbar-thumb,
 .construction-cards-slider::-webkit-scrollbar-thumb {
   background: linear-gradient(90deg, var(--color-accent-60), var(--color-accent-dark-80));
   border-radius: 4px;
   transition: all 0.3s ease;
 }
 
+.file-cards-slider::-webkit-scrollbar-thumb:hover,
 .construction-cards-slider::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(90deg, var(--color-accent-80), var(--color-accent-dark-100));
   transform: scaleY(1.2);
 }
 
+.file-cards-slider::-webkit-scrollbar-corner,
 .construction-cards-slider::-webkit-scrollbar-corner {
   background: transparent;
 }
 
 /* Плавная анимация появления карточек */
+.file-cards-slider > div,
 .construction-cards-slider > div {
   animation: slideInFromRight 0.4s ease-out;
 }
@@ -1195,13 +1221,15 @@
 
 /* Адаптивность для мобильных устройств */
 @media (max-width: 768px) {
+  .file-cards-slider > div,
   .construction-cards-slider > div {
     min-width: 320px;
     max-width: 380px;
   }
 }
 
-/* Стили для вертикального отображения конструкций в форме */
+/* Стили для вертикального отображения карточек в форме */
+.file-cards-vertical > div,
 .construction-cards-vertical > div {
   animation: slideInFromTop 0.4s ease-out;
 }
@@ -1217,7 +1245,8 @@
   }
 }
 
-/* Стили для секции карточек конструкций в нижней части */
+/* Стили для секции карточек файлов в нижней части */
+.file-cards-section,
 .construction-cards-section {
   border-top: 2px solid var(--color-accent-10);
   padding-top: 24px;
@@ -1227,6 +1256,7 @@
   padding: 20px;
 }
 
+.file-cards-section h3,
 .construction-cards-section h3 {
   display: flex;
   align-items: center;
@@ -1238,11 +1268,13 @@
 }
 
 /* Улучшенные стили для карточек в слайдере */
+.file-cards-slider > div,
 .construction-cards-slider > div {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   border-radius: 12px;
 }
 
+.file-cards-slider > div:hover,
 .construction-cards-slider > div:hover {
   transform: translateY(-4px) scale(1.02);
   box-shadow: 0 12px 32px var(--color-accent-15);
@@ -1252,4 +1284,299 @@
   .form-modal .field-group-3 .field-item {
     flex: 1 1 100%;
   }
+}
+
+/* ========================================
+   ДЕКОРАТИВНЫЕ ЭЛЕМЕНТЫ
+   ======================================== */
+
+.decorative-element {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 50px;
+  height: 50px;
+  background: linear-gradient(135deg, var(--color-blue-500) 0%, var(--color-blue-600) 100%);
+  border-radius: 0 0 0 100px;
+  opacity: 0.1;
+}
+
+.decorative-element-green {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 60px;
+  height: 60px;
+  background: linear-gradient(135deg, var(--color-green-500) 0%, var(--color-green-600) 100%);
+  border-radius: 0 0 0 60px;
+  opacity: 0.1;
+}
+
+.decorative-element-circle {
+  position: absolute;
+  top: -20px;
+  right: -20px;
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, var(--color-blue-500) 0%, var(--color-blue-600) 100%);
+  border-radius: 50%;
+  opacity: 0.1;
+}
+
+.decorative-stripe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--color-blue-500) 0%, var(--color-blue-600) 100%);
+}
+
+.decorative-stripe-thin {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--color-blue-500) 0%, var(--color-blue-600) 100%);
+}
+
+/* ========================================
+   ИНДИКАТОРЫ
+   ======================================== */
+
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-blue-500) 0%, var(--color-blue-600) 100%);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+}
+
+.status-indicator-small {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-blue-500);
+}
+
+.success-indicator {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 16px;
+  height: 16px;
+  background: linear-gradient(135deg, var(--color-green-500) 0%, var(--color-green-600) 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.success-indicator-inner {
+  width: 8px;
+  height: 8px;
+  background: white;
+  border-radius: 50%;
+}
+
+/* ========================================
+   ИКОНКИ И АВАТАРЫ
+   ======================================== */
+
+.icon-container {
+  width: 60px;
+  height: 60px;
+  background: linear-gradient(135deg, var(--color-blue-500) 0%, var(--color-blue-600) 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.icon-container-sm {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--color-green-500), var(--color-green-600));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.view-icon-container {
+  background: var(--color-blue-100);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.delete-icon-container {
+  background: var(--color-red-100);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ========================================
+   ПРЕВЬЮ ИЗОБРАЖЕНИЙ
+   ======================================== */
+
+.preview-container {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border: 2px solid var(--theme-border);
+  background: var(--theme-bg-elevated);
+  padding: 8px;
+}
+
+.preview-image {
+  height: 60px;
+  width: 100px;
+  object-fit: contain;
+  border-radius: 8px;
+  display: block;
+}
+
+.preview-image-lg {
+  height: 120px;
+  width: auto;
+  object-fit: contain;
+  border-radius: 8px;
+  display: block;
+}
+
+.preview-placeholder {
+  height: 60px;
+  width: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--theme-bg-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--theme-border);
+}
+
+/* ========================================
+   КАРТОЧКИ ДОКУМЕНТОВ
+   ======================================== */
+
+.document-card {
+  background: linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%);
+  border: 1px solid var(--theme-border);
+  transition: all 0.2s ease;
+  cursor: pointer;
+  position: relative;
+}
+
+.document-card:hover {
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: var(--color-blue-300);
+}
+
+.document-card-inner {
+  background: linear-gradient(135deg, var(--theme-bg-secondary) 0%, var(--theme-bg-elevated) 100%);
+  position: relative;
+  overflow: hidden;
+  box-shadow: none;
+}
+
+/* ========================================
+   СЕКЦИЯ ДОКУМЕНТОВ
+   ======================================== */
+
+.documents-section {
+  background: linear-gradient(135deg, var(--theme-bg-secondary) 0%, var(--theme-bg-elevated) 100%);
+  border: 1px solid var(--theme-border);
+  position: relative;
+  overflow: hidden;
+}
+
+/* ========================================
+   КНОПКИ И ДЕЙСТВИЯ
+   ======================================== */
+
+.action-button-gradient {
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+  transition: all 0.2s ease;
+}
+
+.action-button-gradient:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.4);
+}
+
+.remove-button-light {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+}
+
+.remove-button-light:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
+/* ========================================
+   ЗАГРУЗКА ФАЙЛОВ
+   ======================================== */
+
+.file-upload-zone {
+  background: linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%);
+  border: 2px dashed var(--theme-border);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.file-upload-zone:hover {
+  border-color: var(--color-blue-400);
+  background: linear-gradient(135deg, var(--theme-bg-secondary) 0%, var(--theme-bg-elevated) 100%);
+}
+
+.file-upload-input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* ========================================
+   МОДАЛЬНОЕ ОКНО - КОНТЕНТ
+   ======================================== */
+
+.modal-content-wrapper {
+  flex: 1;
+  overflow: auto;
+  padding: var(--mantine-spacing-md);
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-side-panel {
+  width: 380px;
+}
+
+/* ========================================
+   БЕЙДЖИ
+   ======================================== */
+
+.badge-exists {
+  background: linear-gradient(135deg, var(--color-green-500), var(--color-green-600));
 }

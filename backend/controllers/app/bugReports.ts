@@ -68,11 +68,11 @@ const createBugReportSchema = z.object({
     cpuArchitecture: z.string().optional(),
     totalMemory: z.number().optional(),
     availableMemory: z.number().optional(),
-    
+
     // Дополнительные поля для совместимости
-    extra: z.record(z.any()).optional()
+    extra: z.record(z.string(), z.any()).optional()
   }).optional(),
-  
+
   // Статус
   isAutoReport: z.boolean().default(true),
   isResolved: z.boolean().default(false),
@@ -139,7 +139,7 @@ export const createBugReport = async (req: Request, res: Response): Promise<any>
       return res.status(400).json({
         success: false,
         error: 'Validation error',
-        details: error.errors
+        details: error.issues
       });
     }
 
@@ -413,7 +413,7 @@ export const resolveBugReport = async (req: Request, res: Response): Promise<any
       return res.status(400).json({
         success: false,
         error: 'Validation error',
-        details: error.errors
+        details: error.issues
       });
     }
 

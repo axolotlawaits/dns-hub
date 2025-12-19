@@ -1,5 +1,4 @@
-import { useDrag, useDrop, DndProvider } from 'react-dnd';
-import { HTML5Backend } from 'react-dnd-html5-backend';
+import { useDrag, useDrop } from 'react-dnd';
 import React from 'react';
 import { Group, Text, ActionIcon, Box } from '@mantine/core';
 import { IconTrash, IconGripVertical } from '@tabler/icons-react';
@@ -165,7 +164,7 @@ export const ListItemWithActions = ({
   );
 };
 
-// Обертка провайдера DnD
+// Обертка провайдера DnD - теперь просто passthrough, так как провайдер глобальный в App.tsx
 export const DndProviderWrapper = ({ children }: { children: React.ReactNode }) => {
-  return <DndProvider backend={HTML5Backend}>{children}</DndProvider>;
+  return <>{children}</>;
 };

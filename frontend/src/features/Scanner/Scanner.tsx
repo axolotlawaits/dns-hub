@@ -1,5 +1,6 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { API } from '../../config/constants';
+import { useUserContext } from '../../hooks/useUserContext';
 import { 
   Button, 
   Title, 
@@ -10,68 +11,164 @@ import {
   Card, 
   Stack, 
   Text, 
-  Badge, 
   Alert, 
-  Progress, 
-  Table, 
-  ActionIcon, 
   Modal,
+  NumberInput,
+  Switch,
+  Table,
+  Badge,
+  ActionIcon,
   Divider,
-  Grid,
-  Paper
+  Select
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { notificationSystem } from '../../utils/Push';
-import { IconRefresh, IconSearch, IconInfoCircle } from '@tabler/icons-react';
+import { IconSettings, IconPlayerPlay, IconPlayerStop, IconDownload, IconFileZip } from '@tabler/icons-react';
 import { usePageHeader } from '../../contexts/PageHeaderContext';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ru';
 
 dayjs.locale('ru');
 
-interface PrinterInfo {
-  ip: string;
-  port: number;
-  status: 'online' | 'offline';
-  responseTime?: number;
-  vendor?: string;
-  model?: string;
-  hasScanner?: boolean;
-  scannerType?: string;
-  lastSeen: string;
-}
-
-interface NetworkScanResult {
-  printers: PrinterInfo[];
-  totalScanned: number;
-  scanDuration: number;
-  errors: string[];
-}
-
 const Scanner = () => {
   const { setHeader, clearHeader } = usePageHeader();
-  const [printers, setPrinters] = useState<PrinterInfo[]>([]);
+  const { user, token } = useUserContext();
+  
+  // Используем token из контекста или fallback на localStorage
+  const authToken = token || localStorage.getItem('token');
+  
   const [loading, setLoading] = useState(false);
-  const [scanProgress, setScanProgress] = useState(0);
-  const [scanResult, setScanResult] = useState<NetworkScanResult | null>(null);
-  const [selectedPrinter, setSelectedPrinter] = useState<PrinterInfo | null>(null);
-  const [modalOpened, { open: openModal, close: closeModal }] = useDisclosure(false);
+  
+  // Настройки сканирования
+  const [settingsModalOpened, { open: openSettingsModal, close: closeSettingsModal }] = useDisclosure(false);
+  const [selectedPrinterForScanning, setSelectedPrinterForScanning] = useState<string>('');
+  const [pages, setPages] = useState<number>(1);
+  const [unlimitedPages, setUnlimitedPages] = useState<boolean>(false);
+  const [delaySeconds, setDelaySeconds] = useState<number>(5);
+  const [isScanningActive, setIsScanningActive] = useState<boolean>(false);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [currentFiles, setCurrentFiles] = useState<any[]>([]);
+  const [scanHistory, setScanHistory] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [knownPrinters, setKnownPrinters] = useState<any[]>([]);
+  const [printersLoading, setPrintersLoading] = useState(false);
+  const [folderSelectModalOpened, setFolderSelectModalOpened] = useState(false);
+  const [tempFolderName, setTempFolderName] = useState<string>('');
 
   // Устанавливаем заголовок страницы
   useEffect(() => {
     setHeader({
-      title: 'Поиск принтеров со сканерами',
-      subtitle: 'Сканирование сети и поиск устройств с возможностью сканирования'
+      title: 'Сканирование документов',
+      subtitle: 'Настройка и управление автоматическим сканированием документов'
     });
 
     return () => clearHeader();
   }, [setHeader, clearHeader]);
-  
-  // Параметры сканирования
-  const [scanParams, setScanParams] = useState({
-    ports: [9100, 631, 515, 80, 443],
-    customPorts: ''
-  });
+
+  // Сохранение настроек сканирования в UserSettings
+  const saveUserSetting = useCallback(async (parameter: string, value: string) => {
+    if (!user?.id) return;
+
+    try {
+      const response = await fetch(`${API}/user/settings`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          parameter: parameter,
+          value: value
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Ошибка сохранения настройки');
+      }
+    } catch (err) {
+      console.error(`Error saving scanner setting ${parameter}:`, err);
+      throw err; // Пробрасываем ошибку для обработки выше
+    }
+  }, [user?.id]);
+
+  // Загрузка настроек сканирования
+  const loadUserSetting = async (parameter: string) => {
+    if (!user?.id) return null;
+    
+    try {
+      const response = await fetch(`${API}/user/settings/${user.id}/${parameter}`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+      if (!response.ok) {
+        return null;
+      }
+      const data = await response.json();
+      return data.value;
+    } catch (err) {
+      console.error('Error loading scanner setting:', err);
+      return null;
+    }
+  };
+
+  // Загрузка настроек из UserSettings
+  const loadSettings = useCallback(async () => {
+    if (!user?.id) return;
+
+    const savedPrinter = await loadUserSetting('scanner_printer');
+    const savedPages = await loadUserSetting('scanner_pages');
+    const savedUnlimited = await loadUserSetting('scanner_unlimited_pages');
+    const savedDelay = await loadUserSetting('scanner_delay_seconds');
+    // Не загружаем folderName из настроек, так как она выбирается при каждом запуске
+
+    if (savedPrinter) {
+      setSelectedPrinterForScanning(savedPrinter);
+    }
+    if (savedPages) setPages(parseInt(savedPages) || 1);
+    if (savedUnlimited !== null) setUnlimitedPages(savedUnlimited === 'true');
+    if (savedDelay) setDelaySeconds(parseInt(savedDelay) || 5);
+    // folderName не загружаем из настроек - будет запрашиваться при каждом запуске
+  }, [user?.id, knownPrinters, token]);
+
+  // Загрузка списка известных принтеров
+  const loadKnownPrinters = useCallback(async () => {
+    try {
+      setPrintersLoading(true);
+      const response = await fetch(`${API}/scanner/printers`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.printers) {
+          setKnownPrinters(data.printers);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading known printers:', error);
+    } finally {
+      setPrintersLoading(false);
+    }
+  }, [selectedPrinterForScanning]);
+
+  // Загрузка настроек при монтировании компонента
+  useEffect(() => {
+    if (user?.id) {
+      loadSettings();
+      loadKnownPrinters();
+    }
+  }, [user?.id, loadSettings, loadKnownPrinters]);
+
+  // Загрузка настроек при открытии модального окна (только списка принтеров)
+  useEffect(() => {
+    if (settingsModalOpened && user?.id) {
+      // Загружаем только список принтеров, не перезагружаем настройки (чтобы не сбрасывать режим ввода)
+      loadKnownPrinters();
+    }
+  }, [settingsModalOpened, user?.id, loadKnownPrinters]);
 
   const showNotification = useCallback((type: 'success' | 'error', message: string) => {
     notificationSystem.addNotification(
@@ -81,67 +178,159 @@ const Scanner = () => {
     );
   }, []);
 
-  // Сканирование сети
-  const scanNetwork = useCallback(async () => {
+  // Сохранение всех настроек в UserSettings (кроме folderName)
+  const saveAllSettings = useCallback(async () => {
+    if (!user?.id) return;
+
+    try {
+      await Promise.all([
+        saveUserSetting('scanner_printer', selectedPrinterForScanning || ''),
+        saveUserSetting('scanner_pages', pages.toString()),
+        saveUserSetting('scanner_unlimited_pages', unlimitedPages.toString()),
+        saveUserSetting('scanner_delay_seconds', delaySeconds.toString())
+        // folderName не сохраняем - выбирается при каждом запуске
+      ]);
+      console.log('[Scanner] Все настройки сохранены в UserSettings');
+    } catch (error) {
+      console.error('[Scanner] Ошибка сохранения настроек:', error);
+      showNotification('error', 'Не удалось сохранить некоторые настройки');
+    }
+  }, [user?.id, selectedPrinterForScanning, pages, unlimitedPages, delaySeconds, saveUserSetting, showNotification]);
+
+  // Сохранение настроек при закрытии модального окна
+  const handleSaveSettings = async () => {
+    await saveAllSettings();
+    showNotification('success', 'Настройки сохранены');
+    closeSettingsModal();
+  };
+
+  // Запуск сканирования
+  const handleStartScanning = async () => {
+    // Используем сохраненные настройки или текущие значения
+    const printerToUse = selectedPrinterForScanning;
+    
+    if (!printerToUse) {
+      showNotification('error', 'Выберите принтер для сканирования в настройках');
+      return;
+    }
+
+    // Открываем модальное окно для выбора папки
+    setTempFolderName('scanned_documents');
+    setFolderSelectModalOpened(true);
+  };
+
+  // Подтверждение запуска сканирования с выбранной папкой
+  const handleConfirmStartScanning = async () => {
+    if (!tempFolderName || tempFolderName.trim() === '') {
+      showNotification('error', 'Введите название папки');
+      return;
+    }
+
+    const printerToUse = selectedPrinterForScanning;
+    if (!printerToUse) {
+      showNotification('error', 'Выберите принтер для сканирования в настройках');
+      return;
+    }
+
+    // Сохраняем текущие настройки перед запуском (кроме папки)
+    if (user?.id) {
+      await Promise.all([
+        saveUserSetting('scanner_printer', selectedPrinterForScanning || ''),
+        saveUserSetting('scanner_pages', pages.toString()),
+        saveUserSetting('scanner_unlimited_pages', unlimitedPages.toString()),
+        saveUserSetting('scanner_delay_seconds', delaySeconds.toString())
+        // Не сохраняем folderName в настройки, так как она выбирается каждый раз
+      ]);
+    }
+
+    const [ip, port] = printerToUse.split(':');
+    
     try {
       setLoading(true);
-      setScanProgress(0);
-      setScanResult(null);
+      setFolderSelectModalOpened(false);
+      
+      const printerPortNum = parseInt(port, 10);
+    if (isNaN(printerPortNum) || printerPortNum < 1 || printerPortNum > 65535) {
+      showNotification('error', 'Неверный формат порта принтера (должен быть от 1 до 65535)');
+      setLoading(false);
+      return;
+    }
 
-      const ports = scanParams.customPorts 
-        ? scanParams.customPorts.split(',').map(p => parseInt(p.trim())).filter(p => !isNaN(p))
-        : scanParams.ports;
+    const requestBody = {
+      printerIp: ip.trim(),
+      printerPort: printerPortNum,
+      pages: unlimitedPages ? null : pages,
+      unlimitedPages: unlimitedPages || false,
+      delaySeconds: delaySeconds || 5,
+      folderName: tempFolderName.trim() || 'scanned_documents'
+    };
 
-      const requestBody = { ports };
+    console.log('[Scanner] Запуск сканирования с параметрами:', requestBody);
 
-      const response = await fetch(`${API}/scanner/scan-network`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify(requestBody),
-      });
+    const response = await fetch(`${API}/scanner/start-scanning`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`
+      },
+      body: JSON.stringify(requestBody)
+    });
 
-      if (!response.ok) {
-        throw new Error('Ошибка сканирования сети');
+    if (!response.ok) {
+      let errorMessage = 'Ошибка запуска сканирования';
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error || errorData.message || errorMessage;
+        console.error('[Scanner] Ошибка от сервера:', errorData);
+      } catch (e) {
+        console.error('[Scanner] Не удалось распарсить ответ об ошибке:', e);
       }
+      throw new Error(errorMessage);
+    }
 
       const data = await response.json();
-      if (data.success && data.result) {
-        setScanResult(data.result);
-        setPrinters(data.result.printers);
-        showNotification('success', `Найдено ${data.result.printers.length} принтеров`);
-      } else {
-        showNotification('error', 'Ошибка сканирования сети');
+      if (data.success) {
+        setIsScanningActive(true);
+        setCurrentSessionId(data.sessionId || null);
+        showNotification('success', 'Сканирование запущено');
+        // Загружаем файлы текущей сессии
+        if (data.sessionId) {
+          loadCurrentFiles(data.sessionId);
+        }
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Неизвестная ошибка';
       showNotification('error', errorMsg);
     } finally {
       setLoading(false);
-      setScanProgress(0);
     }
-  }, [scanParams, showNotification]);
+  };
 
-  // Загрузка известных принтеров
-  const loadKnownPrinters = useCallback(async () => {
+  // Отмена выбора папки
+  const handleCancelFolderSelect = useCallback(() => {
+    setFolderSelectModalOpened(false);
+    setTempFolderName('');
+  }, []);
+
+  // Остановка сканирования
+  const handleStopScanning = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API}/scanner/printers`, {
+      const response = await fetch(`${API}/scanner/stop-scanning`, {
+        method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
+          'Authorization': `Bearer ${authToken}`
+        }
       });
 
       if (!response.ok) {
-        throw new Error('Ошибка загрузки принтеров');
+        throw new Error('Ошибка остановки сканирования');
       }
 
       const data = await response.json();
       if (data.success) {
-        setPrinters(data.printers || []);
-        showNotification('success', 'Список принтеров обновлен');
+        setIsScanningActive(false);
+        showNotification('success', 'Сканирование остановлено');
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Неизвестная ошибка';
@@ -149,265 +338,505 @@ const Scanner = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Загрузка текущих файлов сессии
+  const loadCurrentFiles = useCallback(async (sessionId: string) => {
+    try {
+      const response = await fetch(`${API}/scanner/session/${sessionId}/files`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.files) {
+          setCurrentFiles(data.files);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading current files:', error);
+    }
+  }, []);
+
+  // Загрузка истории сканирований
+  const loadScanHistory = useCallback(async () => {
+    try {
+      setHistoryLoading(true);
+      const response = await fetch(`${API}/scanner/history`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.sessions) {
+          setScanHistory(data.sessions);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading scan history:', error);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  // Скачивание отдельного файла
+  const handleDownloadFile = useCallback(async (fileId: string, fileName: string) => {
+    try {
+      const response = await fetch(`${API}/scanner/file/${fileId}/download`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Ошибка скачивания файла');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      showNotification('success', 'Файл скачан');
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Неизвестная ошибка';
+      showNotification('error', errorMsg);
+    }
   }, [showNotification]);
 
-  // Обработка выбора принтера
-  const handlePrinterSelect = useCallback((printer: PrinterInfo) => {
-    setSelectedPrinter(printer);
-    openModal();
-  }, [openModal]);
+  // Скачивание zip архива сессии
+  const handleDownloadZip = useCallback(async (sessionId: string) => {
+    try {
+      const response = await fetch(`${API}/scanner/session/${sessionId}/download-zip`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Ошибка создания архива');
+      }
 
-  // Статистика принтеров
-  const printerStats = useMemo(() => {
-    const online = printers.filter(p => p.status === 'online').length;
-    const offline = printers.filter(p => p.status === 'offline').length;
-    const withScanner = printers.filter(p => p.hasScanner === true).length;
-    
-    return { online, offline, withScanner, total: printers.length };
-  }, [printers]);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `scan_session_${sessionId}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      showNotification('success', 'Архив скачан');
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Неизвестная ошибка';
+      showNotification('error', errorMsg);
+    }
+  }, [showNotification]);
 
-  // Строки таблицы принтеров
-  const printerRows = printers.map((printer) => (
-    <Table.Tr key={`${printer.ip}:${printer.port}`}>
-      <Table.Td>
-        <Group gap="xs">
-          <Badge 
-            color={printer.status === 'online' ? 'green' : printer.status === 'offline' ? 'red' : 'gray'}
-            variant="light"
-          >
-            {printer.status === 'online' ? 'Онлайн' : printer.status === 'offline' ? 'Офлайн' : 'Неизвестно'}
-          </Badge>
-          <Text fw={500}>{printer.ip}:{printer.port}</Text>
-        </Group>
-      </Table.Td>
-      <Table.Td>
-        {printer.vendor && printer.model ? `${printer.vendor} ${printer.model}` : 'Неизвестно'}
-      </Table.Td>
-      <Table.Td>
-        {printer.responseTime ? `${printer.responseTime}мс` : '-'}
-      </Table.Td>
-      <Table.Td>
-        <Badge 
-          color={printer.hasScanner ? 'green' : 'gray'}
-          variant="light"
-        >
-          {printer.scannerType || (printer.hasScanner ? 'Со сканером' : 'Только принтер')}
-        </Badge>
-      </Table.Td>
-      <Table.Td>
-        {dayjs(printer.lastSeen).format('DD.MM.YYYY HH:mm:ss')}
-      </Table.Td>
-      <Table.Td>
-        <Group gap="xs">
-          <ActionIcon
-            variant="light"
-            color="blue"
-            onClick={() => handlePrinterSelect(printer)}
-            title="Подробности"
-          >
-            <IconInfoCircle size="1rem" />
-          </ActionIcon>
-        </Group>
-      </Table.Td>
-    </Table.Tr>
-  ));
+  // Проверка статуса сканирования
+  useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const response = await fetch(`${API}/scanner/scanning-status`, {
+          headers: {
+            'Authorization': `Bearer ${authToken}`
+          }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setIsScanningActive(data.isActive || false);
+          if (data.sessionId) {
+            setCurrentSessionId(data.sessionId);
+            if (data.files) {
+              setCurrentFiles(data.files);
+            } else if (data.sessionId) {
+              loadCurrentFiles(data.sessionId);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error checking scanning status:', error);
+      }
+    };
+
+    checkStatus();
+    loadScanHistory(); // Загружаем историю при монтировании
+    const interval = setInterval(() => {
+      checkStatus();
+      if (isScanningActive && currentSessionId) {
+        loadCurrentFiles(currentSessionId);
+      }
+    }, 5000); // Проверяем каждые 5 секунд
+    return () => clearInterval(interval);
+  }, [isScanningActive, currentSessionId, loadCurrentFiles, loadScanHistory]);
+
 
   return (
     <Box p="md">
-      
-      {/* Статистика */}
-      <Grid mb="xl">
-        <Grid.Col span={3}>
-          <Paper p="md" withBorder>
-            <Text size="sm" c="dimmed">Всего найдено</Text>
-            <Text size="xl" fw={700}>{printerStats.total}</Text>
-          </Paper>
-        </Grid.Col>
-        <Grid.Col span={3}>
-          <Paper p="md" withBorder>
-            <Text size="sm" c="dimmed">Онлайн</Text>
-            <Text size="xl" fw={700} c="green">{printerStats.online}</Text>
-          </Paper>
-        </Grid.Col>
-        <Grid.Col span={3}>
-          <Paper p="md" withBorder>
-            <Text size="sm" c="dimmed">Офлайн</Text>
-            <Text size="xl" fw={700} c="red">{printerStats.offline}</Text>
-          </Paper>
-        </Grid.Col>
-        <Grid.Col span={3}>
-          <Paper p="md" withBorder>
-            <Text size="sm" c="dimmed">Со сканером</Text>
-            <Text size="xl" fw={700} c="green">{printerStats.withScanner}</Text>
-          </Paper>
-        </Grid.Col>
-      </Grid>
-
-      {/* Панель управления */}
+      {/* Панель управления сканированием документов */}
       <Card withBorder shadow="sm" radius="md" p="md" mb="xl">
-        <Title order={4} mb="md">Сканирование локальной сети</Title>
-        
-        <Alert variant="light" color="blue" title="Автоматическое сканирование" mb="md">
-          <Text size="sm">
-            Сканер автоматически определит все подсети сервера и найдет принтеры со сканерами.
-            Сканирование может занять несколько минут в зависимости от размера сети.
-          </Text>
-        </Alert>
-
-        <Grid>
-          <Grid.Col span={6}>
-            <TextInput
-              label="Порты для сканирования (через запятую)"
-              placeholder="9100, 631, 515, 80, 443"
-              value={scanParams.customPorts}
-              onChange={(event) => setScanParams(prev => ({ 
-                ...prev, 
-                customPorts: event.currentTarget.value 
-              }))}
-            />
-          </Grid.Col>
-          <Grid.Col span={6}>
-            <Group align="flex-end">
+        <Group justify="space-between" mb="md">
+          <Title order={4}>Сканирование документов</Title>
+          <Group>
+            <Button
+              onClick={openSettingsModal}
+              leftSection={<IconSettings size="1rem" />}
+              variant="light"
+            >
+              Настройки
+            </Button>
+            {isScanningActive ? (
               <Button
-                onClick={scanNetwork}
+                onClick={handleStopScanning}
+                leftSection={<IconPlayerStop size="1rem" />}
+                color="red"
                 loading={loading}
-                leftSection={<IconSearch size="1rem" />}
-                color="blue"
-                size="lg"
               >
-                Сканировать локальную сеть
+                Остановить
               </Button>
+            ) : (
               <Button
-                onClick={loadKnownPrinters}
+                onClick={handleStartScanning}
+                leftSection={<IconPlayerPlay size="1rem" />}
+                color="green"
                 loading={loading}
-                leftSection={<IconRefresh size="1rem" />}
-                variant="outline"
+                disabled={!selectedPrinterForScanning}
               >
-                Обновить
+                Запустить
               </Button>
-            </Group>
-          </Grid.Col>
-        </Grid>
+            )}
+          </Group>
+        </Group>
 
-        {scanProgress > 0 && (
-          <Box mt="md">
-            <Text size="sm" mb="xs">Прогресс сканирования: {scanProgress}%</Text>
-            <Progress value={scanProgress} size="sm" />
-          </Box>
+        {isScanningActive && (
+          <Alert variant="light" color="green" mb="md">
+            <Text size="sm">Сканирование активно</Text>
+          </Alert>
         )}
       </Card>
 
-      {/* Результаты сканирования */}
-      {scanResult && (
-        <Alert variant="light" color="blue" title="Результаты сканирования" mb="md">
-          <Text size="sm">
-            Просканировано: {scanResult.totalScanned} адресов за {scanResult.scanDuration}мс
-          </Text>
-          {scanResult.errors.length > 0 && (
-            <Text size="sm" c="red" mt="xs">
-              Ошибок: {scanResult.errors.length}
-            </Text>
-          )}
-        </Alert>
+      {/* Текущие отсканированные файлы */}
+      {currentFiles.length > 0 && (
+        <Card withBorder shadow="sm" radius="md" p="md" mb="xl">
+          <Group justify="space-between" mb="md">
+            <Title order={4}>Отсканированные файлы</Title>
+            {currentSessionId && (
+              <Button
+                onClick={() => handleDownloadZip(currentSessionId)}
+                leftSection={<IconFileZip size="1rem" />}
+                variant="light"
+                size="sm"
+              >
+                Скачать все в ZIP
+              </Button>
+            )}
+          </Group>
+          
+          <Table>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Имя файла</Table.Th>
+                <Table.Th>Размер</Table.Th>
+                <Table.Th>Дата сканирования</Table.Th>
+                <Table.Th>Действия</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {currentFiles.map((file) => (
+                <Table.Tr key={file.id}>
+                  <Table.Td>
+                    <Text fw={500}>{file.fileName}</Text>
+                  </Table.Td>
+                  <Table.Td>
+                    <Text size="sm" c="dimmed">
+                      {(file.fileSize / 1024).toFixed(2)} KB
+                    </Text>
+                  </Table.Td>
+                  <Table.Td>
+                    <Text size="sm">
+                      {dayjs(file.scannedAt).format('DD.MM.YYYY HH:mm:ss')}
+                    </Text>
+                  </Table.Td>
+                  <Table.Td>
+                    <ActionIcon
+                      variant="light"
+                      color="blue"
+                      onClick={() => handleDownloadFile(file.id, file.fileName)}
+                      title="Скачать файл"
+                    >
+                      <IconDownload size="1rem" />
+                    </ActionIcon>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Card>
       )}
 
-      {/* Таблица принтеров */}
-      <Card withBorder shadow="sm" radius="md" p={0}>
-        <Box p="md">
-          <Group justify="space-between" align="center">
-            <Title order={4}>Найденные принтеры</Title>
-            <Badge variant="light" size="lg">
-              {printers.length} устройств
-            </Badge>
-          </Group>
-        </Box>
-        
-        <Divider />
-        
-        <Table>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Адрес</Table.Th>
-              <Table.Th>Модель</Table.Th>
-              <Table.Th>Время отклика</Table.Th>
-              <Table.Th>Тип устройства</Table.Th>
-              <Table.Th>Последняя проверка</Table.Th>
-              <Table.Th>Действия</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {printerRows.length > 0 ? printerRows : (
-              <Table.Tr>
-                <Table.Td colSpan={6} ta="center" py="xl">
-                  <Text c="dimmed">Принтеры не найдены</Text>
-                </Table.Td>
-              </Table.Tr>
-            )}
-          </Table.Tbody>
-        </Table>
-      </Card>
+      {/* История сканирований */}
+      <Card withBorder shadow="sm" radius="md" p="md">
+        <Group justify="space-between" mb="md">
+          <Title order={4}>История сканирований</Title>
+          <Button
+            onClick={loadScanHistory}
+            loading={historyLoading}
+            variant="light"
+            size="sm"
+          >
+            Обновить
+          </Button>
+        </Group>
 
-      {/* Модальное окно с деталями принтера */}
-      <Modal
-        opened={modalOpened}
-        onClose={closeModal}
-        title="Детали принтера"
-        size="md"
-      >
-        {selectedPrinter && (
+        {scanHistory.length === 0 ? (
+          <Text c="dimmed" ta="center" py="xl">
+            История сканирований пуста
+          </Text>
+        ) : (
           <Stack gap="md">
-            <Group>
-              <Text fw={500}>IP адрес:</Text>
-              <Text>{selectedPrinter.ip}:{selectedPrinter.port}</Text>
-            </Group>
-            
-            <Group>
-              <Text fw={500}>Статус:</Text>
-              <Badge 
-                color={selectedPrinter.status === 'online' ? 'green' : 'red'}
-                variant="light"
-              >
-                {selectedPrinter.status === 'online' ? 'Онлайн' : 'Офлайн'}
-              </Badge>
-            </Group>
-            
-            {selectedPrinter.vendor && (
-              <Group>
-                <Text fw={500}>Производитель:</Text>
-                <Text>{selectedPrinter.vendor}</Text>
-              </Group>
-            )}
-            
-            {selectedPrinter.model && (
-              <Group>
-                <Text fw={500}>Модель:</Text>
-                <Text>{selectedPrinter.model}</Text>
-              </Group>
-            )}
-            
-            {selectedPrinter.responseTime && (
-              <Group>
-                <Text fw={500}>Время отклика:</Text>
-                <Text>{selectedPrinter.responseTime}мс</Text>
-              </Group>
-            )}
-            
-            <Group>
-              <Text fw={500}>Тип устройства:</Text>
-              <Badge 
-                color={selectedPrinter.hasScanner ? 'green' : 'gray'}
-                variant="light"
-              >
-                {selectedPrinter.scannerType || (selectedPrinter.hasScanner ? 'Принтер со сканером' : 'Только принтер')}
-              </Badge>
-            </Group>
-            
-            <Group>
-              <Text fw={500}>Последняя проверка:</Text>
-              <Text>{dayjs(selectedPrinter.lastSeen).format('DD.MM.YYYY HH:mm:ss')}</Text>
-            </Group>
+            {scanHistory.map((session) => (
+              <Card key={session.id} withBorder p="md">
+                <Group justify="space-between" mb="xs">
+                  <Group>
+                    <Text fw={500}>
+                      {session.printerIp}:{session.printerPort}
+                    </Text>
+                    <Badge
+                      color={
+                        session.status === 'active' ? 'green' :
+                        session.status === 'completed' ? 'blue' : 'gray'
+                      }
+                      variant="light"
+                    >
+                      {session.status === 'active' ? 'Активно' :
+                       session.status === 'completed' ? 'Завершено' : 'Остановлено'}
+                    </Badge>
+                  </Group>
+                  <Group>
+                    <Text size="sm" c="dimmed">
+                      {dayjs(session.startedAt).format('DD.MM.YYYY HH:mm:ss')}
+                    </Text>
+                    {session.files.length > 0 && (
+                      <Button
+                        onClick={() => handleDownloadZip(session.id)}
+                        leftSection={<IconFileZip size="1rem" />}
+                        variant="light"
+                        size="xs"
+                      >
+                        ZIP
+                      </Button>
+                    )}
+                  </Group>
+                </Group>
+                
+                <Text size="sm" c="dimmed" mb="xs">
+                  Файлов: {session.files.length} | Папка: {session.folderName}
+                </Text>
+
+                {session.files.length > 0 && (
+                  <>
+                    <Divider my="xs" />
+                    <Table>
+                      <Table.Tbody>
+                        {session.files.map((file: any) => (
+                          <Table.Tr key={file.id}>
+                            <Table.Td>
+                              <Text size="sm">{file.fileName}</Text>
+                            </Table.Td>
+                            <Table.Td>
+                              <Text size="sm" c="dimmed">
+                                {(file.fileSize / 1024).toFixed(2)} KB
+                              </Text>
+                            </Table.Td>
+                            <Table.Td>
+                              <Text size="sm" c="dimmed">
+                                {dayjs(file.scannedAt).format('DD.MM.YYYY HH:mm')}
+                              </Text>
+                            </Table.Td>
+                            <Table.Td>
+                              <ActionIcon
+                                variant="light"
+                                color="blue"
+                                onClick={() => handleDownloadFile(file.id, file.fileName)}
+                                title="Скачать файл"
+                                size="sm"
+                              >
+                                <IconDownload size="0.875rem" />
+                              </ActionIcon>
+                            </Table.Td>
+                          </Table.Tr>
+                        ))}
+                      </Table.Tbody>
+                    </Table>
+                  </>
+                )}
+              </Card>
+            ))}
           </Stack>
         )}
+      </Card>
+
+      {/* Модальное окно настроек сканирования */}
+      <Modal
+        opened={settingsModalOpened}
+        onClose={async () => {
+          // Автоматически сохраняем настройки при закрытии
+          await saveAllSettings();
+          closeSettingsModal();
+        }}
+        title="Настройки сканирования документов"
+        size="md"
+      >
+        <Stack gap="md">
+          <Select
+            label="Выбор принтера или сканера"
+            placeholder="Выберите из списка известных принтеров"
+            description="Выберите принтер из списка найденных принтеров"
+            data={knownPrinters.map(p => ({
+              value: `${p.ip}:${p.port}`,
+              label: p.displayName || `${p.ip}:${p.port}`
+            }))}
+            value={knownPrinters.some(p => `${p.ip}:${p.port}` === selectedPrinterForScanning) 
+              ? selectedPrinterForScanning 
+              : null}
+            onChange={async (value) => {
+              if (!value) {
+                setSelectedPrinterForScanning('');
+                return;
+              }
+              
+              setSelectedPrinterForScanning(value);
+              
+              // Автоматически сохраняем при изменении
+              if (user?.id && value) {
+                await saveUserSetting('scanner_printer', value);
+              }
+            }}
+            searchable
+            clearable
+            disabled={printersLoading}
+            required
+          />
+
+          <Switch
+            label="Без ограничения страниц"
+            description="Настройка сохраняется в UserSettings"
+            checked={unlimitedPages}
+            onChange={async (event) => {
+              const newValue = event.currentTarget.checked;
+              setUnlimitedPages(newValue);
+              // Автоматически сохраняем при изменении
+              if (user?.id) {
+                await saveUserSetting('scanner_unlimited_pages', newValue.toString());
+              }
+            }}
+          />
+
+          {!unlimitedPages && (
+            <NumberInput
+              label="Количество страниц"
+              description="Настройка сохраняется в UserSettings"
+              placeholder="Введите количество страниц"
+              value={pages}
+              onChange={async (value) => {
+                const numValue = typeof value === 'number' ? value : 1;
+                setPages(numValue);
+                // Автоматически сохраняем при изменении
+                if (user?.id) {
+                  await saveUserSetting('scanner_pages', numValue.toString());
+                }
+              }}
+              min={1}
+              required
+            />
+          )}
+
+          <NumberInput
+            label="Интервал между сканированиями (секунды)"
+            description="Настройка сохраняется в UserSettings"
+            placeholder="Введите интервал в секундах"
+            value={delaySeconds}
+            onChange={async (value) => {
+              const numValue = typeof value === 'number' ? value : 5;
+              setDelaySeconds(numValue);
+              // Автоматически сохраняем при изменении
+              if (user?.id) {
+                await saveUserSetting('scanner_delay_seconds', numValue.toString());
+              }
+            }}
+            min={1}
+            required
+          />
+
+          <Group justify="flex-end" mt="md">
+            <Button 
+              variant="outline" 
+              onClick={async () => {
+                // При отмене загружаем сохраненные настройки обратно
+                await loadSettings();
+                closeSettingsModal();
+              }}
+            >
+              Отмена
+            </Button>
+            <Button onClick={handleSaveSettings}>
+              Сохранить
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      {/* Модальное окно выбора папки при запуске сканирования */}
+      <Modal
+        opened={folderSelectModalOpened}
+        onClose={handleCancelFolderSelect}
+        title="Выбор папки для сканирования"
+        centered
+      >
+        <Stack gap="md">
+          <Text size="sm" c="dimmed">
+            Введите название папки, куда будут сохраняться отсканированные документы. 
+            Папка будет создана автоматически.
+          </Text>
+          
+          <TextInput
+            label="Название папки"
+            placeholder="scanned_documents"
+            value={tempFolderName}
+            onChange={(event) => setTempFolderName(event.currentTarget.value)}
+            required
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && tempFolderName.trim()) {
+                handleConfirmStartScanning();
+              }
+            }}
+          />
+
+          <Group justify="flex-end" mt="md">
+            <Button 
+              variant="outline" 
+              onClick={handleCancelFolderSelect}
+            >
+              Отмена
+            </Button>
+            <Button 
+              onClick={handleConfirmStartScanning}
+              disabled={!tempFolderName || tempFolderName.trim() === ''}
+              loading={loading}
+            >
+              Запустить сканирование
+            </Button>
+          </Group>
+        </Stack>
       </Modal>
 
       <LoadingOverlay visible={loading} />

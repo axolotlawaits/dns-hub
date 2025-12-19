@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { getRKList, getRKById, createRK, updateRK, deleteRK, getRKTypes, getRKStatuses, getBranchesList, notifyRK } from '../../controllers/add/rk.js';
+import { getRKList, getRKById, createRK, updateRK, deleteRK, getRKTypes, getRKStatuses, getBranchesList, notifyRK, addConstruction, addDocuments } from '../../controllers/add/rk.js';
 import uploadRK from '../../middleware/uploaderRK.js';
 
 const router = Router();
@@ -35,6 +35,36 @@ router.put('/:id', uploadRK.any(), (req: Request, res: Response, next: NextFunct
 });
 
 router.delete('/:id', deleteRK); // Удалить запись RK
+
+// Добавление конструкции к существующей РК
+router.post('/:rkId/construction', uploadRK.any(), (req: Request, res: Response, next: NextFunction) => {
+  console.log('RK Add Construction Request:', {
+    rkId: req.params.rkId,
+    body: req.body,
+    files: Array.isArray(req.files) ? req.files.map((f: Express.Multer.File) => ({
+      fieldname: f.fieldname,
+      originalname: f.originalname,
+      size: f.size,
+      mimetype: f.mimetype
+    })) : []
+  });
+  addConstruction(req, res, next);
+});
+
+// Добавление документов к конструкции
+router.post('/:rkId/documents', uploadRK.any(), (req: Request, res: Response, next: NextFunction) => {
+  console.log('RK Add Documents Request:', {
+    rkId: req.params.rkId,
+    body: req.body,
+    files: Array.isArray(req.files) ? req.files.map((f: Express.Multer.File) => ({
+      fieldname: f.fieldname,
+      originalname: f.originalname,
+      size: f.size,
+      mimetype: f.mimetype
+    })) : []
+  });
+  addDocuments(req, res, next);
+});
 
 // Справочные данные
 router.get('/types/list', getRKTypes); // Получить список типов конструкций

@@ -275,8 +275,23 @@ export const getUserData = async (req: Request, res: Response): Promise<any> => 
     const groupName = getGroupName?.group?.name
     const userUuid = getUserUuid?.uuid
 
-    const payload = { userId: user.id, userUuid, positionName: user.position, groupName, userRole: user.role }
-    const token = jwt.sign(payload, accessPrivateKey, { algorithm: 'RS256', expiresIn: '30m' })
+    // Проверяем, есть ли в текущем токене impersonatedBy
+    const token = (req as any).token;
+    let impersonatedBy = undefined;
+    if (token && token.impersonatedBy) {
+      impersonatedBy = token.impersonatedBy;
+      console.log('[getUserData] Сохраняем impersonatedBy из текущего токена:', impersonatedBy);
+    }
+
+    const payload = { 
+      userId: user.id, 
+      userUuid, 
+      positionName: user.position, 
+      groupName, 
+      userRole: user.role,
+      ...(impersonatedBy ? { impersonatedBy } : {})
+    }
+    const newToken = jwt.sign(payload, accessPrivateKey, { algorithm: 'RS256', expiresIn: '30m' })
     const refreshToken = jwt.sign(payload, refreshPrivateKey, { algorithm: 'RS256', expiresIn: '90d' })
 
     res.cookie('refreshToken', refreshToken, {
@@ -286,7 +301,7 @@ export const getUserData = async (req: Request, res: Response): Promise<any> => 
       maxAge: 90 * 24 * 60 * 60 * 1000
     })
 
-    res.status(200).json({user, token})
+    res.status(200).json({user, token: newToken})
   } else {
     res.status(400).json({error: 'не удалась найти пользователя'})
   }

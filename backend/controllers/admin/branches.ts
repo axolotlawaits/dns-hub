@@ -152,7 +152,7 @@ export const createBranch = async (req: Request, res: Response): Promise<any> =>
       return res.status(400).json({
         success: false,
         error: 'Validation error',
-        details: error.errors
+        details: (error as z.ZodError).issues
       });
     }
     console.error('❌ [Branches] Error creating branch:', error);
@@ -179,7 +179,7 @@ export const updateBranch = async (req: Request, res: Response): Promise<any> =>
       return res.status(400).json({
         success: false,
         error: 'Validation error',
-        details: error.errors
+        details: (error as z.ZodError).issues
       });
     }
     console.error('❌ [Branches] Error updating branch:', error);

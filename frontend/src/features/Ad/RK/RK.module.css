@@ -1,0 +1,265 @@
+/* Карточка РК */
+.rkCard {
+  background: var(--theme-bg-elevated);
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid var(--theme-border-primary);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.rkCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+/* Иконка филиала */
+.branchIcon {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600));
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+/* Кнопки действий */
+.actionButton {
+  border-radius: 10px;
+}
+
+.actionButtonView {
+  background: var(--color-blue-100);
+  color: var(--color-blue-700);
+  border: 1px solid var(--color-blue-200);
+}
+
+.actionButtonEdit {
+  background: var(--color-green-100);
+  color: var(--color-green-700);
+  border: 1px solid var(--color-green-200);
+}
+
+.actionButtonDelete {
+  background: var(--color-red-100);
+  color: var(--color-red-700);
+  border: 1px solid var(--color-red-200);
+}
+
+/* Карточка конструкции */
+.constructionCard {
+  background: linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%);
+  border-radius: 16px;
+  padding: 16px;
+  border: 1px solid var(--theme-border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.04);
+  position: relative;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  overflow: hidden;
+  min-width: 280px;
+  max-width: 350px;
+  flex: 0 0 auto;
+}
+
+/* Декоративная полоса */
+.decorativeStripe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 20px 20px 0 0;
+}
+
+/* Иконка конструкции */
+.constructionIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Секция документов */
+.documentsSection {
+  margin-top: 20px;
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(37, 99, 235, 0.05) 100%);
+  border-radius: 16px;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  position: relative;
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Визуальная связь */
+.visualConnection {
+  position: absolute;
+  top: -8px;
+  left: 20px;
+  width: 2px;
+  height: 8px;
+  border-radius: 1px;
+}
+
+/* Иконка документов */
+.documentsIcon {
+  width: 24px;
+  height: 24px;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Счетчик документов */
+.documentsCount {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(37, 99, 235, 0.1));
+  border-radius: 16px;
+  padding: 4px 12px;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+/* Превью документа */
+.documentPreview {
+  width: 100px;
+  height: 80px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid rgba(59, 130, 246, 0.3);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.7));
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
+.documentPreview:hover {
+  transform: scale(1.05) translateY(-3px);
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  border-color: rgba(59, 130, 246, 0.5);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.8));
+}
+
+/* Индикатор связи */
+.connectionIndicator {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Название файла в превью */
+.fileNameOverlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.7) 100%);
+  padding: 4px 6px 6px 6px;
+  border-radius: 0 0 12px 12px;
+}
+
+.fileNameText {
+  color: white;
+  text-align: center;
+  line-height: 1.2;
+  word-break: break-word;
+  font-size: 10px;
+  font-weight: 500;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* Кнопка "ещё документов" */
+.moreDocuments {
+  width: 90px;
+  height: 70px;
+  border-radius: 10px;
+  border: 2px dashed var(--color-blue-300);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--color-blue-50), var(--color-indigo-50));
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.moreDocuments:hover {
+  border-color: var(--color-blue-500);
+  background: linear-gradient(135deg, var(--color-blue-100), var(--color-indigo-100));
+}
+
+/* Слайдер конструкций */
+.constructionSlider {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding: 8px 0 16px 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-blue-400) var(--theme-bg-secondary);
+}
+
+/* Футер карточки */
+.cardFooter {
+  border-top: 1px solid var(--theme-border-secondary);
+  padding-top: 16px;
+  margin-top: 16px;
+}
+
+/* Аватар пользователя */
+.userAvatar {
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600));
+  color: white;
+  font-weight: 600;
+}
+
+/* Файловая иконка */
+.fileIconBox {
+  width: 100px;
+  height: 70px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.1) 100%);
+  border-radius: 8px;
+  border: 2px solid rgba(59, 130, 246, 0.2);
+  font-size: 24px;
+  color: var(--color-blue-600);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+  padding: 8px;
+}
+
+/* Placeholder для изображений */
+.imagePlaceholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--color-blue-100), var(--color-blue-200));
+  color: var(--color-blue-600);
+  font-size: 14px;
+  text-align: center;
+  padding: 8px;
+}
+

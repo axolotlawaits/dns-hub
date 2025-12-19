@@ -7,7 +7,8 @@ type BirthdayUser = {
   birthday: Date;
   email: string;
   image?: string | null; // Allow null here
-  branch: {
+  branch: { 
+    name: string;
     uuid: string;
     type: string;
   };
@@ -34,6 +35,7 @@ export const getUpcomingBirthdays = async (
       select: {
         branch: {
           select: {
+            name: true,
             uuid: true,
             type: true,
           },
@@ -62,6 +64,7 @@ export const getUpcomingBirthdays = async (
         email: true,
         branch: {
           select: {
+            name: true,
             uuid: true,
             type: true
           },

@@ -33,12 +33,13 @@ import sliderRouter from './routes/add/slider.js'
 import merchRouter from './routes/retail/merch.js'
 import printServiceRouter from './routes/retail/printService.js'
 import appStoreRouter from './routes/retail/appStore.js'
+import trassirRouter from './routes/retail/trassir.js'
+import shopRouter from './routes/retail/shop.js'
 import adminRouter from './routes/admin.js'
 import telegramRouter  from './routes/app/telegram.js'
 import bugReportsRouter from './routes/app/bugReports.js'
 import branchesRouter from './routes/admin/branches.js'
 import usersRouter from './routes/admin/users.js'
-import systemRouter from './routes/admin/system.js'
 import analyticsRouter from './routes/admin/analytics.js'
 import auditRouter from './routes/admin/audit.js'
 
@@ -49,41 +50,20 @@ import { createServer } from 'http';
 import { SocketIOService } from './socketio.js';
 import { telegramService } from './controllers/app/telegram.js';
 import { merchBotService } from './controllers/app/merchBot.js';
+import { trassirService } from './controllers/app/trassirService.js';
 import { initToolsCron } from './tasks/cron.js';
 import promBundle from 'express-prom-bundle'
 
 const app = express()
 
 
-// Оптимизированное подключение к Prisma
-const getDatabaseUrl = () => {
-  const baseUrl = process.env.DATABASE_URL;
-  if (!baseUrl) {
-    throw new Error('DATABASE_URL is not defined');
-  }
-  
-  // Проверяем, есть ли уже параметры в URL
-  const hasParams = baseUrl.includes('?');
-  const separator = hasParams ? '&' : '?';
-  
-  const params = process.env.NODE_ENV === 'development' 
-    ? 'connection_limit=2&pool_timeout=5&connect_timeout=5'
-    : 'connection_limit=10&pool_timeout=20';
-    
-  return `${baseUrl}${separator}${params}`;
-};
-
 export const prisma = new PrismaClient({
   log: process.env.NODE_ENV === 'development' ? ['error'] : ['error'],
   datasources: {
     db: {
-      url: getDatabaseUrl()
+      url: process.env.DATABASE_URL
     }
-  },
-  // Дополнительные оптимизации для dev режима
-  ...(process.env.NODE_ENV === 'development' && {
-    errorFormat: 'minimal'
-  })
+  }
 })
 
 const __dirname = path.resolve()
@@ -166,7 +146,6 @@ app.use('/hub-api/bug-reports', bugReportsRouter);
 // Admin routes (только для DEVELOPER)
 app.use('/hub-api/admin/branches', branchesRouter);
 app.use('/hub-api/admin/users', usersRouter);
-app.use('/hub-api/admin/system', systemRouter);
 app.use('/hub-api/admin/analytics', analyticsRouter);
 app.use('/hub-api/admin/audit', auditRouter);
 
@@ -223,6 +202,8 @@ app.use('/hub-api/add/sliders', sliderRouter)
 app.use('/hub-api/retail/merch', merchRouter) // Дублируем маршрут для retail
 app.use('/hub-api/retail/print-service', printServiceRouter);
 app.use('/hub-api/retail/app-store', appStoreRouter);
+app.use('/hub-api/retail/shop', shopRouter);
+app.use('/hub-api/trassir', trassirRouter);
 
 // Остальные роуты
 app.use('/hub-api/radio', adminRouter)
@@ -326,6 +307,9 @@ server.listen(port, async function() {
     setImmediate(async () => {
       console.log('🔄 [Server] setImmediate выполняется...');
       
+      // Загрузка дверей Trassir
+      trassirService.loadDoors().catch(err => console.error('Failed to load Trassir doors:', err));
+
       // Запуск Telegram бота (не блокируем Merch бота)
       (async () => {
         try {
@@ -443,7 +427,22 @@ server.listen(port, async function() {
             }
           }
         }
+
       }, merchBotDelay);
+
+      // Запуск Trassir бота (независимо от Merch бота)
+      setTimeout(async () => {
+        try {
+          // TrassirBot отключен - функционал дверей перенесен в основной Telegram бот
+          if (process.env.TRASSIR_ADDRESS) {
+            console.log('✅ [Server] Trassir API настроен, двери доступны через основной Telegram бот');
+          } else {
+            console.log('⚠️ [Server] TRASSIR_ADDRESS не найден, функционал дверей отключен');
+          }
+        } catch (error) {
+          console.error('❌ [Server] Failed to start Trassir bot:', error);
+        }
+      }, 3000);
     });
   } else {
     console.log('🚫 [Server] Bots disabled (ENABLE_BOTS=false)');

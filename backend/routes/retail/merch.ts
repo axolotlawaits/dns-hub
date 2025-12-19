@@ -8,6 +8,7 @@ import {
   updateMerchCard,
   deleteMerchCard,
   getAllMerchCards,
+  getMerchCardById,
   addCardImages,
   addMerchAttachment,
   deleteMerchAttachment,
@@ -289,6 +290,7 @@ router.delete('/categories/:id', authenticateToken, deleteMerchCategory as any);
 
 // Роуты для карточек (layer = 0) - требуют аутентификации
 router.get('/cards', authenticateToken, getAllMerchCards as any);
+router.get('/cards/:id', authenticateToken, getMerchCardById as any);
 router.post('/cards', authenticateToken, ...(createMerchCard as any));
 router.put('/cards/:id', authenticateToken, ...(updateMerchCard as any));
 router.delete('/cards/:id', authenticateToken, deleteMerchCard as any);
@@ -305,22 +307,38 @@ router.delete('/cards/:id/images', authenticateToken, async (req: any, res: any,
     // Извлекаем имя файла из URL (может быть полный URL или относительный путь)
     let fileName = imageUrl;
     
-    // Если это полный URL, извлекаем имя файла
-    if (imageUrl.includes('/')) {
+    console.log(`🔍 [DELETE /cards/:id/images] Получен imageUrl: ${imageUrl}`);
+    
+    // Если это полный URL (начинается с http:// или https://)
+    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+      // Извлекаем путь после последнего слэша
+      const urlPath = new URL(imageUrl).pathname;
+      fileName = urlPath.split('/').pop() || imageUrl;
+    } else if (imageUrl.includes('/')) {
+      // Если это относительный путь, извлекаем имя файла
       fileName = imageUrl.split('/').pop() || imageUrl;
     }
     
     // Убираем query параметры если есть
     fileName = fileName.split('?')[0];
     
-    // Убираем путь если есть (например, "add/merch/filename.jpg" -> "filename.jpg")
+    // Убираем путь если есть (например, "retail/merch/filename.jpg" -> "filename.jpg")
     if (fileName.includes('/')) {
       fileName = fileName.split('/').pop() || fileName;
+    }
+    
+    // Декодируем URL-кодированные символы (например, %20 -> пробел)
+    try {
+      fileName = decodeURIComponent(fileName);
+    } catch (e) {
+      // Если декодирование не удалось, используем как есть
     }
     
     if (!fileName) {
       return res.status(400).json({ error: 'Неверный формат imageUrl' });
     }
+    
+    console.log(`🔍 [DELETE /cards/:id/images] Извлеченное имя файла: ${fileName}`);
 
     console.log(`🔍 [DELETE /cards/:id/images] Ищем attachment для карточки ${id}, fileName: ${fileName}`);
 
@@ -354,7 +372,7 @@ router.delete('/cards/:id/images', authenticateToken, async (req: any, res: any,
     console.log(`✅ [DELETE /cards/:id/images] Найден attachment: ${attachment.id}, source: ${attachment.source}`);
 
     // Удаляем файл
-    const filePath = path.join(process.cwd(), 'public', 'add', 'merch', attachment.source);
+    const filePath = path.join(process.cwd(), 'public', 'retail', 'merch', attachment.source);
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
       console.log(`✅ [DELETE /cards/:id/images] Файл удален: ${filePath}`);
@@ -454,7 +472,7 @@ router.delete('/categories/:id/image', authenticateToken, async (req: any, res: 
 
     // Удаляем все image attachments
     for (const attachment of attachments) {
-      const filePath = path.join(process.cwd(), 'public', 'add', 'merch', attachment.source);
+      const filePath = path.join(process.cwd(), 'public', 'retail', 'merch', attachment.source);
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
       }

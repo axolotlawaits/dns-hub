@@ -120,7 +120,7 @@ function Merch() {
   return (
     <AppProvider>
           <Box className="merch-container">
-            <Box p="xl">
+            <Box>
               <Tabs defaultValue="management">
                 <Group justify="space-between" align="center" mb="md">
                   <Card shadow="sm" radius="lg" p="md" className="merch-navigation" style={{ flex: 1 }}>

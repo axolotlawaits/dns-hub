@@ -165,7 +165,7 @@ function handleError(error: unknown, res: Response) {
   if (error instanceof z.ZodError) {
     return res.status(400).json({
       error: "Ошибка валидации",
-      details: error.errors
+      details: error.issues
     });
   }
   if (axios.isAxiosError(error)) {

@@ -45,6 +45,7 @@ router.get('/status/:userId', async (req: any, res: any) => {
       where: { id: req.params.userId },
       select: { 
         telegramChatId: true, 
+        telegramUsername: true,
         name: true,
       }
     });
@@ -52,7 +53,7 @@ router.get('/status/:userId', async (req: any, res: any) => {
     const status = {
       is_connected: !!user?.telegramChatId,
       chat_id: user?.telegramChatId,
-      user_name: user?.name,
+      user_name: user?.telegramUsername || null,
     };
 
     res.json(status);

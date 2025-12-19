@@ -63,9 +63,90 @@ export const UserContextProvider = ({ children }: Props) => {
   const refreshUserData = async () => {
     if (user) {
       try {
-        const response = await fetch(`${API}/user/${user.id}`)
-        const json = await response.json()
-        if (response.ok) {
+        // Проверяем, не вошли ли мы под другим пользователем
+        const currentToken = localStorage.getItem('token');
+        if (currentToken) {
+          try {
+            const base64Url = currentToken.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const jsonPayload = decodeURIComponent(atob(base64).split('').map((c) => {
+              return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+            const tokenData = JSON.parse(jsonPayload);
+            // Если токен содержит impersonatedBy, не обновляем его
+            if (tokenData?.impersonatedBy !== undefined && tokenData?.impersonatedBy !== null) {
+              console.log('[UserContext] Пропускаем обновление токена - пользователь вошел под другим пользователем');
+              console.log('[UserContext] impersonatedBy:', tokenData.impersonatedBy);
+              // Обновляем токен в состоянии, если он еще не установлен
+              if (token !== currentToken) {
+                setToken(currentToken);
+              }
+              return;
+            }
+          } catch (e) {
+            console.error('[UserContext] Ошибка декодирования токена:', e);
+            // Если не удалось декодировать токен, продолжаем обновление
+          }
+        }
+
+        const response = await fetch(`${API}/user/${user.id}`, {
+          headers: {
+            'Authorization': `Bearer ${currentToken || ''}`
+          }
+        });
+        
+        // Проверяем статус перед парсингом JSON
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            // Неавторизован - очищаем данные
+            console.warn('[UserContext] Пользователь не авторизован, очищаем localStorage');
+            localStorage.removeItem('user');
+            localStorage.removeItem('token');
+            setUser(null);
+            setToken(null);
+            return;
+          } else if (response.status === 400) {
+            // Пользователь не найден в базе данных
+            console.warn('[UserContext] Пользователь не найден в базе данных, очищаем localStorage');
+            localStorage.removeItem('user');
+            localStorage.removeItem('token');
+            setUser(null);
+            setToken(null);
+            return;
+          }
+          // Для других ошибок пробуем получить JSON
+          const errorText = await response.text();
+          console.error('[UserContext] Ошибка при получении данных пользователя:', response.status, errorText);
+          return;
+        }
+        
+        const json = await response.json();
+        if (response.ok && json) {
+          // Проверяем новый токен перед сохранением
+          try {
+            const base64Url = json.token.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const jsonPayload = decodeURIComponent(atob(base64).split('').map((c) => {
+              return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+            const newTokenData = JSON.parse(jsonPayload);
+            // Если новый токен не содержит impersonatedBy, а старый содержал, не перезаписываем
+            if (newTokenData?.impersonatedBy === undefined && currentToken) {
+              const oldBase64Url = currentToken.split('.')[1];
+              const oldBase64 = oldBase64Url.replace(/-/g, '+').replace(/_/g, '/');
+              const oldJsonPayload = decodeURIComponent(atob(oldBase64).split('').map((c) => {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+              }).join(''));
+              const oldTokenData = JSON.parse(oldJsonPayload);
+              if (oldTokenData?.impersonatedBy !== undefined && oldTokenData?.impersonatedBy !== null) {
+                console.log('[UserContext] Сохраняем старый токен с impersonatedBy, не перезаписываем');
+                return;
+              }
+            }
+          } catch (e) {
+            // Если не удалось декодировать, продолжаем обновление
+          }
+          
           setToken(json.token)
           localStorage.setItem('user', JSON.stringify(json.user))
           localStorage.setItem('token', json.token)

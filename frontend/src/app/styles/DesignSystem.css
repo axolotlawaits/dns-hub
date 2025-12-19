@@ -590,15 +590,6 @@ html {
   -moz-osx-font-smoothing: grayscale;
 }
 
-body {
-  margin: 0;
-  padding: 0;
-  /* Используем theme переменные напрямую - они правильно устанавливаются через ThemeProvider */
-  background-color: var(--theme-bg-primary) !important;
-  color: var(--theme-text-primary) !important;
-  transition: var(--transition-colors);
-}
-
 /* Глобальные стили для Mantine компонентов - используем theme переменные */
 [data-mantine-color-scheme="dark"] {
   --mantine-color-body: var(--theme-bg-primary) !important;

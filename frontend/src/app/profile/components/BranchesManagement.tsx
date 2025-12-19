@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
-  Container,
   Paper,
   Title,
   Table,
@@ -12,9 +11,7 @@ import {
   Stack,
   Alert,
   Text,
-  Grid,
   ScrollArea,
-  Divider,
   Box,
   Pagination,
 } from '@mantine/core';
@@ -40,7 +37,7 @@ export default function BranchesManagement() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpened, setModalOpened] = useState(false);
-  const [deleteModalOpened, setDeleteModalOpened] = useState(false);
+  const [, setDeleteModalOpened] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -128,7 +125,7 @@ export default function BranchesManagement() {
     }
   };
 
-  const handleConfirmDelete = async () => {
+  const _handleConfirmDelete = async () => {
     if (!selectedBranch) return;
 
     try {
@@ -221,7 +218,7 @@ export default function BranchesManagement() {
   ], []);
 
   return (
-    <Container size="xl">
+    <Box  size="xl">
       <Stack gap="md">
         <Group justify="space-between">
           <Title order={2}>Управление филиалами</Title>
@@ -349,7 +346,7 @@ export default function BranchesManagement() {
           onSubmit={handleSave}
         />
       </Stack>
-    </Container>
+    </Box>
   );
 }
 

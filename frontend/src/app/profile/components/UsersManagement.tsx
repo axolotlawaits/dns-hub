@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
-  Container,
   Paper,
   Title,
   Table,
@@ -14,8 +13,9 @@ import {
   Text,
   ScrollArea,
   Pagination,
+  Box,
 } from '@mantine/core';
-import { IconEdit, IconTrash, IconPlus, IconAlertCircle, IconUsers } from '@tabler/icons-react';
+import { IconEdit, IconTrash, IconPlus, IconAlertCircle, IconUsers, IconLogin } from '@tabler/icons-react';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { FilterGroup } from '../../../utils/filter';
 import useAuthFetch from '../../../hooks/useAuthFetch';
@@ -38,7 +38,7 @@ export default function UsersManagement() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpened, setModalOpened] = useState(false);
-  const [deleteModalOpened, setDeleteModalOpened] = useState(false);
+  const [, setDeleteModalOpened] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -90,6 +90,54 @@ export default function UsersManagement() {
     setDeleteModalOpened(true);
   };
 
+  const handleLoginAs = async (user: User) => {
+    try {
+      // Сохраняем текущий токен и данные администратора перед входом под пользователем
+      const currentToken = localStorage.getItem('token');
+      const currentUser = localStorage.getItem('user');
+      if (currentToken) {
+        localStorage.setItem('adminToken', currentToken);
+      }
+      if (currentUser) {
+        localStorage.setItem('adminUser', currentUser);
+      }
+
+      const response = await authFetch(`${API}/admin/users/${user.id}/login-as`, {
+        method: 'POST',
+      });
+      if (response && response.ok) {
+        const data = await response.json();
+        // Сохраняем токены и данные нового пользователя
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('refreshToken', data.refreshToken);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        
+        // Проверяем токен для отладки
+        try {
+          const base64Url = data.token.split('.')[1];
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+          const jsonPayload = decodeURIComponent(atob(base64).split('').map((c) => {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+          }).join(''));
+          const tokenData = JSON.parse(jsonPayload);
+          console.log('[UsersManagement] Token after login-as:', tokenData);
+          console.log('[UsersManagement] impersonatedBy:', tokenData?.impersonatedBy);
+        } catch (e) {
+          console.error('[UsersManagement] Error decoding token:', e);
+        }
+        
+        // Перезагружаем страницу для применения нового токена
+        window.location.href = '/';
+      } else {
+        const error = await response?.json();
+        setError(error?.error || 'Не удалось войти как пользователь');
+      }
+    } catch (error) {
+      console.error('Error logging in as user:', error);
+      setError('Не удалось войти как пользователь');
+    }
+  };
+
   const handleSave = async (formData: any) => {
     try {
       setError(null);
@@ -126,7 +174,7 @@ export default function UsersManagement() {
     }
   };
 
-  const handleConfirmDelete = async () => {
+  const _handleConfirmDelete = async () => {
     if (!selectedUser) return;
 
     try {
@@ -262,7 +310,7 @@ export default function UsersManagement() {
   };
 
   return (
-    <Container size="xl">
+    <Box size="xl">
       <Stack gap="md">
         <Group justify="space-between">
           <Title order={2}>Управление пользователями</Title>
@@ -283,7 +331,7 @@ export default function UsersManagement() {
           onColumnFiltersChange={handleColumnFiltersChange}
         />
 
-        <Paper shadow="sm" p="md" radius="md" withBorder>
+        <Paper shadow="sm" radius="md" withBorder>
           {loading ? (
             <Text c="dimmed">Загрузка...</Text>
           ) : filteredUsers.length === 0 ? (
@@ -329,6 +377,15 @@ export default function UsersManagement() {
                         </Table.Td>
                         <Table.Td>
                           <Group gap="xs">
+                            <Tooltip label="Войти как пользователь">
+                              <ActionIcon
+                                variant="light"
+                                color="green"
+                                onClick={() => handleLoginAs(user)}
+                              >
+                                <IconLogin size={18} />
+                              </ActionIcon>
+                            </Tooltip>
                             <Tooltip label="Редактировать">
                               <ActionIcon
                                 variant="light"
@@ -385,7 +442,6 @@ export default function UsersManagement() {
           onSubmit={handleSave}
         />
       </Stack>
-    </Container>
+    </Box>
   );
 }
-

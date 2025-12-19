@@ -18,8 +18,6 @@
     var(--theme-bg-elevated) 20%,
     transparent 100%
   );
-  border-top: 1px solid var(--theme-border-primary);
-
   overflow: hidden;
 }
 
