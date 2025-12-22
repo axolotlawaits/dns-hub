@@ -6,6 +6,7 @@ import * as net from 'net';
 import * as dns from 'dns';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { Buffer } from 'buffer';
 import { prisma } from '../../server.js';
 import AdmZip from 'adm-zip';
 
@@ -30,6 +31,14 @@ const networkScanSchema = z.object({
       message: "Invalid IPv4 address format",
     }
   ).optional(),
+  singleIp: z.string().refine(
+    (val) =>
+      /^(\d{1,3}\.){3}\d{1,3}$/.test(val) &&
+      val.split('.').every((num) => Number(num) >= 0 && Number(num) <= 255),
+    {
+      message: "Invalid IPv4 address format",
+    }
+  ).optional(), // Для тестирования конкретного IP
   ports: z.array(z.number().int().min(1).max(65535)).default([9100, 631, 515, 80, 443])
 });
 
@@ -57,7 +66,7 @@ interface NetworkScanResult {
 // Поддерживает Linux и Docker окружения
 export const scanNetworkForPrinters = async (req: Request, res: Response): Promise<Response | void> => {
   try {
-    const { networkRange, startIp, endIp, ports } = networkScanSchema.parse(req.body);
+    const { networkRange, startIp, endIp, singleIp, ports } = networkScanSchema.parse(req.body);
     
     const startTime = Date.now();
     let ipList: string[] = [];
@@ -86,7 +95,11 @@ export const scanNetworkForPrinters = async (req: Request, res: Response): Promi
       console.log('[Scanner] Используется host network mode - прямой доступ к сетевому стеку хоста Ubuntu');
     }
 
-    if (networkRange) {
+    // Если указан конкретный IP для тестирования, используем его
+    if (singleIp) {
+      console.log(`[Scanner] Тестовое сканирование конкретного IP: ${singleIp}`);
+      ipList = [singleIp];
+    } else if (networkRange) {
       ipList = await expandNetworkRange(networkRange);
     } else if (startIp && endIp) {
       ipList = await generateIpRange(startIp, endIp);
@@ -390,6 +403,45 @@ export const startDocumentScanning = async (req: Request, res: Response): Promis
       activeScans.delete(userId);
     }
 
+    // Проверяем состояние принтера и сканера перед запуском
+    console.log(`[Scanner] Проверка состояния принтера ${printerIp}:${printerPort}...`);
+    
+    const printerStatus = await checkPrinterAndScannerStatus(printerIp, printerPort);
+    
+    if (!printerStatus.isOnline) {
+      return res.status(400).json({
+        success: false,
+        error: 'Принтер недоступен',
+        message: `Принтер ${printerIp}:${printerPort} не отвечает. Проверьте, что принтер включен и подключен к сети.`
+      });
+    }
+    
+    if (!printerStatus.hasScanner) {
+      return res.status(400).json({
+        success: false,
+        error: 'Сканер недоступен',
+        message: `Принтер ${printerIp}:${printerPort} не имеет сканера или сканер не поддерживается.`
+      });
+    }
+    
+    if (printerStatus.isBusy) {
+      return res.status(400).json({
+        success: false,
+        error: 'Принтер занят',
+        message: `Принтер ${printerIp}:${printerPort} занят другой задачей. Попробуйте позже.`
+      });
+    }
+    
+    if (printerStatus.scannerBusy) {
+      return res.status(400).json({
+        success: false,
+        error: 'Сканер занят',
+        message: `Сканер на принтере ${printerIp}:${printerPort} занят другим процессом. Дождитесь завершения текущего сканирования.`
+      });
+    }
+    
+    console.log(`[Scanner] Принтер готов к сканированию:`, printerStatus);
+
     // Создаем сессию сканирования в базе данных
     const scanSession = await prisma.scanSession.create({
       data: {
@@ -406,7 +458,7 @@ export const startDocumentScanning = async (req: Request, res: Response): Promis
     const maxPages = unlimitedPages ? Infinity : (pages || 1);
 
     // Создаем директорию для сохранения файлов
-    const uploadsDir = path.join(process.cwd(), 'uploads', 'scanner', scanSession.id);
+    const uploadsDir = path.join(process.cwd(), 'public', 'scanner', folderName || 'scanned_documents', scanSession.id);
     await fs.mkdir(uploadsDir, { recursive: true });
 
     const scanDocument = async () => {
@@ -428,33 +480,155 @@ export const startDocumentScanning = async (req: Request, res: Response): Promis
       }
 
       try {
+        // Проверяем состояние принтера перед каждым сканированием
+        const status = await checkPrinterAndScannerStatus(printerIp, printerPort);
+        
+        if (!status.isOnline) {
+          console.warn(`[Scanner] Принтер ${printerIp}:${printerPort} недоступен, пропускаем сканирование`);
+          return; // Пропускаем это сканирование, но продолжаем сессию
+        }
+        
+        if (status.isBusy || status.scannerBusy) {
+          console.warn(`[Scanner] Принтер ${printerIp}:${printerPort} занят, ждем ${delayMs}ms перед повторной попыткой`);
+          return; // Пропускаем это сканирование, но продолжаем сессию
+        }
+        
         currentPage++;
         console.log(`[Scanner] Сканирование документа ${currentPage}/${unlimitedPages ? '∞' : maxPages} с принтера ${printerIp}:${printerPort}`);
-        
-        // Здесь будет логика сканирования документа
-        // TODO: Реализовать реальное сканирование через SANE или другую библиотеку
-        // Пока создаем тестовый файл для демонстрации
         
         const fileName = `scan_${currentPage}_${Date.now()}.pdf`;
         const filePath = path.join(uploadsDir, fileName);
         
-        // Создаем тестовый файл (в реальности здесь будет сканирование)
-        const testContent = `Scanned document ${currentPage} from ${printerIp}:${printerPort}`;
-        await fs.writeFile(filePath, testContent);
+        // Пытаемся выполнить реальное сканирование через SANE (scanimage)
+        let scanSuccess = false;
+        let scanError = '';
+        
+        try {
+          // Проверяем наличие scanimage
+          try {
+            await execAsync('which scanimage', { timeout: 2000 });
+          } catch (whichError) {
+            throw new Error('scanimage не установлен. Установите: apt-get install sane sane-utils');
+          }
+          
+          // Получаем список доступных устройств SANE
+          let availableDevices = '';
+          try {
+            const { stdout } = await execAsync('scanimage -L 2>&1', { timeout: 5000 });
+            availableDevices = stdout;
+            console.log(`[Scanner] Доступные SANE устройства:\n${availableDevices}`);
+          } catch (listError) {
+            console.log(`[Scanner] Не удалось получить список устройств:`, listError instanceof Error ? listError.message : String(listError));
+          }
+          
+          // Пробуем разные форматы сетевых устройств SANE
+          const deviceFormats = [
+            `escl:http://${printerIp}:631`,      // eSCL через IPP порт
+            `escl:http://${printerIp}:${printerPort}`, // eSCL через указанный порт
+            `net:${printerIp}:${printerPort}`,   // SANE сетевой протокол
+            `airscan:escl:${printerIp}`,         // AirPrint/eSCL
+            `ipp:${printerIp}:631/ipp/print`,    // IPP
+          ];
+          
+          // Если устройство найдено в списке, используем его напрямую
+          if (availableDevices.includes(printerIp)) {
+            // Ищем точное совпадение устройства
+            const deviceMatch = availableDevices.match(new RegExp(`(\\S+${printerIp.replace(/\./g, '\\.')}\\S+)`, 'i'));
+            if (deviceMatch && deviceMatch[1]) {
+              deviceFormats.unshift(deviceMatch[1]); // Добавляем найденное устройство первым
+            }
+          }
+          
+          for (const device of deviceFormats) {
+            try {
+              console.log(`[Scanner] Попытка сканирования с устройства: ${device}`);
+              
+              // Сначала проверяем доступность устройства
+              try {
+                await execAsync(`scanimage -d "${device}" --test-option 2>&1 || true`, { timeout: 3000 });
+              } catch (testError) {
+                // Игнорируем ошибки теста, продолжаем
+              }
+              
+              // Выполняем сканирование в PNM формат
+              const pnmPath = filePath.replace('.pdf', '.pnm');
+              try {
+                await execAsync(
+                  `scanimage -d "${device}" --format=pnm --resolution 300 --mode Color > "${pnmPath}" 2>&1`,
+                  { timeout: 30000, maxBuffer: 50 * 1024 * 1024 }
+                );
+                
+                // Проверяем, что PNM файл создан и не пустой
+                const pnmStats = await fs.stat(pnmPath).catch(() => null);
+                if (pnmStats && pnmStats.size > 100) {
+                  // Пробуем конвертировать в PDF через ImageMagick
+                  try {
+                    await execAsync(`convert "${pnmPath}" "${filePath}"`, { timeout: 15000 });
+                    await fs.unlink(pnmPath).catch(() => {});
+                    const pdfStats = await fs.stat(filePath);
+                    if (pdfStats.size > 0) {
+                      scanSuccess = true;
+                      console.log(`[Scanner] Сканирование успешно выполнено через ${device}`);
+                      break;
+                    }
+                  } catch (convertError) {
+                    // Если конвертация не удалась, оставляем PNM файл
+                    console.log(`[Scanner] Конвертация в PDF не удалась, оставляем PNM:`, convertError instanceof Error ? convertError.message : String(convertError));
+                    await fs.rename(pnmPath, filePath).catch(() => {});
+                    const finalStats = await fs.stat(filePath);
+                    if (finalStats.size > 0) {
+                      scanSuccess = true;
+                      console.log(`[Scanner] Сканирование выполнено, файл сохранен как PNM`);
+                      break;
+                    }
+                  }
+                }
+              } catch (scanCmdError) {
+                scanError = scanCmdError instanceof Error ? scanCmdError.message : String(scanCmdError);
+                console.log(`[Scanner] Не удалось сканировать через ${device}:`, scanError);
+                continue;
+              }
+            } catch (deviceError) {
+              scanError = deviceError instanceof Error ? deviceError.message : String(deviceError);
+              continue;
+            }
+          }
+          
+        } catch (saneError) {
+          scanError = saneError instanceof Error ? saneError.message : String(saneError);
+          console.log(`[Scanner] SANE (scanimage) недоступен:`, scanError);
+        }
+        
+        // Если реальное сканирование не удалось, создаем информационный файл
+        if (!scanSuccess) {
+          console.warn(`[Scanner] Реальное сканирование не удалось. Ошибка: ${scanError || 'Неизвестная ошибка'}`);
+          const infoContent = `Информация о сканировании ${currentPage}\n` +
+            `Принтер: ${printerIp}:${printerPort}\n` +
+            `Время: ${new Date().toISOString()}\n\n` +
+            `Для реального сканирования необходимо:\n` +
+            `1. Установить SANE: apt-get install sane sane-utils\n` +
+            `2. Установить драйверы для вашего принтера (например, sane-airscan для сетевых принтеров)\n` +
+            `3. Настроить сетевой доступ к сканеру\n` +
+            `4. Убедиться, что принтер поддерживает сканирование по сети\n\n` +
+            `Ошибка: ${scanError || 'Сканирование не выполнено'}`;
+          await fs.writeFile(filePath, infoContent);
+        }
         
         const stats = await fs.stat(filePath);
         
         // Сохраняем информацию о файле в базу данных
+        // Сохраняем относительный путь от public для доступа через веб-сервер
+        const relativePath = path.relative(path.join(process.cwd(), 'public'), filePath);
         await prisma.scannedFile.create({
           data: {
             scanSessionId: scanSession.id,
             fileName,
-            filePath: path.relative(process.cwd(), filePath),
+            filePath: relativePath,
             fileSize: stats.size
           }
         });
         
-        console.log(`[Scanner] Файл сохранен: ${fileName}`);
+        console.log(`[Scanner] Файл сохранен: ${fileName} (${stats.size} байт)`);
         
       } catch (error) {
         console.error(`[Scanner] Ошибка сканирования документа:`, error);
@@ -691,7 +865,8 @@ export const downloadFile = async (req: Request, res: Response): Promise<Respons
       });
     }
 
-    const filePath = path.join(process.cwd(), file.filePath);
+    // Путь к файлу относительно public директории
+    const filePath = path.join(process.cwd(), 'public', file.filePath);
     
     // Проверяем существование файла
     try {
@@ -767,7 +942,8 @@ export const downloadSessionZip = async (req: Request, res: Response): Promise<R
 
     // Добавляем файлы в архив
     for (const file of session.files) {
-      const filePath = path.join(process.cwd(), file.filePath);
+      // Путь к файлу относительно public директории
+      const filePath = path.join(process.cwd(), 'public', file.filePath);
       try {
         await fs.access(filePath);
         zip.addLocalFile(filePath, '', file.fileName);
@@ -794,6 +970,146 @@ export const downloadSessionZip = async (req: Request, res: Response): Promise<R
         message: error instanceof Error ? error.message : 'Неизвестная ошибка'
       });
     }
+  }
+};
+
+// Удаление отдельного файла
+export const deleteFile = async (req: Request, res: Response): Promise<Response | void> => {
+  try {
+    const token = (req as any).token;
+    const userId = token?.userId;
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Не авторизован'
+      });
+    }
+
+    const { fileId } = req.params;
+
+    // Проверяем, что файл принадлежит пользователю
+    const file = await prisma.scannedFile.findFirst({
+      where: { id: fileId },
+      include: {
+        scanSession: {
+          select: { userId: true }
+        }
+      }
+    });
+
+    if (!file) {
+      return res.status(404).json({
+        success: false,
+        error: 'Файл не найден'
+      });
+    }
+
+    if (file.scanSession.userId !== userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Нет доступа к этому файлу'
+      });
+    }
+
+    // Удаляем файл с диска
+    const filePath = path.join(process.cwd(), 'public', file.filePath);
+    try {
+      await fs.unlink(filePath);
+      console.log(`[Scanner] Файл удален с диска: ${filePath}`);
+    } catch (fsError) {
+      console.warn(`[Scanner] Не удалось удалить файл с диска: ${filePath}`, fsError);
+      // Продолжаем удаление из БД даже если файл не найден на диске
+    }
+
+    // Удаляем запись из базы данных
+    await prisma.scannedFile.delete({
+      where: { id: fileId }
+    });
+
+    res.json({
+      success: true,
+      message: 'Файл удален'
+    });
+  } catch (error) {
+    console.error('[Scanner] Ошибка удаления файла:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Ошибка удаления файла',
+      message: error instanceof Error ? error.message : 'Неизвестная ошибка'
+    });
+  }
+};
+
+// Удаление сессии сканирования со всеми файлами
+export const deleteSession = async (req: Request, res: Response): Promise<Response | void> => {
+  try {
+    const token = (req as any).token;
+    const userId = token?.userId;
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Не авторизован'
+      });
+    }
+
+    const { sessionId } = req.params;
+
+    // Проверяем, что сессия принадлежит пользователю
+    const session = await prisma.scanSession.findFirst({
+      where: { id: sessionId, userId },
+      include: {
+        files: true
+      }
+    });
+
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        error: 'Сессия не найдена'
+      });
+    }
+
+    // Удаляем все файлы сессии с диска
+    for (const file of session.files) {
+      const filePath = path.join(process.cwd(), 'public', file.filePath);
+      try {
+        await fs.unlink(filePath);
+        console.log(`[Scanner] Файл удален с диска: ${filePath}`);
+      } catch (fsError) {
+        console.warn(`[Scanner] Не удалось удалить файл с диска: ${filePath}`, fsError);
+      }
+    }
+
+    // Удаляем директорию сессии, если она пуста
+    try {
+      const sessionDir = path.dirname(path.join(process.cwd(), 'public', session.files[0]?.filePath || ''));
+      if (session.files.length > 0) {
+        const filesInDir = await fs.readdir(sessionDir).catch(() => []);
+        if (filesInDir.length === 0) {
+          await fs.rmdir(sessionDir).catch(() => {});
+        }
+      }
+    } catch (dirError) {
+      // Игнорируем ошибки удаления директории
+      console.warn('[Scanner] Не удалось удалить директорию сессии:', dirError);
+    }
+
+    // Удаляем сессию и все связанные файлы из базы данных
+    await prisma.scanSession.delete({
+      where: { id: sessionId }
+    });
+
+    res.json({
+      success: true,
+      message: 'Сессия сканирования удалена'
+    });
+  } catch (error) {
+    console.error('[Scanner] Ошибка удаления сессии:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Ошибка удаления сессии',
+      message: error instanceof Error ? error.message : 'Неизвестная ошибка'
+    });
   }
 };
 
@@ -949,6 +1265,216 @@ async function getPrinterDetails(ip: string, port: number): Promise<Partial<Prin
   return details;
 }
 
+// Проверка состояния принтера и сканера
+async function checkPrinterAndScannerStatus(
+  ip: string, 
+  port: number
+): Promise<{
+  isOnline: boolean;
+  hasScanner: boolean;
+  isBusy: boolean;
+  scannerBusy: boolean;
+  status?: string;
+  error?: string;
+}> {
+  const result = {
+    isOnline: false,
+    hasScanner: false,
+    isBusy: false,
+    scannerBusy: false,
+    status: 'unknown' as string | undefined,
+    error: undefined as string | undefined
+  };
+
+  try {
+    // 1. Проверка доступности принтера (ping и порт)
+    console.log(`[Scanner] Проверка доступности принтера ${ip}:${port}...`);
+    
+    // Проверяем открытость порта
+    const portOpen = await checkPortOpen(ip, port, 3000);
+    if (!portOpen) {
+      // Пробуем другие стандартные порты
+      const commonPorts = [631, 80, 443, 9100];
+      let anyPortOpen = false;
+      for (const testPort of commonPorts) {
+        if (await checkPortOpen(ip, testPort, 2000)) {
+          anyPortOpen = true;
+          break;
+        }
+      }
+      if (!anyPortOpen) {
+        result.error = 'Принтер не отвечает на запросы';
+        return result;
+      }
+    }
+    
+    result.isOnline = true;
+    console.log(`[Scanner] Принтер ${ip}:${port} доступен`);
+
+    // 2. Проверка наличия сканера через базу данных
+    try {
+      const printer = await prisma.printer.findUnique({
+        where: {
+          ip_port: { ip, port }
+        }
+      });
+      
+      if (printer && printer.hasScanner) {
+        result.hasScanner = true;
+        console.log(`[Scanner] Принтер ${ip}:${port} имеет сканер`);
+      } else {
+        // Пробуем определить наличие сканера динамически
+        const details = await getPrinterDetails(ip, port);
+        if (details.hasScanner) {
+          result.hasScanner = true;
+          console.log(`[Scanner] Сканер обнаружен на принтере ${ip}:${port}`);
+        } else {
+          result.error = 'Сканер не обнаружен на принтере';
+          return result;
+        }
+      }
+    } catch (dbError) {
+      // Если не найдено в БД, пробуем определить динамически
+      const details = await getPrinterDetails(ip, port);
+      if (details.hasScanner) {
+        result.hasScanner = true;
+      } else {
+        result.error = 'Сканер не обнаружен на принтере';
+        return result;
+      }
+    }
+
+    // 3. Проверка занятости принтера через SNMP
+    try {
+      const hasSnmp = await checkUtilityExists('snmpget');
+      if (hasSnmp) {
+        // Проверяем состояние принтера через SNMP
+        // OID для состояния принтера: 1.3.6.1.2.1.25.3.2.1.5.1 (hrDeviceStatus)
+        try {
+          const { stdout: snmpStatus } = await execAsync(
+            `snmpget -v2c -c public -t 1 -r 1 ${ip} 1.3.6.1.2.1.25.3.2.1.5.1 2>/dev/null || snmpget -v2c -c public -t 1 -r 1 ${ip} 1.3.6.1.2.1.25.3.2.1.5.1 2>/dev/null || echo "unknown"`,
+            { timeout: 2000 }
+          );
+          
+          // Значения: 1 = unknown, 2 = running, 3 = warning, 4 = testing, 5 = down
+          if (snmpStatus.includes('= 5') || snmpStatus.includes('down')) {
+            result.isBusy = false; // Принтер выключен, не занят, но и не работает
+            result.status = 'down';
+            result.error = 'Принтер выключен';
+            return result;
+          } else if (snmpStatus.includes('= 3') || snmpStatus.includes('warning')) {
+            result.isBusy = true;
+            result.status = 'warning';
+          } else if (snmpStatus.includes('= 2') || snmpStatus.includes('running')) {
+            result.status = 'running';
+            // Дополнительно проверяем очередь печати
+            try {
+              const { stdout: queueStatus } = await execAsync(
+                `snmpget -v2c -c public -t 1 -r 1 ${ip} 1.3.6.1.2.1.25.1.1.0 2>/dev/null || echo "unknown"`,
+                { timeout: 2000 }
+              );
+              // Если есть активные задания, принтер занят
+              if (queueStatus.includes('active') || queueStatus.includes('processing')) {
+                result.isBusy = true;
+                result.status = 'busy';
+              }
+            } catch {
+              // Игнорируем ошибки проверки очереди
+            }
+          }
+        } catch (snmpError) {
+          // SNMP может быть недоступен, это не критично
+          console.log(`[Scanner] SNMP проверка недоступна для ${ip}:`, snmpError instanceof Error ? snmpError.message : String(snmpError));
+        }
+      }
+    } catch (snmpCheckError) {
+      // Игнорируем ошибки SNMP
+    }
+
+    // 4. Проверка занятости сканера через SANE
+    try {
+      const hasScanimage = await checkUtilityExists('scanimage');
+      if (hasScanimage) {
+        // Пробуем получить список устройств и проверить их состояние
+        try {
+          const { stdout: devices } = await execAsync('scanimage -L 2>&1', { timeout: 3000 });
+          
+          // Ищем устройство с IP нашего принтера
+          const deviceMatch = devices.match(new RegExp(`(\\S+${ip.replace(/\./g, '\\.')}\\S+)`, 'i'));
+          if (deviceMatch && deviceMatch[1]) {
+            const device = deviceMatch[1];
+            
+            // Пробуем получить статус устройства
+            try {
+              await execAsync(`scanimage -d "${device}" --test-option 2>&1`, { timeout: 2000 });
+              // Если команда выполнилась без ошибок "busy" или "in use", сканер свободен
+            } catch (testError) {
+              const errorMsg = testError instanceof Error ? testError.message : String(testError);
+              if (errorMsg.includes('busy') || errorMsg.includes('in use') || errorMsg.includes('locked')) {
+                result.scannerBusy = true;
+                result.status = 'scanner_busy';
+                console.log(`[Scanner] Сканер на ${ip}:${port} занят`);
+              }
+            }
+          }
+        } catch (saneError) {
+          // SANE может быть недоступен или устройство не найдено
+          console.log(`[Scanner] SANE проверка недоступна для ${ip}:`, saneError instanceof Error ? saneError.message : String(saneError));
+        }
+      }
+    } catch (saneCheckError) {
+      // Игнорируем ошибки SANE
+    }
+
+    // 5. Дополнительная проверка через HTTP/IPP
+    try {
+      // Пробуем проверить состояние через IPP (Internet Printing Protocol)
+      const ippUrl = `http://${ip}:631/ipp/print`;
+      try {
+        const response = await fetch(ippUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/ipp',
+            'User-Agent': 'Scanner-Check/1.0'
+          },
+          body: Buffer.from([
+            0x02, 0x00, // IPP version 2.0
+            0x00, 0x0b, // Get-Printer-Attributes operation
+            0x00, 0x00, 0x00, 0x01, // Request ID
+            0x01, // Begin attribute group (printer-attributes-tag)
+            0x47, // charset attribute
+            0x00, 0x12, // name length
+            ...Buffer.from('attributes-charset', 'utf-8'),
+            0x00, 0x05, // value length
+            ...Buffer.from('utf-8', 'utf-8'),
+            0x03 // End of attributes
+          ]),
+          signal: AbortSignal.timeout(2000)
+        });
+        
+        if (response.ok) {
+          const ippData = await response.arrayBuffer();
+          // Парсим IPP ответ для определения состояния
+          // Если принтер отвечает, он доступен
+          result.status = 'ipp_available';
+        }
+      } catch (ippError) {
+        // IPP может быть недоступен, это не критично
+      }
+    } catch (httpError) {
+      // Игнорируем ошибки HTTP/IPP
+    }
+
+    console.log(`[Scanner] Статус принтера ${ip}:${port}:`, result);
+    return result;
+
+  } catch (error) {
+    console.error(`[Scanner] Ошибка проверки состояния принтера ${ip}:${port}:`, error);
+    result.error = error instanceof Error ? error.message : 'Неизвестная ошибка';
+    return result;
+  }
+}
+
 // Получение информации через SNMP
 async function getSnmpInfo(ip: string): Promise<{ vendor?: string; model?: string }> {
   const result: { vendor?: string; model?: string } = {};
@@ -996,6 +1522,8 @@ async function getSnmpInfo(ip: string): Promise<{ vendor?: string; model?: strin
 
     // Ищем известных производителей
     const vendorPatterns = [
+      { pattern: /pantum/i, name: 'Pantum' },
+      { pattern: /kyocera/i, name: 'Kyocera' },
       { pattern: /canon/i, name: 'Canon' },
       { pattern: /hp|hewlett/i, name: 'HP' },
       { pattern: /epson/i, name: 'Epson' },

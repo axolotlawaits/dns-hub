@@ -2,7 +2,7 @@ import { Image, Text } from '@mantine/core';
 import dayjs from 'dayjs';
 import { DynamicFormModal, FormConfig } from '../../../utils/formModal';
 import { FilePreviewModal } from '../../../utils/FilePreviewModal';
-import RKCalendarModal from './RKCalendarNew';
+import RKCalendarModal from './RKCalendar';
 import { API } from '../../../config/constants';
 
 interface RKModalsProps {

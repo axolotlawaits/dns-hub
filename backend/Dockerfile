@@ -10,7 +10,13 @@ RUN apk add --no-cache \
     net-tools \
     iproute2 \
     bind-tools \
-    coreutils
+    coreutils \
+    sane \
+    sane-backends \
+    sane-utils \
+    imagemagick \
+    ghostscript \
+    netpbm
 
 WORKDIR /app
 

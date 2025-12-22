@@ -23,8 +23,10 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { notificationSystem } from '../../utils/Push';
-import { IconSettings, IconPlayerPlay, IconPlayerStop, IconDownload, IconFileZip } from '@tabler/icons-react';
+import { IconSettings, IconPlayerPlay, IconPlayerStop, IconDownload, IconFileZip, IconEye, IconTrash } from '@tabler/icons-react';
 import { usePageHeader } from '../../contexts/PageHeaderContext';
+import { FilePreviewModal } from '../../utils/FilePreviewModal';
+import { DynamicFormModal } from '../../utils/formModal';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ru';
 
@@ -54,6 +56,13 @@ const Scanner = () => {
   const [printersLoading, setPrintersLoading] = useState(false);
   const [folderSelectModalOpened, setFolderSelectModalOpened] = useState(false);
   const [tempFolderName, setTempFolderName] = useState<string>('');
+  const [previewModalOpened, { open: openPreviewModal, close: closePreviewModal }] = useDisclosure(false);
+  const [previewFiles, setPreviewFiles] = useState<any[]>([]);
+  const [previewInitialIndex, setPreviewInitialIndex] = useState(0);
+  const [deleteFileModalOpened, { open: openDeleteFileModal, close: closeDeleteFileModal }] = useDisclosure(false);
+  const [deleteSessionModalOpened, { open: openDeleteSessionModal, close: closeDeleteSessionModal }] = useDisclosure(false);
+  const [fileToDelete, setFileToDelete] = useState<{ id: string; fileName: string } | null>(null);
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
 
   // Устанавливаем заголовок страницы
   useEffect(() => {
@@ -134,6 +143,8 @@ const Scanner = () => {
 
   // Загрузка списка известных принтеров
   const loadKnownPrinters = useCallback(async () => {
+    if (!user?.id || !authToken) return;
+    
     try {
       setPrintersLoading(true);
       const response = await fetch(`${API}/scanner/printers`, {
@@ -141,18 +152,70 @@ const Scanner = () => {
           'Authorization': `Bearer ${authToken}`
         }
       });
+      
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.printers) {
-          setKnownPrinters(data.printers);
+          // Захардкоженный принтер "5 этаж"
+          const hardcodedPrinter = {
+            id: 'hardcoded-floor5',
+            ip: '10.11.145.185',
+            port: 9100,
+            name: '5 этаж',
+            displayName: '5 этаж (10.11.145.185:9100)',
+            vendor: null,
+            model: null,
+            hasScanner: true,
+            scannerType: null
+          };
+          
+          // Проверяем, есть ли уже этот принтер в списке
+          const hasFloor5 = data.printers.some((p: any) => 
+            p.ip === '10.11.145.185' && p.port === 9100
+          );
+          
+          // Добавляем захардкоженный принтер в начало списка
+          if (!hasFloor5) {
+            setKnownPrinters([hardcodedPrinter, ...data.printers]);
+          } else {
+            setKnownPrinters(data.printers);
+          }
+        } else {
+          // Если список пуст, добавляем только захардкоженный принтер
+          const hardcodedPrinter = {
+            id: 'hardcoded-floor5',
+            ip: '10.11.145.185',
+            port: 9100,
+            name: '5 этаж',
+            displayName: '5 этаж (10.11.145.185:9100)',
+            vendor: null,
+            model: null,
+            hasScanner: true,
+            scannerType: null
+          };
+          setKnownPrinters([hardcodedPrinter]);
         }
+      } else {
+        // Если запрос не удался, все равно показываем захардкоженный принтер
+        const hardcodedPrinter = {
+          id: 'hardcoded-floor5',
+          ip: '10.11.145.185',
+          port: 9100,
+          name: '5 этаж',
+          displayName: '5 этаж (10.11.145.185:9100)',
+          vendor: null,
+          model: null,
+          hasScanner: true,
+          scannerType: null
+        };
+        setKnownPrinters([hardcodedPrinter]);
       }
     } catch (error) {
       console.error('Error loading known printers:', error);
     } finally {
       setPrintersLoading(false);
     }
-  }, [selectedPrinterForScanning]);
+  }, [user?.id, authToken]);
 
   // Загрузка настроек при монтировании компонента
   useEffect(() => {
@@ -441,6 +504,125 @@ const Scanner = () => {
     }
   }, [showNotification]);
 
+  // Открытие модального окна удаления файла
+  const handleDeleteFileClick = useCallback((fileId: string, fileName: string) => {
+    setFileToDelete({ id: fileId, fileName });
+    openDeleteFileModal();
+  }, [openDeleteFileModal]);
+
+  // Подтверждение удаления файла
+  const handleDeleteFileConfirm = useCallback(async () => {
+    if (!authToken || !fileToDelete) {
+      showNotification('error', 'Не авторизован');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      closeDeleteFileModal();
+      
+      const response = await fetch(`${API}/scanner/file/${fileToDelete.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Ошибка удаления файла');
+      }
+
+      showNotification('success', 'Файл удален');
+      
+      // Обновляем список файлов для предпросмотра
+      setPreviewFiles(prev => prev.filter(f => f.id !== fileToDelete.id));
+      
+      // Обновляем список файлов
+      if (currentSessionId) {
+        loadCurrentFiles(currentSessionId);
+      }
+      loadScanHistory();
+      
+      setFileToDelete(null);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Ошибка при удалении файла';
+      showNotification('error', errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  }, [authToken, showNotification, currentSessionId, loadCurrentFiles, loadScanHistory, fileToDelete, closeDeleteFileModal]);
+
+  // Открытие модального окна удаления сессии
+  const handleDeleteSessionClick = useCallback((sessionId: string) => {
+    setSessionToDelete(sessionId);
+    openDeleteSessionModal();
+  }, [openDeleteSessionModal]);
+
+  // Подтверждение удаления сессии
+  const handleDeleteSessionConfirm = useCallback(async () => {
+    if (!authToken || !sessionToDelete) {
+      showNotification('error', 'Не авторизован');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      closeDeleteSessionModal();
+      
+      const response = await fetch(`${API}/scanner/session/${sessionToDelete}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Ошибка удаления сессии');
+      }
+
+      showNotification('success', 'Сессия сканирования удалена');
+      
+      // Обновляем историю
+      loadScanHistory();
+      
+      // Если удалена текущая сессия, сбрасываем состояние
+      if (currentSessionId === sessionToDelete) {
+        setIsScanningActive(false);
+        setCurrentSessionId(null);
+        setCurrentFiles([]);
+      }
+      
+      setSessionToDelete(null);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Ошибка при удалении сессии';
+      showNotification('error', errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  }, [authToken, showNotification, currentSessionId, loadScanHistory, sessionToDelete, closeDeleteSessionModal]);
+
+  // Предпросмотр файла
+  const handlePreviewFile = useCallback((file: any, allFiles?: any[]) => {
+    const filesToPreview = allFiles || (file ? [file] : []);
+    const fileIndex = filesToPreview.findIndex(f => f.id === file.id);
+    
+    // Преобразуем файлы в формат для FilePreviewModal
+    const attachments = filesToPreview.map(f => ({
+      id: f.id,
+      name: f.fileName,
+      mimeType: f.fileName.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 
+                f.fileName.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/i) ? 'image/jpeg' : 
+                'application/octet-stream',
+      source: f.filePath // Относительный путь, FilePreviewModal добавит API
+    }));
+    
+    setPreviewFiles(attachments);
+    setPreviewInitialIndex(fileIndex >= 0 ? fileIndex : 0);
+    openPreviewModal();
+  }, [openPreviewModal]);
+
   // Проверка статуса сканирования
   useEffect(() => {
     const checkStatus = async () => {
@@ -486,6 +668,56 @@ const Scanner = () => {
         <Group justify="space-between" mb="md">
           <Title order={4}>Сканирование документов</Title>
           <Group>
+            <Button
+              onClick={async () => {
+                // Добавляем принтер напрямую по IP (для сетевых принтеров)
+                try {
+                  setLoading(true);
+                  const printerIp = '10.11.145.185';
+                  const printerPort = 9100; // Стандартный порт для сетевых принтеров
+                  
+                  // Добавляем принтер в список известных
+                  const response = await fetch(`${API}/scanner/printers`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                      ip: printerIp,
+                      port: printerPort,
+                      displayName: `Сетевой принтер ${printerIp}:${printerPort}`
+                    })
+                  });
+                  
+                  if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                      showNotification('success', 'Принтер добавлен в список');
+                      // Устанавливаем его как выбранный
+                      setSelectedPrinterForScanning(`${printerIp}:${printerPort}`);
+                      await saveUserSetting('scanner_printer', `${printerIp}:${printerPort}`);
+                      loadKnownPrinters(); // Обновляем список принтеров
+                    } else {
+                      throw new Error(data.error || 'Ошибка добавления принтера');
+                    }
+                  } else {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || 'Ошибка добавления принтера');
+                  }
+                } catch (error) {
+                  const errorMsg = error instanceof Error ? error.message : 'Ошибка при добавлении принтера';
+                  showNotification('error', errorMsg);
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              variant="light"
+              color="blue"
+              loading={loading}
+            >
+              Добавить принтер 10.11.145.185
+            </Button>
             <Button
               onClick={openSettingsModal}
               leftSection={<IconSettings size="1rem" />}
@@ -566,14 +798,35 @@ const Scanner = () => {
                     </Text>
                   </Table.Td>
                   <Table.Td>
-                    <ActionIcon
-                      variant="light"
-                      color="blue"
-                      onClick={() => handleDownloadFile(file.id, file.fileName)}
-                      title="Скачать файл"
-                    >
-                      <IconDownload size="1rem" />
-                    </ActionIcon>
+                    <Group gap="xs">
+                      <ActionIcon
+                        variant="light"
+                        color="blue"
+                        onClick={() => handlePreviewFile(file, currentFiles)}
+                        title="Предпросмотр"
+                        size="sm"
+                      >
+                        <IconEye size="0.875rem" />
+                      </ActionIcon>
+                      <ActionIcon
+                        variant="light"
+                        color="blue"
+                        onClick={() => handleDownloadFile(file.id, file.fileName)}
+                        title="Скачать файл"
+                        size="sm"
+                      >
+                        <IconDownload size="0.875rem" />
+                      </ActionIcon>
+                      <ActionIcon
+                        variant="light"
+                        color="red"
+                        onClick={() => handleDeleteFileClick(file.id, file.fileName)}
+                        title="Удалить файл"
+                        size="sm"
+                      >
+                        <IconTrash size="0.875rem" />
+                      </ActionIcon>
+                    </Group>
                   </Table.Td>
                 </Table.Tr>
               ))}
@@ -624,16 +877,27 @@ const Scanner = () => {
                     <Text size="sm" c="dimmed">
                       {dayjs(session.startedAt).format('DD.MM.YYYY HH:mm:ss')}
                     </Text>
-                    {session.files.length > 0 && (
-                      <Button
-                        onClick={() => handleDownloadZip(session.id)}
-                        leftSection={<IconFileZip size="1rem" />}
+                    <Group gap="xs">
+                      {session.files.length > 0 && (
+                        <Button
+                          onClick={() => handleDownloadZip(session.id)}
+                          leftSection={<IconFileZip size="1rem" />}
+                          variant="light"
+                          size="xs"
+                        >
+                          ZIP
+                        </Button>
+                      )}
+                      <ActionIcon
                         variant="light"
-                        size="xs"
+                        color="red"
+                        onClick={() => handleDeleteSessionClick(session.id)}
+                        title="Удалить сессию"
+                        size="sm"
                       >
-                        ZIP
-                      </Button>
-                    )}
+                        <IconTrash size="1rem" />
+                      </ActionIcon>
+                    </Group>
                   </Group>
                 </Group>
                 
@@ -662,15 +926,35 @@ const Scanner = () => {
                               </Text>
                             </Table.Td>
                             <Table.Td>
-                              <ActionIcon
-                                variant="light"
-                                color="blue"
-                                onClick={() => handleDownloadFile(file.id, file.fileName)}
-                                title="Скачать файл"
-                                size="sm"
-                              >
-                                <IconDownload size="0.875rem" />
-                              </ActionIcon>
+                              <Group gap="xs">
+                                <ActionIcon
+                                  variant="light"
+                                  color="blue"
+                                  onClick={() => handlePreviewFile(file, currentFiles)}
+                                  title="Предпросмотр"
+                                  size="sm"
+                                >
+                                  <IconEye size="0.875rem" />
+                                </ActionIcon>
+                                <ActionIcon
+                                  variant="light"
+                                  color="blue"
+                                  onClick={() => handleDownloadFile(file.id, file.fileName)}
+                                  title="Скачать файл"
+                                  size="sm"
+                                >
+                                  <IconDownload size="0.875rem" />
+                                </ActionIcon>
+                                <ActionIcon
+                                  variant="light"
+                                  color="red"
+                                  onClick={() => handleDeleteFileClick(file.id, file.fileName)}
+                                  title="Удалить файл"
+                                  size="sm"
+                                >
+                                  <IconTrash size="0.875rem" />
+                                </ActionIcon>
+                              </Group>
                             </Table.Td>
                           </Table.Tr>
                         ))}
@@ -702,14 +986,15 @@ const Scanner = () => {
             description="Выберите принтер из списка найденных принтеров"
             data={knownPrinters.map(p => ({
               value: `${p.ip}:${p.port}`,
-              label: p.displayName || `${p.ip}:${p.port}`
+              label: p.displayName || `${p.name || ''} (${p.ip}:${p.port})`.trim() || `${p.ip}:${p.port}`
             }))}
-            value={knownPrinters.some(p => `${p.ip}:${p.port}` === selectedPrinterForScanning) 
-              ? selectedPrinterForScanning 
-              : null}
+            value={selectedPrinterForScanning || null}
             onChange={async (value) => {
               if (!value) {
                 setSelectedPrinterForScanning('');
+                if (user?.id) {
+                  await saveUserSetting('scanner_printer', '');
+                }
                 return;
               }
               
@@ -838,6 +1123,77 @@ const Scanner = () => {
           </Group>
         </Stack>
       </Modal>
+
+      {/* Модальное окно предпросмотра файла */}
+      <FilePreviewModal
+        opened={previewModalOpened}
+        onClose={closePreviewModal}
+        attachments={previewFiles}
+        initialIndex={previewInitialIndex}
+        onDeleteFile={async (fileId: string) => {
+          // Устанавливаем файл для удаления и открываем модалку подтверждения
+          const file = currentFiles.find(f => f.id === fileId) || 
+                       scanHistory.flatMap(s => s.files || []).find((f: any) => f.id === fileId);
+          if (file) {
+            setFileToDelete({ id: fileId, fileName: file.fileName });
+            closePreviewModal();
+            openDeleteFileModal();
+          }
+        }}
+        requireAuth={true}
+      />
+
+      {/* Модальное окно подтверждения удаления файла */}
+      <DynamicFormModal
+        opened={deleteFileModalOpened}
+        onClose={() => {
+          closeDeleteFileModal();
+          setFileToDelete(null);
+        }}
+        title="Удаление файла"
+        mode="delete"
+        fields={[]}
+        initialValues={{}}
+        onConfirm={handleDeleteFileConfirm}
+        submitButtonText="Удалить"
+        cancelButtonText="Отмена"
+        viewExtraContent={() => (
+          <Stack gap="md" p="md">
+            <Text size="lg" c="var(--theme-text-primary)" ta="center">
+              Вы уверены, что хотите удалить файл "{fileToDelete?.fileName}"?
+            </Text>
+            <Text size="sm" c="var(--theme-text-secondary)" ta="center">
+              Это действие нельзя отменить.
+            </Text>
+          </Stack>
+        )}
+      />
+
+      {/* Модальное окно подтверждения удаления сессии */}
+      <DynamicFormModal
+        opened={deleteSessionModalOpened}
+        onClose={() => {
+          closeDeleteSessionModal();
+          setSessionToDelete(null);
+        }}
+        title="Удаление сессии сканирования"
+        mode="delete"
+        fields={[]}
+        initialValues={{}}
+        onConfirm={handleDeleteSessionConfirm}
+        submitButtonText="Удалить"
+        cancelButtonText="Отмена"
+        viewExtraContent={() => (
+          <Stack gap="md" p="md">
+            <Text size="lg" c="var(--theme-text-primary)" ta="center">
+              Вы уверены, что хотите удалить всю сессию сканирования со всеми файлами?
+            </Text>
+            <Text size="sm" c="var(--theme-text-secondary)" ta="center">
+              Это действие нельзя отменить. Все файлы сессии будут удалены.
+            </Text>
+          </Stack>
+        )}
+      />
 
       <LoadingOverlay visible={loading} />
     </Box>

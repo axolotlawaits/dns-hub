@@ -9,7 +9,9 @@ import {
   getScanHistory,
   getSessionFiles,
   downloadFile,
-  downloadSessionZip
+  downloadSessionZip,
+  deleteFile,
+  deleteSession
 } from '../../controllers/scanner/scanner.js';
 import { authenticateToken } from '../../middleware/auth.js';
 
@@ -44,5 +46,11 @@ router.get('/file/:fileId/download', authenticateToken, downloadFile);
 
 // Скачивание всех файлов сессии в zip архиве
 router.get('/session/:sessionId/download-zip', authenticateToken, downloadSessionZip);
+
+// Удаление отдельного файла
+router.delete('/file/:fileId', authenticateToken, deleteFile);
+
+// Удаление сессии сканирования
+router.delete('/session/:sessionId', authenticateToken, deleteSession);
 
 export default router;

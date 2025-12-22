@@ -7,7 +7,7 @@ import { Button, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Paper, Bad
 import { RKModals } from './RKModals';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
-import { IconPencil, IconTrash, IconUpload, IconDownload, IconPlus, IconEye } from '@tabler/icons-react';
+import { IconPencil, IconTrash, IconUpload, IconDownload, IconPlus, IconEye, IconCalendar } from '@tabler/icons-react';
 import { type FormConfig } from '../../../utils/formModal';
 import { DndProviderWrapper } from '../../../utils/dnd';
 import { FilterGroup } from '../../../utils/filter';
@@ -1109,6 +1109,19 @@ return (
     >
       {loading && <LoadingOverlay visible />}
       
+      {/* Кнопка календаря */}
+      {rkData.length > 0 && (
+        <Group justify="flex-end" mb="md">
+          <Button
+            leftSection={<IconCalendar size={18} />}
+            onClick={calendarHandlers.open}
+            variant="light"
+          >
+            Календарь
+          </Button>
+        </Group>
+      )}
+      
       {/* Фильтры */}
       {rkData.length > 0 && (
           <FilterGroup
@@ -1345,7 +1358,16 @@ return (
                                       key={group.construction.id}
                                       att={group.construction as any}
                                         apiBase={API}
-                                        onOpenFilePreview={openFilePreview}
+                                        onOpenFilePreview={() => {
+                                          // Создаем массив всех файлов группы: конструкция + документы
+                                          const constructionUrl = `${API}/public/add/RK/${group.construction.source}`.replace(/([^:]\/)\/+/g, '$1');
+                                          const documentUrls = group.documents.map((doc: any) => {
+                                            const docPath = String(doc.source || '');
+                                            return `${API}/public/add/RK/${docPath}`.replace(/([^:]\/)\/+/g, '$1');
+                                          });
+                                          const allFiles = [constructionUrl, ...documentUrls];
+                                          openFilePreview(allFiles, 0);
+                                        }}
                                       />
                                   </Box>
                                   
@@ -1390,12 +1412,17 @@ return (
                                           const sourcePath = String(doc.source || '');
                                           const fileName = sourcePath.split('/').pop() || 'Документ';
                                           const fileUrl = `${API}/public/add/RK/${sourcePath}`.replace(/([^:]\/)\/+/g, '$1');
+                                          // Создаем массив всех URL документов для превью
+                                          const allDocumentUrls = group.documents.map((d: any) => {
+                                            const docPath = String(d.source || '');
+                                            return `${API}/public/add/RK/${docPath}`.replace(/([^:]\/)\/+/g, '$1');
+                                          });
                                           return (
                                             <Box
                                               key={docIndex}
                                               title={fileName}
                                               className={styles.documentPreview}
-                                              onClick={() => openFilePreview([fileUrl], 0)}
+                                              onClick={() => openFilePreview(allDocumentUrls, docIndex)}
                                             >
                                               <img
                                                 src={fileUrl}

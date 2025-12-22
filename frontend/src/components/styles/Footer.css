@@ -6,10 +6,11 @@
 .auto-hide-footer {
   position: fixed !important;
   bottom: 0;
-  left: 0;
-  right: 0;
-  transform: translateY(calc(100% - 12px));
-  width: 100%;
+  left: 50% !important;
+  transform: translate(-50%, calc(100% - 12px)) !important;
+  width: fit-content;
+  min-width: fit-content;
+  max-width: 100%;
   height: 60px;
   transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   background: linear-gradient(
@@ -23,14 +24,14 @@
 
 /* Принудительно показываем футер */
 .auto-hide-footer.visible {
-  transform: translateY(0) !important;
+  transform: translate(-50%, 0) !important;
   border-radius: 12px 12px 0 0;
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
 }
 
 /* Показываем футер при наведении или когда видим */
 .auto-hide-footer:hover {
-  transform: translateY(0);
+  transform: translate(-50%, 0);
 }
 
 /* Градиентная полоска сверху - позиционируется внутри #footer */
@@ -101,17 +102,17 @@
 
 /* Скрываем футер */
 .auto-hide-footer.hidden {
-  transform: translateY(calc(100% - 12px)) !important;
+  transform: translate(-50%, calc(100% - 12px)) !important;
 }
 
 /* Принудительно скрываем если не видим */
 .auto-hide-footer:not(.visible):not(:hover) {
-  transform: translateY(calc(100% - 12px)) !important;
+  transform: translate(-50%, calc(100% - 12px)) !important;
 }
 
 /* Стили для отключенного автоскрытия */
 .auto-hide-footer.auto-hide-disabled {
-  transform: translateY(0) !important;
+  transform: translate(-50%, 0) !important;
   border-radius: 0;
   box-shadow: none;
 }
@@ -128,19 +129,19 @@
 @media (max-width: 768px) {
   .auto-hide-footer {
     height: 50px;
-    transform: translateY(calc(100% - 8px));
+    transform: translate(-50%, calc(100% - 8px));
   }
   
   .auto-hide-footer.hidden {
-    transform: translateY(calc(100% - 8px));
+    transform: translate(-50%, calc(100% - 8px));
   }
   
   .auto-hide-footer.visible {
-    transform: translateY(0) !important;
+    transform: translate(-50%, 0) !important;
   }
   
   .auto-hide-footer.auto-hide-disabled {
-    transform: translateY(0) !important;
+    transform: translate(-50%, 0) !important;
   }
   
   .auto-hide-footer::before {
@@ -167,254 +168,18 @@
 @media (max-width: 480px) {
   .auto-hide-footer {
     height: 45px;
-    transform: translateY(calc(100% - 6px));
+    transform: translate(-50%, calc(100% - 6px));
   }
   
   .auto-hide-footer.hidden {
-    transform: translateY(calc(100% - 6px));
+    transform: translate(-50%, calc(100% - 6px));
   }
   
   .auto-hide-footer.visible {
-    transform: translateY(0) !important;
+    transform: translate(-50%, 0) !important;
   }
   
   .auto-hide-footer.auto-hide-disabled {
-    transform: translateY(0) !important;
-  }
-}
-
-/* Правый блок с разделителем */
-.footer-right-section {
-  display: flex;
-  align-items: center;
-  height: 100%;
-  gap: 12px;
-  padding: 0;
-  margin-left: auto;
-  flex-shrink: 0;
-  min-width: fit-content;
-}
-
-.footer-divider {
-  height: 60%;
-  margin: 0;
-  align-self: center;
-  border-color: rgba(0, 0, 0, 0.1);
-  opacity: 0.5;
-}
-
-/* Темная тема для разделителя */
-[data-theme="dark"] .footer-divider {
-  border-color: rgba(255, 255, 255, 0.1);
-}
-
-/* Блок времени */
-.footer-time-option {
-  padding: 8px 12px;
-  cursor: pointer;
-  border-radius: 12px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  background: transparent;
-}
-
-.footer-time-option:hover {
-  background: rgba(255, 255, 255, 0.2);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-/* Темная тема для времени */
-[data-theme="dark"] .footer-time-option:hover {
-  background: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.footer-time-text {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-}
-
-.footer-time {
-  font-size: 16px;
-  font-weight: 500;
-}
-
-.footer-date {
-  font-size: 12px;
-  color: var(--mantine-color-dimmed);
-}
-
-/* Блок погоды */
-.footer-weather-option {
-  display: flex;
-  align-items: center;
-  padding: 8px 12px;
-  gap: 8px;
-  cursor: pointer;
-  border-radius: 12px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  background: transparent;
-}
-
-.footer-weather-option:hover {
-  background: rgba(255, 255, 255, 0.2);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-/* Темная тема для погоды */
-[data-theme="dark"] .footer-weather-option:hover {
-  background: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.footer-weather-text {
-  display: flex;
-  flex-direction: column;
-}
-
-.weather-icon {
-  font-size: 24px;
-}
-
-.weather-temp {
-  font-weight: 500;
-  font-size: 16px;
-}
-
-.weather-location {
-  font-size: 12px;
-  color: var(--mantine-color-dimmed);
-  white-space: nowrap;
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Календарь */
-.calendar-dropdown {
-  padding: 0;
-  border: none;
-  box-shadow: var(--theme-shadow-lg);
-  border-radius: var(--radius-lg);
-}
-/* Темная тема для календаря */
-/* Полностью прозрачный контейнер */
-.no-border-popper {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  padding: 0 !important;
-}
-
-/* Темная тема для календаря */
-.dark-calendar {
-  background-color: var(--theme-bg-elevated) !important;
-  border: 1px solid var(--theme-border) !important;
-  color: var(--theme-text-primary) !important;
-  border-radius: var(--radius-lg) !important;
-}
-
-.dark-calendar .react-datepicker__header {
-  background-color: var(--theme-bg-elevated) !important;
-  border-bottom: 1px solid var(--theme-border) !important;
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0 !important;
-}
-
-.dark-calendar .react-datepicker__current-month,
-.dark-calendar .react-datepicker__day-name,
-.dark-calendar .react-datepicker__day {
-  color: var(--theme-text-primary) !important;
-}
-
-.dark-calendar .react-datepicker__day:hover {
-  background-color: var(--theme-bg-hover) !important;
-}
-
-.dark-calendar .react-datepicker__day--selected {
-  background-color: var(--color-blue-500) !important;
-  color: white !important;
-}
-
-.dark-calendar .react-datepicker__day--today {
-  font-weight: bold;
-  color: var(--color-blue-400) !important;
-}
-
-.dark-calendar .react-datepicker__navigation-icon::before {
-  border-color: var(--theme-border) !important;
-}
-
-/* Адаптивность футера */
-@media (max-width: 1200px) {
-  .footer-time-option,
-  .footer-weather-option {
-    padding: 6px 8px;
-  }
-  
-  .footer-time {
-    font-size: 14px;
-  }
-  
-  .footer-date {
-    font-size: 10px;
-  }
-  
-  .weather-temp {
-    font-size: 14px;
-  }
-  
-  .weather-location {
-    font-size: 10px;
-    max-width: 80px;
-  }
-}
-
-@media (max-width: 900px) {
-  .footer-time-option,
-  .footer-weather-option {
-    padding: 4px 6px;
-  }
-  
-  .footer-time {
-    font-size: 12px;
-  }
-  
-  .footer-date {
-    font-size: 9px;
-  }
-  
-  .weather-temp {
-    font-size: 12px;
-  }
-  
-  .weather-location {
-    font-size: 9px;
-    max-width: 60px;
-  }
-}
-
-@media (max-width: 768px) {
-  .footer-time-option,
-  .footer-weather-option {
-    padding: 3px 4px;
-  }
-  
-  .footer-time {
-    font-size: 11px;
-  }
-  
-  .footer-date {
-    font-size: 8px;
-  }
-  
-  .weather-temp {
-    font-size: 11px;
-  }
-  
-  .weather-location {
-    font-size: 8px;
-    max-width: 50px;
+    transform: translate(-50%, 0) !important;
   }
 }
