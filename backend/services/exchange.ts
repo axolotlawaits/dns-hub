@@ -1244,7 +1244,8 @@ export const getRooms = async (
       </t:ConnectingSID>
     </t:ExchangeImpersonation>` : '';
     
-    // Получаем список комнат через GetRoomLists и GetRooms
+    // Получаем список комнат через поиск пользователей типа "Room" в адресной книге
+    // Используем ResolveNames для поиска всех пользователей, затем фильтруем по типу Room
     const soapEnvelope = `<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages"
@@ -1254,7 +1255,9 @@ export const getRooms = async (
     <t:RequestServerVersion Version="${EXCHANGE_CONFIG.ewsVersion}" />${impersonationHeader}
   </soap:Header>
   <soap:Body>
-    <m:GetRoomLists />
+    <m:ResolveNames ReturnFullContactData="true">
+      <m:UnresolvedEntry>*</m:UnresolvedEntry>
+    </m:ResolveNames>
   </soap:Body>
 </soap:Envelope>`;
 
@@ -1263,7 +1266,7 @@ export const getRooms = async (
       response = await makeEwsRequest(
         ewsUrl,
         soapEnvelope,
-        'http://schemas.microsoft.com/exchange/services/2006/messages/GetRoomLists',
+        'http://schemas.microsoft.com/exchange/services/2006/messages/ResolveNames',
         ntlmUsername,
         ewsPassword,
         ntlmDomain
@@ -1278,35 +1281,114 @@ export const getRooms = async (
 
     if (response.statusCode !== 200) {
       console.error(`[Exchange] [getRooms] ❌ EWS request failed with status code ${response.statusCode}`);
-      // Если GetRoomLists не поддерживается, возвращаем пустой список
       return [];
     }
 
-    // Парсим ответ и получаем список комнат
+    // Парсим ответ и получаем список всех пользователей, затем фильтруем комнаты
     const parsed = xmlParser.parse(response.body);
     const envelope = parsed['s:Envelope'] || parsed['soap:Envelope'] || parsed.Envelope;
     const body = envelope?.['s:Body'] || envelope?.['soap:Body'] || envelope?.Body;
-    const getRoomListsResponse = body?.['m:GetRoomListsResponse'] || body?.GetRoomListsResponse;
-    const responseMessages = getRoomListsResponse?.['m:ResponseMessages'] || getRoomListsResponse?.ResponseMessages;
-    const getRoomListsResponseMessage = responseMessages?.['m:GetRoomListsResponseMessage'] || responseMessages?.GetRoomListsResponseMessage;
+    const resolveNamesResponse = body?.['m:ResolveNamesResponse'] || body?.ResolveNamesResponse;
+    const responseMessages = resolveNamesResponse?.['m:ResponseMessages'] || resolveNamesResponse?.ResponseMessages;
+    const resolveNamesResponseMessage = responseMessages?.['m:ResolveNamesResponseMessage'] || responseMessages?.ResolveNamesResponseMessage;
     
     const rooms: Array<{ email: string; name: string }> = [];
     
-    if (getRoomListsResponseMessage) {
-      const roomLists = getRoomListsResponseMessage?.['m:RoomLists'] || getRoomListsResponseMessage?.RoomLists;
-      const addressLists = roomLists?.['t:AddressList'] || roomLists?.AddressList;
+    if (resolveNamesResponseMessage) {
+      const resolutionSet = resolveNamesResponseMessage?.['m:ResolutionSet'] || resolveNamesResponseMessage?.ResolutionSet;
+      const resolutions = resolutionSet?.['t:Resolution'] || resolutionSet?.Resolution;
       
-      if (addressLists) {
-        const addressListArray = Array.isArray(addressLists) ? addressLists : [addressLists];
+      if (resolutions) {
+        const resolutionsArray = Array.isArray(resolutions) ? resolutions : [resolutions];
         
-        // Для каждого списка комнат получаем комнаты
-        for (const addressList of addressListArray) {
-          const name = addressList?.['t:Name'] || addressList?.Name || '';
-          const address = addressList?.['t:Address'] || addressList?.Address || '';
+        resolutionsArray.forEach((resolution: any) => {
+          const mailbox = resolution?.['t:Mailbox'] || resolution?.Mailbox;
+          const contact = resolution?.['t:Contact'] || resolution?.Contact;
           
-          if (address) {
-            // Получаем комнаты из этого списка
-            const getRoomsSoap = `<?xml version="1.0" encoding="utf-8"?>
+          if (mailbox) {
+            const email = mailbox?.['t:EmailAddress'] || mailbox?.EmailAddress || '';
+            const name = mailbox?.['t:Name'] || mailbox?.Name || email;
+            const routingType = mailbox?.['t:RoutingType'] || mailbox?.RoutingType || '';
+            
+            // Проверяем, является ли это комнатой
+            // Комнаты обычно имеют тип "Room" в MailboxType или в контакте
+            const mailboxType = mailbox?.['t:MailboxType'] || mailbox?.MailboxType || '';
+            const isRoom = mailboxType === 'Room' || 
+                          (contact && (contact?.['t:DisplayName'] || contact?.DisplayName || '').toLowerCase().includes('room')) ||
+                          (name && name.toLowerCase().includes('room')) ||
+                          (email && email.toLowerCase().includes('room'));
+            
+            // Также проверяем через контакт, если есть
+            if (contact) {
+              const contactDisplayName = contact?.['t:DisplayName'] || contact?.DisplayName || '';
+              const contactEmail = contact?.['t:EmailAddresses'] || contact?.EmailAddresses;
+              
+              // Если это комната, добавляем её
+              if (isRoom && email) {
+                rooms.push({ 
+                  email: email, 
+                  name: name || contactDisplayName || email 
+                });
+              }
+            } else if (isRoom && email) {
+              // Если контакта нет, но это комната по другим признакам
+              rooms.push({ 
+                email: email, 
+                name: name || email 
+              });
+            }
+          }
+        });
+      }
+    }
+    
+    // Если через ResolveNames не получилось найти комнаты, пробуем альтернативный способ
+    // - поиск через GetRoomLists (если настроены списки комнат)
+    if (rooms.length === 0) {
+      console.log('[Exchange] [getRooms] No rooms found via ResolveNames, trying GetRoomLists...');
+      
+      const getRoomListsSoap = `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages"
+               xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types"
+               xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Header>
+    <t:RequestServerVersion Version="${EXCHANGE_CONFIG.ewsVersion}" />${impersonationHeader}
+  </soap:Header>
+  <soap:Body>
+    <m:GetRoomLists />
+  </soap:Body>
+</soap:Envelope>`;
+
+      try {
+        const roomListsResponse = await makeEwsRequest(
+          ewsUrl,
+          getRoomListsSoap,
+          'http://schemas.microsoft.com/exchange/services/2006/messages/GetRoomLists',
+          ntlmUsername,
+          ewsPassword,
+          ntlmDomain
+        );
+
+        if (roomListsResponse.statusCode === 200) {
+          const roomListsParsed = xmlParser.parse(roomListsResponse.body);
+          const roomListsEnvelope = roomListsParsed['s:Envelope'] || roomListsParsed['soap:Envelope'] || roomListsParsed.Envelope;
+          const roomListsBody = roomListsEnvelope?.['s:Body'] || roomListsEnvelope?.['soap:Body'] || roomListsEnvelope?.Body;
+          const getRoomListsResponse = roomListsBody?.['m:GetRoomListsResponse'] || roomListsBody?.GetRoomListsResponse;
+          const roomListsResponseMessages = getRoomListsResponse?.['m:ResponseMessages'] || getRoomListsResponse?.ResponseMessages;
+          const getRoomListsResponseMessage = roomListsResponseMessages?.['m:GetRoomListsResponseMessage'] || roomListsResponseMessages?.GetRoomListsResponseMessage;
+          
+          const roomLists = getRoomListsResponseMessage?.['m:RoomLists'] || getRoomListsResponseMessage?.RoomLists;
+          const addressLists = roomLists?.['t:AddressList'] || roomLists?.AddressList;
+          
+          if (addressLists) {
+            const addressListArray = Array.isArray(addressLists) ? addressLists : [addressLists];
+            
+            for (const addressList of addressListArray) {
+              const address = addressList?.['t:Address'] || addressList?.Address || '';
+              
+              if (address) {
+                const getRoomsSoap = `<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages"
                xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types"
@@ -1323,43 +1405,47 @@ export const getRooms = async (
   </soap:Body>
 </soap:Envelope>`;
 
-            try {
-              const roomsResponse = await makeEwsRequest(
-                ewsUrl,
-                getRoomsSoap,
-                'http://schemas.microsoft.com/exchange/services/2006/messages/GetRooms',
-                ntlmUsername,
-                ewsPassword,
-                ntlmDomain
-              );
+                try {
+                  const roomsResponse = await makeEwsRequest(
+                    ewsUrl,
+                    getRoomsSoap,
+                    'http://schemas.microsoft.com/exchange/services/2006/messages/GetRooms',
+                    ntlmUsername,
+                    ewsPassword,
+                    ntlmDomain
+                  );
 
-              if (roomsResponse.statusCode === 200) {
-                const roomsParsed = xmlParser.parse(roomsResponse.body);
-                const roomsEnvelope = roomsParsed['s:Envelope'] || roomsParsed['soap:Envelope'] || roomsParsed.Envelope;
-                const roomsBody = roomsEnvelope?.['s:Body'] || roomsEnvelope?.['soap:Body'] || roomsEnvelope?.Body;
-                const getRoomsResponse = roomsBody?.['m:GetRoomsResponse'] || roomsBody?.GetRoomsResponse;
-                const roomsResponseMessages = getRoomsResponse?.['m:ResponseMessages'] || getRoomsResponse?.ResponseMessages;
-                const getRoomsResponseMessage = roomsResponseMessages?.['m:GetRoomsResponseMessage'] || roomsResponseMessages?.GetRoomsResponseMessage;
-                
-                const roomsList = getRoomsResponseMessage?.['m:Rooms'] || getRoomsResponseMessage?.Rooms;
-                const roomItems = roomsList?.['t:Room'] || roomsList?.Room;
-                
-                if (roomItems) {
-                  const roomItemsArray = Array.isArray(roomItems) ? roomItems : [roomItems];
-                  roomItemsArray.forEach((room: any) => {
-                    const roomEmail = room?.['t:EmailAddress'] || room?.EmailAddress || '';
-                    const roomName = room?.['t:Name'] || room?.Name || roomEmail;
-                    if (roomEmail) {
-                      rooms.push({ email: roomEmail, name: roomName });
+                  if (roomsResponse.statusCode === 200) {
+                    const roomsParsed = xmlParser.parse(roomsResponse.body);
+                    const roomsEnvelope = roomsParsed['s:Envelope'] || roomsParsed['soap:Envelope'] || roomsParsed.Envelope;
+                    const roomsBody = roomsEnvelope?.['s:Body'] || roomsEnvelope?.['soap:Body'] || roomsEnvelope?.Body;
+                    const getRoomsResponse = roomsBody?.['m:GetRoomsResponse'] || roomsBody?.GetRoomsResponse;
+                    const roomsResponseMessages = getRoomsResponse?.['m:ResponseMessages'] || getRoomsResponse?.ResponseMessages;
+                    const getRoomsResponseMessage = roomsResponseMessages?.['m:GetRoomsResponseMessage'] || roomsResponseMessages?.GetRoomsResponseMessage;
+                    
+                    const roomsList = getRoomsResponseMessage?.['m:Rooms'] || getRoomsResponseMessage?.Rooms;
+                    const roomItems = roomsList?.['t:Room'] || roomsList?.Room;
+                    
+                    if (roomItems) {
+                      const roomItemsArray = Array.isArray(roomItems) ? roomItems : [roomItems];
+                      roomItemsArray.forEach((room: any) => {
+                        const roomEmail = room?.['t:EmailAddress'] || room?.EmailAddress || '';
+                        const roomName = room?.['t:Name'] || room?.Name || roomEmail;
+                        if (roomEmail) {
+                          rooms.push({ email: roomEmail, name: roomName });
+                        }
+                      });
                     }
-                  });
+                  }
+                } catch (roomError) {
+                  console.error(`[Exchange] [getRooms] Error getting rooms from list ${address}:`, roomError);
                 }
               }
-            } catch (roomError) {
-              console.error(`[Exchange] [getRooms] Error getting rooms from list ${address}:`, roomError);
             }
           }
         }
+      } catch (roomListsError) {
+        console.error('[Exchange] [getRooms] Error getting room lists:', roomListsError);
       }
     }
 
@@ -1375,12 +1461,8 @@ export const getRooms = async (
 // Экспорт сервиса
 export const exchangeService = {
   getCalendarEvents,
-  createCalendarEvent,
-  updateCalendarEvent,
-  deleteCalendarEvent,
   getUserEmail,
   checkNewEmailsAndNotify,
-  getRooms,
   isConfigured: isExchangeConfigured
 };
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { API } from '../config/constants';
 import { 
   Box, 
@@ -12,15 +12,12 @@ import {
   Alert, 
   Card, 
   Stack,
-  Button,
   Title} from '@mantine/core';
-import { DynamicFormModal, FormField } from '../utils/formModal';
 import { 
   IconCalendar, 
   IconGift, 
   IconAlertCircle, 
-  IconClock, 
-  IconPlus,
+  IconClock,
 } from '@tabler/icons-react';
 import { useUserContext } from '../hooks/useUserContext';
 import { usePageHeader } from '../contexts/PageHeaderContext';
@@ -107,11 +104,6 @@ export default function Events() {
       error: eventsError
     });
   }, [events, loadingEvents, eventsError]);
-  const [eventModalOpened, setEventModalOpened] = useState(false);
-  
-  // Данные для выбора пользователей и помещений
-  const [users, setUsers] = useState<Array<{ value: string; label: string; email: string }>>([]);
-  const [rooms, setRooms] = useState<Array<{ value: string; label: string }>>([]);
   
   // Диагностика токена
   useEffect(() => {
@@ -250,150 +242,6 @@ export default function Events() {
     }
   }, [token]);
 
-  // Обработчик создания события через DynamicFormModal
-  const handleCreateEvent = useCallback(async (values: Record<string, any>) => {
-    const authToken = token || localStorage.getItem('token');
-    if (!authToken) {
-      setEventsError('Токен авторизации отсутствует');
-      return;
-    }
-    
-    // Валидация полей
-    if (!values.subject?.trim()) {
-      setEventsError('Введите название события');
-      return;
-    }
-    
-    if (!values.startDateTime || !values.endDateTime) {
-      setEventsError('Укажите дату начала и окончания');
-      return;
-    }
-    
-    // Конвертируем datetime-local в ISO формат
-    let startDateTimeISO: string;
-    let endDateTimeISO: string;
-    
-    try {
-      const startDate = new Date(values.startDateTime);
-      const endDate = new Date(values.endDateTime);
-      
-      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-        setEventsError('Неверный формат даты');
-        return;
-      }
-      
-      if (endDate <= startDate) {
-        setEventsError('Дата окончания должна быть позже даты начала');
-        return;
-      }
-      
-      startDateTimeISO = startDate.toISOString();
-      endDateTimeISO = endDate.toISOString();
-    } catch (err) {
-      setEventsError('Ошибка при обработке даты');
-      return;
-    }
-    
-    setLoadingEvents(true);
-    setEventsError(null);
-    
-    try {
-      const eventData = {
-        subject: values.subject.trim(),
-        body: values.body || undefined,
-        startDateTime: startDateTimeISO,
-        endDateTime: endDateTimeISO,
-        timeZone: values.timeZone || 'Europe/Moscow',
-        location: values.location || undefined,
-        attendees: values.attendees || undefined,
-        isAllDay: values.isAllDay || false,
-        reminderMinutesBeforeStart: values.reminderMinutesBeforeStart || 15
-      };
-      
-      console.log('[Events] Creating event with data:', eventData);
-      
-      const response = await fetch(`${API}/exchange/calendar/events`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`
-        },
-        body: JSON.stringify(eventData)
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to create event' }));
-        const errorMessage = errorData.error || errorData.message || `Ошибка: ${response.status}`;
-        console.error('[Events] Error creating event:', errorData);
-        setEventsError(errorMessage);
-        return;
-      }
-      
-      const result = await response.json();
-      console.log('[Events] Event created successfully:', result);
-      
-      setEventModalOpened(false);
-      setEventsError(null);
-      
-      // Обновляем список событий
-      await loadCalendarEvents();
-    } catch (err) {
-      console.error('[Events] Error creating event:', err);
-      setEventsError(err instanceof Error ? err.message : 'Неизвестная ошибка при создании события');
-    } finally {
-      setLoadingEvents(false);
-    }
-  }, [token, loadCalendarEvents]);
-
-  // Загрузка пользователей для выбора приглашенных
-  const loadUsers = useCallback(async () => {
-    const authToken = token || localStorage.getItem('token');
-    if (!authToken) return;
-    
-    try {
-      const response = await fetch(`${API}/user/users-with-email`, {
-        headers: {
-          'Authorization': `Bearer ${authToken}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setUsers(Array.isArray(data) ? data : []);
-      }
-    } catch (err) {
-      console.error('[Events] Error loading users:', err);
-    }
-  }, [token]);
-  
-  // Загрузка помещений из Exchange
-  const loadRooms = useCallback(async () => {
-    const authToken = token || localStorage.getItem('token');
-    if (!authToken) return;
-    
-    try {
-      const response = await fetch(`${API}/exchange/rooms`, {
-        headers: {
-          'Authorization': `Bearer ${authToken}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        const roomsList = data.rooms || [];
-        setRooms(roomsList.map((room: { email: string; name: string }) => ({
-          value: room.email,
-          label: room.name || room.email
-        })));
-      } else {
-        // Если ошибка, просто оставляем пустой список
-        setRooms([]);
-      }
-    } catch (err) {
-      console.error('[Events] Error loading rooms:', err);
-      setRooms([]);
-    }
-  }, [token]);
 
   useEffect(() => {
     const authToken = token || localStorage.getItem('token');
@@ -409,69 +257,6 @@ export default function Events() {
       console.warn('[Events] ⚠️ No authToken, skipping loadCalendarEvents');
     }
   }, [fetchUpcomingBirthdays, token, loadCalendarEvents]);
-  
-  // Загружаем пользователей и помещения при открытии модального окна
-  useEffect(() => {
-    if (eventModalOpened) {
-      loadRooms();
-      loadUsers();
-    }
-  }, [eventModalOpened, loadRooms, loadUsers]);
-
-  // Конфигурация полей для DynamicFormModal
-  const eventFormFields = useMemo<FormField[]>(() => [
-    {
-      name: 'subject',
-      label: 'Название',
-      type: 'text',
-      required: true,
-      placeholder: 'Введите название события'
-    },
-    {
-      name: 'body',
-      label: 'Описание',
-      type: 'textarea',
-      placeholder: 'Введите описание события'
-    },
-    {
-      name: 'startDateTime',
-      label: 'Начало',
-      type: 'datetime',
-      required: true
-    },
-    {
-      name: 'endDateTime',
-      label: 'Окончание',
-      type: 'datetime',
-      required: true
-    },
-    {
-      name: 'location',
-      label: 'Помещение',
-      type: 'selectSearch',
-      options: rooms.map(r => ({ value: r.label, label: r.label })),
-      placeholder: 'Выберите или введите помещение'
-    },
-    {
-      name: 'attendees',
-      label: 'Приглашенные',
-      type: 'multiselect',
-      options: users,
-      placeholder: 'Выберите пользователей',
-      searchable: true
-    },
-    {
-      name: 'isAllDay',
-      label: 'Весь день',
-      type: 'boolean'
-    },
-    {
-      name: 'reminderMinutesBeforeStart',
-      label: 'Напоминание (минуты)',
-      type: 'number',
-      placeholder: '15'
-    }
-  ], [users, rooms]);
 
   useEffect(() => {
     setHeader({
@@ -675,14 +460,6 @@ export default function Events() {
 
       <Group justify="space-between" mb="md">
         <Title order={2}>События</Title>
-        <Group gap="xs">
-          <Button
-            leftSection={<IconPlus size={18} />}
-            onClick={() => setEventModalOpened(true)}
-          >
-            Создать событие
-          </Button>
-        </Group>
       </Group>
 
       {/* Объединенный список событий */}
@@ -847,32 +624,6 @@ export default function Events() {
           </ScrollArea.Autosize>
         ) : null}
       </Box>
-
-      {/* Modal для создания события */}
-      <DynamicFormModal
-        opened={eventModalOpened}
-        onClose={() => {
-          setEventModalOpened(false);
-          setEventsError(null);
-        }}
-        title="Создать событие"
-        mode="create"
-        fields={eventFormFields}
-        initialValues={{
-          subject: '',
-          body: '',
-          startDateTime: '',
-          endDateTime: '',
-          timeZone: 'Europe/Moscow',
-          location: '',
-          attendees: [],
-          isAllDay: false,
-          reminderMinutesBeforeStart: 15
-        }}
-        onSubmit={handleCreateEvent}
-        error={eventsError}
-        loading={loadingEvents}
-      />
     </Box>
   );
 }
