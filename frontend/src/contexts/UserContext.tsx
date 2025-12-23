@@ -23,7 +23,7 @@ type UserContextTypes = {
   token: string | null;
   login: (user: User, token: string) => void;
   logout: () => void;
-  refreshAccessToken: () => void;
+  refreshAccessToken: () => Promise<string | null>;
   setUser: React.Dispatch<React.SetStateAction<User | null>>;
 };
 
@@ -183,7 +183,7 @@ export const UserContextProvider = ({ children }: Props) => {
     localStorage.removeItem('domain');
   };
 
-  const refreshAccessToken = async () => {
+  const refreshAccessToken = async (): Promise<string | null> => {
     const response = await fetch(`${API}/refresh-token`, {
       method: 'POST',
       credentials: 'include'

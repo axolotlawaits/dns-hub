@@ -64,7 +64,7 @@ export const getCategories = async (req: Request, res: Response) => {
     const categories = await prisma.type.findMany({
       where: {
         model_uuid: tool.id,
-        chapter: 'ads_category',
+        chapter: 'Категория',
         parent_type: null, // Только корневые категории
       },
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
@@ -128,7 +128,7 @@ export const initCategories = async (req: Request, res: Response) => {
     const existingCount = await prisma.type.count({
       where: {
         model_uuid: tool.id,
-        chapter: 'ads_category',
+        chapter: 'Категория',
       },
     });
     if (existingCount > 0) {
@@ -160,7 +160,7 @@ export const initCategories = async (req: Request, res: Response) => {
           data: {
             ...cat,
             model_uuid: tool.id,
-            chapter: 'ads_category',
+            chapter: 'Категория',
           },
         })
       )
@@ -187,7 +187,7 @@ export const createCategory = async (req: Request, res: Response) => {
       data: {
         ...data,
         model_uuid: tool.id,
-        chapter: 'ads_category',
+        chapter: 'Категория',
       },
     });
     res.json(category);
@@ -321,7 +321,7 @@ export const getAds = async (req: Request, res: Response) => {
     ]);
 
     res.json({
-      ads,
+      shops: ads,
       pagination: {
         page: pageNum,
         limit: limitNum,

@@ -16,7 +16,7 @@ import logsRouter from './routes/app/logs.js'
 import meterReadingRouter from './routes/aho/meterReading.js'
 import searchRouter from './routes/app/search.js'
 import profileRouter from './routes/app/profile.js'
-import birthdayRouter from './routes/app/birthday.js'
+import eventsRouter from './routes/app/events.js'
 import bookmarksRouter from './routes/app/bookmarks.js'
 import notificationRouter from './routes/app/notification.js'
 import correspondenceRouter from './routes/aho/correspondence.js'
@@ -37,15 +37,18 @@ import trassirRouter from './routes/retail/trassir.js'
 import shopRouter from './routes/retail/shop.js'
 import adminRouter from './routes/admin.js'
 import telegramRouter  from './routes/app/telegram.js'
+import exchangeRouter from './routes/app/exchange.js'
 import bugReportsRouter from './routes/app/bugReports.js'
 import branchesRouter from './routes/admin/branches.js'
 import usersRouter from './routes/admin/users.js'
 import analyticsRouter from './routes/admin/analytics.js'
 import auditRouter from './routes/admin/audit.js'
+import pollRouter from './routes/app/poll.js'
 
 import fs from 'fs'
 import cookieParser from 'cookie-parser'
 import { refreshToken } from './middleware/auth.js';
+import { requireHTTPS, hsts, clearSensitiveData } from './middleware/security.js';
 import { createServer } from 'http';
 import { SocketIOService } from './socketio.js';
 import { telegramService } from './controllers/app/telegram.js';
@@ -113,6 +116,10 @@ const metricsMiddleware = promBundle({
 // Trust proxy для правильного определения IP адресов
 app.set('trust proxy', 1);
 
+// Security middleware - применяем до всех роутов
+app.use(hsts); // HSTS headers для HTTPS соединений
+app.use(clearSensitiveData); // Очистка чувствительных данных после запроса
+
 // CORS должен идти ДО любых лимитеров и роутов, чтобы preflight получал заголовки
 app.use(cors(corsOptions))
 // Явная обработка preflight (без path-to-regexp конфликтов)
@@ -158,6 +165,17 @@ app.use('/hub-api/radio', radioRouter)
 app.use('/hub-api/profile', profileRouter)
 app.use('/hub-api/telegram', telegramRouter)
 
+// Логирование всех запросов к Exchange ДО роутера
+app.use('/hub-api/exchange', (req, res, next) => {
+  console.log(`[Server] 🌐 Exchange request received: ${req.method} ${req.path}`);
+  console.log(`[Server] 🌐 Full URL: ${req.url}`);
+  console.log(`[Server] 🌐 Query:`, req.query);
+  console.log(`[Server] 🌐 Headers authorization:`, req.headers.authorization ? 'present' : 'missing');
+  next();
+});
+
+app.use('/hub-api/exchange', exchangeRouter)
+
 // Ленивая загрузка merch-bot роутера (только если боты включены)
 if (process.env.ENABLE_BOTS !== 'false') {
   let merchBotRouterLoaded = false;
@@ -189,9 +207,10 @@ if (process.env.ENABLE_BOTS !== 'false') {
   });
 }
 
-app.use('/hub-api/birthday', birthdayRouter)
+app.use('/hub-api/events', eventsRouter)
 app.use('/hub-api/bookmarks', bookmarksRouter)
 app.use('/hub-api/notifications', notificationRouter)
+app.use('/hub-api/polls', pollRouter)
 app.use('/hub-api/aho/meter-reading', meterReadingRouter)
 app.use('/hub-api/aho/correspondence', correspondenceRouter)
 app.use('/hub-api/accounting/supply-docs', supplydocsRouter)

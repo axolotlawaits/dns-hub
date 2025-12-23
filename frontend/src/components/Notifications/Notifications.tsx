@@ -178,8 +178,9 @@ function NotificationsList() {
   const visibleNotifications = showAll ? allNotifications : unreadNotifications;
 
   return (
-    <Box className="notifications-widget">
-      <Group justify="space-between" mb="md">
+    <Box style={{ padding: '0 12px 12px 0', width: '100%' }}>
+      <Box className="notifications-widget">
+        <Group justify="space-between" mb="md">
         <Group gap="sm">
           <ThemeIcon size="md" color="blue" variant="light">
             <IconBell size={20} />
@@ -269,6 +270,7 @@ function NotificationsList() {
           })
         )}
       </div>
+      </Box>
     </Box>
   );
 }

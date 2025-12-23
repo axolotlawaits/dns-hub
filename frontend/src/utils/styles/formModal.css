@@ -386,13 +386,6 @@
   gap: 16px;
 }
 
-@media (max-width: 768px) {
-  .file-fields-grid,
-  .construction-fields-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
 .attachment-item {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -1116,19 +1109,6 @@
   vertical-align: middle;
 }
 
-/* Адаптивность для групп полей */
-@media (max-width: 768px) {
-  .form-modal .field-group {
-    flex-direction: column;
-    gap: 0;
-  }
-  
-  .form-modal .field-group .field-item {
-    margin-bottom: 16px;
-    margin-right: 0;
-  }
-}
-
 /* Стили для групп из 2 полей */
 .form-modal .field-group-2 .field-item {
   flex: 1 1 0; /* Равномерное распределение пространства */
@@ -1149,16 +1129,6 @@
 
 .form-modal .field-group-3 .field-item:last-child {
   margin-right: 0;
-}
-
-@media (max-width: 1024px) {
-  .form-modal .field-group-3 {
-    flex-wrap: wrap;
-  }
-  
-  .form-modal .field-group-3 .field-item {
-    flex: 1 1 calc(50% - var(--space-sm));
-  }
 }
 
 /* ========================================
@@ -1219,15 +1189,6 @@
   }
 }
 
-/* Адаптивность для мобильных устройств */
-@media (max-width: 768px) {
-  .file-cards-slider > div,
-  .construction-cards-slider > div {
-    min-width: 320px;
-    max-width: 380px;
-  }
-}
-
 /* Стили для вертикального отображения карточек в форме */
 .file-cards-vertical > div,
 .construction-cards-vertical > div {
@@ -1278,12 +1239,6 @@
 .construction-cards-slider > div:hover {
   transform: translateY(-4px) scale(1.02);
   box-shadow: 0 12px 32px var(--color-accent-15);
-}
-
-@media (max-width: 768px) {
-  .form-modal .field-group-3 .field-item {
-    flex: 1 1 100%;
-  }
 }
 
 /* ========================================

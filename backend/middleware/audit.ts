@@ -72,11 +72,15 @@ async function logAction(
   }
 }
 
+// Системный UUID для неудачных попыток входа (когда userId неизвестен)
+const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
+
 /**
  * Вспомогательная функция для логирования действий вручную
+ * userId может быть null для неудачных попыток входа (будет использован системный UUID)
  */
 export const logUserAction = async (
-  userId: string,
+  userId: string | null,
   userEmail: string | null,
   action: string,
   entityType?: string,
@@ -86,9 +90,12 @@ export const logUserAction = async (
   userAgent?: string
 ): Promise<void> => {
   try {
+    // Для неудачных попыток входа используем системный UUID
+    const finalUserId = userId || SYSTEM_USER_ID;
+    
     await prisma.auditLog.create({
       data: {
-        userId,
+        userId: finalUserId,
         userEmail,
         action,
         entityType: entityType || null,

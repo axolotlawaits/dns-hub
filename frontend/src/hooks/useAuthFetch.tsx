@@ -1,4 +1,3 @@
-import { API } from "../config/constants"
 import { useUserContext } from "./useUserContext"
 import { useNavigate } from "react-router"
 
@@ -8,7 +7,10 @@ const useAuthFetch = () => {
 
   const authFetch = async (url: string, options: RequestInit = {}) => {
     const headers = new Headers(options.headers)
-    headers.set('Content-Type', 'application/json')
+    // Не устанавливаем Content-Type для FormData - браузер сделает это автоматически с правильным boundary
+    if (!(options.body instanceof FormData)) {
+      headers.set('Content-Type', 'application/json')
+    }
     if (token) {
       headers.set('Authorization', `Bearer ${token}`)
     }

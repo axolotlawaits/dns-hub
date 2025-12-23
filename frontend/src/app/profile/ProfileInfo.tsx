@@ -924,11 +924,19 @@ const ProfileInfo = () => {
                   >
                     Telegram
                   </Text>
+                  {telegramUserName && (
+                        <Text 
+                          size="sm"
+                          style={{ color: 'var(--theme-text-secondary)' }}
+                        >
+                          @{telegramUserName}
+                        </Text>
+                      )}
                 </Group>
                 {telegramLoading ? (
                   <Loader size="sm" />
                 ) : (
-                                  <Badge 
+                <Badge 
                   color={isTelegramConnected ? "green" : "gray"} 
                   variant="light"
                   size="sm"
@@ -942,14 +950,7 @@ const ProfileInfo = () => {
                 <>
                   {isTelegramConnected ? (
                     <Stack gap="md">
-                      {telegramUserName && (
-                        <Text 
-                          size="sm"
-                          style={{ color: 'var(--theme-text-secondary)' }}
-                        >
-                          @{telegramUserName}
-                        </Text>
-                      )}
+
                       
                       {/* Переключатели настроек Telegram */}
                       <Stack gap="xs">

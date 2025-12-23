@@ -46,7 +46,7 @@ import Merch from '../features/Retail/Merch/Merch';
 import Retail from '../features/Retail/Retail';
 import PrintService from '../features/Retail/PrintService/PrintService';
 import { Scanner } from '../features/Scanner';
-import Birthday from './Birthday';
+import Events from './Events';
 import ProfileInfo from './profile/ProfileInfo';
 import Profile from './profile/Profile';
 import Management from './profile/Management';
@@ -164,7 +164,7 @@ function App() {
             padding="md"
             navbar={{
               width: navOpened ? 225 : 80,
-              breakpoint: 'sm',
+              breakpoint: 'xl', // Установлено большое значение, чтобы не срабатывало
             }}
         
             id='page'
@@ -200,7 +200,7 @@ function App() {
                 <Route path='/profile' element={<Profile />} />
                 <Route path='/profile/info' element={<ProfileInfo />} />
                 <Route path='/profile/management' element={user.role !== 'EMPLOYEE' ? <Management /> : <Navigate to='/' />} />
-                <Route path='/birthday' element={<Birthday />} />
+                  <Route path='/events' element={<Events />} />
                 <Route path='/bookmarks' element={<Bookmarks />} />
                 <Route path='/notification' element={<Notification />} />
                 <Route path='/slider-admin' element={<SlideAdmin/>} />

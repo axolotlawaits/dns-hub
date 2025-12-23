@@ -1,7 +1,7 @@
 import News from './News';
-import Birthday from './Birthday';
+import Events from './Events';
 import Bookmarks from './Bookmarks';
-import Notifications from '../components/Notifications/Notifications';
+import Poll from './Poll';
 
 function Home() {
 
@@ -38,14 +38,14 @@ function Home() {
         flexDirection: 'column',
         gap: '20px'
       }}>
-        {/* Уведомления */}
-        <div style={{ height: '500px', flexShrink: 0 }}>
-          <Notifications />
+        {/* События */}
+        <div style={{ flex: 1 }}>
+          <Events />
         </div>
 
-        {/* Дни рождения */}
+        {/* Опросник */}
         <div style={{ flex: 1 }}>
-          <Birthday />
+          <Poll />
         </div>
       </div>
     </div>

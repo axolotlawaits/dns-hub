@@ -3,6 +3,9 @@ import { scheduleRouteDay } from '../controllers/supply/routeDay.js'
 import { dailyRKJob } from '../controllers/add/rk.js';
 import { weeklyRocDocSync } from '../controllers/accounting/roc.js';
 import { cleanupOldMusicFolders, preloadNextMonthMusic } from '../controllers/app/radio.js';
+import { SocketIOService } from '../socketio.js';
+import { exchangeService } from '../services/exchange.js';
+import { prisma } from '../server.js';
 
 export const initToolsCron = () => {
   schedule.scheduleJob('0 0 * * *', async () => {
@@ -47,6 +50,58 @@ export const initToolsCron = () => {
       }
     } catch (e) {
       console.error('Monthly music preload error', e);
+    }
+  });
+
+  // Проверка новых писем для активных пользователей через Socket.IO каждые 5 минут
+  schedule.scheduleJob('*/5 * * * *', async () => {
+    try {
+      if (!exchangeService.isConfigured()) {
+        return; // Exchange не настроен, пропускаем проверку
+      }
+
+      const socketService = SocketIOService.getInstance();
+      const connectedUserIds = socketService.getConnectedUsers();
+      
+      if (connectedUserIds.length === 0) {
+        return; // Нет активных пользователей
+      }
+
+      console.log(`[Exchange] [Cron] Checking emails for ${connectedUserIds.length} active users...`);
+
+      // Получаем email для каждого активного пользователя
+      const allUsers = await prisma.user.findMany({
+        where: {
+          id: { in: connectedUserIds }
+        },
+        select: {
+          id: true,
+          email: true
+        }
+      });
+
+      // Фильтруем только пользователей с email
+      const users = allUsers.filter(user => user.email !== null && user.email !== undefined);
+
+      console.log(`[Exchange] [Cron] Found ${users.length} active users with email`);
+
+      // Проверяем письма для каждого активного пользователя
+      for (const user of users) {
+        if (!user.email) continue;
+        
+        try {
+          await exchangeService.checkNewEmailsAndNotify(user.id, user.email);
+          // Небольшая задержка между проверками, чтобы не перегружать Exchange
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (error: any) {
+          console.error(`[Exchange] [Cron] Error checking emails for user ${user.id}:`, error.message);
+          // Продолжаем проверку для других пользователей
+        }
+      }
+
+      console.log(`[Exchange] [Cron] ✅ Finished checking emails for active users`);
+    } catch (e) {
+      console.error('[Exchange] [Cron] Email check error:', e);
     }
   });
 }

@@ -3,6 +3,8 @@ import { NextFunction, Request, Response } from "express";
 import sharp from 'sharp';
 import { PrismaClient } from '@prisma/client';
 import { prisma } from '../server.js';
+import { checkLoginRateLimit, resetLoginRateLimit, maskLogin } from './rateLimiter.js';
+import { logUserAction } from '../middleware/audit.js';
 
 interface LdapUser {
     department?: string;
@@ -208,17 +210,32 @@ async function processUserData(entry: any, login: string) {
 }
 
 export async function ldapAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const startTime = Date.now();
+    const minResponseTime = 500; // Минимальное время ответа для защиты от timing attacks
+    
     const { login: rawLogin, pass: rawPass } = req.body;
 
     // Обрезаем пробелы в логине и пароле
     const login = typeof rawLogin === 'string' ? rawLogin.trim() : rawLogin;
     const pass = typeof rawPass === 'string' ? rawPass.trim() : rawPass;
+    
+    // Получаем IP адрес для rate limiting
+    const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+    const userAgent = req.get('user-agent') || null;
+    const maskedLogin = maskLogin(login);
 
-    console.log(`[LDAP Auth] Starting authentication for user: ${login}`);
+    console.log(`[LDAP Auth] Starting authentication for user: ${maskedLogin}`);
 
     // Валидация входных данных
     if (!login || !pass) {
         console.log(`[LDAP Auth] Missing credentials - login: ${!!login}, pass: ${!!pass}`);
+        
+        // Унифицируем время ответа
+        const elapsed = Date.now() - startTime;
+        if (elapsed < minResponseTime) {
+            await new Promise(resolve => setTimeout(resolve, minResponseTime - elapsed));
+        }
+        
         res.status(400).json({ message: 'Login and password are required' });
         return;
     }
@@ -226,6 +243,12 @@ export async function ldapAuth(req: Request, res: Response, next: NextFunction):
     // Дополнительная валидация
     if (typeof login !== 'string' || typeof pass !== 'string') {
         console.log(`[LDAP Auth] Invalid credential types - login: ${typeof login}, pass: ${typeof pass}`);
+        
+        const elapsed = Date.now() - startTime;
+        if (elapsed < minResponseTime) {
+            await new Promise(resolve => setTimeout(resolve, minResponseTime - elapsed));
+        }
+        
         res.status(400).json({ message: 'Login and password must be strings' });
         return;
     }
@@ -233,13 +256,115 @@ export async function ldapAuth(req: Request, res: Response, next: NextFunction):
     // Проверка длины и содержимого (после обрезки пробелов)
     if (login.length < 1 || login.length > 50) {
         console.log(`[LDAP Auth] Invalid login length: ${login.length}`);
+        
+        const elapsed = Date.now() - startTime;
+        if (elapsed < minResponseTime) {
+            await new Promise(resolve => setTimeout(resolve, minResponseTime - elapsed));
+        }
+        
         res.status(400).json({ message: 'Login must be between 1 and 50 characters' });
         return;
     }
 
     if (pass.length < 1 || pass.length > 128) {
         console.log(`[LDAP Auth] Invalid password length: ${pass.length}`);
+        
+        const elapsed = Date.now() - startTime;
+        if (elapsed < minResponseTime) {
+            await new Promise(resolve => setTimeout(resolve, minResponseTime - elapsed));
+        }
+        
         res.status(400).json({ message: 'Password must be between 1 and 128 characters' });
+        return;
+    }
+
+    // Rate limiting по IP адресу
+    const ipRateLimit = checkLoginRateLimit(
+        Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
+        5, // Максимум 5 попыток
+        15 * 60 * 1000, // 15 минут
+        30 * 60 * 1000 // 30 минут блокировки
+    );
+    
+    if (!ipRateLimit.allowed) {
+        const resetTime = ipRateLimit.blockedUntil 
+            ? new Date(ipRateLimit.blockedUntil).toLocaleString('ru-RU')
+            : new Date(ipRateLimit.resetTime).toLocaleString('ru-RU');
+        
+        console.warn(`[LDAP Auth] IP rate limit exceeded: ${maskedLogin} from IP ${ipAddress}`);
+        
+        // Логируем попытку превышения лимита
+        await logUserAction(
+            null as string | null, // userId (null для неудачных попыток)
+            null, // userEmail
+            'LOGIN_RATE_LIMIT_EXCEEDED',
+            'Authentication',
+            undefined,
+            {
+                login: maskedLogin,
+                ipAddress: Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
+                userAgent,
+                reason: 'IP rate limit exceeded'
+            },
+            Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
+            userAgent || undefined
+        ).catch(() => {});
+        
+        const elapsed = Date.now() - startTime;
+        if (elapsed < minResponseTime) {
+            await new Promise(resolve => setTimeout(resolve, minResponseTime - elapsed));
+        }
+        
+        res.status(429).json({ 
+            message: 'Too many login attempts',
+            details: `Слишком много попыток входа. Пожалуйста, попробуйте позже после ${resetTime}.`,
+            retryAfter: Math.ceil((ipRateLimit.blockedUntil || ipRateLimit.resetTime - Date.now()) / 1000)
+        });
+        return;
+    }
+
+    // Rate limiting по логину
+    const loginRateLimit = checkLoginRateLimit(
+        login.toLowerCase(),
+        3, // Максимум 3 неудачные попытки для одного логина
+        15 * 60 * 1000, // 15 минут
+        30 * 60 * 1000 // 30 минут блокировки
+    );
+    
+    if (!loginRateLimit.allowed) {
+        const resetTime = loginRateLimit.blockedUntil 
+            ? new Date(loginRateLimit.blockedUntil).toLocaleString('ru-RU')
+            : new Date(loginRateLimit.resetTime).toLocaleString('ru-RU');
+        
+        console.warn(`[LDAP Auth] Login rate limit exceeded: ${maskedLogin}`);
+        
+        // Логируем попытку превышения лимита
+        await logUserAction(
+            null as string | null,
+            null,
+            'LOGIN_RATE_LIMIT_EXCEEDED',
+            'Authentication',
+            undefined,
+            {
+                login: maskedLogin,
+                ipAddress: Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
+                userAgent,
+                reason: 'Login rate limit exceeded'
+            },
+            Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
+            userAgent || undefined
+        ).catch(() => {});
+        
+        const elapsed = Date.now() - startTime;
+        if (elapsed < minResponseTime) {
+            await new Promise(resolve => setTimeout(resolve, minResponseTime - elapsed));
+        }
+        
+        // Всегда возвращаем одинаковое сообщение для защиты от перечисления пользователей
+        res.status(401).json({ 
+            message: 'Invalid credentials',
+            details: 'Проверьте правильность введенных данных'
+        });
         return;
     }
 
@@ -321,6 +446,8 @@ export async function ldapAuth(req: Request, res: Response, next: NextFunction):
 
         console.log(`[LDAP Auth] Authentication successful for user: ${login}`);
         res.locals.user = user;
+        // Сохраняем пароль временно для возможного сохранения в Exchange (будет удален после использования)
+        res.locals.userPassword = pass;
         next();
     } catch (error) {
         console.error(`[LDAP Auth] Authentication failed for user: ${login}`, error);
@@ -365,12 +492,137 @@ export async function ldapAuth(req: Request, res: Response, next: NextFunction):
 
 
 export async function updateUserPhoto(req: Request, res: Response): Promise<void> {
+    const startTime = Date.now();
+    const minResponseTime = 500; // Минимальное время ответа для защиты от timing attacks
+    
     try {
+        const token = (req as any).token;
+        if (!token || !token.userId) {
+            const elapsed = Date.now() - startTime;
+            if (elapsed < minResponseTime) {
+                await new Promise(resolve => setTimeout(resolve, minResponseTime - elapsed));
+            }
+            res.status(401).json({ message: 'Unauthorized' });
+            return;
+        }
+
         const { login: rawLogin, photo, password: rawPassword } = req.body;
 
         // Обрезаем пробелы в логине и пароле
         const login = typeof rawLogin === 'string' ? rawLogin.trim() : rawLogin;
         const password = typeof rawPassword === 'string' ? rawPassword.trim() : rawPassword;
+        
+        // Получаем IP адрес и User-Agent для логирования
+        const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+        const userAgent = req.get('user-agent') || null;
+        const maskedLogin = maskLogin(login);
+
+        // Проверка прав доступа: пользователь может обновлять только свое фото
+        const user = await prisma.user.findUnique({
+            where: { id: token.userId },
+            select: { login: true, email: true }
+        });
+
+        if (!user) {
+            const elapsed = Date.now() - startTime;
+            if (elapsed < minResponseTime) {
+                await new Promise(resolve => setTimeout(resolve, minResponseTime - elapsed));
+            }
+            
+            await logUserAction(
+                token.userId,
+                null,
+                'PHOTO_UPDATE_FAILED',
+                'User',
+                token.userId,
+                {
+                    login: maskedLogin,
+                    ipAddress: Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
+                    userAgent,
+                    reason: 'User not found in database'
+                },
+                Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
+                userAgent || undefined
+            ).catch(() => {});
+            
+            res.status(404).json({ message: 'User not found' });
+            return;
+        }
+
+        // Проверяем, что login из запроса соответствует авторизованному пользователю
+        if (user.login.toLowerCase() !== login.toLowerCase()) {
+            const elapsed = Date.now() - startTime;
+            if (elapsed < minResponseTime) {
+                await new Promise(resolve => setTimeout(resolve, minResponseTime - elapsed));
+            }
+            
+            console.warn(`[Photo Update] Security: User ${token.userId} attempted to update photo for user ${login}`);
+            
+            await logUserAction(
+                token.userId,
+                user.email || null,
+                'PHOTO_UPDATE_UNAUTHORIZED_ATTEMPT',
+                'User',
+                login,
+                {
+                    attemptedLogin: maskedLogin,
+                    actualLogin: maskLogin(user.login),
+                    ipAddress: Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
+                    userAgent
+                },
+                Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
+                userAgent || undefined
+            ).catch(() => {});
+            
+            res.status(403).json({ 
+                message: 'Access denied: You can only update your own photo' 
+            });
+            return;
+        }
+
+        // Rate limiting по IP адресу
+        const ipRateLimit = checkLoginRateLimit(
+            Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
+            3, // Максимум 3 попытки
+            15 * 60 * 1000, // 15 минут
+            30 * 60 * 1000 // 30 минут блокировки
+        );
+        
+        if (!ipRateLimit.allowed) {
+            const resetTime = ipRateLimit.blockedUntil 
+                ? new Date(ipRateLimit.blockedUntil).toLocaleString('ru-RU')
+                : new Date(ipRateLimit.resetTime).toLocaleString('ru-RU');
+            
+            console.warn(`[Photo Update] IP rate limit exceeded: ${maskedLogin} from IP ${ipAddress}`);
+            
+            await logUserAction(
+                token.userId,
+                user.email || null,
+                'PHOTO_UPDATE_RATE_LIMIT_EXCEEDED',
+                'User',
+                token.userId,
+                {
+                    login: maskedLogin,
+                    ipAddress: Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
+                    userAgent,
+                    reason: 'IP rate limit exceeded'
+                },
+                Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
+                userAgent || undefined
+            ).catch(() => {});
+            
+            const elapsed = Date.now() - startTime;
+            if (elapsed < minResponseTime) {
+                await new Promise(resolve => setTimeout(resolve, minResponseTime - elapsed));
+            }
+            
+            res.status(429).json({ 
+                message: 'Too many photo update attempts',
+                details: `Слишком много попыток обновления фото. Пожалуйста, попробуйте позже после ${resetTime}.`,
+                retryAfter: Math.ceil((ipRateLimit.blockedUntil || ipRateLimit.resetTime - Date.now()) / 1000)
+            });
+            return;
+        }
 
         // Валидация входных данных
         if (!login || !photo || !password) {
@@ -379,7 +631,13 @@ export async function updateUserPhoto(req: Request, res: Response): Promise<void
             if (!photo) missingFields.push('photo');
             if (!password) missingFields.push('password');
 
-            console.log('Photo update request rejected - missing required fields:', missingFields.join(', '));
+            console.log(`[Photo Update] Missing required fields for user: ${maskedLogin}`);
+            
+            const elapsed = Date.now() - startTime;
+            if (elapsed < minResponseTime) {
+                await new Promise(resolve => setTimeout(resolve, minResponseTime - elapsed));
+            }
+            
             res.status(400).json({
                 message: 'Login, photo, and password are required',
                 missingFields,
@@ -388,7 +646,35 @@ export async function updateUserPhoto(req: Request, res: Response): Promise<void
             return;
         }
 
-        console.log(`Starting photo update process for user: ${login}`);
+        // Валидация формата логина (защита от LDAP инъекций)
+        if (login.length < 1 || login.length > 50) {
+            const elapsed = Date.now() - startTime;
+            if (elapsed < minResponseTime) {
+                await new Promise(resolve => setTimeout(resolve, minResponseTime - elapsed));
+            }
+            
+            res.status(400).json({
+                message: 'Invalid login format',
+                details: 'Login must be between 1 and 50 characters'
+            });
+            return;
+        }
+
+        // Проверка размера base64 строки (до декодирования)
+        if (photo.length > 7 * 1024 * 1024) { // ~7MB base64 = ~5MB после декодирования
+            const elapsed = Date.now() - startTime;
+            if (elapsed < minResponseTime) {
+                await new Promise(resolve => setTimeout(resolve, minResponseTime - elapsed));
+            }
+            
+            res.status(413).json({
+                message: 'Photo data is too large',
+                details: 'Maximum size is 5MB after encoding'
+            });
+            return;
+        }
+
+        console.log(`[Photo Update] Starting photo update process for user: ${maskedLogin}`);
 
         // Проверка валидности base64
         if (!/^[A-Za-z0-9+/]+={0,2}$/.test(photo)) {
@@ -415,6 +701,28 @@ export async function updateUserPhoto(req: Request, res: Response): Promise<void
         try {
             photoBuffer = await processLdapPhoto(photo);
         } catch (error) {
+            const elapsed = Date.now() - startTime;
+            if (elapsed < minResponseTime) {
+                await new Promise(resolve => setTimeout(resolve, minResponseTime - elapsed));
+            }
+            
+            await logUserAction(
+                token.userId,
+                user.email || null,
+                'PHOTO_UPDATE_FAILED',
+                'User',
+                token.userId,
+                {
+                    login: maskedLogin,
+                    ipAddress: Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
+                    userAgent,
+                    reason: 'Invalid image data',
+                    error: error instanceof Error ? error.message : 'Unknown error'
+                },
+                Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
+                userAgent || undefined
+            ).catch(() => {});
+            
             res.status(400).json({
                 message: 'Invalid image data',
                 details: error instanceof Error ? error.message : 'The provided image could not be processed'
@@ -426,32 +734,35 @@ export async function updateUserPhoto(req: Request, res: Response): Promise<void
         const client = await createLdapClient();
 
         try {
+            // Экранируем специальные символы в логине для безопасности LDAP
+            const escapedLogin = login.replace(/[\\*()]/g, '\\$&');
+            
             // Аутентификация в LDAP - пробуем разные форматы
             let bindSuccess = false;
             let lastError = null;
             
             // Попытка 1: username@dns-shop.ru (тестируем первым)
             try {
-                await client.bind(`${login}@dns-shop.ru`, password);
-                console.log(`[Photo Update] Successfully bound user: ${login}@dns-shop.ru`);
+                await client.bind(`${escapedLogin}@dns-shop.ru`, password);
+                console.log(`[Photo Update] Successfully bound user: ${maskedLogin}@dns-shop.ru`);
                 bindSuccess = true;
             } catch (bindError1) {
                 lastError = bindError1;
-                console.log(`[Photo Update] First bind attempt failed: ${login}@dns-shop.ru`);
+                console.log(`[Photo Update] First bind attempt failed: ${maskedLogin}@dns-shop.ru`);
                 
                 // Попытка 2: username@partner.ru
                 try {
-                    await client.bind(`${login}@partner.ru`, password);
-                    console.log(`[Photo Update] Successfully bound user: ${login}@partner.ru`);
+                    await client.bind(`${escapedLogin}@partner.ru`, password);
+                    console.log(`[Photo Update] Successfully bound user: ${maskedLogin}@partner.ru`);
                     bindSuccess = true;
                 } catch (bindError2) {
                     lastError = bindError2;
-                    console.log(`[Photo Update] Second bind attempt failed: ${login}@partner.ru`);
+                    console.log(`[Photo Update] Second bind attempt failed: ${maskedLogin}@partner.ru`);
                     
                     // Попытка 3: полный DN формат
                     try {
-                        await client.bind(`CN=${login},OU=DNS Users,DC=partner,DC=ru`, password);
-                        console.log(`[Photo Update] Successfully bound user with DN format: ${login}`);
+                        await client.bind(`CN=${escapedLogin},OU=DNS Users,DC=partner,DC=ru`, password);
+                        console.log(`[Photo Update] Successfully bound user with DN format: ${maskedLogin}`);
                         bindSuccess = true;
                     } catch (bindError3) {
                         lastError = bindError3;
@@ -461,13 +772,61 @@ export async function updateUserPhoto(req: Request, res: Response): Promise<void
             }
             
             if (!bindSuccess) {
-                throw lastError || new Error('All bind attempts failed');
+                const elapsed = Date.now() - startTime;
+                if (elapsed < minResponseTime) {
+                    await new Promise(resolve => setTimeout(resolve, minResponseTime - elapsed));
+                }
+                
+                await logUserAction(
+                    token.userId,
+                    user.email || null,
+                    'PHOTO_UPDATE_FAILED',
+                    'User',
+                    token.userId,
+                    {
+                        login: maskedLogin,
+                        ipAddress: Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
+                        userAgent,
+                        reason: 'LDAP authentication failed',
+                        error: lastError instanceof Error ? lastError.message : 'All bind attempts failed'
+                    },
+                    Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
+                    userAgent || undefined
+                ).catch(() => {});
+                
+                // Всегда возвращаем одинаковое сообщение для защиты от timing attacks
+                res.status(401).json({ 
+                    message: 'Authentication failed',
+                    details: 'Invalid credentials'
+                });
+                return;
             }
             
             const entry = await searchUser(client, login);
 
             const userDn = entry.dn;
             if (!userDn) {
+                const elapsed = Date.now() - startTime;
+                if (elapsed < minResponseTime) {
+                    await new Promise(resolve => setTimeout(resolve, minResponseTime - elapsed));
+                }
+                
+                await logUserAction(
+                    token.userId,
+                    user.email || null,
+                    'PHOTO_UPDATE_FAILED',
+                    'User',
+                    token.userId,
+                    {
+                        login: maskedLogin,
+                        ipAddress: Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
+                        userAgent,
+                        reason: 'User DN not found'
+                    },
+                    Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
+                    userAgent || undefined
+                ).catch(() => {});
+                
                 res.status(404).json({ 
                     message: 'User DN not found',
                     details: 'The user was authenticated but their distinguished name was not found'
@@ -475,7 +834,7 @@ export async function updateUserPhoto(req: Request, res: Response): Promise<void
                 return;
             }
 
-            console.log(`Found user DN: ${userDn}`);
+            console.log(`[Photo Update] Found user DN for: ${maskedLogin}`);
 
             // Обновление фото в LDAP
             const change = new Change({
@@ -487,7 +846,7 @@ export async function updateUserPhoto(req: Request, res: Response): Promise<void
             });
 
             await client.modify(userDn, change);
-            console.log(`Photo updated in LDAP for user ${login}`);
+            console.log(`[Photo Update] Photo updated in LDAP for user: ${maskedLogin}`);
 
             // Обновление фото в базе данных
             try {
@@ -495,9 +854,35 @@ export async function updateUserPhoto(req: Request, res: Response): Promise<void
                     where: { login },
                     data: { image: photoBase64 }
                 });
-                console.log(`Photo updated in database for user ${login}`);
+                console.log(`[Photo Update] Photo updated in database for user: ${maskedLogin}`);
             } catch (dbError) {
-                console.error('Database update failed:', dbError);
+                console.error('[Photo Update] Database update failed:', dbError);
+                // Не прерываем выполнение, так как LDAP обновление успешно
+            }
+
+            // Логируем успешное обновление фото
+            await logUserAction(
+                token.userId,
+                user.email || null,
+                'PHOTO_UPDATE_SUCCESS',
+                'User',
+                token.userId,
+                {
+                    login: maskedLogin,
+                    ipAddress: Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
+                    userAgent,
+                    originalSize: photoSize,
+                    processedSize: photoBuffer.length,
+                    compressionRatio: `${Math.round(photoBuffer.length / photoSize * 100)}%`
+                },
+                Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
+                userAgent || undefined
+            ).catch(() => {});
+
+            // Унифицируем время ответа
+            const elapsed = Date.now() - startTime;
+            if (elapsed < minResponseTime) {
+                await new Promise(resolve => setTimeout(resolve, minResponseTime - elapsed));
             }
 
             // Успешный ответ
@@ -512,14 +897,41 @@ export async function updateUserPhoto(req: Request, res: Response): Promise<void
             });
 
         } catch (error) {
-            console.error('Photo update process failed:', error);
+            console.error(`[Photo Update] Photo update process failed for user: ${maskedLogin}`, error);
+            
+            const elapsed = Date.now() - startTime;
+            if (elapsed < minResponseTime) {
+                await new Promise(resolve => setTimeout(resolve, minResponseTime - elapsed));
+            }
+            
+            await logUserAction(
+                token.userId,
+                user.email || null,
+                'PHOTO_UPDATE_FAILED',
+                'User',
+                token.userId,
+                {
+                    login: maskedLogin,
+                    ipAddress: Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
+                    userAgent,
+                    reason: 'Unexpected error',
+                    error: error instanceof Error ? error.message : 'Unknown error'
+                },
+                Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
+                userAgent || undefined
+            ).catch(() => {});
+            
             res.status(500).json({
                 message: 'Photo update failed',
                 error: error instanceof Error ? error.message : 'Unknown error',
                 details: 'Please try again later or contact support'
             });
         } finally {
-            await client.unbind();
+            try {
+                await client.unbind();
+            } catch (unbindError) {
+                console.error(`[Photo Update] Error closing LDAP connection:`, unbindError);
+            }
         }
     } catch (error) {
         if (error instanceof Error && error.message.includes('request entity too large')) {

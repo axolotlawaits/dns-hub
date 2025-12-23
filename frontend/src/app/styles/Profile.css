@@ -495,20 +495,6 @@
   }
 }
 
-@media (max-width: 480px) {
-  .profile-container {
-    padding: var(--space-2);
-  }
-  
-  .access-select-block {
-    padding: var(--space-4);
-  }
-  
-  .tool-card {
-    padding: var(--space-3);
-  }
-}
-
 /* Темная тема */
 [data-mantine-color-scheme="dark"] .profile-main-card,
 [data-mantine-color-scheme="dark"] .notifications-card,

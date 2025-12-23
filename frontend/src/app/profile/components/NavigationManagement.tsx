@@ -19,6 +19,7 @@ import {
   Box
 } from '@mantine/core';
 import { IconEdit, IconTrash, IconPlus, IconAlertCircle, IconMenu2, IconChevronRight } from '@tabler/icons-react';
+import * as TablerIcons from '@tabler/icons-react';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { FilterGroup } from '../../../utils/filter';
 import useAuthFetch from '../../../hooks/useAuthFetch';
@@ -152,8 +153,20 @@ export default function NavigationManagement() {
         parentId = null;
       }
 
+      // Нормализуем значение иконки - убеждаемся, что это полное название с префиксом "Icon"
+      let iconValue = formData.icon || '';
+      if (iconValue && !iconValue.startsWith('Icon')) {
+        // Если значение без префикса "Icon", добавляем его
+        iconValue = `Icon${iconValue.charAt(0).toUpperCase() + iconValue.slice(1)}`;
+      }
+      // Если значение пустое, используем значение из selectedItem (при редактировании)
+      if (!iconValue && selectedItem?.icon) {
+        iconValue = selectedItem.icon;
+      }
+
       const data = {
         ...formData,
+        icon: iconValue,
         link,
         order,
         parent_id: parentId,
@@ -512,7 +525,15 @@ export default function NavigationManagement() {
                             >
                               <Table.Td>
                                 <Group gap="xs">
-                                  <IconMenu2 size={16} />
+                                  {(() => {
+                                    const IconComponent = TablerIcons[item.icon as keyof typeof TablerIcons] as 
+                                      React.ComponentType<{ size?: number; stroke?: number }> | undefined;
+                                    return IconComponent ? (
+                                      <IconComponent size={16} stroke={1.5} />
+                                    ) : (
+                                      <IconMenu2 size={16} />
+                                    );
+                                  })()}
                                   <Text fw={selectedRootItem === item.id ? 600 : 400}>
                                     {item.name}
                                   </Text>
@@ -663,7 +684,22 @@ export default function NavigationManagement() {
                               </Group>
                             </Table.Td>
                             <Table.Td>
-                              <Text size="sm" c="dimmed">{item.icon}</Text>
+                              <Group gap="xs">
+                                {(() => {
+                                  const IconComponent = TablerIcons[item.icon as keyof typeof TablerIcons] as 
+                                    React.ComponentType<{ size?: number; stroke?: number }> | undefined;
+                                  return IconComponent ? (
+                                    <>
+                                      <IconComponent size={18} stroke={1.5} />
+                                      <Text size="xs" c="dimmed" style={{ fontFamily: 'monospace' }}>
+                                        {item.icon}
+                                      </Text>
+                                    </>
+                                  ) : (
+                                    <Text size="sm" c="dimmed">{item.icon || '—'}</Text>
+                                  );
+                                })()}
+                              </Group>
                             </Table.Td>
                             <Table.Td>
                               <Text size="sm" c="dimmed">{item.link}</Text>

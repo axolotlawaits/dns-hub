@@ -316,57 +316,6 @@
   animation: slideInLeft 200ms ease-out;
 }
 
-/* Адаптивность */
-@media (max-width: 768px) {
-  .modern-navbar {
-    width: 100% !important;
-    height: auto;
-    border-right: none;
-    border-bottom: 1px solid var(--theme-border-primary);
-  }
-  
-  .modern-navbar.collapsed {
-    width: 100% !important;
-  }
-  
-  .navbar-content {
-    padding: var(--space-2);
-  }
-  
-  .nav-options {
-    flex-direction: row;
-    overflow-x: auto;
-    gap: var(--space-2);
-  }
-  
-  .nav-option {
-    min-width: 140px;
-    flex-shrink: 0;
-  }
-  
-  .nav-option.collapsed {
-    min-width: 70px;
-  }
-  
-  .nav-option-content {
-    min-height: 48px;
-    padding: var(--space-3);
-  }
-  
-  .nav-option-icon {
-    width: 24px;
-    height: 24px;
-  }
-  
-  .nav-option-name {
-    font-size: 16px;
-  }
-  
-  .nav-option-description {
-    font-size: 14px;
-  }
-}
-
 /* Темная тема - дополнительные стили */
 [data-theme="dark"] .logo-icon {
   background: linear-gradient(135deg, var(--color-primary-400), var(--color-primary-300));

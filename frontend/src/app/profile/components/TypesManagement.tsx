@@ -113,6 +113,31 @@ export default function TypesManagement() {
     setDeleteModalOpened(true);
   };
 
+  const handleEditChapter = (toolId: string, chapterName: string) => {
+    // Находим первый тип в разделе для редактирования
+    const chapterTypes = types.filter(t => 
+      t.model_uuid === toolId && 
+      (t.chapter || 'Без раздела') === chapterName
+    );
+    if (chapterTypes.length > 0) {
+      handleEdit(chapterTypes[0]);
+    }
+  };
+
+  const handleDeleteChapter = (toolId: string, chapterName: string) => {
+    // Находим все типы в разделе
+    const chapterTypes = types.filter(t => 
+      t.model_uuid === toolId && 
+      (t.chapter || 'Без раздела') === chapterName
+    );
+    if (chapterTypes.length > 0) {
+      // Устанавливаем первый тип для показа модального окна
+      // В модальном окне будет информация о количестве типов для удаления
+      setSelectedType(chapterTypes[0]);
+      setDeleteModalOpened(true);
+    }
+  };
+
   const handleSave = async (formData: any) => {
     try {
       setError(null);
@@ -160,16 +185,51 @@ export default function TypesManagement() {
 
     try {
       setError(null);
-      const response = await authFetch(`${API}/type/${selectedType.id}`, {
-        method: 'DELETE',
-      });
-      if (response && response.ok) {
-        await fetchTypes();
-        setDeleteModalOpened(false);
-        setSelectedType(null);
+      
+      // Проверяем, удаляем ли мы весь раздел или один тип
+      const chapterTypes = types.filter(t => 
+        t.model_uuid === selectedType.model_uuid && 
+        (t.chapter || 'Без раздела') === (selectedType.chapter || 'Без раздела')
+      );
+      const isChapterDelete = chapterTypes.length > 1 && 
+        chapterTypes.some(t => t.id === selectedType.id);
+      
+      if (isChapterDelete) {
+        // Удаляем все типы раздела
+        const deletePromises = chapterTypes.map(type => 
+          authFetch(`${API}/type/${type.id}`, {
+            method: 'DELETE',
+          })
+        );
+        
+        const responses = await Promise.all(deletePromises);
+        const failed = responses.filter(r => !r || !r.ok);
+        
+        if (failed.length === 0) {
+          await fetchTypes();
+          setDeleteModalOpened(false);
+          setSelectedType(null);
+          // Сбрасываем выбор раздела, если он был удален
+          if (selectedToolId === selectedType.model_uuid && selectedChapter === (selectedType.chapter || 'Без раздела')) {
+            setSelectedChapter(null);
+          }
+        } else {
+          const errorData = await failed[0]?.json();
+          setError(errorData?.error || `Ошибка удаления типа. Удалено ${responses.length - failed.length} из ${responses.length}`);
+        }
       } else {
-        const errorData = await response?.json();
-        setError(errorData?.error || 'Ошибка удаления типа');
+        // Удаляем один тип
+        const response = await authFetch(`${API}/type/${selectedType.id}`, {
+          method: 'DELETE',
+        });
+        if (response && response.ok) {
+          await fetchTypes();
+          setDeleteModalOpened(false);
+          setSelectedType(null);
+        } else {
+          const errorData = await response?.json();
+          setError(errorData?.error || 'Ошибка удаления типа');
+        }
       }
     } catch (error) {
       console.error('Error deleting type:', error);
@@ -184,14 +244,41 @@ export default function TypesManagement() {
     const toolId = selectedType?.model_uuid || selectedToolId;
     const chapter = selectedType?.chapter || selectedChapter;
     
-    return types
-      .filter(type => 
-        type.model_uuid === toolId && 
-        type.chapter === chapter &&
-        type.id !== selectedType?.id &&
-        !type.parent_type // Только корневые типы могут быть родителями
-      )
-      .map(type => ({ value: type.id, label: type.name }));
+    // Получаем все типы из того же инструмента и раздела, исключая текущий тип и его потомков
+    const availableTypes = types.filter(type => 
+      type.model_uuid === toolId && 
+      type.chapter === chapter &&
+      type.id !== selectedType?.id
+    );
+    
+    // Исключаем потомков текущего типа (если редактируем)
+    const excludeIds = new Set<string>();
+    if (selectedType) {
+      const findChildren = (parentId: string) => {
+        availableTypes.forEach(type => {
+          if (type.parent_type === parentId) {
+            excludeIds.add(type.id);
+            findChildren(type.id);
+          }
+        });
+      };
+      findChildren(selectedType.id);
+    }
+    
+    return availableTypes
+      .filter(type => !excludeIds.has(type.id))
+      .map(type => ({ 
+        value: type.id, 
+        label: type.name,
+        parent: type.parent_type 
+      }))
+      .sort((a, b) => {
+        // Сортируем: сначала корневые, потом по имени
+        const aIsRoot = !types.find(t => t.id === a.value)?.parent_type;
+        const bIsRoot = !types.find(t => t.id === b.value)?.parent_type;
+        if (aIsRoot !== bIsRoot) return aIsRoot ? -1 : 1;
+        return a.label.localeCompare(b.label);
+      });
   }, [types, selectedType, selectedToolId, selectedChapter]);
 
   const formFields = useMemo(() => [
@@ -213,7 +300,15 @@ export default function TypesManagement() {
       label: 'Родительский тип',
       type: 'select' as const,
       required: false,
-      options: [{ value: '', label: 'Нет (корневой тип)' }, ...parentTypeOptions],
+      options: [
+        { value: '', label: 'Нет (корневой тип)' },
+        ...parentTypeOptions.map(opt => ({
+          value: opt.value,
+          label: opt.parent 
+            ? `  └─ ${opt.label}` 
+            : opt.label
+        }))
+      ],
     },
     {
       name: 'name',
@@ -287,15 +382,52 @@ export default function TypesManagement() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [tools, types]);
 
-  // Получаем типы выбранного раздела
+  // Строим иерархию типов для выбранного раздела
+  const buildTypeHierarchy = (typesList: Type[]): Type[] => {
+    const typeMap = new Map<string, Type & { level: number }>();
+    
+    // Создаем карту всех типов с уровнем вложенности
+    typesList.forEach(type => {
+      typeMap.set(type.id, { ...type, level: 0 });
+    });
+    
+    // Определяем уровни вложенности
+    const setLevel = (typeId: string, level: number = 0): number => {
+      const type = typeMap.get(typeId);
+      if (!type) return level;
+      
+      if (type.parent_type) {
+        const parentLevel = setLevel(type.parent_type, level + 1);
+        type.level = parentLevel;
+        return parentLevel;
+      }
+      type.level = level;
+      return level;
+    };
+    
+    typesList.forEach(type => {
+      setLevel(type.id);
+    });
+    
+    // Сортируем: сначала по уровню, потом по sortOrder, потом по имени
+    const sortedTypes = Array.from(typeMap.values()).sort((a, b) => {
+      if (a.level !== b.level) return a.level - b.level;
+      if ((a.sortOrder ?? 0) !== (b.sortOrder ?? 0)) return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+      return a.name.localeCompare(b.name);
+    });
+    
+    return sortedTypes;
+  };
+
+  // Получаем типы выбранного раздела с иерархией
   const selectedChapterTypes = useMemo(() => {
     if (!selectedToolId || !selectedChapter) return [];
     const filtered = types.filter(type => 
       type.model_uuid === selectedToolId && 
       (type.chapter || 'Без раздела') === selectedChapter
     );
-    return applyFilters(filtered)
-      .sort((a, b) => a.name.localeCompare(b.name));
+    const filteredTypes = applyFilters(filtered);
+    return buildTypeHierarchy(filteredTypes);
   }, [types, selectedToolId, selectedChapter, chapterFilter, nameFilter]);
 
   const handleColumnFiltersChange = (columnId: string, value: any) => {
@@ -438,15 +570,45 @@ export default function TypesManagement() {
                                       }}
                                     >
                                       <Table.Td>
-                                        <Group gap="xs" style={{ paddingLeft: '24px' }}>
-                                          <IconFolder size={14} style={{ opacity: 0.7 }} />
-                                          <Text 
-                                            fw={isChapterSelected ? 600 : 400}
-                                            c={isChapterSelected ? undefined : 'dimmed'}
-                                            size="sm"
-                                          >
-                                            {chapter.name}
-                                          </Text>
+                                        <Group gap="xs" style={{ paddingLeft: '24px' }} justify="space-between">
+                                          <Group gap="xs">
+                                            <IconFolder size={14} style={{ opacity: 0.7 }} />
+                                            <Text 
+                                              fw={isChapterSelected ? 600 : 400}
+                                              c={isChapterSelected ? undefined : 'dimmed'}
+                                              size="sm"
+                                            >
+                                              {chapter.name}
+                                            </Text>
+                                          </Group>
+                                          <Group gap={4} onClick={(e) => e.stopPropagation()}>
+                                            <Tooltip label="Редактировать все типы раздела">
+                                              <ActionIcon
+                                                variant="subtle"
+                                                color="blue"
+                                                size="sm"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleEditChapter(tool.id, chapter.name);
+                                                }}
+                                              >
+                                                <IconEdit size={14} />
+                                              </ActionIcon>
+                                            </Tooltip>
+                                            <Tooltip label="Удалить все типы раздела">
+                                              <ActionIcon
+                                                variant="subtle"
+                                                color="red"
+                                                size="sm"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleDeleteChapter(tool.id, chapter.name);
+                                                }}
+                                              >
+                                                <IconTrash size={14} />
+                                              </ActionIcon>
+                                            </Tooltip>
+                                          </Group>
                                         </Group>
                                       </Table.Td>
                                       <Table.Td>
@@ -542,24 +704,55 @@ export default function TypesManagement() {
                         </Table.Tr>
                       </Table.Thead>
                       <Table.Tbody>
-                        {selectedChapterTypes.map((type: any) => {
+                        {selectedChapterTypes.map((type: Type & { level?: number }) => {
                           const level = type.level || 0;
                           const parentType = types.find(t => t.id === type.parent_type);
+                          const hasChildren = types.some(t => t.parent_type === type.id);
+                          
                           return (
-                            <Table.Tr key={type.id}>
+                            <Table.Tr 
+                              key={type.id}
+                              style={{
+                                backgroundColor: level > 0 ? 'var(--mantine-color-gray-0)' : undefined,
+                              }}
+                            >
                               <Table.Td>
-                                <Group gap="xs" style={{ paddingLeft: `${level * 24}px` }}>
-                                  {level > 0 && <IconChevronRight size={14} style={{ opacity: 0.5 }} />}
-                                  <Text>{type.name}</Text>
+                                <Group gap="xs" style={{ paddingLeft: `${level * 20}px` }}>
+                                  {level > 0 && (
+                                    <IconChevronRight 
+                                      size={14} 
+                                      style={{ 
+                                        opacity: 0.5,
+                                        color: parentType?.colorHex || undefined
+                                      }} 
+                                    />
+                                  )}
+                                  {hasChildren && (
+                                    <IconFolder size={14} style={{ opacity: 0.6 }} />
+                                  )}
+                                  <Text 
+                                    fw={level === 0 ? 500 : 400}
+                                    c={type.colorHex || undefined}
+                                  >
+                                    {type.name}
+                                  </Text>
                                 </Group>
                               </Table.Td>
                               <Table.Td>
                                 {parentType ? (
-                                  <Badge variant="light" size="sm">
+                                  <Badge 
+                                    variant="light" 
+                                    size="sm"
+                                    style={{ 
+                                      backgroundColor: parentType.colorHex 
+                                        ? `${parentType.colorHex}20` 
+                                        : undefined 
+                                    }}
+                                  >
                                     {parentType.name}
                                   </Badge>
                                 ) : (
-                                  <Text c="dimmed" size="sm">—</Text>
+                                  <Text c="dimmed" size="sm">Корневой</Text>
                                 )}
                               </Table.Td>
                               <Table.Td>
@@ -568,8 +761,11 @@ export default function TypesManagement() {
                               <Table.Td>
                                 {type.colorHex ? (
                                   <Badge
-                                    color={type.colorHex}
-                                    style={{ backgroundColor: type.colorHex }}
+                                    style={{ 
+                                      backgroundColor: type.colorHex,
+                                      color: '#fff',
+                                      border: 'none'
+                                    }}
                                   >
                                     {type.colorHex}
                                   </Badge>
@@ -634,9 +830,22 @@ export default function TypesManagement() {
           }}
           title="Подтверждение удаления"
         >
-          <Text mb="md">
-            Вы уверены, что хотите удалить тип "{selectedType?.name}"?
-          </Text>
+          {selectedType && (() => {
+            const chapterTypes = types.filter(t => 
+              t.model_uuid === selectedType.model_uuid && 
+              (t.chapter || 'Без раздела') === (selectedType.chapter || 'Без раздела')
+            );
+            const isChapterDelete = chapterTypes.length > 1;
+            
+            return (
+              <Text mb="md">
+                {isChapterDelete 
+                  ? `Вы уверены, что хотите удалить все типы раздела "${selectedType.chapter || 'Без раздела'}" (${chapterTypes.length} типов)?`
+                  : `Вы уверены, что хотите удалить тип "${selectedType.name}"?`
+                }
+              </Text>
+            );
+          })()}
           {error && (
             <Alert icon={<IconAlertCircle size={18} />} color="red" mb="md">
               {error}

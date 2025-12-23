@@ -323,14 +323,3 @@
 [data-theme="dark"] .news-menu-item:hover {
   background-color: var(--theme-bg-hover);
 }
-
-/* Адаптивность */
-@media (max-width: 768px) {
-  .news-container {
-    padding: var(--space-1);
-  }
-  
-  .news-card {
-    padding: var(--space-3);
-  }
-}

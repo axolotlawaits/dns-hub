@@ -7,14 +7,12 @@ import {
   ActionIcon, 
   Avatar, 
   Text, 
-  Group,
   Stack,
   Card,
   Box,
   Container,
   Transition,
   Alert,
-  ThemeIcon,
   Divider
 } from '@mantine/core';
 import { useState, useCallback, useMemo, useEffect, memo, useRef } from 'react';
@@ -32,9 +30,7 @@ import {
   IconLogin,
   IconArrowRight,
   IconRefresh,
-  IconAlertCircle,
-  IconCheck
-} from '@tabler/icons-react';
+  IconAlertCircle} from '@tabler/icons-react';
 import { formatName } from '../utils/format';
 
 // Типы вынесены в начало для лучшей читаемости
@@ -71,11 +67,7 @@ const getTimeOfDay = (): TimeOfDay => {
   return hour < 5 ? 'night' : hour < 11 ? 'morning' : hour < 17 ? 'day' : 'evening';
 };
 
-// Прокси-серверы удалены - используем официальный Unsplash API
-
 // getContextualImage удалена - используем только цвета фона
-
-// Прокси-функция удалена - используем официальный Unsplash API
 
 // Функция для создания градиентного фона с извилистыми линиями
 const getContextualGradientBackground = (
@@ -88,8 +80,6 @@ const getContextualGradientBackground = (
   pressure?: number,
   visibility?: number,
   uvIndex?: number,
-  latitude?: number,
-  longitude?: number,
   elevation?: number,
   isWeekend?: boolean
 ): string => {
@@ -302,14 +292,12 @@ const getContextualBackground = (
   pressure?: number,
   visibility?: number,
   uvIndex?: number,
-  latitude?: number,
-  longitude?: number,
   elevation?: number,
   isWeekend?: boolean
 ) => {
   const backgroundImage = getContextualGradientBackground(
     season, timeOfDay, weatherCondition, temperature, humidity, windSpeed, 
-    pressure, visibility, uvIndex, latitude, longitude, elevation, isWeekend
+    pressure, visibility, uvIndex, elevation, isWeekend
   );
   
     return {
@@ -323,8 +311,6 @@ const getContextualBackground = (
     pressure,
     visibility,
     uvIndex,
-    latitude,
-    longitude,
     elevation,
     isWeekend
   };
@@ -340,8 +326,6 @@ const fetchBackgroundImage = async (
   pressure?: number,
   visibility?: number,
   uvIndex?: number,
-  latitude?: number,
-  longitude?: number,
   elevation?: number,
   isWeekend?: boolean
 ) => {
@@ -350,7 +334,7 @@ const fetchBackgroundImage = async (
   
   const background = getContextualBackground(
     season, timeOfDay, weatherCondition, actualTemperature, humidity, windSpeed, 
-    pressure, visibility, uvIndex, latitude, longitude, elevation, isWeekend
+    pressure, visibility, uvIndex, elevation, isWeekend
   );
   
   
@@ -446,14 +430,7 @@ const UserProfileCard = memo(({ userInfo }: { userInfo: UserInfo }) => (
           @{userInfo.login}
         </Text>
       </Box>
-      <Group gap="xs" mt="xs" mb="xs">
-        <ThemeIcon size="sm" color="green" variant="light">
-          <IconCheck size={14} />
-        </ThemeIcon>
-        <Text size="xs" c="var(--theme-text-secondary)">
-          Известный пользователь
-        </Text>
-      </Group>
+
     </Stack>
   </Card>
 ));
@@ -505,8 +482,6 @@ function Login() {
     pressure,
     visibility,
     uvIndex,
-    latitude,
-    longitude,
     elevation
   } = useWeather();
   const [currentSeason, currentTimeOfDay] = useMemo(() => [getSeason(), getTimeOfDay()], []);
@@ -569,8 +544,6 @@ function Login() {
           pressure,
           visibility,
           uvIndex,
-          latitude,
-          longitude,
           elevation,
           isWeekend
         );
@@ -582,7 +555,7 @@ function Login() {
         console.error('[Advanced Background Loader] Error loading background:', error);
         
         // Fallback - используем текущие данные
-        const fallbackBackground = {
+          const fallbackBackground = {
           backgroundImage: getContextualGradientBackground(
             currentSeason, 
             currentTimeOfDay, 
@@ -593,8 +566,6 @@ function Login() {
             pressure,
             visibility,
             uvIndex,
-            latitude,
-            longitude,
             elevation,
             isWeekend
           )
@@ -615,7 +586,7 @@ function Login() {
       controller.abort();
       clearInterval(backgroundTimer);
     };
-  }, [currentSeason, currentTimeOfDay, weatherCondition, temperature, humidity, windSpeed, pressure, visibility, uvIndex, latitude, longitude, elevation, isWeekend]);
+  }, [currentSeason, currentTimeOfDay, weatherCondition, temperature, humidity, windSpeed, pressure, visibility, uvIndex, elevation, isWeekend]);
 
   const handleInputChange = useCallback((field: keyof LoginType) => 
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -725,8 +696,6 @@ function Login() {
         pressure,
         visibility,
         uvIndex,
-        latitude,
-        longitude,
         elevation,
         isWeekend
       )}

@@ -414,44 +414,6 @@
     transform: translateY(0);
   }
 }
-
-/* Адаптивность */
-@media (max-width: 768px) {
-  .login-wrapper {
-    padding: var(--space-2);
-  }
-  
-  .login-container {
-    max-width: 100%;
-  }
-  
-  .login-form {
-    padding: var(--space-6);
-  }
-  
-  .welcome-title {
-    font-size: var(--font-size-2xl);
-  }
-  
-  .login-button,
-  .switch-user-button {
-    font-size: var(--font-size-sm);
-    padding: var(--space-3) var(--space-4);
-  }
-  
-  .image-credit {
-    right: var(--space-2);
-    bottom: var(--space-2);
-    padding: var(--space-3);
-    max-width: 280px;
-  }
-}
-
-@media (max-width: 480px) {
-  .login-form {
-    padding: var(--space-3);
-    padding-bottom: var(--space-2) !important;
-  }
   
   .form-content {
     padding: var(--space-1) 0;
@@ -460,7 +422,7 @@
   .welcome-title {
     font-size: var(--font-size-xl);
   }
-}
+
 
 /* Темная тема */
 [data-mantine-color-scheme="dark"] .login-form {

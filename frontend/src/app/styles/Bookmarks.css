@@ -152,33 +152,6 @@
   z-index: 100;
 }
 
-/* Адаптивность */
-@media (max-width: 768px) {
-  .bookmarks-container {
-    padding: var(--space-1);
-  }
-  
-  .bookmark-card {
-    height: 150px;
-  }
-  
-  .bookmark-title {
-    font-size: var(--font-size-md);
-  }
-  
-  .bookmark-overlay {
-    padding: var(--space-3);
-  }
-}
-
-@media (max-width: 480px) {
-  .bookmark-card {
-    height: 120px;
-  }
-  
-  .bookmark-title {
-    font-size: var(--font-size-sm);
-  }
   
   .bookmark-overlay {
     padding: var(--space-2);
@@ -187,4 +160,4 @@
   .bookmark-actions {
     opacity: 1; /* Всегда показываем действия на мобильных */
   }
-}
+

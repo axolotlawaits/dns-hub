@@ -8,9 +8,8 @@ export type WeatherCondition =
   | 'blizzard' | 'freezing_rain' | 'ice_pellets'
   | 'partly_cloudy' | 'overcast' | 'scattered_clouds';
 
-// Расширенные типы для погодных данных
+// Типы для погодных данных (только то, что используется в Login.tsx)
 export interface WeatherData {
-  // Основные данные
   location: string;
   weatherCondition: WeatherCondition;
   temperature: number;
@@ -19,37 +18,7 @@ export interface WeatherData {
   pressure: number;
   visibility: number;
   uvIndex: number;
-  
-  // Географические данные
-  latitude: number;
-  longitude: number;
-  timezone: string;
   elevation: number;
-  country: string;
-  region: string;
-  
-  // Временные данные
-  sunrise: string;
-  sunset: string;
-  moonPhase: string;
-  dayLength: number;
-  
-  // Дополнительные погодные данные
-  feelsLike: number;
-  dewPoint: number;
-  windDirection: number;
-  gustSpeed: number;
-  cloudCover: number;
-  precipitation: number;
-  
-  // Астрономические данные
-  solarRadiation: number;
-  moonIllumination: number;
-  
-  // Климатические данные
-  heatIndex: number;
-  windChill: number;
-  
   isWeatherLoading: boolean;
 }
 
@@ -57,7 +26,7 @@ const WEATHER_API_KEY = '7a61de9f85134f88a9273945250904';
 const WEATHER_UPDATE_INTERVAL = 3600000;
 
 export function useWeather() {
-  // Основные данные
+  // Только данные, используемые в Login.tsx
   const [location, setLocation] = useState('Загрузка...');
   const [weatherCondition, setWeatherCondition] = useState<WeatherCondition>('clear');
   const [temperature, setTemperature] = useState<number | undefined>(undefined);
@@ -66,37 +35,7 @@ export function useWeather() {
   const [pressure, setPressure] = useState<number>(1013);
   const [visibility, setVisibility] = useState<number>(10);
   const [uvIndex, setUvIndex] = useState<number>(0);
-  
-  // Географические данные
-  const [latitude, setLatitude] = useState<number>(0);
-  const [longitude, setLongitude] = useState<number>(0);
-  const [timezone, setTimezone] = useState<string>('');
   const [elevation, setElevation] = useState<number>(0);
-  const [country, setCountry] = useState<string>('');
-  const [region, setRegion] = useState<string>('');
-  
-  // Временные данные
-  const [sunrise, setSunrise] = useState<string>('');
-  const [sunset, setSunset] = useState<string>('');
-  const [moonPhase, setMoonPhase] = useState<string>('');
-  const [dayLength, setDayLength] = useState<number>(0);
-  
-  // Дополнительные погодные данные
-  const [feelsLike, setFeelsLike] = useState<number>(0);
-  const [dewPoint, setDewPoint] = useState<number>(0);
-  const [windDirection, setWindDirection] = useState<number>(0);
-  const [gustSpeed, setGustSpeed] = useState<number>(0);
-  const [cloudCover, setCloudCover] = useState<number>(0);
-  const [precipitation, setPrecipitation] = useState<number>(0);
-  
-  // Астрономические данные
-  const [solarRadiation, setSolarRadiation] = useState<number>(0);
-  const [moonIllumination, setMoonIllumination] = useState<number>(0);
-  
-  // Климатические данные
-  const [heatIndex, setHeatIndex] = useState<number>(0);
-  const [windChill, setWindChill] = useState<number>(0);
-  
   const [isWeatherLoading, setIsWeatherLoading] = useState(true);
 
   // Функция для определения расширенных погодных условий
@@ -104,7 +43,6 @@ export function useWeather() {
     const condition = conditionText.toLowerCase();
     
     // Используем дополнительные параметры для более точного определения
-    console.log(`[Weather Condition] Analyzing: "${conditionText}", humidity: ${humidity}%, visibility: ${visibility}km, wind: ${windSpeed}km/h`);
     
     // Специальные условия
     if (condition.includes('гроза') || condition.includes('thunderstorm')) return 'thunderstorm';
@@ -145,26 +83,7 @@ export function useWeather() {
     return 'clear';
   };
 
-  // Функция для расчета фазы луны
-  const calculateMoonPhase = (date: Date): string => {
-    const year = date.getFullYear();
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
-    
-    // Упрощенный расчет фазы луны
-    const c = Math.floor((year - 2000) * 12.3685);
-    const n = Math.floor((year - 2000) * 12.3685) + month + day / 30;
-    const phase = (n - c) % 29.53059;
-    
-    if (phase < 1.84566) return 'new_moon';
-    if (phase < 5.53699) return 'waxing_crescent';
-    if (phase < 9.22831) return 'first_quarter';
-    if (phase < 12.91963) return 'waxing_gibbous';
-    if (phase < 16.61096) return 'full_moon';
-    if (phase < 20.30228) return 'waning_gibbous';
-    if (phase < 23.99361) return 'last_quarter';
-    return 'waning_crescent';
-  };
+  // УДАЛЕНО: calculateMoonPhase - не используется в Login.tsx
 
   const fetchWeather = useCallback(async () => {
     setIsWeatherLoading(true);
@@ -177,15 +96,10 @@ export function useWeather() {
       
       const data = await response.json();
       
-      // Основные данные
+      // Только данные, используемые в Login.tsx
       setLocation(`${data.location.name}, ${data.location.country}`);
       setTemperature(Math.round(data.current.temp_c));
-      setLatitude(data.location.lat);
-      setLongitude(data.location.lon);
-      setTimezone(data.location.tz_id);
       setElevation(data.location.elevation || 0);
-      setCountry(data.location.country || '');
-      setRegion(data.location.region || '');
 
       // Расширенные погодные условия
       const condition = determineWeatherCondition(
@@ -202,59 +116,8 @@ export function useWeather() {
       setPressure(data.current.pressure_mb || 1013);
       setVisibility(data.current.vis_km || 10);
       setUvIndex(data.current.uv || 0);
-      
-      // Дополнительные погодные данные
-      setFeelsLike(Math.round(data.current.feelslike_c || data.current.temp_c));
-      setDewPoint(Math.round(data.current.dewpoint_c || 0));
-      setWindDirection(data.current.wind_degree || 0);
-      setGustSpeed(data.current.gust_kph || 0);
-      setCloudCover(data.current.cloud || 0);
-      setPrecipitation(data.current.precip_mm || 0);
-      
-      // Астрономические данные
-      setSolarRadiation(data.current.solar_radiation || 0);
-      setMoonIllumination(data.current.moon_illumination || 0);
-      
-      // Климатические данные
-      setHeatIndex(Math.round(data.current.heatindex_c || data.current.temp_c));
-      setWindChill(Math.round(data.current.windchill_c || data.current.temp_c));
-
-      // Время восхода/заката и фаза луны
-      setSunrise(data.forecast?.forecastday?.[0]?.astro?.sunrise || '');
-      setSunset(data.forecast?.forecastday?.[0]?.astro?.sunset || '');
-      setMoonPhase(calculateMoonPhase(new Date()));
-      
-      // Расчет продолжительности дня
-      if (data.forecast?.forecastday?.[0]?.astro?.sunrise && data.forecast?.forecastday?.[0]?.astro?.sunset) {
-        const sunriseTime = new Date(`2000-01-01 ${data.forecast.forecastday[0].astro.sunrise}`);
-        const sunsetTime = new Date(`2000-01-01 ${data.forecast.forecastday[0].astro.sunset}`);
-        const dayLengthHours = (sunsetTime.getTime() - sunriseTime.getTime()) / (1000 * 60 * 60);
-        setDayLength(dayLengthHours);
-      }
-
-      console.log('🌤️ Получены расширенные погодные данные:', {
-        location: `${data.location.name}, ${data.location.country}`,
-        weatherCondition: condition,
-        temperature: Math.round(data.current.temp_c),
-        humidity: data.current.humidity,
-        windSpeed: data.current.wind_kph,
-        pressure: data.current.pressure_mb,
-        visibility: data.current.vis_km,
-        uvIndex: data.current.uv,
-        coordinates: `${data.location.lat}, ${data.location.lon}`,
-        timezone: data.location.tz_id,
-        elevation: data.location.elevation,
-        feelsLike: data.current.feelslike_c,
-        dewPoint: data.current.dewpoint_c,
-        windDirection: data.current.wind_degree,
-        cloudCover: data.current.cloud,
-        precipitation: data.current.precip_mm,
-        moonPhase: calculateMoonPhase(new Date()),
-        dayLength: dayLength
-      });
 
     } catch (error) {
-      console.error('Ошибка погоды:', error);
       setLocation('Местоположение не определено');
     } finally {
       setIsWeatherLoading(false);
@@ -268,7 +131,7 @@ export function useWeather() {
   }, [fetchWeather]);
 
   return { 
-    // Основные данные
+    // Только данные, используемые в Login.tsx
     location, 
     weatherCondition, 
     temperature, 
@@ -277,37 +140,7 @@ export function useWeather() {
     pressure,
     visibility,
     uvIndex,
-    
-    // Географические данные
-    latitude,
-    longitude,
-    timezone,
     elevation,
-    country,
-    region,
-    
-    // Временные данные
-    sunrise,
-    sunset,
-    moonPhase,
-    dayLength,
-    
-    // Дополнительные погодные данные
-    feelsLike,
-    dewPoint,
-    windDirection,
-    gustSpeed,
-    cloudCover,
-    precipitation,
-    
-    // Астрономические данные
-    solarRadiation,
-    moonIllumination,
-    
-    // Климатические данные
-    heatIndex,
-    windChill,
-    
     isWeatherLoading 
   };
 }

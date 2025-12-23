@@ -23,6 +23,8 @@ import {
   Avatar,
   Divider,
   Title,
+  FileInput,
+  Checkbox,
 } from '@mantine/core';
 import {
   IconSearch,
@@ -131,6 +133,7 @@ function Shop() {
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [branchFilter, setBranchFilter] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string | null>('ACTIVE');
+  const [onlyWithPhotos, setOnlyWithPhotos] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
@@ -369,9 +372,15 @@ function Shop() {
   }, [shops, user]);
 
   const displayedShops = useMemo(() => {
-    if (activeTab === 'my') return myShops;
-    return shops;
-  }, [activeTab, shops, myShops]);
+    let result = activeTab === 'my' ? myShops : shops;
+    
+    // Фильтр "только с фото"
+    if (onlyWithPhotos) {
+      result = result.filter(shop => shop.images && shop.images.length > 0);
+    }
+    
+    return result;
+  }, [activeTab, shops, myShops, onlyWithPhotos]);
 
   return (
     <Container size="xl" py="md">
@@ -424,6 +433,11 @@ function Shop() {
                   clearable
                   w={150}
                 />
+                <Checkbox
+                  label="Только с фото"
+                  checked={onlyWithPhotos}
+                  onChange={(e) => setOnlyWithPhotos(e.currentTarget.checked)}
+                />
                 <Button
                   variant="light"
                   leftSection={<IconFilter size={16} />}
@@ -432,36 +446,6 @@ function Shop() {
                   Применить
                 </Button>
               </Group>
-              {/* Кнопка инициализации категорий для админов */}
-              {(user?.role === 'ADMIN' || user?.role === 'DEVELOPER') && categoryOptions.length === 0 && (
-                <Group>
-                  <Button
-                    variant="filled"
-                    color="blue"
-                    onClick={async () => {
-                      try {
-                        const response = await authFetch(`${API}/retail/shop/categories/init`, {
-                          method: 'POST',
-                        });
-                        if (response?.ok) {
-                          notificationSystem.addNotification('Успех', 'Категории успешно инициализированы', 'success');
-                          fetchCategories();
-                        } else {
-                          notificationSystem.addNotification('Ошибка', 'Не удалось инициализировать категории', 'error');
-                        }
-                      } catch (error) {
-                        console.error('Error initializing categories:', error);
-                        notificationSystem.addNotification('Ошибка', 'Не удалось инициализировать категории', 'error');
-                      }
-                    }}
-                  >
-                    Инициализировать стандартные категории
-                  </Button>
-                  <Text size="sm" c="dimmed">
-                    Нажмите для создания стандартных категорий (Бытовая техника, Красота и здоровье, и т.д.)
-                  </Text>
-                </Group>
-              )}
             </Stack>
           </Paper>
 
@@ -974,6 +958,7 @@ function CreateShopForm({ categories, branches, onSuccess }: {
   }>>([
     { name: '', quantity: 1, article: '', description: '', condition: 'GOOD' },
   ]);
+  const [photos, setPhotos] = useState<File[]>([]);
 
   const addItem = () => {
     setItems([...items, { name: '', quantity: 1, article: '', description: '', condition: 'GOOD' }]);
@@ -1019,6 +1004,32 @@ function CreateShopForm({ categories, branches, onSuccess }: {
       });
 
       if (response?.ok) {
+        const createdShop = await response.json();
+        
+        // Загружаем фото, если они есть
+        if (photos.length > 0 && createdShop.id) {
+          try {
+            const formData = new FormData();
+            photos.forEach((photo) => {
+              formData.append('images', photo);
+            });
+            
+            const photoResponse = await authFetch(`${API}/retail/shop/shops/${createdShop.id}/images`, {
+              method: 'POST',
+              body: formData,
+              // Не устанавливаем Content-Type для FormData - браузер сделает это автоматически
+            });
+            
+            if (!photoResponse?.ok) {
+              console.error('Failed to upload photos');
+              notificationSystem.addNotification('Предупреждение', 'Объявление создано, но не удалось загрузить фото', 'warning');
+            }
+          } catch (photoError) {
+            console.error('Error uploading photos:', photoError);
+            notificationSystem.addNotification('Предупреждение', 'Объявление создано, но не удалось загрузить фото', 'warning');
+          }
+        }
+        
         notificationSystem.addNotification('Успех', 'Объявление создано', 'success');
         onSuccess();
       } else {
@@ -1138,6 +1149,23 @@ function CreateShopForm({ categories, branches, onSuccess }: {
         >
           Добавить товар
         </Button>
+
+        <Divider label="Фото" labelPosition="center" />
+
+        <FileInput
+          label="Фотографии объявления"
+          placeholder="Выберите фотографии"
+          accept="image/*"
+          multiple
+          value={photos}
+          onChange={setPhotos}
+          clearable
+        />
+        {photos.length > 0 && (
+          <Text size="sm" c="dimmed">
+            Выбрано фотографий: {photos.length}
+          </Text>
+        )}
 
         <Divider />
 

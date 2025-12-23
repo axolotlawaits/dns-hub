@@ -224,60 +224,7 @@
   min-width: 120px;
   max-width: 50%;
 }
-
-/* Адаптивность для большого количества фильтров */
-@media (max-width: 1400px) {
-  .filter-item {
-    min-width: 140px;
-    flex: 1 1 140px;
-    max-width: 180px;
-  }
   
-  .filter-date-item {
-    min-width: 100px;
-  }
-}
-
-@media (max-width: 1200px) {
-  .filter-item {
-    min-width: 130px;
-    flex: 1 1 130px;
-    max-width: 160px;
-  }
-  
-  .filter-date-item {
-    min-width: 90px;
-  }
-}
-
-@media (max-width: 992px) {
-  .filter-item {
-    min-width: 120px;
-    flex: 1 1 120px;
-    max-width: 150px;
-  }
-  
-  .filter-date-item {
-    min-width: 80px;
-  }
-}
-
-@media (max-width: 768px) {
-  .filter-item {
-    min-width: 100%;
-    flex: 1 1 100%;
-    max-width: 100%;
-  }
-}
-
-@media (max-width: 480px) {
-  .filter-group {
-    padding: 12px;
-  }
-  
-  .filter-item {
-    min-width: 100%;
-  }
   
   .filter-date-group {
     flex-direction: column !important;
@@ -288,7 +235,7 @@
     min-width: 100%;
     max-width: 100%;
   }
-}
+
 
 /* Темная тема - стили наследуются автоматически */
 

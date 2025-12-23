@@ -411,68 +411,6 @@
   }
 }
 
-/* === АДАПТИВНОСТЬ === */
-@media (max-width: 1200px) {
-  .radio-content {
-    padding: var(--space-6);
-  }
-  
-  .radio-stats-card,
-  .radio-stream-card,
-  .radio-device-card {
-    padding: var(--space-5);
-  }
-}
-
-@media (max-width: 768px) {
-  .radio-container {
-    padding: var(--space-4);
-  }
-  
-  .radio-header {
-    padding: var(--space-4);
-  }
-  
-  .radio-content {
-    padding: var(--space-4);
-  }
-  
-  .radio-stats-card,
-  .radio-stream-card,
-  .radio-device-card {
-    padding: var(--space-4);
-  }
-  
-  .radio-tab-item {
-    padding: var(--space-2) var(--space-3);
-    font-size: var(--font-size-xs);
-  }
-}
-
-@media (max-width: 480px) {
-  .radio-container {
-    padding: var(--space-2);
-  }
-  
-  .radio-header {
-    padding: var(--space-3);
-  }
-  
-  .radio-content {
-    padding: var(--space-3);
-  }
-  
-  .radio-stats-card,
-  .radio-stream-card,
-  .radio-device-card {
-    padding: var(--space-3);
-  }
-  
-  .radio-tab-item {
-    padding: var(--space-2);
-    font-size: var(--font-size-xs);
-  }
-}
 
 /* === ТЕМНАЯ ТЕМА === */
 [data-mantine-color-scheme="dark"] .radio-navigation,
@@ -685,21 +623,4 @@
 
 .web-radio-player .playing-indicator {
   animation: pulse 2s infinite;
-}
-
-/* Адаптивность */
-@media (max-width: 768px) {
-  .web-radio-player .mantine-Button-root {
-    padding: var(--space-2) var(--space-3);
-    font-size: var(--font-size-sm);
-  }
-  
-  .web-radio-player .mantine-ActionIcon-root {
-    width: 36px;
-    height: 36px;
-  }
-  
-  .web-radio-player .stream-item {
-    padding: var(--space-2);
-  }
 }

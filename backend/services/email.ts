@@ -2,6 +2,7 @@
 import nodemailer from 'nodemailer';
 import type { NotificationWithRelations } from '../controllers/app/notification.js';
 import SMTPTransport from 'nodemailer/lib/smtp-transport';
+import { prisma } from '../server.js';
 
 let transporter: nodemailer.Transporter | null = null;
 
@@ -176,6 +177,37 @@ async function send(notification: NotificationWithRelations): Promise<boolean> {
       text: generatePlainText(notification),
       html: generateHtml(notification),
     });
+    
+    // Обновляем уведомление, добавляя пометку о том, что оно было отправлено через почту
+    // Это нужно для отображения пометки "Outlook" в интерфейсе
+    if (notification.action && typeof notification.action === 'object') {
+      const action = notification.action as any;
+      if (!action.source && !action.isEmailNotification) {
+        // Обновляем action, добавляя метаданные о почте
+        await prisma.notifications.update({
+          where: { id: notification.id },
+          data: {
+            action: {
+              ...action,
+              isEmailNotification: true,
+              source: 'outlook'
+            }
+          }
+        });
+      }
+    } else {
+      // Если action пустой, создаем новый
+      await prisma.notifications.update({
+        where: { id: notification.id },
+        data: {
+          action: {
+            isEmailNotification: true,
+            source: 'outlook'
+          }
+        }
+      });
+    }
+    
     return true;
   } catch (error) {
     console.error('Failed to send email:', error);

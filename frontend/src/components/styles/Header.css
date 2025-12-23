@@ -258,55 +258,6 @@
   animation: slideDown 200ms ease-out;
 }
 
-/* Адаптивность */
-@media (max-width: 768px) {
-  .header-content {
-    padding: 0 var(--space-4);
-  }
-  
-  .header-center {
-    margin: 0 var(--space-4);
-    max-width: 400px;
-  }
-  
-  .page-header-content {
-    flex-direction: column;
-    gap: var(--space-3);
-    align-items: flex-start;
-    padding: var(--space-3) var(--space-4);
-  }
-  
-  .page-header-text {
-    flex: none;
-    max-width: 100%;
-  }
-  
-  .page-title {
-    font-size: 1.25rem;
-  }
-  
-  .page-subtitle {
-    font-size: 0.8rem;
-  }
-  
-  .page-header-actions {
-    width: 100%;
-    justify-content: flex-end;
-    gap: var(--space-2);
-  }
-  
-}
-
-@media (max-width: 640px) {
-  .header-center {
-    display: none;
-  }
-  
-  .header-content {
-    gap: var(--space-4);
-  }
-}
-
 /* Состояния загрузки */
 .header-action.loading {
   opacity: 0.6;

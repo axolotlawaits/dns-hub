@@ -522,50 +522,10 @@
   max-width: 400px;
 }
 
-/* ========================================
-   АДАПТИВНОСТЬ
-   ======================================== */
-
-@media (max-width: 768px) {
-  .web-radio-player-container {
-    min-height: 400px;
-    padding: var(--space-4);
-  }
-
-  .web-radio-player-play-button {
-    width: 80px;
-    height: 80px;
-  }
-
-  .web-radio-player-controls {
-    gap: var(--space-3);
-  }
-
-  .web-radio-player-footer {
-    flex-direction: column;
-    gap: var(--space-4);
-    align-items: flex-start;
-  }
-
-  .web-radio-player-footer-status {
-    text-align: left;
-  }
-
-  .web-radio-player-track-title {
-    font-size: 1.25rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .web-radio-player-play-button {
-    width: 70px;
-    height: 70px;
-  }
 
   .web-radio-player-track-title {
     font-size: 1.125rem;
   }
-}
 
 /* ========================================
    ДОПОЛНИТЕЛЬНЫЕ ЭФФЕКТЫ

@@ -162,14 +162,4 @@
   background-color: transparent;
   border-color: var(--theme-border-primary);
 }
-
-/* Адаптивность */
-@media (max-width: 768px) {
-  .notifications-container {
-    padding: 0;
-  }
   
-  .notification-card {
-    padding: var(--space-3);
-  }
-}

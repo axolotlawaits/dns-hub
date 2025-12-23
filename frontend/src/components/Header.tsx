@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {  ActionIcon,  AppShell,  Avatar,  Menu,  Divider,  Group,  Text,  Tooltip, Transition, Box, Button, Badge, ThemeIcon, ScrollArea, Loader, Stack } from '@mantine/core';
-import {  IconBrightnessDown,  IconLogin,  IconLogout,  IconMoon,  IconUser, IconSearch, IconBell, IconAlertCircle, IconInfoCircle, IconCheck, IconX } from '@tabler/icons-react';
+import {  IconBrightnessDown,  IconLogin,  IconLogout,  IconMoon,  IconUser, IconSearch, IconBell, IconAlertCircle, IconInfoCircle, IconCheck, IconX, IconMail } from '@tabler/icons-react';
 import { useNavigate } from 'react-router';
 import { useUserContext } from '../hooks/useUserContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -94,21 +94,6 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
     const tokenData = decodeToken(token);
     const impersonated = tokenData?.impersonatedBy !== undefined && tokenData?.impersonatedBy !== null;
     setIsImpersonated(impersonated);
-    
-    // Для отладки
-    console.log('[Header] Raw token:', token?.substring(0, 50) + '...');
-    console.log('[Header] Token data:', tokenData);
-    console.log('[Header] impersonatedBy:', tokenData?.impersonatedBy);
-    console.log('[Header] isImpersonated:', impersonated);
-    
-    // Также проверяем localStorage напрямую
-    const localStorageToken = localStorage.getItem('token');
-    if (localStorageToken && localStorageToken !== token) {
-      console.warn('[Header] Token mismatch! Context token differs from localStorage token');
-      const localStorageTokenData = decodeToken(localStorageToken);
-      console.log('[Header] localStorage token data:', localStorageTokenData);
-      console.log('[Header] localStorage impersonatedBy:', localStorageTokenData?.impersonatedBy);
-    }
   }, [token]);
 
   const handleReturnToMyAccount = async () => {
@@ -134,7 +119,6 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
         window.location.href = '/login';
       }
     } catch (error) {
-      console.error('Error returning to account:', error);
     }
   };
 
@@ -168,7 +152,6 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
       const data = await response.json();
       setNotifications(data.data || []);
     } catch (err) {
-      console.error('Ошибка загрузки уведомлений:', err);
     } finally {
       if (showLoading) {
         setNotificationsLoading(false);
@@ -244,7 +227,6 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
         prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
       );
     } catch (err) {
-      console.error('Ошибка обновления уведомления:', err);
     }
   }, [user?.id]);
 
@@ -605,6 +587,14 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
                                               {notification.tool.name}
                                             </Badge>
                                           )}
+                                          {/* Пометка Outlook для уведомлений из почты */}
+                                          {((notification.action as any)?.source === 'exchange' || 
+                                            (notification.action as any)?.source === 'outlook' ||
+                                            (notification.action as any)?.isEmailNotification) && (
+                                            <Badge size="xs" variant="light" color="orange">
+                                              Outlook
+                                            </Badge>
+                                          )}
                                         </Group>
                                         <Text size="xs" c="var(--theme-text-tertiary)">
                                           {formatTime(notification.createdAt)}
@@ -656,9 +646,6 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
                           <div>
                             <Text size="sm" fw={500} c="var(--theme-text-primary)">
                               {user.name}
-                            </Text>
-                            <Text size="xs" c="var(--theme-text-secondary)">
-                              {user.email}
                             </Text>
                           </div>
                         </Group>

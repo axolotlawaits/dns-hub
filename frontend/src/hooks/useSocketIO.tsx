@@ -20,8 +20,6 @@ export const useSocketIO = () => {
         socketRef.current = null;
       }
 
-      console.log(`[Socket.IO] Connecting to ${APIWebSocket}`);
-      
       socketRef.current = io(APIWebSocket, {
         query: { userId: user.id },
         path: '/socket.io',
@@ -39,26 +37,21 @@ export const useSocketIO = () => {
       const socket = socketRef.current;
 
       socket.on('connect', () => {
-        console.log(`[Socket.IO] Connected with ID: ${socket.id}`);
         setIsConnected(true);
       });
 
-      socket.on('connection_ack', (data) => {
-        console.log('[Socket.IO] Connection acknowledged:', data);
+      socket.on('connection_ack', () => {
       });
 
       socket.on('notification', (message) => {
-        console.log('[Socket.IO] New notification:', message);
         setLastNotification(message);
       });
 
       socket.on('system_metrics', (metrics) => {
-        console.log('[Socket.IO] System metrics received:', metrics);
         setSystemMetrics(metrics);
       });
 
       socket.on('disconnect', (reason) => {
-        console.log(`[Socket.IO] Disconnected: ${reason}`);
         setIsConnected(false);
         
         if (reason === 'io server disconnect') {
@@ -67,13 +60,11 @@ export const useSocketIO = () => {
         }
       });
 
-      socket.on('connect_error', (err) => {
-        console.error(`[Socket.IO] Connection error:`, err.message);
+      socket.on('connect_error', () => {
         setIsConnected(false);
       });
 
-      socket.on('error', (err) => {
-        console.error(`[Socket.IO] Error:`, err);
+      socket.on('error', () => {
       });
     };
 
@@ -81,7 +72,6 @@ export const useSocketIO = () => {
 
     return () => {
       if (socketRef.current) {
-        console.log(`[Socket.IO] Cleaning up connection`);
         socketRef.current.off(); // Удаляем все обработчики
         socketRef.current.disconnect();
         socketRef.current = null;

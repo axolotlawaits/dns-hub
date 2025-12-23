@@ -102,16 +102,13 @@ const Navigation: React.FC<NavigationProps> = ({ navOpened, toggleNav }) => {
         });
 
         if (!response.ok) {
-          console.error('Ошибка при загрузке инструментов для обратной связи');
           return;
         }
 
         const data = await response.json();
-        console.log('📦 [Navigation] Загружены инструменты для обратной связи:', data);
         setFeedbackParentTools(data.parentTools || []);
         setToolsData(data); // Сохраняем все данные для использования в другом useEffect
       } catch (err) {
-        console.error('Ошибка при загрузке инструментов для обратной связи:', err);
       }
     };
 
@@ -120,44 +117,30 @@ const Navigation: React.FC<NavigationProps> = ({ navOpened, toggleNav }) => {
 
   // Загрузка дочерних инструментов при выборе родительского
   useEffect(() => {
-    console.log('🔄 [Navigation] Изменен родительский инструмент:', feedbackParentTool);
-    console.log('📦 [Navigation] toolsData:', toolsData);
-    
     if (!feedbackParentTool || feedbackParentTool === 'general' || feedbackParentTool === 'other') {
-      console.log('❌ [Navigation] Родительский инструмент не выбран или это general/other');
       setFeedbackChildTools([]);
       setFeedbackChildTool('');
       return;
     }
 
     if (!toolsData) {
-      console.log('⚠️ [Navigation] toolsData еще не загружены');
       return;
     }
 
     if (!toolsData.parentToolsWithChildren) {
-      console.log('⚠️ [Navigation] parentToolsWithChildren отсутствует в toolsData');
-      console.log('📦 [Navigation] Структура toolsData:', Object.keys(toolsData));
       return;
     }
-
-    console.log('🔍 [Navigation] Ищем родительский инструмент:', feedbackParentTool);
-    console.log('📋 [Navigation] Доступные родительские инструменты:', toolsData.parentToolsWithChildren.map((p: any) => ({ value: p.value, label: p.label, childrenCount: p.children?.length || 0 })));
     
     // Находим родительский инструмент по link
     const parentTool = toolsData.parentToolsWithChildren.find((p: any) => p.value === feedbackParentTool);
-    console.log('✅ [Navigation] Найден родительский инструмент:', parentTool);
     
     if (parentTool) {
       if (parentTool.children && parentTool.children.length > 0) {
-        console.log('👶 [Navigation] Найдено дочерних инструментов:', parentTool.children.length, parentTool.children);
         setFeedbackChildTools(parentTool.children);
       } else {
-        console.log('⚠️ [Navigation] У родительского инструмента нет дочерних элементов');
         setFeedbackChildTools([]);
       }
     } else {
-      console.log('❌ [Navigation] Родительский инструмент не найден в списке');
       setFeedbackChildTools([]);
     }
     setFeedbackChildTool('');
@@ -267,7 +250,6 @@ const Navigation: React.FC<NavigationProps> = ({ navOpened, toggleNav }) => {
               throw new Error('Сессия истекла. Пожалуйста, войдите снова.');
             }
           } catch (refreshError) {
-            console.error('Token refresh failed:', refreshError);
             throw refreshError;
           }
         }
@@ -291,7 +273,6 @@ const Navigation: React.FC<NavigationProps> = ({ navOpened, toggleNav }) => {
 
       handleCloseFeedbackModal();
     } catch (error) {
-      console.error('Ошибка при отправке обратной связи:', error);
       setFeedbackError(error instanceof Error ? error.message : 'Не удалось отправить обратную связь');
     } finally {
       setIsSubmittingFeedback(false);

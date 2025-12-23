@@ -91,7 +91,12 @@ export default function BookmarksList() {
       if (!user?.id) return;
 
       try {
-        const response = await fetch(`${API}/user/settings/${user.id}/bookmarks_cards_per_row`);
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API}/user/settings/${user.id}/bookmarks_cards_per_row`, {
+          headers: {
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          }
+        });
         if (response.ok) {
           const data = await response.json();
           const savedSetting = data.value;
