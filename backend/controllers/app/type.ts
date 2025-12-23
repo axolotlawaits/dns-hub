@@ -399,3 +399,163 @@ export const deleteType = async (
     next(error);
   }
 };
+
+// Загрузка типов корреспонденции
+export const loadCorrespondenceTypes = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    // Структура типов отправителей
+    const senderTypesStructure = [
+      {
+        name: 'Суд',
+        children: [
+          {
+            name: 'Федеральные суды',
+            children: [
+              { name: 'Суды общей юрисдикции' },
+              { name: 'Арбитражный суд' },
+              { name: 'Специализированные суды' },
+            ],
+          },
+          { name: 'Мировые судьи' },
+        ],
+      },
+      { name: 'ФССП' },
+      { name: 'МВД' },
+      { name: 'ФНС' },
+      { name: 'СК' },
+      { name: 'Прокуратура' },
+      { name: 'ФСБ' },
+      { name: 'Роспотребнадзор' },
+      { name: 'Роскомнадзор' },
+      { name: 'Физическое лицо' },
+      { name: 'Юридическое лицо' },
+      { name: 'Иное' },
+    ];
+
+    // Типы документов
+    const documentTypes = [
+      'Исковое заявление',
+      'Повестка',
+      'Решение',
+      'Определение',
+      'Постановление',
+      'Запрос',
+      'Представление',
+      'Заявление',
+      'Претензия',
+      'Жалоба',
+      'Исполнительный лист',
+      'Иное',
+    ];
+
+    // Получаем или создаем Tool для корреспонденции
+    let tool = await prisma.tool.findFirst({
+      where: { link: 'aho/correspondence' },
+    });
+
+    if (!tool) {
+      tool = await prisma.tool.create({
+        data: {
+          name: 'Корреспонденция',
+          icon: '📮',
+          link: 'aho/correspondence',
+          description: 'Управление входящей и исходящей корреспонденцией',
+          order: 100,
+          included: true,
+        },
+      });
+    }
+
+    // Функция для создания или обновления типа
+    const createOrUpdateType = async (
+      toolId: string,
+      chapter: string,
+      name: string,
+      parentId: string | null = null,
+      sortOrder: number = 0
+    ) => {
+      const existingType = await prisma.type.findFirst({
+        where: {
+          model_uuid: toolId,
+          chapter: chapter,
+          name: name,
+          parent_type: parentId,
+        },
+      });
+
+      if (existingType) {
+        if (existingType.sortOrder !== sortOrder) {
+          await prisma.type.update({
+            where: { id: existingType.id },
+            data: { sortOrder },
+          });
+        }
+        return existingType;
+      }
+
+      return await prisma.type.create({
+        data: {
+          model_uuid: toolId,
+          chapter: chapter,
+          name: name,
+          parent_type: parentId,
+          sortOrder: sortOrder,
+        },
+      });
+    };
+
+    // Рекурсивно создаем типы отправителей
+    const createSenderTypes = async (
+      toolId: string,
+      items: any[],
+      parentId: string | null = null,
+      sortOrder: number = 0
+    ) => {
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const currentSortOrder = sortOrder + i;
+
+        const type = await createOrUpdateType(
+          toolId,
+          'Отправитель',
+          item.name,
+          parentId,
+          currentSortOrder
+        );
+
+        if (item.children && item.children.length > 0) {
+          await createSenderTypes(toolId, item.children, type.id, 0);
+        }
+      }
+    };
+
+    // Создаем типы документов
+    const createDocumentTypes = async (toolId: string) => {
+      for (let i = 0; i < documentTypes.length; i++) {
+        await createOrUpdateType(
+          toolId,
+          'Тип документа',
+          documentTypes[i],
+          null,
+          i
+        );
+      }
+    };
+
+    // Выполняем загрузку
+    await createSenderTypes(tool.id, senderTypesStructure);
+    await createDocumentTypes(tool.id);
+
+    res.status(200).json({ 
+      message: 'Типы корреспонденции успешно загружены',
+      toolId: tool.id
+    });
+  } catch (error) {
+    console.error('[Type Controller] Error loading correspondence types:', error);
+    next(error);
+  }
+};

@@ -19,6 +19,7 @@ interface User {
   id: string;
   name: string;
   email?: string;
+  image?: string | null;
 }
 
 
@@ -35,6 +36,8 @@ interface Type {
   id: string;
   name: string;
   chapter: string;
+  parent_type?: string | null;
+  children?: Type[];
 }
 
 interface Correspondence {
@@ -198,7 +201,7 @@ export default function CorrespondenceList() {
   const fetchUsers = useCallback(async () => {
     try {
       setState(prev => ({ ...prev, loadingUsers: true }));
-      const usersData = await fetchData(`${API}/user/users-with-email`);
+      const usersData = await fetchData(`${API}/user/users-for-responsible`);
       setState(prev => ({ ...prev, users: usersData, loadingUsers: false }));
       return usersData;
     } catch (error) {
@@ -306,29 +309,43 @@ export default function CorrespondenceList() {
         groupWith: ['senderSubTypeId'],
         groupSize: 2 as const,
         onChange: (val: string, setFieldValue: any) => {
+          // Устанавливаем новое значение типа отправителя
           setFieldValue('senderTypeId', val);
-          // Сбрасываем подтипы при смене типа отправителя
-          const selectedType = state.senderTypes.find(t => t.id === val);
-          if (selectedType?.name !== 'Суд') {
-            setFieldValue('senderSubTypeId', undefined);
-            setFieldValue('senderSubSubTypeId', undefined);
-          } else {
-            setFieldValue('senderSubSubTypeId', undefined);
-          }
+          // Сбрасываем подтипы сразу же - используем пустую строку для Select
+          setFieldValue('senderSubTypeId', '');
+          setFieldValue('senderSubSubTypeId', '');
         }
       },
       {
         name: 'senderSubTypeId',
         label: 'Подтип отправителя',
         type: 'select' as const,
-        options: state.senderSubTypes.map(t => ({ value: t.id, label: t.name })),
+        options: (values: any) => {
+          // Показываем только подтипы для выбранного типа "Суд"
+          const selectedType = state.senderTypes.find(t => t.id === values.senderTypeId);
+          if (selectedType?.name === 'Суд') {
+            // Находим тип "Суд" и возвращаем его детей
+            const courtType = state.senderTypes.find(t => t.name === 'Суд' && t.children);
+            if (courtType?.children) {
+              return courtType.children.map((child: Type) => ({ 
+                value: child.id, 
+                label: child.name 
+              }));
+            }
+          }
+          return [];
+        },
         required: false,
+        disabled: (values: any) => {
+          const selectedType = state.senderTypes.find(t => t.id === values.senderTypeId);
+          return selectedType?.name !== 'Суд';
+        },
         onChange: (val: string, setFieldValue: any) => {
           setFieldValue('senderSubTypeId', val);
-          // Сбрасываем подподтип при смене подтипа
+          // Сбрасываем подподтип при смене подтипа - используем пустую строку
           const selectedSubType = state.senderSubTypes.find(t => t.id === val);
           if (selectedSubType?.name !== 'Федеральные суды') {
-            setFieldValue('senderSubSubTypeId', undefined);
+            setFieldValue('senderSubSubTypeId', '');
           }
         }
       },
@@ -336,8 +353,33 @@ export default function CorrespondenceList() {
         name: 'senderSubSubTypeId',
         label: 'Подподтип отправителя',
         type: 'select' as const,
-        options: state.senderSubSubTypes.map(t => ({ value: t.id, label: t.name })),
+        options: (values: any) => {
+          // Показываем только подподтипы для выбранного подтипа "Федеральные суды"
+          const selectedSubType = state.senderSubTypes.find(t => t.id === values.senderSubTypeId);
+          if (selectedSubType?.name === 'Федеральные суды') {
+            // Находим тип "Суд" в senderTypes, затем его ребенка "Федеральные суды", затем его детей
+            const courtType = state.senderTypes.find(t => t.name === 'Суд' && t.children);
+            if (courtType?.children) {
+              const federalCourtsType = courtType.children.find((child: Type) => child.name === 'Федеральные суды' && child.children);
+              if (federalCourtsType?.children) {
+                return federalCourtsType.children.map((child: Type) => ({ 
+                  value: child.id, 
+                  label: child.name 
+                }));
+              }
+            }
+            // Fallback: ищем в senderSubSubTypes по parent_type
+            return state.senderSubSubTypes
+              .filter(t => t.parent_type === selectedSubType.id)
+              .map(t => ({ value: t.id, label: t.name }));
+          }
+          return [];
+        },
         required: false,
+        disabled: (values: any) => {
+          const selectedSubType = state.senderSubTypes.find(t => t.id === values.senderSubTypeId);
+          return selectedSubType?.name !== 'Федеральные суды';
+        },
         groupWith: ['senderName'],
         groupSize: 2 as const,
       },
@@ -601,16 +643,29 @@ export default function CorrespondenceList() {
       accessorKey: 'userName',
       header: 'Автор',
       filterFn: 'includesString',
-      cell: ({ getValue }) => (
-        <Group gap="sm">
-          <Avatar size="sm" radius="md" color="blue">
-            {(getValue() as string).charAt(0).toUpperCase()}
-          </Avatar>
-          <Text size="sm" c="var(--theme-text-primary)">
-            {getValue() as string}
-          </Text>
-        </Group>
-      ),
+      cell: ({ row }) => {
+        const userName = row.original.userName;
+        const userImage = row.original.user?.image;
+        // Если изображение есть, формируем data URL (если это base64 строка без префикса)
+        const avatarSrc = userImage 
+          ? (userImage.startsWith('data:') ? userImage : `data:image/jpeg;base64,${userImage}`)
+          : null;
+        return (
+          <Group gap="sm">
+            <Avatar 
+              size="sm" 
+              radius="md" 
+              color="blue"
+              src={avatarSrc || undefined}
+            >
+              {userName.charAt(0).toUpperCase()}
+            </Avatar>
+            <Text size="sm" c="var(--theme-text-primary)">
+              {userName}
+            </Text>
+          </Group>
+        );
+      },
     },
     {
       id: 'actions',

@@ -1,7 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import { validateData } from '../../middleware/validation.js';
 import { z } from 'zod';
-import { getLastUser, login, updateUserSettings, getUserSettings, updateUser, getUserData, getUsersWithEmail } from '../../controllers/app/user.js';
+import { getLastUser, login, updateUserSettings, getUserSettings, updateUser, getUserData, getUsersWithEmail, getUsersForResponsible } from '../../controllers/app/user.js';
 import { ldapAuth, updateUserPhoto } from '../../utils/ldap.js';
 import { authenticateToken } from '../../middleware/auth.js';
 import { clearSensitiveData } from '../../middleware/security.js';
@@ -20,6 +20,7 @@ const updatePhotoSchema = z.object({
 const router = express.Router();
 
 router.get('/users-with-email', authenticateToken, getUsersWithEmail)
+router.get('/users-for-responsible', authenticateToken, getUsersForResponsible)
 router.get('/:id', authenticateToken, getUserData)
 router.post('/login', validateData(ldapLoginSchema), ldapAuth, clearSensitiveData, login);
 router.get('/last-user/:login', getLastUser);

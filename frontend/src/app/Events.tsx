@@ -84,6 +84,7 @@ export default function Events() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [eventsError, setEventsError] = useState<string | null>(null);
+  const [last503ErrorTime, setLast503ErrorTime] = useState<number | null>(null);
   
   
   // Load birthdays
@@ -115,7 +116,13 @@ export default function Events() {
 
   // Load calendar events
   const loadCalendarEvents = useCallback(async () => {
-    if (!user?.email) {
+    // Проверяем user из контекста или localStorage
+    const currentUser = user || (() => {
+      const storedUser = localStorage.getItem('user');
+      return storedUser ? JSON.parse(storedUser) : null;
+    })();
+    
+    if (!currentUser?.email) {
       setEventsError('Пользователь не авторизован');
       return;
     }
@@ -124,6 +131,11 @@ export default function Events() {
     
     if (!authToken) {
       setEventsError('Токен авторизации отсутствует');
+      return;
+    }
+    
+    // Если была ошибка 503 менее 30 секунд назад, не делаем повторный запрос
+    if (last503ErrorTime && Date.now() - last503ErrorTime < 30000) {
       return;
     }
     
@@ -139,7 +151,8 @@ export default function Events() {
       const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${authToken}`
-        }
+        },
+        credentials: 'include'
       });
       
       if (!response.ok) {
@@ -150,9 +163,21 @@ export default function Events() {
         } catch {
           errorData = { error: 'Failed to load calendar events' };
         }
+        
+        // Специальная обработка для 503 (Service Unavailable)
+        if (response.status === 503) {
+          const errorMessage = errorData.message || errorData.error || 'Сервис календаря временно недоступен. События календаря не будут отображены.';
+          setEventsError(errorMessage);
+          setEvents([]); // Очищаем события, но не блокируем работу приложения
+          setLast503ErrorTime(Date.now()); // Запоминаем время ошибки 503
+          setLoadingEvents(false);
+          return;
+        }
+        
         const errorMessage = errorData.error || errorData.message || `Ошибка загрузки событий: ${response.status}`;
         setEventsError(errorMessage);
         setEvents([]);
+        setLoadingEvents(false);
         return;
       }
       
@@ -166,27 +191,44 @@ export default function Events() {
         setEventsError(null);
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Неизвестная ошибка при загрузке событий';
+      // Обработка сетевых ошибок и других исключений
+      const errorMessage = err instanceof Error 
+        ? (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')
+            ? 'Не удалось подключиться к серверу календаря. Проверьте подключение к интернету.'
+            : err.message)
+        : 'Неизвестная ошибка при загрузке событий';
       setEventsError(errorMessage);
-      setEvents([]);
+      setEvents([]); // Очищаем события при ошибке
     } finally {
       setLoadingEvents(false);
     }
-  }, [token, user]);
+  }, [token, user, last503ErrorTime]);
 
 
   useEffect(() => {
+    // Проверяем user из контекста или localStorage
+    const currentUser = user || (() => {
+      const storedUser = localStorage.getItem('user');
+      return storedUser ? JSON.parse(storedUser) : null;
+    })();
+    
     // Загружаем дни рождения только если пользователь авторизован
-    if (!user?.email) {
+    if (!currentUser?.email) {
       return;
     }
     
     fetchUpcomingBirthdays();
     
     // Загружаем календарь только если есть токен и пользователь авторизован
+    // Используем небольшую задержку, чтобы убедиться, что контекст обновился после логина
     const authToken = token || localStorage.getItem('token');
-    if (authToken && user) {
-      loadCalendarEvents().catch(() => {});
+    if (authToken && currentUser) {
+      // Используем setTimeout для небольшой задержки при входе через lastlogin
+      const timer = setTimeout(() => {
+        loadCalendarEvents().catch(() => {});
+      }, 100);
+      
+      return () => clearTimeout(timer);
     }
   }, [user, token, fetchUpcomingBirthdays, loadCalendarEvents]);
 
@@ -352,11 +394,18 @@ export default function Events() {
       {/* Объединенный список событий */}
       <Box>
         {eventsError && (
-          <Alert icon={<IconAlertCircle size={16} />} title="Ошибка загрузки событий" color="red" mb="md">
+          <Alert 
+            icon={<IconAlertCircle size={16} />} 
+            title={eventsError.includes('недоступен') || eventsError.includes('503') ? 'Сервис календаря недоступен' : 'Ошибка загрузки событий'} 
+            color={eventsError.includes('недоступен') || eventsError.includes('503') ? 'yellow' : 'red'} 
+            mb="md"
+          >
             {eventsError}
-            <Text size="xs" mt="xs" c="dimmed">
-              Проверьте консоль браузера (F12) для деталей ошибки
-            </Text>
+            {!eventsError.includes('недоступен') && !eventsError.includes('503') && (
+              <Text size="xs" mt="xs" c="dimmed">
+                Проверьте консоль браузера (F12) для деталей ошибки
+              </Text>
+            )}
           </Alert>
         )}
 

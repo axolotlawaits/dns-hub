@@ -6,7 +6,8 @@ import {
   getTypesByModelUuid,
   createType,
   updateType,
-  deleteType
+  deleteType,
+  loadCorrespondenceTypes
 } from '../../controllers/app/type.js';
 
 const router = express.Router();
@@ -30,5 +31,8 @@ router.patch('/:id', updateType);
 
 // Маршрут для удаления типа
 router.delete('/:id', deleteType);
+
+// Маршрут для загрузки типов корреспонденции
+router.post('/load-correspondence-types', loadCorrespondenceTypes);
 
 export default router;

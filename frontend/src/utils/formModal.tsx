@@ -150,8 +150,8 @@ export interface FormField {
   label: string | ((values: Record<string, any>) => string);
   type: FieldType;
   required?: boolean;
-  options?: Array<{ value: string; label: string; icon?: JSX.Element }>;
-  data?: Array<{ value: string; label: string; icon?: JSX.Element }>; // Для MultiSelect
+  options?: Array<{ value: string; label: string; icon?: JSX.Element }> | ((values: Record<string, any>) => Array<{ value: string; label: string; icon?: JSX.Element }>);
+  data?: Array<{ value: string; label: string; icon?: JSX.Element }> | ((values: Record<string, any>) => Array<{ value: string; label: string; icon?: JSX.Element }>); // Для MultiSelect
   step?: string;
   min?: number;
   max?: number;
@@ -573,6 +573,10 @@ const FileFieldsCard = memo(({
 
     if (!isVisible) return null;
 
+    // Определяем label и placeholder для мета-полей файлов (FileFieldConfig использует только строки)
+    const metaLabel = field.label;
+    const metaPlaceholder = field.placeholder;
+
     const commonProps = {
       size: 'sm' as const,
       radius: 'md' as const,
@@ -589,7 +593,7 @@ const FileFieldsCard = memo(({
         return (
           <TextInput
             key={field.name}
-            label={field.label}
+            label={metaLabel}
             value={fieldValue}
             onChange={(e) => {
               const raw = e.target.value;
@@ -597,21 +601,25 @@ const FileFieldsCard = memo(({
               handleChange(masked);
             }}
             onKeyDown={field.onKeyDown}
-            placeholder={field.placeholder}
+            placeholder={metaPlaceholder}
             required={isRequired}
             {...commonProps}
           />
         );
-      case 'select':
+      case 'select': {
+        const selectOptions: Array<{ value: string; label: string; icon?: JSX.Element }> = 
+          typeof field.options === 'function' 
+            ? (field.options as (values: Record<string, any>) => Array<{ value: string; label: string; icon?: JSX.Element }>)(file.meta || {})
+            : (field.options || []);
         return (
           <Select
             key={field.name}
-            label={field.label}
+            label={metaLabel}
             value={fieldValue}
             onChange={handleChange}
-            placeholder={field.placeholder}
+            placeholder={metaPlaceholder}
             required={isRequired}
-            data={field.options || []}
+            data={selectOptions}
             searchable={field.searchable}
             clearable={field.clearable}
             allowDeselect={field.allowDeselect}
@@ -621,14 +629,15 @@ const FileFieldsCard = memo(({
             {...commonProps}
           />
         );
+      }
       case 'date':
         return (
           <TextInput
             key={field.name}
-            label={field.label}
+            label={metaLabel}
             value={fieldValue}
             onChange={(e) => handleChange(e.target.value)}
-            placeholder={field.placeholder}
+            placeholder={metaPlaceholder}
             required={isRequired}
             type="date"
             {...commonProps}
@@ -638,10 +647,10 @@ const FileFieldsCard = memo(({
         return (
           <TextInput
             key={field.name}
-            label={field.label}
+            label={metaLabel}
             value={fieldValue}
             onChange={(e) => handleChange(e.target.value)}
-            placeholder={field.placeholder}
+            placeholder={metaPlaceholder}
             required={isRequired}
             type="datetime-local"
             {...commonProps}
@@ -1265,6 +1274,15 @@ export const DynamicFormModal = ({
     return grouped;
   }, []);
 
+  // Хелпер для вычисления опций (поддержка функций)
+  const getFieldOptions = useCallback((field: FormField): Array<{ value: string; label: string; icon?: JSX.Element }> => {
+    if (!field.options) return [];
+    if (typeof field.options === 'function') {
+      return field.options(form.values);
+    }
+    return field.options;
+  }, [form.values]);
+
   const renderField = useCallback((field: FormField) => {
     // Поддержка динамических label и placeholder через функции
     const labelValue = typeof field.label === 'function' ? field.label(form.values) : field.label;
@@ -1309,7 +1327,7 @@ export const DynamicFormModal = ({
             <MultiSelect
               key={field.name}
               label={labelValue}
-              data={(field.options || []).filter(option => option && option.value && option.label)}
+              data={getFieldOptions(field).filter(option => option && option.value && option.label)}
               value={current}
               searchable={field.searchable}
               onSearchChange={(s) => field.onSearchChange?.(s)}
@@ -1328,7 +1346,7 @@ export const DynamicFormModal = ({
           <Select
             key={field.name}
             {...commonProps}
-            data={field.options || []}
+            data={getFieldOptions(field)}
             searchable={field.searchable}
             onSearchChange={(s) => field.onSearchChange?.(s)}
             nothingFoundMessage="Не найдено"
@@ -1337,8 +1355,17 @@ export const DynamicFormModal = ({
             comboboxProps={{ withinPortal: true, zIndex: 10001 }}
             value={singleValue}
             onChange={(val) => {
-              form.setFieldValue(field.name, val);
-              field.onChange?.(val ?? '', form.setFieldValue);
+              const newValue = val ?? '';
+              form.setFieldValue(field.name, newValue);
+              // Вызываем onChange после обновления формы через requestAnimationFrame
+              const onChangeHandler = field.onChange;
+              if (onChangeHandler) {
+                requestAnimationFrame(() => {
+                  onChangeHandler(newValue, (path: string, value: any) => {
+                    form.setFieldValue(path, value);
+                  });
+                });
+              }
             }}
           />
         );
@@ -1349,7 +1376,7 @@ export const DynamicFormModal = ({
           <Select
             key={field.name}
             {...commonProps}
-            data={field.options || []}
+            data={getFieldOptions(field)}
             searchable
             nothingFoundMessage="Ничего не найдено"
             clearable
@@ -1358,19 +1385,32 @@ export const DynamicFormModal = ({
             comboboxProps={{ withinPortal: true, zIndex: 10001 }}
             value={singleValue}
             onChange={(val) => {
-              form.setFieldValue(field.name, val);
-              field.onChange?.(val ?? '', form.setFieldValue);
+              const newValue = val ?? '';
+              form.setFieldValue(field.name, newValue);
+              // Вызываем onChange после обновления формы через requestAnimationFrame
+              const onChangeHandler = field.onChange;
+              if (onChangeHandler) {
+                requestAnimationFrame(() => {
+                  onChangeHandler(newValue, (path: string, value: any) => {
+                    form.setFieldValue(path, value);
+                  });
+                });
+              }
             }}
           />
         );
       }
       case 'multiselect': {
         const current: string[] = (form.getInputProps(field.name) as any)?.value || [];
+        const multiselectOptions: Array<{ value: string; label: string; icon?: JSX.Element }> = 
+          typeof field.options === 'function' 
+            ? (field.options as (values: Record<string, any>) => Array<{ value: string; label: string; icon?: JSX.Element }>)(form.values)
+            : (field.options || []);
         return (
           <MultiSelect
             key={field.name}
             label={labelValue}
-            data={(field.options || []).filter(option => option && option.value && option.label)}
+            data={multiselectOptions.filter((option: any) => option && option.value && option.label)}
             value={current}
             searchable={field.searchable}
             onSearchChange={(s) => field.onSearchChange?.(s)}
@@ -1402,7 +1442,7 @@ export const DynamicFormModal = ({
       case 'file':
         return (
           <div key={field.name}>
-            <Text fw={500} mb="sm">{field.label}</Text>
+            <Text fw={500} mb="sm">{typeof field.label === 'function' ? field.label(form.values) : field.label}</Text>
             <FileUploadComponent
               onFilesDrop={handleFileDropFor(field.name)}
               attachments={attachmentsMap[field.name] || []}
@@ -1419,14 +1459,14 @@ export const DynamicFormModal = ({
         return (
           <Switch
             key={field.name}
-            label={field.label}
+            label={labelValue}
             checked={form.getInputProps(field.name, { type: 'checkbox' }).checked || false}
             onChange={(e) => {
               form.setFieldValue(field.name, e.currentTarget.checked);
               field.onChange?.(e.currentTarget.checked, form.setFieldValue);
             }}
             required={field.required}
-            disabled={field.disabled}
+            disabled={disabledValue}
             mb={field.mb}
           />
         );
@@ -1449,12 +1489,12 @@ export const DynamicFormModal = ({
               <Group gap="xs" align="flex-end">
                 <TextInput
                   key={field.name}
-                  label={field.label}
+                  label={labelValue}
                   value={iconValue}
                   readOnly
-                  placeholder={field.placeholder || 'Выберите иконку'}
+                  placeholder={placeholderValue || 'Выберите иконку'}
                   required={field.required}
-                  disabled={field.disabled}
+                  disabled={disabledValue}
                   mb={field.mb}
                   rightSection={
                     iconValue ? (
@@ -1739,7 +1779,7 @@ export const DynamicFormModal = ({
                       attachmentsMap[field.name] && attachmentsMap[field.name].length > 0 && (
                         <div key={`${field.name}-cards`} style={{ marginBottom: '24px' }}>
                           <Text fw={600} size="lg" mb="md" style={{ color: 'var(--theme-text-primary)' }}>
-                            📋 {field.label} ({attachmentsMap[field.name].length})
+                            📋 {typeof field.label === 'function' ? field.label(form.values) : field.label} ({attachmentsMap[field.name].length})
                           </Text>
                           <div 
                             style={{

@@ -267,16 +267,16 @@ const getCalendarEventsViaEWS = async (
   userId?: string,
   req?: any
 ): Promise<ExchangeCalendarEvent[]> => {
+  let useImpersonation = true;
+  let userPasswordMissing = false;
+  
   try {
     const ewsUrl = getEwsUrl();
     
     let ewsUsername = EXCHANGE_CONFIG.ewsUsername;
     let ewsPassword = EXCHANGE_CONFIG.ewsPassword;
     let ewsDomain = EXCHANGE_CONFIG.ewsDomain;
-    let useImpersonation = true;
     let userPassword: string | null = null;
-    
-    let userPasswordMissing = false;
     if (userId) {
       try {
         userPassword = await getUserExchangePassword(userId, req);
@@ -425,7 +425,33 @@ const getCalendarEventsViaEWS = async (
     if (errorBody.includes('ErrorNonExistentMailbox') || errorBody.includes('no mailbox')) {
       return [];
     }
+    
+    // Обработка сетевых ошибок и ошибок подключения
+    const errorMessage = error.message || '';
+    if (errorMessage.includes('ECONNREFUSED') || 
+        errorMessage.includes('ETIMEDOUT') || 
+        errorMessage.includes('ENOTFOUND') ||
+        errorMessage.includes('timeout') ||
+        errorMessage.includes('network') ||
+        error.code === 'ECONNREFUSED' ||
+        error.code === 'ETIMEDOUT' ||
+        error.code === 'ENOTFOUND') {
+      const networkError = new Error('Exchange server is unavailable or unreachable');
+      (networkError as any).isNetworkError = true;
+      throw networkError;
+    }
+    
     console.error('[Exchange] [getCalendarEventsViaEWS] Error:', error.message);
+    console.error('[Exchange] [getCalendarEventsViaEWS] Error stack:', error.stack);
+    console.error('[Exchange] [getCalendarEventsViaEWS] Error details:', {
+      message: error.message,
+      code: error.code,
+      name: error.name,
+      userId,
+      userEmail,
+      useImpersonation,
+      userPasswordMissing
+    });
     throw error;
   }
 };

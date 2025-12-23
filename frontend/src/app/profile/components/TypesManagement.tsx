@@ -19,10 +19,11 @@ import {
   Divider,
   Box
 } from '@mantine/core';
-import { IconEdit, IconTrash, IconPlus, IconAlertCircle, IconTags, IconFolder, IconChevronRight, IconChevronDown } from '@tabler/icons-react';
+import { IconEdit, IconTrash, IconPlus, IconAlertCircle, IconTags, IconFolder, IconChevronRight, IconChevronDown, IconDownload } from '@tabler/icons-react';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { FilterGroup } from '../../../utils/filter';
 import useAuthFetch from '../../../hooks/useAuthFetch';
+import { useUserContext } from '../../../hooks/useUserContext';
 import { API } from '../../../config/constants';
 
 interface Type {
@@ -62,8 +63,10 @@ export default function TypesManagement() {
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [loadingCorrespondenceTypes, setLoadingCorrespondenceTypes] = useState(false);
 
   const authFetch = useAuthFetch();
+  const { user } = useUserContext();
 
   useEffect(() => {
     fetchTypes();
@@ -234,6 +237,33 @@ export default function TypesManagement() {
     } catch (error) {
       console.error('Error deleting type:', error);
       setError('Ошибка удаления типа');
+    }
+  };
+
+  const handleLoadCorrespondenceTypes = async () => {
+    try {
+      setLoadingCorrespondenceTypes(true);
+      setError(null);
+      
+      const response = await authFetch(`${API}/type/load-correspondence-types`, {
+        method: 'POST',
+      });
+      
+      if (response && response.ok) {
+        await response.json();
+        await fetchTypes();
+        setError(null);
+        // Показываем успешное сообщение через alert (можно заменить на notification)
+        alert('Типы корреспонденции успешно загружены!');
+      } else {
+        const errorData = await response?.json();
+        setError(errorData?.error || errorData?.message || 'Ошибка загрузки типов корреспонденции');
+      }
+    } catch (error) {
+      console.error('Error loading correspondence types:', error);
+      setError('Ошибка загрузки типов корреспонденции');
+    } finally {
+      setLoadingCorrespondenceTypes(false);
     }
   };
 
@@ -460,9 +490,22 @@ export default function TypesManagement() {
       <Stack gap="md">
         <Group justify="space-between">
           <Title order={2}>Управление типами</Title>
-          <Button leftSection={<IconPlus size={18} />} onClick={handleCreate}>
-            Добавить тип
-          </Button>
+          <Group gap="sm">
+            {(user?.role === 'DEVELOPER' || user?.role === 'ADMIN') && (
+              <Button 
+                leftSection={<IconDownload size={18} />} 
+                onClick={handleLoadCorrespondenceTypes}
+                loading={loadingCorrespondenceTypes}
+                variant="light"
+                color="blue"
+              >
+                Загрузить типы корреспонденции
+              </Button>
+            )}
+            <Button leftSection={<IconPlus size={18} />} onClick={handleCreate}>
+              Добавить тип
+            </Button>
+          </Group>
         </Group>
 
         {error && (
@@ -666,7 +709,7 @@ export default function TypesManagement() {
                       gap: 16,
                     }}
                   >
-                    <IconTags size={48} color="var(--mantine-color-gray-4)" />
+                    <IconTags size={48} style={{ color: 'var(--mantine-color-dimmed)' }} />
                     <Text c="dimmed" size="lg">
                       {!selectedToolId 
                         ? 'Выберите инструмент слева для просмотра разделов'
@@ -684,7 +727,7 @@ export default function TypesManagement() {
                       gap: 16,
                     }}
                   >
-                    <IconTags size={48} color="var(--mantine-color-gray-4)" />
+                    <IconTags size={48} style={{ color: 'var(--mantine-color-dimmed)' }} />
                     <Text c="dimmed">
                       {columnFilters.length > 0 
                         ? 'Нет результатов по заданным фильтрам' 
@@ -709,33 +752,113 @@ export default function TypesManagement() {
                           const parentType = types.find(t => t.id === type.parent_type);
                           const hasChildren = types.some(t => t.parent_type === type.id);
                           
+                          // Вычисляем цвет границы с прозрачностью
+                          const getBorderColor = () => {
+                            if (level === 0) return undefined;
+                            const baseColor = parentType?.colorHex || 'var(--mantine-color-gray-4)';
+                            // Если это hex цвет, добавляем прозрачность через rgba
+                            if (baseColor.startsWith('#')) {
+                              const r = parseInt(baseColor.slice(1, 3), 16);
+                              const g = parseInt(baseColor.slice(3, 5), 16);
+                              const b = parseInt(baseColor.slice(5, 7), 16);
+                              return `rgba(${r}, ${g}, ${b}, 0.3)`;
+                            }
+                            return baseColor;
+                          };
+
                           return (
                             <Table.Tr 
                               key={type.id}
                               style={{
-                                backgroundColor: level > 0 ? 'var(--mantine-color-gray-0)' : undefined,
+                                borderLeft: level > 0 ? `3px solid ${getBorderColor()}` : undefined,
                               }}
                             >
                               <Table.Td>
-                                <Group gap="xs" style={{ paddingLeft: `${level * 20}px` }}>
-                                  {level > 0 && (
-                                    <IconChevronRight 
-                                      size={14} 
-                                      style={{ 
-                                        opacity: 0.5,
-                                        color: parentType?.colorHex || undefined
-                                      }} 
-                                    />
-                                  )}
-                                  {hasChildren && (
-                                    <IconFolder size={14} style={{ opacity: 0.6 }} />
-                                  )}
-                                  <Text 
-                                    fw={level === 0 ? 500 : 400}
-                                    c={type.colorHex || undefined}
-                                  >
-                                    {type.name}
-                                  </Text>
+                                <Group gap="xs" style={{ paddingLeft: `${level * 24}px`, position: 'relative' }}>
+                                  {/* Индикатор уровня с визуальными элементами */}
+                                  <Group gap={6} style={{ position: 'relative', zIndex: 1 }}>
+                                    {/* Отступы для уровней */}
+                                    {level > 0 && (
+                                      <Group gap={2} style={{ width: `${(level - 1) * 20}px`, justifyContent: 'flex-end' }}>
+                                        {/* Вертикальная линия для каждого уровня */}
+                                        {Array.from({ length: level }).map((_, idx) => (
+                                          <Box
+                                            key={idx}
+                                            style={{
+                                              width: '2px',
+                                              height: '100%',
+                                              backgroundColor: idx === level - 1 
+                                                ? (parentType?.colorHex || 'var(--mantine-color-gray-5)')
+                                                : 'transparent',
+                                              opacity: 0.4,
+                                              marginRight: idx < level - 1 ? '18px' : '0',
+                                            }}
+                                          />
+                                        ))}
+                                        {/* Горизонтальная линия и стрелка */}
+                                        <Box
+                                          style={{
+                                            width: '10px',
+                                            height: '2px',
+                                            backgroundColor: parentType?.colorHex || 'var(--mantine-color-gray-5)',
+                                            opacity: 0.5,
+                                          }}
+                                        />
+                                        <IconChevronRight 
+                                          size={14} 
+                                          style={{ 
+                                            opacity: 0.7,
+                                            color: parentType?.colorHex || 'var(--mantine-color-gray-6)',
+                                            marginLeft: '-4px',
+                                            marginRight: '2px'
+                                          }} 
+                                        />
+                                      </Group>
+                                    )}
+                                    {/* Иконка типа */}
+                                    {hasChildren ? (
+                                      <IconFolder 
+                                        size={18} 
+                                        style={{ 
+                                          opacity: 0.8, 
+                                          color: type.colorHex || 'var(--mantine-color-blue-6)',
+                                          flexShrink: 0
+                                        }} 
+                                      />
+                                    ) : level === 0 ? (
+                                      <IconTags size={16} style={{ opacity: 0.6, flexShrink: 0 }} />
+                                    ) : (
+                                      <Box 
+                                        style={{ 
+                                          width: 18, 
+                                          height: 18, 
+                                          display: 'flex', 
+                                          alignItems: 'center', 
+                                          justifyContent: 'center',
+                                          flexShrink: 0
+                                        }}
+                                      >
+                                        <Box
+                                          style={{
+                                            width: '6px',
+                                            height: '6px',
+                                            borderRadius: '50%',
+                                            backgroundColor: parentType?.colorHex || 'var(--mantine-color-gray-5)',
+                                            opacity: 0.6,
+                                          }}
+                                        />
+                                      </Box>
+                                    )}
+                                    {/* Название типа */}
+                                    <Text 
+                                      fw={level === 0 ? 600 : level === 1 ? 500 : 400}
+                                      c={type.colorHex || (level === 0 ? undefined : 'dimmed')}
+                                      size="sm"
+                                      style={{ flex: 1 }}
+                                    >
+                                      {type.name}
+                                    </Text>
+                                  </Group>
                                 </Group>
                               </Table.Td>
                               <Table.Td>

@@ -312,7 +312,8 @@ const deleteAttachments = async (attachmentIds: string[], correspondenceId: stri
 
   await Promise.all(
     attachments.map(async (attachment) => {
-      await deleteFileSafely(path.join(attachment.source));
+      const fullPath = path.join(process.cwd(), 'public', 'aho', 'correspondence', attachment.source);
+      await deleteFileSafely(fullPath);
       await prisma.correspondenceAttachment.delete({
         where: { id: attachment.id }
       });
@@ -508,10 +509,14 @@ export const deleteCorrespondence = async (
     });
 
     await Promise.all(
-      attachments.map(attachment => deleteFileSafely(attachment.source))
+      attachments.map(attachment => {
+        const fullPath = path.join(process.cwd(), 'public', 'aho', 'correspondence', attachment.source);
+        return deleteFileSafely(fullPath);
+      })
     );
 
     // Delete attachments and correspondence in a transaction
+    // Note: Cascade deletion will handle attachments automatically, but we delete files first
     await prisma.$transaction([
       prisma.correspondenceAttachment.deleteMany({
         where: { record_id: correspondenceId },
@@ -520,6 +525,39 @@ export const deleteCorrespondence = async (
         where: { id: correspondenceId },
       }),
     ]);
+
+    res.status(204).end();
+  } catch (error) {
+    if (handlePrismaError(error, res)) return;
+    next(error);
+  }
+};
+
+// Delete individual attachment
+export const deleteAttachment = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<any> => {
+  try {
+    const attachmentId = req.params.attachmentId;
+
+    const attachment = await prisma.correspondenceAttachment.findUnique({
+      where: { id: attachmentId },
+    });
+
+    if (!attachment) {
+      return res.status(404).json({ error: 'Attachment not found' });
+    }
+
+    // Delete file from disk
+    const fullPath = path.join(process.cwd(), 'public', 'aho', 'correspondence', attachment.source);
+    await deleteFileSafely(fullPath);
+
+    // Delete attachment record
+    await prisma.correspondenceAttachment.delete({
+      where: { id: attachmentId },
+    });
 
     res.status(204).end();
   } catch (error) {

@@ -497,7 +497,7 @@ model CorrespondenceAttachment {
   record_id      String
   userAdd        String
   source         String
-  correspondence Correspondence @relation(fields: [record_id], references: [id])
+  correspondence Correspondence @relation(fields: [record_id], references: [id], onDelete: Cascade)
   user           User           @relation(fields: [userAdd], references: [id])
 }
 

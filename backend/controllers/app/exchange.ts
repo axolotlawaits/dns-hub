@@ -54,13 +54,52 @@ export const getMyCalendarEvents = async (req: Request, res: Response): Promise<
       res.json({ events });
     } catch (exchangeError: any) {
       console.error('[Exchange Controller] Exchange service error:', exchangeError);
+      console.error('[Exchange Controller] Error stack:', exchangeError.stack);
+      console.error('[Exchange Controller] Error details:', {
+        message: exchangeError.message,
+        code: exchangeError.code,
+        isNetworkError: exchangeError.isNetworkError,
+        userId: token?.userId,
+        userEmail
+      });
+      
+      // Определяем тип ошибки для правильного HTTP статуса
+      const errorMessage = exchangeError.message || 'Unknown error occurred while fetching calendar events';
+      const isNetworkError = exchangeError.isNetworkError || 
+                            errorMessage.includes('ECONNREFUSED') || 
+                            errorMessage.includes('ETIMEDOUT') || 
+                            errorMessage.includes('ENOTFOUND') ||
+                            errorMessage.includes('timeout') ||
+                            errorMessage.includes('network') ||
+                            errorMessage.includes('unavailable') ||
+                            errorMessage.includes('unreachable');
+      
+      // Если Exchange сервер недоступен или не отвечает, возвращаем 503
+      if (isNetworkError) {
+        res.status(503).json({ 
+          error: 'Exchange service unavailable',
+          message: 'Сервис календаря временно недоступен. Пожалуйста, попробуйте позже.'
+        });
+        return;
+      }
+      
+      // Для других ошибок возвращаем 500
       res.status(500).json({ 
         error: 'Failed to get calendar events from Exchange',
-        message: exchangeError.message || 'Unknown error occurred while fetching calendar events'
+        message: errorMessage
       });
     }
   } catch (error: any) {
     console.error('[Exchange Controller] Error getting calendar events:', error);
-    res.status(500).json({ error: 'Failed to get calendar events', message: error.message });
+    console.error('[Exchange Controller] Error stack:', error.stack);
+    console.error('[Exchange Controller] Error details:', {
+      message: error.message,
+      name: error.name,
+      userId: (req as any).token?.userId
+    });
+    res.status(500).json({ 
+      error: 'Failed to get calendar events', 
+      message: error.message || 'Unknown error occurred'
+    });
   }
 };

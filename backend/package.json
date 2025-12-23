@@ -11,6 +11,8 @@
     "dev:minimal": "cross-env ENABLE_BOTS=false ENABLE_CRON=false tsx server.ts",
     "dev:compiled": "npm run build && node build/server.js",
     "generate-encryption-key": "node scripts/generate-encryption-key.js",
+    "load-correspondence-types": "node scripts/load-correspondence-types.js",
+    "export-correspondence-types": "node scripts/export-correspondence-types.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

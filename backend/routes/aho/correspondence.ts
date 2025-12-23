@@ -5,6 +5,7 @@ import {
   getCorrespondenceById,
   updateCorrespondence,
   deleteCorrespondence,
+  deleteAttachment,
   getSenderTypes,
   getDocumentTypes,
 } from '../../controllers/aho/correspondence.js';
@@ -58,5 +59,8 @@ router.put('/:id', uploadCorrespondence.any(), (req, res, next) => {
 
 // Delete a correspondence
 router.delete('/:id', deleteCorrespondence);
+
+// Delete an individual attachment
+router.delete('/attachments/:attachmentId', deleteAttachment);
 
 export default router;

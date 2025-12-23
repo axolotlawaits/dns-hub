@@ -38,7 +38,7 @@ const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: 
     const [error, setError] = useState(false);
 
     useEffect(() => {
-      if (!src) return;
+      if (!src || src.trim() === '') return;
 
       let currentBlobUrl: string | null = null;
 
@@ -56,6 +56,12 @@ const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: 
               throw Object.assign(new Error('Unauthorized'), { status: 401 });
             }
             if (!response.ok) {
+              // Для 404 не показываем ошибку, просто возвращаем null
+              if (response.status === 404) {
+                setError(false);
+                setLoading(false);
+                return null;
+              }
               throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
             }
 
@@ -70,6 +76,11 @@ const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: 
             // Первая попытка с текущим токеном
             const token = localStorage.getItem('token');
             const blob = await doFetch(token);
+            if (!blob) {
+              setError(true);
+              setLoading(false);
+              return;
+            }
             const newBlobUrl = URL.createObjectURL(blob);
             currentBlobUrl = newBlobUrl;
             setBlobUrl(newBlobUrl);
@@ -88,6 +99,11 @@ const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: 
                   const newToken = await refreshResponse.json();
                   localStorage.setItem('token', newToken);
                   const blob = await doFetch(newToken);
+                  if (!blob) {
+                    setError(true);
+                    setLoading(false);
+                    return;
+                  }
                   const newBlobUrl = URL.createObjectURL(blob);
                   currentBlobUrl = newBlobUrl;
                   setBlobUrl(newBlobUrl);
@@ -148,7 +164,12 @@ const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: 
     return <Text c="red">Ошибка загрузки файла</Text>;
   }
 
-  return children(blobUrl || src);
+  const finalUrl = blobUrl || (src && src.trim() !== '' ? src : null);
+  if (!finalUrl) {
+    return <Text c="dimmed">Файл не найден</Text>;
+  }
+
+  return children(finalUrl);
 };
 
 // Компонент для загрузки изображений с заголовками авторизации
@@ -165,24 +186,29 @@ const AuthImage = ({ src, alt, onMimeTypeDetected, onLoad, onError, ...props }: 
       onMimeTypeDetected={onMimeTypeDetected}
       onError={onError}
     >
-      {(blobUrl: string) => (
-        <img 
-          src={blobUrl} 
-          alt={alt || ''} 
-          onLoad={handleLoad}
-          onError={onError}
-          style={{
-            maxWidth: '100%',
-            maxHeight: '100%',
-            width: 'auto',
-            height: 'auto',
-            objectFit: 'contain',
-            objectPosition: 'center',
-            display: 'block'
-          }}
-          {...props} 
-        />
-      )}
+      {(blobUrl: string) => {
+        if (!blobUrl || blobUrl.trim() === '') {
+          return <Text c="dimmed">Изображение не найдено</Text>;
+        }
+        return (
+          <img 
+            src={blobUrl} 
+            alt={alt || ''} 
+            onLoad={handleLoad}
+            onError={onError}
+            style={{
+              maxWidth: '100%',
+              maxHeight: '100%',
+              width: 'auto',
+              height: 'auto',
+              objectFit: 'contain',
+              objectPosition: 'center',
+              display: 'block'
+            }}
+            {...props} 
+          />
+        );
+      }}
     </AuthFileLoader>
   );
 };
@@ -1078,38 +1104,53 @@ export const FilePreviewModal = ({
             className={`file-preview-modal__thumbnail${isActive ? ' file-preview-modal__thumbnail--active' : ''}`}
           >
             <Box className="file-preview-modal__thumbnail-preview">
-              {meta.isImage && (
+              {meta.isImage && meta.previewUrl && meta.previewUrl.trim() !== '' && (
                 <AuthFileLoader src={meta.previewUrl}>
-                  {(blobUrl: string) => (
-                    <img
-                      src={blobUrl}
-                      alt={meta.name}
-                      className="file-preview-modal__thumbnail-media"
-                    />
-                  )}
+                  {(blobUrl: string) => {
+                    if (!blobUrl || blobUrl.trim() === '') {
+                      return <FileIcon size={24} />;
+                    }
+                    return (
+                      <img
+                        src={blobUrl}
+                        alt={meta.name}
+                        className="file-preview-modal__thumbnail-media"
+                      />
+                    );
+                  }}
                 </AuthFileLoader>
               )}
 
-              {meta.isVideo && (
+              {meta.isVideo && meta.previewUrl && meta.previewUrl.trim() !== '' && (
                 <AuthFileLoader src={meta.previewUrl}>
-                  {(blobUrl: string) => (
-                    <video
-                      src={blobUrl}
-                      className="file-preview-modal__thumbnail-media"
-                      muted
-                      loop
-                      playsInline
-                      autoPlay
-                    />
-                  )}
+                  {(blobUrl: string) => {
+                    if (!blobUrl || blobUrl.trim() === '') {
+                      return <FileIcon size={24} />;
+                    }
+                    return (
+                      <video
+                        src={blobUrl}
+                        className="file-preview-modal__thumbnail-media"
+                        muted
+                        loop
+                        playsInline
+                        autoPlay
+                      />
+                    );
+                  }}
                 </AuthFileLoader>
               )}
 
-              {meta.isPdf && (
+              {meta.isPdf && meta.previewUrl && meta.previewUrl.trim() !== '' && (
                 <AuthFileLoader src={meta.previewUrl}>
-                  {(blobUrl: string) => (
-                    <PdfThumbnail src={blobUrl} className="file-preview-modal__thumbnail-media" />
-                  )}
+                  {(blobUrl: string) => {
+                    if (!blobUrl || blobUrl.trim() === '') {
+                      return <FileIcon size={24} />;
+                    }
+                    return (
+                      <PdfThumbnail src={blobUrl} className="file-preview-modal__thumbnail-media" />
+                    );
+                  }}
                 </AuthFileLoader>
               )}
 
@@ -1248,15 +1289,19 @@ export const FilePreviewModal = ({
                 onPointerLeave={handlePointerUp}
                 onPointerCancel={handlePointerUp}
               >
-                <AuthImage
-                  src={fileUrl}
-                  alt={fileName}
-                  fit="contain"
-                  className="file-preview-modal__image"
-                  onMimeTypeDetected={setFileMimeType}
-                  onLoad={handleImageLoad}
-                  onError={handleImageError}
-                />
+                {fileUrl && fileUrl.trim() !== '' ? (
+                  <AuthImage
+                    src={fileUrl}
+                    alt={fileName}
+                    fit="contain"
+                    className="file-preview-modal__image"
+                    onMimeTypeDetected={setFileMimeType}
+                    onLoad={handleImageLoad}
+                    onError={handleImageError}
+                  />
+                ) : (
+                  <Text c="dimmed">Изображение не найдено</Text>
+                )}
               </Box>
           </Box>
           </Box>
@@ -1372,28 +1417,35 @@ export const FilePreviewModal = ({
                 overflow: 'hidden'
               }}
             >
-              <AuthFileLoader 
-                src={fileUrl} 
-                onMimeTypeDetected={setFileMimeType}
-                onLoad={() => setLoading(false)}
-                onError={() => setError(true)}
-              >            
-                {(blobUrl: string) => (
-                  <iframe
-                    title="PDF Viewer"
-                    src={`${blobUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      border: 'none',
-                      overflow: 'hidden',
-                      display: 'block'
-                    }}
-                    scrolling="no"
-                    frameBorder="0"
-                  />
-                )}
-              </AuthFileLoader>
+              {fileUrl && fileUrl.trim() !== '' ? (
+                <AuthFileLoader 
+                  src={fileUrl} 
+                  onMimeTypeDetected={setFileMimeType}
+                  onLoad={() => setLoading(false)}
+                  onError={() => setError(true)}
+                >            
+                  {(blobUrl: string) => {
+                    if (!blobUrl || blobUrl.trim() === '') {
+                      return <Text c="dimmed">PDF не найден</Text>;
+                    }
+                    return (
+                      <iframe
+                        title="PDF Viewer"
+                        src={`${blobUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          border: 'none',
+                          overflow: 'hidden',
+                          display: 'block'
+                        }}
+                        scrolling="no"
+                        frameBorder="0"
+                      />
+                    );
+                  }}
+                </AuthFileLoader>
+              ) : null}
             </Box>
           </Box>
           {/* Панель зума для PDF */}
@@ -1475,22 +1527,31 @@ export const FilePreviewModal = ({
           </Group>
           
           <Box className="file-preview-modal__audio-wrapper">
-            <AuthFileLoader 
-              src={fileUrl} 
-              onMimeTypeDetected={setFileMimeType}
-              onLoad={() => setLoading(false)}
-              onError={() => setError(true)}
-            >
-              {(blobUrl: string) => (
-                <audio
-                  controls
-                  src={blobUrl}
-                  className="file-preview-modal__audio-player"
-                >
-                  Ваш браузер не поддерживает элемент audio.
-                </audio>
-              )}
-            </AuthFileLoader>
+            {fileUrl && fileUrl.trim() !== '' ? (
+              <AuthFileLoader 
+                src={fileUrl} 
+                onMimeTypeDetected={setFileMimeType}
+                onLoad={() => setLoading(false)}
+                onError={() => setError(true)}
+              >
+                {(blobUrl: string) => {
+                  if (!blobUrl || blobUrl.trim() === '') {
+                    return <Text c="dimmed">Аудио файл не найден</Text>;
+                  }
+                  return (
+                    <audio
+                      controls
+                      src={blobUrl}
+                      className="file-preview-modal__audio-player"
+                    >
+                      Ваш браузер не поддерживает элемент audio.
+                    </audio>
+                  );
+                }}
+              </AuthFileLoader>
+            ) : (
+              <Text c="dimmed">Аудио файл не найден</Text>
+            )}
           </Box>
         </Box>
       );
@@ -1520,24 +1581,33 @@ export const FilePreviewModal = ({
             </Button>
           </Group>
           
-          <AuthFileLoader 
-            src={fileUrl} 
-            onMimeTypeDetected={setFileMimeType}
-            onLoad={() => setLoading(false)}
-            onError={() => setError(true)}
-          >
-            {(blobUrl: string) => (
-              <Box className="file-preview-modal__video-container">
-                <video
-                  controls
-                  className="file-preview-modal__video-player"
-                  src={blobUrl}
-                >
-                  Ваш браузер не поддерживает видео.
-                </video>
-              </Box>
-            )}
-          </AuthFileLoader>
+          {fileUrl && fileUrl.trim() !== '' ? (
+            <AuthFileLoader 
+              src={fileUrl} 
+              onMimeTypeDetected={setFileMimeType}
+              onLoad={() => setLoading(false)}
+              onError={() => setError(true)}
+            >
+              {(blobUrl: string) => {
+                if (!blobUrl || blobUrl.trim() === '') {
+                  return <Text c="dimmed">Видео файл не найден</Text>;
+                }
+                return (
+                  <Box className="file-preview-modal__video-container">
+                    <video
+                      controls
+                      className="file-preview-modal__video-player"
+                      src={blobUrl}
+                    >
+                      Ваш браузер не поддерживает видео.
+                    </video>
+                  </Box>
+                );
+              }}
+            </AuthFileLoader>
+          ) : (
+            <Text c="dimmed">Видео файл не найден</Text>
+          )}
         </Box>
       );
     }
@@ -1598,19 +1668,28 @@ export const FilePreviewModal = ({
                   : '100%'
               }}
             >
-              <AuthFileLoader 
-                src={fileUrl} 
-                onMimeTypeDetected={setFileMimeType}
-                onLoad={() => setLoading(false)}
-                onError={() => setError(true)}
-              >
-                {(blobUrl: string) => (
-                  <iframe
-                    title="File Viewer"
-                    src={blobUrl}
-                  />
-                )}
-              </AuthFileLoader>
+              {fileUrl && fileUrl.trim() !== '' ? (
+                <AuthFileLoader 
+                  src={fileUrl} 
+                  onMimeTypeDetected={setFileMimeType}
+                  onLoad={() => setLoading(false)}
+                  onError={() => setError(true)}
+                >
+                  {(blobUrl: string) => {
+                    if (!blobUrl || blobUrl.trim() === '') {
+                      return <Text c="dimmed">Файл не найден</Text>;
+                    }
+                    return (
+                      <iframe
+                        title="File Viewer"
+                        src={blobUrl}
+                      />
+                    );
+                  }}
+                </AuthFileLoader>
+              ) : (
+                <Text c="dimmed">Файл не найден</Text>
+              )}
             </Box>
           </Box>
         </Box>

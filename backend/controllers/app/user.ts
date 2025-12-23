@@ -607,6 +607,47 @@ export const getUsersWithEmail = async (req: Request, res: Response): Promise<an
   }
 };
 
+/**
+ * GET /api/user/users-for-responsible
+ * Получить список пользователей из таблицы User для выбора ответственного
+ */
+export const getUsersForResponsible = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const token = (req as any).token;
+    if (!token || !token.userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Получаем всех пользователей из таблицы User
+    const users = await prisma.user.findMany({
+      select: {
+        id: true,
+        name: true,
+        email: true
+      },
+      orderBy: {
+        name: 'asc'
+      }
+    });
+
+    // Форматируем для фронтенда
+    const formattedUsers = users
+      .filter(u => u.name) // Фильтруем только тех, у кого есть имя
+      .map(u => ({
+        value: u.id,
+        label: u.name || 'Без имени',
+        id: u.id,
+        name: u.name,
+        email: u.email || null
+      }));
+
+    return res.status(200).json(formattedUsers);
+  } catch (error: any) {
+    console.error('[User] Error getting users for responsible:', error);
+    return res.status(500).json({ error: 'Failed to get users', message: error.message });
+  }
+};
+
 export const getUserData = async (req: Request, res: Response): Promise<any> => {
   const userId = req.params.id
 
