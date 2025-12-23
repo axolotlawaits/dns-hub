@@ -15,7 +15,6 @@ import {
   Divider,
   Card,
   Stack,
-  Title,
   Button,
   Flex
 } from '@mantine/core';
@@ -39,6 +38,7 @@ export default function NewsList() {
   const { user } = useUserContext();
   const [news, setNews] = useState<News[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [selectedNews, setSelectedNews] = useState<News | null>(null);
   const [newsForm, setNewsForm] = useState({
     name: '',
@@ -51,7 +51,7 @@ export default function NewsList() {
   const [viewModalOpened, { open: openViewModal, close: closeViewModal }] = useDisclosure(false);
   const [editModalOpened, { open: openEditModal, close: closeEditModal }] = useDisclosure(false);
   const [createModalOpened, { open: openCreateModal, close: closeCreateModal }] = useDisclosure(false);
-  const [deleteModalOpened, { close: closeDeleteModal }] = useDisclosure(false);
+  const [deleteModalOpened, { open: openDeleteModal, close: closeDeleteModal }] = useDisclosure(false);
   const [allNewsModalOpened, { open: openAllNewsModal, close: closeAllNewsModal }] = useDisclosure(false);
 
   const calculateVisibleCount = () => {
@@ -98,6 +98,7 @@ export default function NewsList() {
 
   const handleCreateNews = async () => {
     try {
+      setSaving(true);
       const token = localStorage.getItem('token');
       const response = await fetch(`${API}/news`, {
         method: 'POST',
@@ -119,6 +120,8 @@ export default function NewsList() {
         closeCreateModal();
     } catch (error) {
       console.error('Ошибка создания новости:', error);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -126,6 +129,7 @@ export default function NewsList() {
     if (!selectedNews) return;
 
     try {
+      setSaving(true);
       const token = localStorage.getItem('token');
       const response = await fetch(`${API}/news/${selectedNews.id}`, {
         method: 'PATCH',
@@ -143,11 +147,14 @@ export default function NewsList() {
 
       const updatedNews = await response.json();
       setNews(news.map(n => n.id === selectedNews.id ? updatedNews : n));
-      setSelectedNews(null);
       setNewsForm({ name: '', description: '', userId: user?.id || '' });
       closeEditModal();
+      closeViewModal(); // Закрываем модальное окно просмотра, если оно было открыто
+      setSelectedNews(null); // Очищаем selectedNews после закрытия модальных окон
     } catch (error) {
       console.error('Ошибка обновления новости:', error);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -171,6 +178,7 @@ export default function NewsList() {
       setNews(news.filter(n => n.id !== selectedNews.id));
       setSelectedNews(null);
       closeDeleteModal();
+      closeViewModal(); // Закрываем модальное окно просмотра после удаления
     } catch (error) {
       console.error('Ошибка удаления новости:', error);
     }
@@ -207,7 +215,7 @@ export default function NewsList() {
             Новости
           </Text>
         </Group>
-        {(user?.role === 'DEVELOPER' || user?.role === 'ADMIN') && (
+        {user && (
           <Button
             leftSection={<IconPlus size={16} />}
             variant="light"
@@ -218,7 +226,7 @@ export default function NewsList() {
               openCreateModal();
             }}
           >
-            Добавить новость
+            {(user?.role === 'DEVELOPER' || user?.role === 'ADMIN') ? 'Добавить новость' : 'Предложить новость'}
           </Button>
         )}
       </Group>
@@ -274,8 +282,8 @@ export default function NewsList() {
               }}
             />
             
-            <Stack gap="sm" style={{ height: '100%', justifyContent: 'space-between', position: 'relative', zIndex: 1 }}>
-              <Box>
+            <Stack gap="sm" style={{ height: '100%', justifyContent: 'space-between', position: 'relative', zIndex: 1, minHeight: 0 }}>
+              <Box style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                 <Text 
                   size="sm" 
                   fw={700} 
@@ -287,30 +295,56 @@ export default function NewsList() {
                     overflow: 'hidden',
                     lineHeight: 1.3,
                     color: 'var(--theme-text-primary)',
-                    fontSize: '14px'
+                    fontSize: '14px',
+                    flexShrink: 0
                   }}
                 >
                   {newsItem.name}
                 </Text>
-                <Text 
-                  size="xs" 
-                  opacity={0.8}
+                <Box
                   style={{
-                    display: '-webkit-box',
-                    WebkitLineClamp: 3,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden',
-                    lineHeight: 1.4,
+                    position: 'relative',
                     flex: 1,
-                    color: 'var(--theme-text-secondary)',
-                    fontSize: '12px'
+                    overflow: 'hidden',
+                    minHeight: 0,
+                    paddingBottom: '1em', // Отступ для градиента
                   }}
                 >
-                  {truncateText(newsItem.description.replace(/<[^>]*>/g, ''), 120)}
-                </Text>
+                  <Text 
+                    size="xs" 
+                    opacity={0.8}
+                    style={{
+                      whiteSpace: 'pre-line', // Сохраняет переносы строк
+                      lineHeight: 1.4,
+                      color: 'var(--theme-text-secondary)',
+                      fontSize: '12px',
+                    }}
+                  >
+                    {newsItem.description
+                      .replace(/<br\s*\/?>/gi, '\n') // Заменяем <br> на перенос строки
+                      .replace(/<\/p>/gi, '\n') // Заменяем закрывающий </p> на перенос
+                      .replace(/<\/div>/gi, '\n') // Заменяем закрывающий </div> на перенос
+                      .replace(/<\/li>/gi, '\n') // Заменяем закрывающий </li> на перенос
+                      .replace(/<[^>]*>/g, '') // Удаляем все остальные HTML теги
+                      .replace(/\n{3,}/g, '\n\n') // Удаляем множественные переносы (более 2 подряд)
+                      .trim()}
+                  </Text>
+                  {/* Градиент для плавного обрезания текста */}
+                  <Box
+                    style={{
+                      position: 'absolute',
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      height: '1.5em', // Высота градиента
+                      background: 'linear-gradient(to top, var(--theme-bg-elevated) 0%, transparent 100%)',
+                      pointerEvents: 'none', // Чтобы не блокировать события мыши
+                    }}
+                  />
+                </Box>
               </Box>
               
-              <Box>
+              <Box style={{ flexShrink: 0 }}>
                 <Divider 
                   mb="sm" 
                   style={{ 
@@ -320,6 +354,7 @@ export default function NewsList() {
                 />
                 <Group justify="space-between" align="center">
                   <Box
+                    className="news-date-badge"
                     style={{
                       background: 'linear-gradient(135deg, var(--color-primary-50) 0%, var(--color-primary-100) 100%)',
                       padding: '4px 8px',
@@ -327,7 +362,12 @@ export default function NewsList() {
                       border: '1px solid var(--color-primary-200)'
                     }}
                   >
-                    <Text size="xs" fw={600} c="var(--color-primary-700)">
+                    <Text 
+                      size="xs" 
+                      fw={600} 
+                      className="news-date-text"
+                      c="var(--color-primary-700)"
+                    >
                       {dayjs(newsItem.createdAt).format('DD.MM')}
                     </Text>
                   </Box>
@@ -335,13 +375,14 @@ export default function NewsList() {
                     variant="light" 
                     color="blue" 
                     size="sm"
+                    className="news-arrow-icon"
                     style={{
                       background: 'var(--color-primary-100)',
                       border: '1px solid var(--color-primary-200)',
                       transition: 'all 0.2s ease'
                     }}
                   >
-                    <IconChevronRight size={14} />
+                    <IconChevronRight size={14} className="news-arrow-icon-svg" />
                   </ActionIcon>
                 </Group>
               </Box>
@@ -453,7 +494,7 @@ export default function NewsList() {
       <Modal
         opened={viewModalOpened}
         onClose={closeViewModal}
-        title="Просмотр новости"
+        title={selectedNews?.name || "Просмотр новости"}
         size="lg"
         className="form-modal"
         centered
@@ -466,7 +507,6 @@ export default function NewsList() {
       >
         {selectedNews && (
           <Stack gap="md" p="md">
-            <Title order={3}>{selectedNews.name}</Title>
             <div dangerouslySetInnerHTML={{ __html: selectedNews.description }} />
             <Divider />
             <Group justify="space-between">
@@ -491,7 +531,9 @@ export default function NewsList() {
                   <ActionIcon
                     variant="subtle"
                     color="red"
-                    onClick={handleRemoveNews}
+                    onClick={() => {
+                      openDeleteModal();
+                    }}
                   >
                     <IconTrash size={16} />
                   </ActionIcon>
@@ -505,7 +547,7 @@ export default function NewsList() {
       <Modal
         opened={createModalOpened}
         onClose={closeCreateModal}
-        title="Создать новость"
+        title={user && (user?.role === 'DEVELOPER' || user?.role === 'ADMIN') ? 'Создать новость' : 'Предложить новость'}
         size="lg"
         className="form-modal"
         centered
@@ -513,8 +555,8 @@ export default function NewsList() {
           backgroundOpacity: 0.5,
         }}
         withCloseButton
-        closeOnClickOutside
-        closeOnEscape
+        closeOnClickOutside={!saving}
+        closeOnEscape={!saving}
       >
         <Stack gap="md" p="md">
           <TextInput
@@ -522,6 +564,7 @@ export default function NewsList() {
             value={newsForm.name}
             onChange={(e) => setNewsForm({ ...newsForm, name: e.target.value })}
             placeholder="Введите заголовок новости"
+            disabled={saving}
           />
           <Box>
             <Text size="sm" fw={500} mb="xs">Описание</Text>
@@ -531,11 +574,11 @@ export default function NewsList() {
             />
           </Box>
           <Group justify="flex-end">
-            <Button variant="outline" onClick={closeCreateModal}>
+            <Button variant="outline" onClick={closeCreateModal} disabled={saving}>
               Отмена
             </Button>
-            <Button onClick={handleCreateNews}>
-              Создать
+            <Button onClick={handleCreateNews} loading={saving}>
+              {user && (user?.role === 'DEVELOPER' || user?.role === 'ADMIN') ? 'Создать' : 'Предложить'}
             </Button>
               </Group>
         </Stack>
@@ -552,8 +595,8 @@ export default function NewsList() {
           backgroundOpacity: 0.5,
         }}
         withCloseButton
-        closeOnClickOutside
-        closeOnEscape
+        closeOnClickOutside={!saving}
+        closeOnEscape={!saving}
       >
         <Stack gap="md" p="md">
           <TextInput
@@ -561,6 +604,7 @@ export default function NewsList() {
             value={newsForm.name}
             onChange={(e) => setNewsForm({ ...newsForm, name: e.target.value })}
             placeholder="Введите заголовок новости"
+            disabled={saving}
           />
           <Box>
             <Text size="sm" fw={500} mb="xs">Описание</Text>
@@ -570,10 +614,10 @@ export default function NewsList() {
             />
           </Box>
           <Group justify="flex-end">
-            <Button variant="outline" onClick={closeEditModal}>
+            <Button variant="outline" onClick={closeEditModal} disabled={saving}>
               Отмена
           </Button>
-            <Button onClick={handleUpdateNews}>
+            <Button onClick={handleUpdateNews} loading={saving}>
               Сохранить
           </Button>
           </Group>
@@ -645,9 +689,10 @@ export default function NewsList() {
                 <ActionIcon
                   variant="subtle"
                   size="sm"
+                  className="news-arrow-icon"
                   onClick={() => handleViewNews(newsItem)}
                 >
-                  <IconChevronRight size={14} />
+                  <IconChevronRight size={14} className="news-arrow-icon-svg" />
                 </ActionIcon>
               </Group>
             </Card>

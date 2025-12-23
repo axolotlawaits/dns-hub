@@ -5,8 +5,11 @@ import { Request, Response, NextFunction } from 'express';
  * Защищает от передачи паролей по незащищенному соединению
  */
 export const requireHTTPS = (req: Request, res: Response, next: NextFunction): void => {
-  // В development разрешаем HTTP
-  if (process.env.NODE_ENV === 'development') {
+  // Разрешаем HTTP для localhost и в development окружении
+  const isLocalhost = req.ip === '::1' || req.ip === '127.0.0.1' || req.hostname === 'localhost' || req.hostname === '127.0.0.1';
+  const isDevelopment = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
+  
+  if (isLocalhost || isDevelopment) {
     return next();
   }
 

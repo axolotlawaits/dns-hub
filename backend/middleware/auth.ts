@@ -3,29 +3,21 @@ import jwt from 'jsonwebtoken'
 import { accessPublicKey, refreshPublicKey, prisma, accessPrivateKey, refreshPrivateKey } from '../server.js';
 
 export const authenticateToken = async (req: Request, res: Response, next: NextFunction): Promise<any> => {
-  console.log(`[Auth Middleware] 🔐 Authenticating request: ${req.method} ${req.path}`);
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
-    console.log(`[Auth Middleware] ❌ No token found in request`);
     return res.sendStatus(401);
   }
-
-  console.log(`[Auth Middleware] ✅ Token found, length: ${token.length}`);
 
   try {
     const decodedToken = jwt.verify(token, accessPublicKey, { algorithms: ['RS256'] });
     (req as any).token = decodedToken;
-    console.log(`[Auth Middleware] ✅ Token verified, userId: ${(decodedToken as any).userId}`);
-
     next();
   } catch (err) {
     if (err instanceof jwt.TokenExpiredError) {
-      console.log(`[Auth Middleware] ❌ Token expired`);
       return res.status(401).json({ message: 'Token has expired' });
     }
-    console.log(`[Auth Middleware] ❌ JWT verification error:`, err instanceof Error ? err.message : 'Unknown error');
     return res.sendStatus(401);
   }
 }
@@ -139,7 +131,6 @@ export const refreshToken = async (req: Request, res: Response): Promise<any> =>
     // Сохраняем impersonatedBy, если он есть в refresh token
     if (payload.impersonatedBy) {
       newPayload.impersonatedBy = payload.impersonatedBy;
-      console.log('[refreshToken] Сохраняем impersonatedBy:', payload.impersonatedBy);
     }
     
     const newAccessToken = jwt.sign(newPayload, accessPrivateKey, { algorithm: 'RS256', expiresIn: '30m' })
@@ -152,7 +143,6 @@ export const refreshToken = async (req: Request, res: Response): Promise<any> =>
       maxAge: 90 * 24 * 60 * 60 * 1000
     })
 
-    console.log('New access token generated successfully')
     res.json(newAccessToken)
   });
 }
@@ -173,7 +163,6 @@ export const authenticateTokenQuery = async (req: Request, res: Response, next: 
     if (err instanceof jwt.TokenExpiredError) {
       return res.status(401).json({ message: 'Token has expired' });
     }
-    console.log('JWT verification error:', err instanceof Error ? err.message : 'Unknown error');
     return res.status(401).json({ message: 'Invalid token' });
   }
 };

@@ -2,7 +2,7 @@
 import { prisma } from '../server.js';
 import httpntlm from 'httpntlm';
 import { XMLParser } from 'fast-xml-parser';
-import { decrypt } from '../utils/encryption.js';
+import { decrypt, needsReencryption, encrypt } from '../utils/encryption.js';
 import { SocketIOService } from '../socketio.js';
 import { NotificationController } from '../controllers/app/notification.js';
 
@@ -276,6 +276,7 @@ const getCalendarEventsViaEWS = async (
     let useImpersonation = true;
     let userPassword: string | null = null;
     
+    let userPasswordMissing = false;
     if (userId) {
       try {
         userPassword = await getUserExchangePassword(userId, req);
@@ -287,10 +288,12 @@ const getCalendarEventsViaEWS = async (
           useImpersonation = false;
         } else {
           // Пароль не найден или в старом формате - используем Impersonation
+          userPasswordMissing = true;
           useImpersonation = true;
         }
       } catch (passwordError: any) {
         // Если ошибка при получении пароля, используем Impersonation
+        userPasswordMissing = true;
         useImpersonation = true;
       }
     }
@@ -399,11 +402,16 @@ const getCalendarEventsViaEWS = async (
       
       // Проверяем на ошибки аутентификации
       if (response.statusCode === 401) {
-        const authError = responseBody.includes('Unauthorized') || responseBody.includes('401') 
-          ? 'Authentication failed. Check EXCHANGE_EWS_USERNAME and EXCHANGE_EWS_PASSWORD'
-          : 'Unauthorized access to Exchange';
+        let authError = 'Unauthorized access to Exchange';
+        if (userPasswordMissing) {
+          authError = 'User Exchange password not configured. Please set your Exchange password in settings, or check Impersonation service account credentials (EXCHANGE_EWS_USERNAME and EXCHANGE_EWS_PASSWORD)';
+        } else if (useImpersonation) {
+          authError = 'Impersonation authentication failed. Check EXCHANGE_EWS_USERNAME, EXCHANGE_EWS_PASSWORD, and Impersonation permissions';
+        } else {
+          authError = 'User authentication failed. Check Exchange password in settings';
+        }
         console.error(`[Exchange] [getCalendarEventsViaEWS] ❌ ${authError}`);
-        throw new Error(`EWS authentication failed (401): ${authError}. Check Exchange credentials and Impersonation permissions.`);
+        throw new Error(`EWS authentication failed (401): ${authError}`);
       }
       
       console.error(`[Exchange] [getCalendarEventsViaEWS] Response body (first 2000 chars):`, responseBody.substring(0, 2000));
@@ -1061,6 +1069,25 @@ export const getUserExchangePassword = async (userId: string, req?: any): Promis
     
     try {
       decryptedPassword = decrypt(passwordSetting.value);
+      
+      // Проверяем, нужно ли перешифровать (автоматическая миграция)
+      if (needsReencryption(passwordSetting.value)) {
+        // Асинхронно перешифровываем пароль новым ключом (не блокируем текущий запрос)
+        prisma.userSettings.update({
+          where: {
+            userId_parameter: {
+              userId: userId,
+              parameter: 'exchange.password'
+            }
+          },
+          data: {
+            value: encrypt(decryptedPassword)
+          }
+        }).catch((err: any) => {
+          console.error('[Exchange] [getUserExchangePassword] Failed to re-encrypt password:', err.message);
+        });
+      }
+      
       return decryptedPassword;
     } catch (decryptError: any) {
       // Если пароль в старом формате, возвращаем null чтобы использовать Impersonation

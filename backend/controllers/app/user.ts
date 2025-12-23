@@ -342,7 +342,6 @@ export const login = async (req: Request, res: Response): Promise<any> => {
       const userPassword = (res.locals as any).userPassword;
       if (userPassword && newUser.email) {
         try {
-          console.log(`[Login] Saving Exchange password for new user ${newUser.id}`);
           const encryptedPassword = encrypt(userPassword);
           await prisma.userSettings.create({
             data: {
@@ -352,7 +351,6 @@ export const login = async (req: Request, res: Response): Promise<any> => {
               type: 'string'
             }
           });
-          console.log(`[Login] Exchange password saved for new user ${newUser.id}`);
           // Очищаем пароль из памяти после использования
           (res.locals as any).userPassword = null;
         } catch (passwordError: any) {
@@ -432,7 +430,6 @@ export const login = async (req: Request, res: Response): Promise<any> => {
     const userPassword = (res.locals as any).userPassword;
     if (userPassword && user.email) {
       try {
-        console.log(`[Login] Saving/updating Exchange password for user ${user.id} (LDAP password = Exchange password)`);
         const encryptedPassword = encrypt(userPassword);
         await prisma.userSettings.upsert({
           where: {
@@ -451,12 +448,11 @@ export const login = async (req: Request, res: Response): Promise<any> => {
             type: 'string'
           }
         });
-        console.log(`[Login] ✅ Exchange password saved/updated in new format for user ${user.id}`);
         // Очищаем пароль из памяти после использования
         (res.locals as any).userPassword = null;
       } catch (passwordError: any) {
         // Не блокируем логин, если не удалось сохранить пароль
-        console.error(`[Login] ❌ Error saving Exchange password for user ${user.id}:`, passwordError.message);
+        console.error(`[Login] Error saving Exchange password for user ${user.id}:`, passwordError.message);
         // Очищаем пароль из памяти даже при ошибке
         (res.locals as any).userPassword = null;
       }

@@ -267,8 +267,6 @@ export async function ldapAuth(req: Request, res: Response, next: NextFunction):
     }
 
     if (pass.length < 1 || pass.length > 128) {
-        console.log(`[LDAP Auth] Invalid password length: ${pass.length}`);
-        
         const elapsed = Date.now() - startTime;
         if (elapsed < minResponseTime) {
             await new Promise(resolve => setTimeout(resolve, minResponseTime - elapsed));

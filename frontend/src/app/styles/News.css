@@ -323,3 +323,28 @@
 [data-theme="dark"] .news-menu-item:hover {
   background-color: var(--theme-bg-hover);
 }
+
+/* Стили для даты и иконки в превью новостей - темная тема */
+[data-theme="dark"] .news-date-badge {
+  background: linear-gradient(135deg, var(--color-primary-800) 0%, var(--color-primary-700) 100%) !important;
+  border: 1px solid var(--color-primary-600) !important;
+}
+
+[data-theme="dark"] .news-date-text {
+  color: var(--color-primary-200) !important;
+}
+
+[data-theme="dark"] .news-arrow-icon {
+  background: var(--color-primary-800) !important;
+  border: 1px solid var(--color-primary-600) !important;
+}
+
+[data-theme="dark"] .news-arrow-icon[data-variant="subtle"] {
+  background: transparent !important;
+  border: none !important;
+}
+
+[data-theme="dark"] .news-arrow-icon-svg {
+  color: var(--color-primary-200) !important;
+  stroke: var(--color-primary-200) !important;
+}
