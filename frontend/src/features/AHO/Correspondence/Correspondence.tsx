@@ -15,15 +15,12 @@ import { DynamicFormModal } from '../../../utils/formModal';
 import { TableComponent } from '../../../utils/table';
 import FloatingActionButton from '../../../components/FloatingActionButton';
 
-interface TypeMailOption {
-  value: string;
-  label: string;
-}
-
 interface User {
   id: string;
   name: string;
+  email?: string;
 }
+
 
 interface CorrespondenceAttachment {
   id: string;
@@ -34,16 +31,35 @@ interface CorrespondenceAttachment {
   user: User;
 }
 
+interface Type {
+  id: string;
+  name: string;
+  chapter: string;
+}
+
 interface Correspondence {
   id: string;
   createdAt: Date;
   ReceiptDate: Date;
   userAdd: string;
-  from: string;
-  to: string;
-  content: string;
-  typeMail: string;
-  numberMail: string;
+  senderTypeId: string;
+  senderType?: Type;
+  senderSubTypeId?: string;
+  senderSubType?: Type;
+  senderSubSubTypeId?: string;
+  senderSubSubType?: Type;
+  senderName: string;
+  documentTypeId: string;
+  documentType?: Type;
+  comments?: string;
+  responsibleId: string;
+  responsible?: User;
+  // Старые поля для обратной совместимости
+  from?: string;
+  to?: string;
+  content?: string;
+  typeMail?: string;
+  numberMail?: string;
   attachments: CorrespondenceAttachment[];
   user: User;
 }
@@ -53,37 +69,62 @@ interface CorrespondenceWithFormattedData extends Correspondence {
   formattedCreatedAt: string;
   userName: string;
   typeMailName: string;
+  senderTypeLabel: string;
+  documentTypeLabel: string;
+  responsibleName: string;
 }
 
 interface CorrespondenceForm {
   ReceiptDate: string;
-  from: string;
-  to: string;
-  content: string;
-  typeMail: string;
-  numberMail: string;
+  senderTypeId: string;
+  senderSubTypeId?: string;
+  senderSubSubTypeId?: string;
+  senderName: string;
+  documentTypeId: string;
+  comments?: string;
+  responsibleId: string;
   attachments: Array<{ id?: string; userAdd?: string; source: File | string }>;
 }
 
 const DEFAULT_CORRESPONDENCE_FORM: CorrespondenceForm = {
   ReceiptDate: dayjs().format('YYYY-MM-DDTHH:mm'),
-  from: '',
-  to: '',
-  content: '',
-  typeMail: '',
-  numberMail: '',
+  senderTypeId: '',
+  senderSubTypeId: undefined,
+  senderSubSubTypeId: undefined,
+  senderName: '',
+  documentTypeId: '',
+  comments: '',
+  responsibleId: '',
   attachments: [],
 };
 
-const formatTableData = (data: Correspondence[], typeMailOptions: TypeMailOption[]): CorrespondenceWithFormattedData[] => {
+const getSenderTypeLabel = (senderType?: Type, senderSubType?: Type, senderSubSubType?: Type): string => {
+  if (!senderType) return 'Не указан';
+  const senderLabel = senderType.name;
+  if (senderSubType) {
+    const subTypeLabel = senderSubType.name;
+    if (senderSubSubType) {
+      const subSubTypeLabel = senderSubSubType.name;
+      return `${senderLabel} - ${subTypeLabel} - ${subSubTypeLabel}`;
+    }
+    return `${senderLabel} - ${subTypeLabel}`;
+  }
+  return senderLabel;
+};
+
+const formatTableData = (data: Correspondence[]): CorrespondenceWithFormattedData[] => {
   return data.map((item) => {
-    const typeMailName = typeMailOptions.find(option => option.value === item.typeMail)?.label || 'Без типа';
+    const senderTypeLabel = getSenderTypeLabel(item.senderType, item.senderSubType, item.senderSubSubType);
+    const documentTypeLabel = item.documentType?.name || 'Не указан';
     return {
       ...item,
       formattedReceiptDate: dayjs(item.ReceiptDate).format('DD.MM.YYYY HH:mm'),
       formattedCreatedAt: dayjs(item.createdAt).format('DD.MM.YYYY HH:mm'),
       userName: item.user?.name ? formatName(item.user.name) : 'Unknown',
-      typeMailName,
+      typeMailName: documentTypeLabel,
+      senderTypeLabel,
+      documentTypeLabel,
+      responsibleName: item.responsible?.name ? formatName(item.responsible.name) : 'Не указан',
     };
   });
 };
@@ -107,7 +148,12 @@ export default function CorrespondenceList() {
     uploadError: null as string | null,
     columnFilters: [] as ColumnFiltersState,
     sorting: [{ id: 'formattedReceiptDate', desc: true }] as SortingState,
-    typeMailOptions: [] as TypeMailOption[],
+    senderTypes: [] as Type[],
+    senderSubTypes: [] as Type[],
+    senderSubSubTypes: [] as Type[],
+    documentTypes: [] as Type[],
+    users: [] as User[],
+    loadingUsers: false,
   });
 
   const modals = {
@@ -149,22 +195,51 @@ export default function CorrespondenceList() {
     }
   }, [showNotification]);
 
-  const fetchTypeMailOptions = useCallback(async () => {
-    const data = await fetchData(`${API}/type/sub?model_uuid=${MODEL_UUID}&chapter=${CHAPTER}`);
-    return data.map((type: any) => ({ value: type.id, label: type.name }));
+  const fetchUsers = useCallback(async () => {
+    try {
+      setState(prev => ({ ...prev, loadingUsers: true }));
+      const usersData = await fetchData(`${API}/user/users-with-email`);
+      setState(prev => ({ ...prev, users: usersData, loadingUsers: false }));
+      return usersData;
+    } catch (error) {
+      console.error('Failed to load users:', error);
+      setState(prev => ({ ...prev, loadingUsers: false }));
+      return [];
+    }
   }, [fetchData]);
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [correspondenceData, typeOptions] = await Promise.all([
+        const [correspondenceData, usersData, senderTypesData, documentTypesData] = await Promise.all([
           fetchData(`${API}/aho/correspondence`),
-          fetchTypeMailOptions()
+          fetchUsers(),
+          fetchData(`${API}/aho/correspondence/types/sender`),
+          fetchData(`${API}/aho/correspondence/types/document`)
         ]);
+        
+        // Извлекаем подтипы и подподтипы из иерархии senderTypes
+        const senderSubTypes: Type[] = [];
+        const senderSubSubTypes: Type[] = [];
+        senderTypesData.forEach((type: Type & { children?: Type[] }) => {
+          if (type.children) {
+            type.children.forEach((subType: Type & { children?: Type[] }) => {
+              senderSubTypes.push(subType);
+              if (subType.children) {
+                senderSubSubTypes.push(...subType.children);
+              }
+            });
+          }
+        });
+
         setState(prev => ({
           ...prev,
           correspondence: correspondenceData,
-          typeMailOptions: typeOptions,
+          users: usersData,
+          senderTypes: senderTypesData,
+          senderSubTypes,
+          senderSubSubTypes,
+          documentTypes: documentTypesData,
           loading: false
         }));
       } catch (error) {
@@ -173,7 +248,7 @@ export default function CorrespondenceList() {
       }
     };
     loadData();
-  }, [fetchData, fetchTypeMailOptions]);
+  }, [fetchData, fetchUsers]);
 
   // Устанавливаем заголовок страницы
   useEffect(() => {
@@ -191,6 +266,27 @@ export default function CorrespondenceList() {
     return () => clearHeader();
   }, [setHeader, clearHeader]);
 
+  const userOptions = useMemo(() => {
+    return state.users.map(u => ({
+      value: u.id,
+      label: formatName(u.name)
+    }));
+  }, [state.users]);
+
+  const senderTypeOptions = useMemo(() => {
+    return state.senderTypes.map(t => ({
+      value: t.id,
+      label: t.name
+    }));
+  }, [state.senderTypes]);
+
+  const documentTypeOptions = useMemo(() => {
+    return state.documentTypes.map(t => ({
+      value: t.id,
+      label: t.name
+    }));
+  }, [state.documentTypes]);
+
   const formConfig = useMemo(() => ({
     fields: [
       {
@@ -200,35 +296,92 @@ export default function CorrespondenceList() {
         required: true
       },
       {
-        name: 'from',
-        label: 'От',
-        type: 'text' as const,
-        required: true
-      },
-      {
-        name: 'to',
-        label: 'Кому',
-        type: 'text' as const,
-        required: true
-      },
-      {
-        name: 'content',
-        label: 'Содержание',
-        type: 'textarea' as const,
-        required: true
-      },
-      {
-        name: 'typeMail',
-        label: 'Тип письма',
+        name: 'senderTypeId',
+        label: 'Отправитель',
         type: 'select' as const,
-        options: state.typeMailOptions,
-        required: true
+        options: senderTypeOptions,
+        required: true,
+        groupWith: ['senderSubTypeId'],
+        groupSize: 2 as const,
+        onChange: (val: string, setFieldValue: any) => {
+          setFieldValue('senderTypeId', val);
+          // Сбрасываем подтипы при смене типа отправителя
+          const selectedType = state.senderTypes.find(t => t.id === val);
+          if (selectedType?.name !== 'Суд') {
+            setFieldValue('senderSubTypeId', undefined);
+            setFieldValue('senderSubSubTypeId', undefined);
+          } else {
+            setFieldValue('senderSubSubTypeId', undefined);
+          }
+        }
       },
       {
-        name: 'numberMail',
-        label: 'Номер письма',
+        name: 'senderSubTypeId',
+        label: 'Подтип отправителя',
+        type: 'select' as const,
+        options: state.senderSubTypes.map(t => ({ value: t.id, label: t.name })),
+        required: false,
+        onChange: (val: string, setFieldValue: any) => {
+          setFieldValue('senderSubTypeId', val);
+          // Сбрасываем подподтип при смене подтипа
+          const selectedSubType = state.senderSubTypes.find(t => t.id === val);
+          if (selectedSubType?.name !== 'Федеральные суды') {
+            setFieldValue('senderSubSubTypeId', undefined);
+          }
+        }
+      },
+      {
+        name: 'senderSubSubTypeId',
+        label: 'Подподтип отправителя',
+        type: 'select' as const,
+        options: state.senderSubSubTypes.map(t => ({ value: t.id, label: t.name })),
+        required: false,
+        groupWith: ['senderName'],
+        groupSize: 2 as const,
+      },
+      {
+        name: 'senderName',
+        label: (values: any) => {
+          const selectedType = state.senderTypes.find(t => t.id === values.senderTypeId);
+          if (selectedType?.name === 'Физическое лицо') {
+            return 'ФИО';
+          }
+          return 'Наименование';
+        },
         type: 'text' as const,
-        required: true
+        required: true,
+        placeholder: (values: any) => {
+          const selectedType = state.senderTypes.find(t => t.id === values.senderTypeId);
+          if (selectedType?.name === 'Физическое лицо') {
+            return 'Введите ФИО физического лица';
+          }
+          return 'Введите наименование отправителя';
+        }
+      },
+      {
+        name: 'documentTypeId',
+        label: 'Тип документа',
+        type: 'select' as const,
+        options: documentTypeOptions,
+        required: true,
+        groupWith: ['responsibleId'],
+        groupSize: 2 as const,
+      },
+      {
+        name: 'comments',
+        label: 'Комментарии',
+        type: 'textarea' as const,
+        required: false,
+        placeholder: 'Номер дела, ФИО стороны для судебной корреспонденции или иные комментарии'
+      },
+      {
+        name: 'responsibleId',
+        label: 'Ответственный',
+        type: 'selectSearch' as const,
+        options: userOptions,
+        required: true,
+        searchable: true,
+        placeholder: 'Выберите ответственного за обработку'
       },
       {
         name: 'attachments',
@@ -243,29 +396,32 @@ export default function CorrespondenceList() {
       }
     ],
     initialValues: DEFAULT_CORRESPONDENCE_FORM,
-  }), [state.typeMailOptions]);
+  }), [userOptions, senderTypeOptions, documentTypeOptions, state.senderTypes, state.senderSubTypes, state.senderSubSubTypes]);
 
   const viewFieldsConfig = useMemo(() => [
     { label: 'Дата получения', value: (item: CorrespondenceWithFormattedData) => item.formattedReceiptDate },
-    { label: 'От', value: (item: CorrespondenceWithFormattedData) => item.from },
-    { label: 'Кому', value: (item: CorrespondenceWithFormattedData) => item.to },
-    { label: 'Тип письма', value: (item: CorrespondenceWithFormattedData) => item.typeMailName },
-    { label: 'Номер письма', value: (item: CorrespondenceWithFormattedData) => item.numberMail },
-    { label: 'Содержание', value: (item: CorrespondenceWithFormattedData) => item.content },
-    { label: 'Создал', value: (item: CorrespondenceWithFormattedData) => item.user?.name || 'Unknown' },
+    { label: 'Отправитель', value: (item: CorrespondenceWithFormattedData) => `${item.senderTypeLabel} - ${item.senderName}` },
+    { label: 'Тип документа', value: (item: CorrespondenceWithFormattedData) => item.documentTypeLabel },
+    { label: 'Комментарии', value: (item: CorrespondenceWithFormattedData) => item.comments || 'Нет комментариев' },
+    { label: 'Ответственный', value: (item: CorrespondenceWithFormattedData) => item.responsibleName },
+    { label: 'Создал', value: (item: CorrespondenceWithFormattedData) => item.user?.name ? formatName(item.user.name) : 'Unknown' },
     { label: 'Дата создания', value: (item: CorrespondenceWithFormattedData) => item.formattedCreatedAt },
   ], []);
 
 
-  const tableData = useMemo(() => formatTableData(state.correspondence, state.typeMailOptions), [state.correspondence, state.typeMailOptions]);
+  const tableData = useMemo(() => formatTableData(state.correspondence), [state.correspondence]);
 
   const filterOptions = useMemo(() => ({
-    user: getFilterOptions(state.correspondence, c => c.user?.name ? formatName(c.user.name) : 'Unknown'),
-    type: getFilterOptions(state.correspondence, c => {
-      const typeMailName = state.typeMailOptions.find(option => option.value === c.typeMail)?.label || 'Без типа';
-      return typeMailName;
+    senderType: getFilterOptions(state.correspondence, c => {
+      return getSenderTypeLabel(c.senderType, c.senderSubType, c.senderSubSubType);
+    }),
+    documentType: getFilterOptions(state.correspondence, c => {
+      return c.documentType?.name || 'Не указан';
+    }),
+    responsible: getFilterOptions(state.correspondence, c => {
+      return c.responsible?.name ? formatName(c.responsible.name) : 'Не указан';
     })
-  }), [state.correspondence, state.typeMailOptions]);
+  }), [state.correspondence]);
 
   const filters = useMemo(() => [
     {
@@ -276,18 +432,26 @@ export default function CorrespondenceList() {
     },
     {
       type: 'select' as const,
-      columnId: 'userName',
-      label: 'Автор',
-      placeholder: 'Выберите пользователя',
-      options: filterOptions.user,
+      columnId: 'senderTypeLabel',
+      label: 'Отправитель',
+      placeholder: 'Выберите отправителя',
+      options: filterOptions.senderType,
+      width: 250,
+    },
+    {
+      type: 'select' as const,
+      columnId: 'documentTypeLabel',
+      label: 'Тип документа',
+      placeholder: 'Выберите тип',
+      options: filterOptions.documentType,
       width: 200,
     },
     {
       type: 'select' as const,
-      columnId: 'typeMailName',
-      label: 'Тип письма',
-      placeholder: 'Выберите тип',
-      options: filterOptions.type,
+      columnId: 'responsibleName',
+      label: 'Ответственный',
+      placeholder: 'Выберите ответственного',
+      options: filterOptions.responsible,
       width: 200,
     },
   ], [filterOptions]);
@@ -305,8 +469,21 @@ export default function CorrespondenceList() {
       ),
     },
     {
-      accessorKey: 'from',
-      header: 'От',
+      accessorKey: 'senderTypeLabel',
+      header: 'Отправитель',
+      filterFn: 'includesString',
+      cell: ({ row }) => {
+        const item = row.original;
+        return (
+          <Text size="sm" c="var(--theme-text-primary)">
+            {item.senderTypeLabel}
+          </Text>
+        );
+      },
+    },
+    {
+      accessorKey: 'senderName',
+      header: 'Наименование/ФИО',
       filterFn: 'includesString',
       cell: ({ getValue }) => (
         <Text size="sm" c="var(--theme-text-primary)">
@@ -315,51 +492,31 @@ export default function CorrespondenceList() {
       ),
     },
     {
-      accessorKey: 'to',
-      header: 'Кому',
-      filterFn: 'includesString',
-      cell: ({ getValue }) => (
-        <Text size="sm" c="var(--theme-text-primary)">
-          {getValue() as string}
-        </Text>
-      ),
-    },
-    {
-      accessorKey: 'typeMailName',
-      header: 'Тип письма',
+      accessorKey: 'documentTypeLabel',
+      header: 'Тип документа',
       filterFn: 'includesString',
       cell: ({ getValue }) => {
         const type = getValue() as string;
-        const getTypeColor = (type: string) => {
-          const colors: Record<string, string> = {
-            'Входящее': 'blue',
-            'Исходящее': 'green',
-            'Внутреннее': 'orange',
-            'Служебное': 'purple',
-            'Без типа': 'gray'
-          };
-          return colors[type] || 'gray';
-        };
         return (
-          <Badge color={getTypeColor(type)} variant="light" size="sm">
+          <Badge color="blue" variant="light" size="sm">
             {type}
           </Badge>
         );
       },
     },
     {
-      accessorKey: 'numberMail',
-      header: 'Номер письма',
+      accessorKey: 'responsibleName',
+      header: 'Ответственный',
       filterFn: 'includesString',
       cell: ({ getValue }) => (
         <Text size="sm" c="var(--theme-text-secondary)">
-          № {getValue() as string}
+          {getValue() as string}
         </Text>
       ),
     },
     {
-      accessorKey: 'content',
-      header: 'Содержание',
+      accessorKey: 'comments',
+      header: 'Комментарии',
       cell: ({ getValue }) => {
         const content = getValue() as string;
         return (
@@ -492,11 +649,13 @@ export default function CorrespondenceList() {
         ...prev,
         correspondenceForm: {
           ReceiptDate: dayjs(data.ReceiptDate).format('YYYY-MM-DDTHH:mm'),
-          from: data.from,
-          to: data.to,
-          content: data.content,
-          typeMail: data.typeMail,
-          numberMail: data.numberMail,
+          senderTypeId: data.senderTypeId,
+          senderSubTypeId: data.senderSubTypeId,
+          senderSubSubTypeId: data.senderSubSubTypeId,
+          senderName: data.senderName,
+          documentTypeId: data.documentTypeId,
+          comments: data.comments || '',
+          responsibleId: data.responsibleId,
           attachments: data.attachments.map(a => ({
             id: a.id,
             userAdd: a.userAdd,
@@ -547,9 +706,20 @@ export default function CorrespondenceList() {
       cleanedValues.ReceiptDate = dayjs(cleanedValues.ReceiptDate).toISOString();
     }
   
+    // Удаляем пустые подтипы
+    if (!cleanedValues.senderSubType) {
+      delete cleanedValues.senderSubType;
+    }
+    if (!cleanedValues.senderSubSubType) {
+      delete cleanedValues.senderSubSubType;
+    }
+    if (!cleanedValues.comments) {
+      delete cleanedValues.comments;
+    }
+  
     formData.append('userAdd', user!.id);
     Object.entries(cleanedValues).forEach(([key, value]) => {
-      if (value !== undefined) {
+      if (value !== undefined && value !== null && value !== '') {
         formData.append(key, String(value));
       }
     });
@@ -706,5 +876,3 @@ export default function CorrespondenceList() {
   );
 }
 
-const MODEL_UUID = '7be62529-3fb5-430d-9017-48b752841e54';
-const CHAPTER = 'Тип письма';

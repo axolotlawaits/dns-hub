@@ -64,6 +64,7 @@ enum Activity {
   Off
 }
 
+
 enum AppCategory {
   MOBILE      // Мобильные приложения
   DESKTOP     // Десктопные приложения
@@ -176,6 +177,10 @@ model Type {
   SupplyDocsRequirements SupplyDocs[]   @relation("SupplyDocs_Requirements")
   Tool                   Tool           @relation(fields: [model_uuid], references: [id])
   shops                  Shop[]
+  correspondenceSenderTypes      Correspondence[]  @relation("CorrespondenceSenderType")
+  correspondenceSenderSubTypes   Correspondence[]  @relation("CorrespondenceSenderSubType")
+  correspondenceSenderSubSubTypes Correspondence[] @relation("CorrespondenceSenderSubSubType")
+  correspondenceDocumentTypes    Correspondence[]  @relation("CorrespondenceDocumentType")
 
   @@index([parent_type])
   @@index([model_uuid, chapter])
@@ -219,7 +224,8 @@ model User {
   telegramLinkToken      String?                    @unique
   telegramUsername       String?
   bookmarks              Bookmarks[]
-  correspondences        Correspondence[]
+  correspondences        Correspondence[]              @relation("CorrespondenceUser")
+  correspondenceResponsible Correspondence[]          @relation("CorrespondenceResponsible")
   attachments            CorrespondenceAttachment[]
   MediaAdd               Media[]                    @relation("Media_UserAdd")
   MediaUpdated           Media[]                    @relation("Media_UserUpdated")
@@ -453,17 +459,36 @@ model MeterReading {
 
 // Корреспонденция
 model Correspondence {
-  id          String                     @id @default(uuid())
-  createdAt   DateTime                   @default(now())
-  ReceiptDate DateTime
-  userAdd     String
-  from        String
-  to          String
-  content     String
-  typeMail    String
-  numberMail  String
-  user        User                       @relation(fields: [userAdd], references: [id])
-  attachments CorrespondenceAttachment[]
+  id                    String                        @id @default(uuid())
+  createdAt             DateTime                      @default(now())
+  ReceiptDate           DateTime                      // Дата получения
+  userAdd               String                        // Кто добавил запись
+  senderTypeId          String                        // Тип отправителя (связь с Type)
+  senderType            Type                          @relation("CorrespondenceSenderType", fields: [senderTypeId], references: [id])
+  senderSubTypeId       String?                       // Подтип (только для суда: Федеральные суды / Мировые судьи)
+  senderSubType         Type?                        @relation("CorrespondenceSenderSubType", fields: [senderSubTypeId], references: [id])
+  senderSubSubTypeId    String?                       // Подподтип (только для федеральных судов)
+  senderSubSubType      Type?                        @relation("CorrespondenceSenderSubSubType", fields: [senderSubSubTypeId], references: [id])
+  senderName            String                        // Наименование отправителя / ФИО
+  documentTypeId        String                        // Тип документа (связь с Type)
+  documentType          Type                          @relation("CorrespondenceDocumentType", fields: [documentTypeId], references: [id])
+  comments              String?                       // Комментарии (номер дела, ФИО стороны и т.д.)
+  responsibleId         String                        // Ответственный за обработку
+  responsible           User                          @relation("CorrespondenceResponsible", fields: [responsibleId], references: [id])
+  // Старые поля для обратной совместимости (можно будет удалить после миграции данных)
+  from                  String?                       @default("")
+  to                    String?                       @default("")
+  content               String?                       @default("")
+  typeMail              String?                       @default("")
+  numberMail            String?                       @default("")
+  user                  User                          @relation("CorrespondenceUser", fields: [userAdd], references: [id])
+  attachments           CorrespondenceAttachment[]
+  
+  @@index([ReceiptDate])
+  @@index([senderTypeId])
+  @@index([documentTypeId])
+  @@index([responsibleId])
+  @@index([userAdd])
 }
 
 model CorrespondenceAttachment {

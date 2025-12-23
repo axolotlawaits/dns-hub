@@ -147,7 +147,7 @@ interface FileFieldConfig {
 
 export interface FormField {
   name: string;
-  label: string;
+  label: string | ((values: Record<string, any>) => string);
   type: FieldType;
   required?: boolean;
   options?: Array<{ value: string; label: string; icon?: JSX.Element }>;
@@ -161,7 +161,7 @@ export interface FormField {
   onChange?: (value: any, setFieldValue?: (path: string, val: any) => void) => void;
   searchable?: boolean;
   onSearchChange?: (search: string) => void;
-  disabled?: boolean;
+  disabled?: boolean | ((values: Record<string, any>) => boolean);
   // Группировка полей в ряд
   groupWith?: string[]; // Массив имен полей для группировки в ряд
   groupSize?: 1 | 2 | 3; // Размер группы (1, 2 или 3 поля в ряд)
@@ -173,7 +173,7 @@ export interface FormField {
   value?: any;
   renderFileList?: (values: any, setFieldValue: (path: string, val: any) => void) => JSX.Element;
   mask?: (value: string) => string;
-  placeholder?: string;
+  placeholder?: string | ((values: Record<string, any>) => string);
   description?: string; // Описание поля
   mb?: string | number; // Отступ снизу для поля
   onKeyDown?: (e: React.KeyboardEvent) => void; // Обработчик нажатия клавиш
@@ -1266,12 +1266,19 @@ export const DynamicFormModal = ({
   }, []);
 
   const renderField = useCallback((field: FormField) => {
+    // Поддержка динамических label и placeholder через функции
+    const labelValue = typeof field.label === 'function' ? field.label(form.values) : field.label;
+    const placeholderValue = typeof field.placeholder === 'function' ? field.placeholder(form.values) : field.placeholder;
+    // Поддержка динамического disabled через функцию
+    const disabledValue = typeof field.disabled === 'function' ? field.disabled(form.values) : field.disabled;
+    
     const commonProps = {
-      label: field.label,
+      label: labelValue,
       required: field.required,
       ...form.getInputProps(field.name),
       mb: field.mb !== undefined ? field.mb : "md" as const,
-      placeholder: field.placeholder,
+      placeholder: placeholderValue,
+      disabled: disabledValue,
       ...COMMON_FIELD_PROPS
     };
 
@@ -1301,13 +1308,13 @@ export const DynamicFormModal = ({
           return (
             <MultiSelect
               key={field.name}
-              label={field.label}
+              label={labelValue}
               data={(field.options || []).filter(option => option && option.value && option.label)}
               value={current}
               searchable={field.searchable}
               onSearchChange={(s) => field.onSearchChange?.(s)}
-              disabled={field.disabled}
-              placeholder={field.placeholder}
+              disabled={disabledValue}
+              placeholder={placeholderValue}
               comboboxProps={{ withinPortal: true }}
               onChange={(vals) => {
                 form.setFieldValue(field.name, vals);
@@ -1325,8 +1332,8 @@ export const DynamicFormModal = ({
             searchable={field.searchable}
             onSearchChange={(s) => field.onSearchChange?.(s)}
             nothingFoundMessage="Не найдено"
-            disabled={field.disabled}
-            placeholder={field.placeholder}
+            disabled={disabledValue}
+            placeholder={placeholderValue}
             comboboxProps={{ withinPortal: true, zIndex: 10001 }}
             value={singleValue}
             onChange={(val) => {
@@ -1346,8 +1353,8 @@ export const DynamicFormModal = ({
             searchable
             nothingFoundMessage="Ничего не найдено"
             clearable
-            disabled={field.disabled}
-            placeholder={field.placeholder}
+            disabled={disabledValue}
+            placeholder={placeholderValue}
             comboboxProps={{ withinPortal: true, zIndex: 10001 }}
             value={singleValue}
             onChange={(val) => {
@@ -1362,13 +1369,13 @@ export const DynamicFormModal = ({
         return (
           <MultiSelect
             key={field.name}
-            label={field.label}
+            label={labelValue}
             data={(field.options || []).filter(option => option && option.value && option.label)}
             value={current}
             searchable={field.searchable}
             onSearchChange={(s) => field.onSearchChange?.(s)}
-            disabled={field.disabled}
-            placeholder={field.placeholder}
+            disabled={disabledValue}
+            placeholder={placeholderValue}
             comboboxProps={{ withinPortal: true }}
             onChange={(vals) => {
               form.setFieldValue(field.name, vals);

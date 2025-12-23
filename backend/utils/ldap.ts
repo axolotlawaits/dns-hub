@@ -279,9 +279,9 @@ export async function ldapAuth(req: Request, res: Response, next: NextFunction):
     // Rate limiting по IP адресу
     const ipRateLimit = checkLoginRateLimit(
         Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
-        5, // Максимум 5 попыток
+        20, // Максимум 20 попыток (увеличено для разработки)
         15 * 60 * 1000, // 15 минут
-        30 * 60 * 1000 // 30 минут блокировки
+        5 * 60 * 1000 // 5 минут блокировки (уменьшено для разработки)
     );
     
     if (!ipRateLimit.allowed) {
@@ -324,9 +324,9 @@ export async function ldapAuth(req: Request, res: Response, next: NextFunction):
     // Rate limiting по логину
     const loginRateLimit = checkLoginRateLimit(
         login.toLowerCase(),
-        3, // Максимум 3 неудачные попытки для одного логина
+        10, // Максимум 10 неудачных попыток для одного логина (увеличено для разработки)
         15 * 60 * 1000, // 15 минут
-        30 * 60 * 1000 // 30 минут блокировки
+        5 * 60 * 1000 // 5 минут блокировки (уменьшено для разработки)
     );
     
     if (!loginRateLimit.allowed) {
@@ -426,6 +426,11 @@ export async function ldapAuth(req: Request, res: Response, next: NextFunction):
                 console.log(`[LDAP Auth] ✅ Service account authentication successful for user: ${login}`);
                 // Продолжаем с найденным пользователем
                 const user = await processUserData(entry, login);
+                
+                // Сбрасываем rate limit при успешном входе
+                resetLoginRateLimit(Array.isArray(ipAddress) ? ipAddress[0] : ipAddress);
+                resetLoginRateLimit(login.toLowerCase());
+                
                 res.locals.user = user;
                 next();
                 return;
@@ -443,6 +448,11 @@ export async function ldapAuth(req: Request, res: Response, next: NextFunction):
         const user = await processUserData(entry, login);
 
         console.log(`[LDAP Auth] Authentication successful for user: ${login}`);
+        
+        // Сбрасываем rate limit при успешном входе
+        resetLoginRateLimit(Array.isArray(ipAddress) ? ipAddress[0] : ipAddress);
+        resetLoginRateLimit(login.toLowerCase());
+        
         res.locals.user = user;
         // Сохраняем пароль временно для возможного сохранения в Exchange (будет удален после использования)
         res.locals.userPassword = pass;

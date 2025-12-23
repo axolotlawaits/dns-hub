@@ -5,10 +5,16 @@ import {
   getCorrespondenceById,
   updateCorrespondence,
   deleteCorrespondence,
+  getSenderTypes,
+  getDocumentTypes,
 } from '../../controllers/aho/correspondence.js';
 import uploadCorrespondence from '../../middleware/uploaderCorrespondence.js'; // Use default import
 
 const router = Router();
+
+// Get types (публичные роуты)
+router.get('/types/sender', getSenderTypes);
+router.get('/types/document', getDocumentTypes);
 
 // Get all correspondences
 router.get('/', getCorrespondences);

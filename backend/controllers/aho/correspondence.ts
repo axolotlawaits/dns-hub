@@ -16,11 +16,19 @@ const AttachmentSchema = z.object({
 const CorrespondenceSchema = z.object({
   ReceiptDate: z.string().datetime(),
   userAdd: z.string().optional(),
-  from: z.string(),
-  to: z.string(),
-  content: z.string(),
-  typeMail: z.string(),
-  numberMail: z.string(),
+  senderTypeId: z.string().uuid('Тип отправителя должен быть выбран'),
+  senderSubTypeId: z.string().uuid().optional(),
+  senderSubSubTypeId: z.string().uuid().optional(),
+  senderName: z.string().min(1, 'Наименование отправителя обязательно'),
+  documentTypeId: z.string().uuid('Тип документа должен быть выбран'),
+  comments: z.string().optional(),
+  responsibleId: z.string().uuid('Ответственный должен быть выбран'),
+  // Старые поля для обратной совместимости
+  from: z.string().optional(),
+  to: z.string().optional(),
+  content: z.string().optional(),
+  typeMail: z.string().optional(),
+  numberMail: z.string().optional(),
   attachments: z.array(AttachmentSchema).optional(),
 });
 
@@ -58,9 +66,86 @@ export const getCorrespondences = async (
   next: NextFunction
 ) => {
   try {
+    const { search, senderType, documentType, responsibleId, startDate, endDate } = req.query;
+    
+    const where: any = {};
+    
+    // Поиск по тексту (в комментариях и наименовании отправителя)
+    if (search && typeof search === 'string') {
+      where.OR = [
+        { comments: { contains: search, mode: 'insensitive' } },
+        { senderName: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+    
+    // Фильтр по типу отправителя
+    if (senderType && typeof senderType === 'string') {
+      where.senderTypeId = senderType;
+    }
+    
+    // Фильтр по типу документа
+    if (documentType && typeof documentType === 'string') {
+      where.documentTypeId = documentType;
+    }
+    
+    // Фильтр по ответственному
+    if (responsibleId && typeof responsibleId === 'string') {
+      where.responsibleId = responsibleId;
+    }
+    
+    // Фильтр по дате получения
+    if (startDate || endDate) {
+      where.ReceiptDate = {};
+      if (startDate) {
+        where.ReceiptDate.gte = new Date(startDate as string);
+      }
+      if (endDate) {
+        where.ReceiptDate.lte = new Date(endDate as string);
+      }
+    }
+    
     const correspondences = await prisma.correspondence.findMany({
-      include: { attachments: true, user: true },
-      orderBy: { createdAt: 'desc' },
+      where,
+      include: { 
+        attachments: true, 
+        user: true,
+        senderType: {
+          select: {
+            id: true,
+            name: true,
+            chapter: true
+          }
+        },
+        senderSubType: {
+          select: {
+            id: true,
+            name: true,
+            chapter: true
+          }
+        },
+        senderSubSubType: {
+          select: {
+            id: true,
+            name: true,
+            chapter: true
+          }
+        },
+        documentType: {
+          select: {
+            id: true,
+            name: true,
+            chapter: true
+          }
+        },
+        responsible: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      },
+      orderBy: { ReceiptDate: 'desc' },
     });
     res.status(200).json(correspondences);
   } catch (error) {
@@ -76,7 +161,44 @@ export const getCorrespondenceById = async (
   try {
     const correspondence = await prisma.correspondence.findUnique({
       where: { id: req.params.id },
-      include: { attachments: true },
+      include: { 
+        attachments: true,
+        senderType: {
+          select: {
+            id: true,
+            name: true,
+            chapter: true
+          }
+        },
+        senderSubType: {
+          select: {
+            id: true,
+            name: true,
+            chapter: true
+          }
+        },
+        senderSubSubType: {
+          select: {
+            id: true,
+            name: true,
+            chapter: true
+          }
+        },
+        documentType: {
+          select: {
+            id: true,
+            name: true,
+            chapter: true
+          }
+        },
+        responsible: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      },
     });
 
     if (!correspondence) {
@@ -127,15 +249,29 @@ export const createCorrespondence = async (
       return res.status(400).json({ error: 'User does not exist' });
     }
 
+    // Проверяем существование ответственного
+    const responsibleExists = await validateUserExists(validatedData.responsibleId);
+    if (!responsibleExists) {
+      return res.status(400).json({ error: 'Responsible user does not exist' });
+    }
+
     const newCorrespondence = await prisma.correspondence.create({
       data: {
         ReceiptDate: new Date(validatedData.ReceiptDate),
         userAdd,
-        from: validatedData.from,
-        to: validatedData.to,
-        content: validatedData.content,
-        typeMail: validatedData.typeMail,
-        numberMail: validatedData.numberMail,
+        senderTypeId: validatedData.senderTypeId,
+        senderSubTypeId: validatedData.senderSubTypeId || null,
+        senderSubSubTypeId: validatedData.senderSubSubTypeId || null,
+        senderName: validatedData.senderName,
+        documentTypeId: validatedData.documentTypeId,
+        comments: validatedData.comments || null,
+        responsibleId: validatedData.responsibleId,
+        // Старые поля для обратной совместимости
+        from: validatedData.from || '',
+        to: validatedData.to || '',
+        content: validatedData.content || '',
+        typeMail: validatedData.typeMail || '',
+        numberMail: validatedData.numberMail || '',
       },
     });
 
@@ -143,7 +279,16 @@ export const createCorrespondence = async (
 
     const result = await prisma.correspondence.findUnique({
       where: { id: newCorrespondence.id },
-      include: { attachments: true },
+      include: { 
+        attachments: true,
+        responsible: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      },
     });
 
     res.status(201).json(result);
@@ -200,26 +345,151 @@ export const updateCorrespondence = async (
     // Process new attachments
     await processAttachments(files as MulterFiles, correspondenceId, body.userAdd || 'unknown');
 
+    // Валидация данных обновления
+    const updateSchema = CorrespondenceSchema.partial();
+    let validatedUpdateData: any = {};
+    try {
+      validatedUpdateData = updateSchema.parse(body);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ errors: error.issues });
+      }
+    }
+    
+    // Проверяем ответственного, если он указан
+    if (validatedUpdateData.responsibleId) {
+      const responsibleExists = await validateUserExists(validatedUpdateData.responsibleId);
+      if (!responsibleExists) {
+        return res.status(400).json({ error: 'Responsible user does not exist' });
+      }
+    }
+
     // Update correspondence
-    const updateData = {
-      ReceiptDate: body.ReceiptDate ? new Date(body.ReceiptDate) : undefined,
-      userAdd: body.userAdd,
-      from: body.from,
-      to: body.to,
-      content: body.content,
-      typeMail: body.typeMail,
-      numberMail: body.numberMail,
+    const updateData: any = {
+      ReceiptDate: validatedUpdateData.ReceiptDate ? new Date(validatedUpdateData.ReceiptDate) : undefined,
+      userAdd: validatedUpdateData.userAdd,
+      senderTypeId: validatedUpdateData.senderTypeId,
+      senderSubTypeId: validatedUpdateData.senderSubTypeId !== undefined ? validatedUpdateData.senderSubTypeId : undefined,
+      senderSubSubTypeId: validatedUpdateData.senderSubSubTypeId !== undefined ? validatedUpdateData.senderSubSubTypeId : undefined,
+      senderName: validatedUpdateData.senderName,
+      documentTypeId: validatedUpdateData.documentTypeId,
+      comments: validatedUpdateData.comments !== undefined ? validatedUpdateData.comments : undefined,
+      responsibleId: validatedUpdateData.responsibleId,
+      // Старые поля для обратной совместимости
+      from: validatedUpdateData.from,
+      to: validatedUpdateData.to,
+      content: validatedUpdateData.content,
+      typeMail: validatedUpdateData.typeMail,
+      numberMail: validatedUpdateData.numberMail,
     };
+    
+    // Удаляем undefined значения
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === undefined) {
+        delete updateData[key];
+      }
+    });
 
     const updatedCorrespondence = await prisma.correspondence.update({
       where: { id: correspondenceId },
       data: updateData,
-      include: { attachments: true },
+      include: { 
+        attachments: true,
+        responsible: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      },
     });
 
     res.status(200).json(updatedCorrespondence);
   } catch (error) {
     if (handlePrismaError(error, res)) return;
+    next(error);
+  }
+};
+
+// Получить Tool для корреспонденции (создать если не существует)
+const getCorrespondenceTool = async () => {
+  let tool = await prisma.tool.findFirst({
+    where: { link: 'aho/correspondence' },
+  });
+
+  if (!tool) {
+    // Создаем Tool для корреспонденции
+    tool = await prisma.tool.create({
+      data: {
+        name: 'Корреспонденция',
+        icon: '📮',
+        link: 'aho/correspondence',
+        description: 'Управление входящей и исходящей корреспонденцией',
+        order: 100,
+        included: true,
+      },
+    });
+  }
+
+  return tool;
+};
+
+// Получить типы отправителей
+export const getSenderTypes = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<any> => {
+  try {
+    const tool = await getCorrespondenceTool();
+    const types = await prisma.type.findMany({
+      where: {
+        model_uuid: tool.id,
+        chapter: 'Отправитель',
+        parent_type: null, // Только корневые типы
+      },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      include: {
+        children: {
+          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+          include: {
+            children: {
+              orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+            },
+          },
+        },
+      },
+    });
+    res.status(200).json(types);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Получить типы документов
+export const getDocumentTypes = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<any> => {
+  try {
+    const tool = await getCorrespondenceTool();
+    const types = await prisma.type.findMany({
+      where: {
+        model_uuid: tool.id,
+        chapter: 'Тип документа',
+      },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      select: {
+        id: true,
+        name: true,
+        colorHex: true,
+        sortOrder: true,
+      },
+    });
+    res.status(200).json(types);
+  } catch (error) {
     next(error);
   }
 };

@@ -165,6 +165,13 @@ export const resetLoginRateLimit = (identifier: string): void => {
 };
 
 /**
+ * Сброс всех rate limit записей (для разработки/отладки)
+ */
+export const clearAllRateLimits = (): void => {
+  rateLimitStore.clear();
+};
+
+/**
  * Маскировка логина для безопасного логирования
  * @param login - Логин пользователя
  * @returns Замаскированный логин (первые 3 символа + ***)

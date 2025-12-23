@@ -574,8 +574,8 @@ export const getUsersWithEmail = async (req: Request, res: Response): Promise<an
     const userDataList = await prisma.userData.findMany({
       where: {
         email: {
-          not: null
-        } as any
+          not: ''
+        }
       },
       include: {
         branch: {
@@ -591,13 +591,13 @@ export const getUsersWithEmail = async (req: Request, res: Response): Promise<an
 
     // Форматируем для фронтенда
     const users = userDataList
-      .filter(ud => ud.email) // Фильтруем только тех, у кого есть email
+      .filter(ud => ud.email && ud.email.trim() !== '') // Фильтруем только тех, у кого есть email
       .map(ud => ({
         value: ud.email!,
-        label: `${ud.fio}${ud.branch?.name ? ` (${ud.branch.name})` : ''}`,
+        label: `${ud.fio}${(ud as any).branch?.name ? ` (${(ud as any).branch.name})` : ''}`,
         email: ud.email!,
         fio: ud.fio,
-        branch: ud.branch?.name || null
+        branch: (ud as any).branch?.name || null
       }));
 
     return res.status(200).json(users);

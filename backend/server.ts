@@ -48,7 +48,7 @@ import pollRouter from './routes/app/poll.js'
 import fs from 'fs'
 import cookieParser from 'cookie-parser'
 import { refreshToken } from './middleware/auth.js';
-import { requireHTTPS, hsts, clearSensitiveData } from './middleware/security.js';
+import { hsts, clearSensitiveData } from './middleware/security.js';
 import { createServer } from 'http';
 import { SocketIOService } from './socketio.js';
 import { telegramService } from './controllers/app/telegram.js';

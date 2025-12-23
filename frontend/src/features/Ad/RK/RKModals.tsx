@@ -307,7 +307,6 @@ export const RKModals: React.FC<RKModalsProps> = ({
             
             // Первый файл - конструкция, остальные - документы к ней
             const allAttachments = attachments || [];
-            let firstFileId: string | null = null;
             
             allAttachments.forEach((att: any, index: number) => {
               if (att.source instanceof File) {
@@ -318,7 +317,6 @@ export const RKModals: React.FC<RKModalsProps> = ({
                   if (att.meta) {
                     formData.append(`attachmentsMeta[0]`, JSON.stringify(att.meta));
                   }
-                  firstFileId = att.id;
                 } else {
                   // Остальные файлы - документы к первой конструкции
                   formData.append(`documents_auto`, att.source);
