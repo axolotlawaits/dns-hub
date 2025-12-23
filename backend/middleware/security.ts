@@ -1,34 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 
 /**
- * Middleware для проверки HTTPS в production окружении
- * Защищает от передачи паролей по незащищенному соединению
- */
-export const requireHTTPS = (req: Request, res: Response, next: NextFunction): void => {
-  // Разрешаем HTTP для localhost и в development окружении
-  const isLocalhost = req.ip === '::1' || req.ip === '127.0.0.1' || req.hostname === 'localhost' || req.hostname === '127.0.0.1';
-  const isDevelopment = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
-  
-  if (isLocalhost || isDevelopment) {
-    return next();
-  }
-
-  // Проверяем, что запрос идет по HTTPS
-  const isSecure = req.secure || req.get('x-forwarded-proto') === 'https';
-  
-  if (!isSecure) {
-    console.warn(`[Security] HTTPS required but request is not secure. IP: ${req.ip}, URL: ${req.originalUrl}`);
-    res.status(403).json({ 
-      error: 'HTTPS required',
-      message: 'This application requires a secure connection. Please use HTTPS.'
-    });
-    return;
-  }
-
-  next();
-};
-
-/**
  * Middleware для установки HSTS (HTTP Strict Transport Security) headers
  * Защищает от downgrade атак
  */
