@@ -623,7 +623,7 @@ model RKAttachment {
   approvalStatus     Type?          @relation("RK_approvalStatus", fields: [approvalStatusId], references: [id])
   parentAttachment   RKAttachment?  @relation("RKAttachment_Parent", fields: [parentAttachmentId], references: [id])
   childAttachments   RKAttachment[] @relation("RKAttachment_Parent")
-  rk                 RK             @relation(fields: [recordId], references: [id])
+  rk                 RK             @relation(fields: [recordId], references: [id], onDelete: Cascade)
   typeStructure      Type?          @relation("RK_typeStructure", fields: [typeStructureId], references: [id])
   userAdd            User           @relation(fields: [userAddId], references: [id])
 }
