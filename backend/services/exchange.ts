@@ -16,13 +16,7 @@ const EXCHANGE_CONFIG = {
   ewsVersion: process.env.EXCHANGE_EWS_VERSION || 'Exchange2016',
 };
 
-console.log('[Exchange] Exchange Service Configuration (EWS):');
-console.log('[Exchange]   OWA URL:', EXCHANGE_CONFIG.owaUrl || '(not set)');
-console.log('[Exchange]   EWS URL:', EXCHANGE_CONFIG.ewsUrl || '(will be auto-detected)');
-console.log('[Exchange]   Username:', EXCHANGE_CONFIG.ewsUsername ? `${EXCHANGE_CONFIG.ewsUsername.substring(0, 3)}***` : '(not set)');
-console.log('[Exchange]   Password:', EXCHANGE_CONFIG.ewsPassword ? '***' : '(not set)');
-console.log('[Exchange]   Domain:', EXCHANGE_CONFIG.ewsDomain || '(not set)');
-console.log('[Exchange]   Version:', EXCHANGE_CONFIG.ewsVersion);
+// Конфигурация Exchange загружена
 // Интерфейс для события календаря
 export interface ExchangeCalendarEvent {
   id?: string;
@@ -111,15 +105,6 @@ const makeEwsRequest = async (
     finalNtlmUsername = username;
   }
   
-  console.log(`[Exchange] [makeEwsRequest] NTLM Auth details:`);
-  console.log(`[Exchange] [makeEwsRequest]   Username: ${username}`);
-  console.log(`[Exchange] [makeEwsRequest]   Domain: ${domain || '(empty)'}`);
-  console.log(`[Exchange] [makeEwsRequest]   Final NTLM username: ${finalNtlmUsername}`);
-  console.log(`[Exchange] [makeEwsRequest]   Password length: ${password.length} (hidden for security)`);
-  console.log(`[Exchange] [makeEwsRequest]   EWS URL: ${ewsUrl}`);
-  console.log(`[Exchange] [makeEwsRequest]   SOAP Action: ${action}`);
-  console.log(`[Exchange] [makeEwsRequest]   SOAP Body length: ${soapEnvelope.length} bytes`);
-  console.log(`[Exchange] [makeEwsRequest]   SOAP Body preview (first 500 chars):`, soapEnvelope.substring(0, 500));
   
   return new Promise((resolve, reject) => {
     httpntlm.post({
@@ -139,10 +124,7 @@ const makeEwsRequest = async (
         return;
       }
       
-      console.log(`[Exchange] [makeEwsRequest] Response status: ${res.statusCode}`);
-      
       if (res.statusCode !== 200) {
-        // Логируем тело ответа для отладки при любой ошибке
         const bodyPreview = res.body ? res.body.substring(0, 2000) : '(no body)';
         console.error(`[Exchange] [makeEwsRequest] ${res.statusCode} Error response body:`, bodyPreview);
       }
@@ -158,9 +140,7 @@ const makeEwsRequest = async (
 // Парсинг SOAP ответа с событиями календаря
 const parseCalendarEventsFromSoap = (soapXml: string): ExchangeCalendarEvent[] => {
   try {
-    console.log('[Exchange] [parseCalendarEventsFromSoap] Starting SOAP parsing, XML length:', soapXml.length);
     const parsed = xmlParser.parse(soapXml);
-    console.log('[Exchange] [parseCalendarEventsFromSoap] Parsed XML structure keys:', Object.keys(parsed));
     
     const envelope = parsed['s:Envelope'] || parsed['soap:Envelope'] || parsed.Envelope;
     if (!envelope) {
@@ -177,7 +157,6 @@ const parseCalendarEventsFromSoap = (soapXml: string): ExchangeCalendarEvent[] =
     const findItemResponse = body?.['m:FindItemResponse'] || body?.FindItemResponse;
     if (!findItemResponse) {
       console.warn('[Exchange] [parseCalendarEventsFromSoap] No FindItemResponse found in body');
-      console.log('[Exchange] [parseCalendarEventsFromSoap] Body keys:', Object.keys(body));
       return [];
     }
     
@@ -193,13 +172,11 @@ const parseCalendarEventsFromSoap = (soapXml: string): ExchangeCalendarEvent[] =
       ? findItemResponseMessage 
       : findItemResponseMessage ? [findItemResponseMessage] : [];
 
-    console.log(`[Exchange] [parseCalendarEventsFromSoap] Found ${responseMessagesArray.length} response messages`);
 
     const events: ExchangeCalendarEvent[] = [];
 
     for (const responseMsg of responseMessagesArray) {
       const responseCode = responseMsg?.['m:ResponseCode'] || responseMsg?.ResponseCode;
-      console.log(`[Exchange] [parseCalendarEventsFromSoap] Response code: ${responseCode}`);
       
       if (responseCode !== 'NoError' && responseCode !== 'Success') {
         console.warn(`[Exchange] [parseCalendarEventsFromSoap] Skipping message with code: ${responseCode}`);
@@ -214,14 +191,12 @@ const parseCalendarEventsFromSoap = (soapXml: string): ExchangeCalendarEvent[] =
       
       const items = rootFolder?.['t:Items'] || rootFolder?.Items;
       if (!items) {
-        console.log('[Exchange] [parseCalendarEventsFromSoap] No Items found in RootFolder (empty calendar)');
         continue;
       }
       
       const calendarItem = items?.['t:CalendarItem'] || items?.CalendarItem;
       const calendarItemsArray = Array.isArray(calendarItem) ? calendarItem : calendarItem ? [calendarItem] : [];
       
-      console.log(`[Exchange] [parseCalendarEventsFromSoap] Found ${calendarItemsArray.length} calendar items`);
 
       for (const item of calendarItemsArray) {
         const itemId = item['t:ItemId']?.['@_Id'] || item.ItemId?.['@_Id'] || '';
@@ -249,11 +224,8 @@ const parseCalendarEventsFromSoap = (soapXml: string): ExchangeCalendarEvent[] =
           }
         }
 
-        console.log(`[Exchange] [parseCalendarEventsFromSoap] Parsing event: ${subject} (${start} - ${end})`);
-
         // Генерируем id, если его нет (для совместимости с фронтендом)
         const eventId = itemId || `event-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        console.log(`[Exchange] [parseCalendarEventsFromSoap] Event ID: ${eventId}`);
 
         events.push({
           id: eventId,
@@ -279,7 +251,6 @@ const parseCalendarEventsFromSoap = (soapXml: string): ExchangeCalendarEvent[] =
       }
     }
 
-    console.log(`[Exchange] [parseCalendarEventsFromSoap] Successfully parsed ${events.length} events`);
     return events;
   } catch (error: any) {
     console.error('[Exchange] [parseCalendarEventsFromSoap] Error parsing SOAP:', error.message);
@@ -297,9 +268,7 @@ const getCalendarEventsViaEWS = async (
   req?: any
 ): Promise<ExchangeCalendarEvent[]> => {
   try {
-    console.log(`[Exchange] [getCalendarEventsViaEWS] Starting for ${userEmail}, userId: ${userId || 'none'}`);
     const ewsUrl = getEwsUrl();
-    console.log(`[Exchange] [getCalendarEventsViaEWS] EWS URL: ${ewsUrl}`);
     
     let ewsUsername = EXCHANGE_CONFIG.ewsUsername;
     let ewsPassword = EXCHANGE_CONFIG.ewsPassword;
@@ -316,15 +285,12 @@ const getCalendarEventsViaEWS = async (
           ewsPassword = userPassword;
           ewsDomain = '';
           useImpersonation = false;
-          console.log(`[Exchange] [getCalendarEventsViaEWS] ✅ Using user password (direct auth) for ${userEmail}`);
         } else {
           // Пароль не найден или в старом формате - используем Impersonation
-          console.log(`[Exchange] [getCalendarEventsViaEWS] ⚠️ User password not available, using Impersonation for ${userEmail}`);
           useImpersonation = true;
         }
       } catch (passwordError: any) {
         // Если ошибка при получении пароля, используем Impersonation
-        console.log(`[Exchange] [getCalendarEventsViaEWS] ⚠️ Error getting user password, falling back to Impersonation: ${passwordError.message}`);
         useImpersonation = true;
       }
     }
@@ -333,15 +299,8 @@ const getCalendarEventsViaEWS = async (
       throw new Error('EWS username and password are required');
     }
     
-    console.log(`[Exchange] [getCalendarEventsViaEWS] Using ${useImpersonation ? 'Impersonation' : 'Direct auth'} for ${userEmail}`);
-    
     let ntlmUsername = ewsUsername;
     let ntlmDomain = ewsDomain;
-    
-    console.log(`[Exchange] [getCalendarEventsViaEWS] Processing credentials:`);
-    console.log(`[Exchange] [getCalendarEventsViaEWS]   Original username: ${ewsUsername}`);
-    console.log(`[Exchange] [getCalendarEventsViaEWS]   Original domain: ${ewsDomain || '(empty)'}`);
-    console.log(`[Exchange] [getCalendarEventsViaEWS]   Use Impersonation: ${useImpersonation}`);
     
     // Если используем прямой доступ с паролем пользователя (не Impersonation)
     if (!useImpersonation && userEmail.includes('@')) {
@@ -349,22 +308,17 @@ const getCalendarEventsViaEWS = async (
       // Exchange может принимать email как username без домена
       ntlmUsername = userEmail; // Используем полный email как username
       ntlmDomain = ''; // Не используем домен для UPN формата
-      console.log(`[Exchange] [getCalendarEventsViaEWS]   Direct auth - using UPN format: ${ntlmUsername} (no domain)`);
     } else if (ntlmUsername.includes('@')) {
       // Для Impersonation используем сервисный аккаунт
       ntlmUsername = ntlmUsername.split('@')[0];
-      console.log(`[Exchange] [getCalendarEventsViaEWS]   Impersonation - extracted username from email: ${ntlmUsername}`);
       if (!ntlmDomain && ewsUsername.includes('@')) {
         const emailParts = ewsUsername.split('@');
         if (emailParts.length > 1) {
           const domainPart = emailParts[1].toLowerCase();
-          console.log(`[Exchange] [getCalendarEventsViaEWS]   Email domain part: ${domainPart}`);
           if (domainPart === 'dns-shop.ru' || domainPart === 'partner.ru') {
             ntlmDomain = 'partner';
-            console.log(`[Exchange] [getCalendarEventsViaEWS]   Set domain to: ${ntlmDomain}`);
           } else if (domainPart.includes('.')) {
             ntlmDomain = domainPart.split('.')[0];
-            console.log(`[Exchange] [getCalendarEventsViaEWS]   Extracted domain from email: ${ntlmDomain}`);
           }
         }
       }
@@ -372,17 +326,10 @@ const getCalendarEventsViaEWS = async (
       const parts = ntlmUsername.split('\\');
       ntlmDomain = parts[0];
       ntlmUsername = parts[1];
-      console.log(`[Exchange] [getCalendarEventsViaEWS]   Split domain\\username: ${ntlmDomain}\\${ntlmUsername}`);
     }
-    
-    console.log(`[Exchange] [getCalendarEventsViaEWS] Final NTLM credentials:`);
-    console.log(`[Exchange] [getCalendarEventsViaEWS]   Username: ${ntlmUsername}`);
-    console.log(`[Exchange] [getCalendarEventsViaEWS]   Domain: ${ntlmDomain || '(empty)'}`);
-    console.log(`[Exchange] [getCalendarEventsViaEWS]   Auth method: ${useImpersonation ? 'Impersonation' : 'Direct (user password)'}`);
 
     const startDate = startDateTime ? startDateTime.toISOString() : new Date().toISOString();
     const endDate = endDateTime ? endDateTime.toISOString() : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-    console.log(`[Exchange] [getCalendarEventsViaEWS] Date range: ${startDate} to ${endDate}`);
 
     const impersonationHeader = useImpersonation ? `
     <t:ExchangeImpersonation>
@@ -390,12 +337,6 @@ const getCalendarEventsViaEWS = async (
         <t:PrimarySmtpAddress>${userEmail.toLowerCase()}</t:PrimarySmtpAddress>
       </t:ConnectingSID>
     </t:ExchangeImpersonation>` : '';
-    
-    console.log(`[Exchange] [getCalendarEventsViaEWS] Impersonation header:`, useImpersonation ? 'PRESENT' : 'NOT USED');
-    if (useImpersonation) {
-      console.log(`[Exchange] [getCalendarEventsViaEWS] Impersonating user: ${userEmail.toLowerCase()}`);
-      console.log(`[Exchange] [getCalendarEventsViaEWS] Impersonation header XML:`, impersonationHeader.trim());
-    }
     
     const soapEnvelope = `<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -422,12 +363,6 @@ const getCalendarEventsViaEWS = async (
   </soap:Body>
 </soap:Envelope>`;
 
-    console.log(`[Exchange] [getCalendarEventsViaEWS] Request details:`);
-    console.log(`[Exchange] [getCalendarEventsViaEWS]   NTLM Username: ${ntlmUsername}`);
-    console.log(`[Exchange] [getCalendarEventsViaEWS]   NTLM Domain: ${ntlmDomain || '(empty)'}`);
-    console.log(`[Exchange] [getCalendarEventsViaEWS]   Use Impersonation: ${useImpersonation}`);
-    console.log(`[Exchange] [getCalendarEventsViaEWS]   Target email: ${userEmail}`);
-    console.log(`[Exchange] [getCalendarEventsViaEWS]   EWS Username (original): ${ewsUsername}`);
     
     let response;
     try {
@@ -455,12 +390,10 @@ const getCalendarEventsViaEWS = async (
       
       // Проверяем на специфичные ошибки Exchange
       if (responseBody.includes('ErrorNonExistentMailbox')) {
-        console.log(`[Exchange] [getCalendarEventsViaEWS] Mailbox does not exist for ${userEmail}`);
         return [];
       }
       
       if (responseBody.includes('ErrorInvalidUserPrincipalName')) {
-        console.log(`[Exchange] [getCalendarEventsViaEWS] Invalid user principal name for ${userEmail}`);
         return [];
       }
       
@@ -477,9 +410,7 @@ const getCalendarEventsViaEWS = async (
       throw new Error(`EWS request failed with status code ${response.statusCode}`);
     }
 
-    console.log(`[Exchange] [getCalendarEventsViaEWS] Successfully received response, parsing SOAP...`);
     const parsedEvents = parseCalendarEventsFromSoap(response.body);
-    console.log(`[Exchange] [getCalendarEventsViaEWS] Parsed ${parsedEvents.length} calendar events`);
     return parsedEvents;
   } catch (error: any) {
     const errorBody = error.body || '';
@@ -813,11 +744,9 @@ const getNewEmailCount = async (
           ewsPassword = userPassword;
           ewsDomain = '';
           useImpersonation = false;
-          console.log(`[Exchange] [getNewEmailCount] Using user password for ${userEmail}`);
         }
       } catch (passwordError: any) {
         // Если пароль в старом формате или не найден, используем Impersonation
-        console.log(`[Exchange] [getNewEmailCount] Cannot use user password, falling back to Impersonation: ${passwordError.message}`);
         useImpersonation = true;
       }
     }
@@ -826,7 +755,6 @@ const getNewEmailCount = async (
       throw new Error('EWS username and password are required');
     }
     
-    console.log(`[Exchange] [getNewEmailCount] Using ${useImpersonation ? 'Impersonation' : 'Direct auth'} for ${userEmail}`);
     
     let ntlmUsername = ewsUsername;
     let ntlmDomain = ewsDomain;
@@ -981,15 +909,12 @@ const getNewEmailCount = async (
 // Проверка новых писем и отправка уведомлений
 export const checkNewEmailsAndNotify = async (userId: string, userEmail: string): Promise<void> => {
   try {
-    console.log(`[Exchange] [checkNewEmailsAndNotify] Checking new emails for user ${userId} (${userEmail})`);
-    
     const lastCheck = emailCheckCache.get(userId);
     const lastCheckTime = lastCheck?.lastCheckTime;
     
     const emailInfo = await getNewEmailCount(userEmail, userId, undefined, lastCheckTime);
     
     if (!lastCheck) {
-      console.log(`[Exchange] [checkNewEmailsAndNotify] First check for user ${userId}, saving state`);
       if (emailInfo.lastMessageTime) {
         emailCheckCache.set(userId, {
           lastCheckTime: new Date(),
@@ -1000,7 +925,6 @@ export const checkNewEmailsAndNotify = async (userId: string, userEmail: string)
     }
     
     if (emailInfo.count === 0) {
-      console.log(`[Exchange] [checkNewEmailsAndNotify] No new messages for user ${userId}`);
       if (emailInfo.lastMessageTime) {
         emailCheckCache.set(userId, {
           lastCheckTime: new Date(),
@@ -1010,7 +934,6 @@ export const checkNewEmailsAndNotify = async (userId: string, userEmail: string)
       return;
     }
     
-    console.log(`[Exchange] [checkNewEmailsAndNotify] Found ${emailInfo.count} new messages for user ${userId}`);
     
     const title = emailInfo.count === 1 ? 'Новое письмо' : `Новых писем: ${emailInfo.count}`;
     const message = emailInfo.count === 1 
@@ -1041,7 +964,6 @@ export const checkNewEmailsAndNotify = async (userId: string, userEmail: string)
         priority: 'MEDIUM'
       });
       
-      console.log(`[Exchange] [checkNewEmailsAndNotify] ✅ Created and sent notification to user ${userId}: ${title}`);
     } catch (error: any) {
       console.error(`[Exchange] [checkNewEmailsAndNotify] ❌ Failed to create notification for user ${userId}:`, error.message);
     }
@@ -1120,7 +1042,9 @@ export const getUserEmail = async (userId: string): Promise<string | null> => {
 };
 
 // Получение пароля Exchange пользователя из UserSettings
+// ВАЖНО: Пароль должен быть очищен из памяти после использования
 export const getUserExchangePassword = async (userId: string, req?: any): Promise<string | null> => {
+  let decryptedPassword: string | null = null;
   try {
     const passwordSetting = await prisma.userSettings.findUnique({
       where: {
@@ -1136,21 +1060,28 @@ export const getUserExchangePassword = async (userId: string, req?: any): Promis
     }
     
     try {
-      const decrypted = decrypt(passwordSetting.value);
-      return decrypted;
+      decryptedPassword = decrypt(passwordSetting.value);
+      return decryptedPassword;
     } catch (decryptError: any) {
       // Если пароль в старом формате, возвращаем null чтобы использовать Impersonation
       // Пароль будет автоматически обновлен при следующем логине
       if (decryptError.message && decryptError.message.includes('Legacy')) {
         console.warn('[Exchange] [getUserExchangePassword] Password in legacy format, will be updated on next login');
       } else {
-        console.error('[Exchange] [getUserExchangePassword] Decryption error:', decryptError.message || decryptError);
+        // Не логируем детали ошибки расшифровки для безопасности
+        console.error('[Exchange] [getUserExchangePassword] Decryption failed (details hidden for security)');
       }
       return null;
     }
   } catch (error: any) {
-    console.error('[Exchange] [getUserExchangePassword] Error:', error.message);
+    // Не логируем детали ошибки для безопасности
+    console.error('[Exchange] [getUserExchangePassword] Error (details hidden for security)');
     return null;
+  } finally {
+    // Очищаем пароль из памяти (хотя в JavaScript это не гарантирует полную очистку)
+    if (decryptedPassword) {
+      decryptedPassword = null;
+    }
   }
 };
 
@@ -1161,14 +1092,6 @@ export const isExchangeConfigured = (): boolean => {
   const hasCredentials = hasUsername && hasPassword;
   const hasUrl = !!(EXCHANGE_CONFIG.ewsUrl || EXCHANGE_CONFIG.owaUrl);
   
-  console.log('[Exchange] [isConfigured] Configuration check:');
-  console.log('[Exchange] [isConfigured]   Username:', hasUsername ? 'present' : 'missing');
-  console.log('[Exchange] [isConfigured]   Password:', hasPassword ? 'present' : 'missing');
-  console.log('[Exchange] [isConfigured]   EWS URL:', EXCHANGE_CONFIG.ewsUrl || 'not set');
-  console.log('[Exchange] [isConfigured]   OWA URL:', EXCHANGE_CONFIG.owaUrl || 'not set');
-  console.log('[Exchange] [isConfigured]   Has URL:', hasUrl);
-  console.log('[Exchange] [isConfigured]   Has credentials:', hasCredentials);
-  console.log('[Exchange] [isConfigured]   Result:', hasCredentials && hasUrl);
   
   return hasCredentials && hasUrl;
 };
@@ -1180,7 +1103,6 @@ export const getRooms = async (
   req?: any
 ): Promise<Array<{ email: string; name: string }>> => {
   try {
-    console.log(`[Exchange] [getRooms] Starting for ${userEmail}, userId: ${userId || 'none'}`);
     const ewsUrl = getEwsUrl();
     
     let ewsUsername = EXCHANGE_CONFIG.ewsUsername;
@@ -1197,13 +1119,10 @@ export const getRooms = async (
           ewsPassword = userPassword;
           ewsDomain = '';
           useImpersonation = false;
-          console.log(`[Exchange] [getRooms] ✅ Using user password (direct auth) for ${userEmail}`);
         } else {
-          console.log(`[Exchange] [getRooms] ⚠️ User password not available, using Impersonation for ${userEmail}`);
           useImpersonation = true;
         }
       } catch (passwordError: any) {
-        console.log(`[Exchange] [getRooms] ⚠️ Error getting user password, falling back to Impersonation: ${passwordError.message}`);
         useImpersonation = true;
       }
     }
