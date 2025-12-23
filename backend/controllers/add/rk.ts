@@ -8,7 +8,7 @@ import multer from 'multer';
 
 // Конфигурация Multer для загрузки файлов
 const upload = multer({ dest: 'uploads/' });
-
+const __dirname = path.resolve()
 // Константы для типов и статусов
 const TYPE_MODEL_UUID = "944287fa-7599-4ff6-aa48-1dd81406f38c";
 const TYPE_CHAPTER = "Тип вывески";
