@@ -1,12 +1,7 @@
 // Роуты для Exchange интеграции
 import express from 'express';
 import {
-  getMyCalendarEvents,
-  createCalendarEvent,
-  updateCalendarEvent,
-  deleteCalendarEvent,
-  getExchangeStatus,
-  getRooms
+  getMyCalendarEvents
 } from '../../controllers/app/exchange.js';
 import { authenticateToken } from '../../middleware/auth.js';
 
@@ -27,20 +22,11 @@ router.use((req, res, next) => {
 // Все роуты требуют аутентификации
 router.use(authenticateToken);
 
-// Статус интеграции
-router.get('/status', getExchangeStatus);
-
-// Помещения
-router.get('/rooms', getRooms);
-
-// Календарь
+// Календарь - только чтение
 router.get('/calendar/events', getMyCalendarEvents);
-router.post('/calendar/events', createCalendarEvent);
-router.patch('/calendar/events/:eventId', updateCalendarEvent);
-router.delete('/calendar/events/:eventId', deleteCalendarEvent);
 
-// УДАЛЕНО: Контакты, задачи, информация о пользователе - не используются
-// Оставлен только календарь и проверка новых писем
+// УДАЛЕНО: Создание, обновление, удаление событий, получение комнат, статус
+// Оставлен только календарь (чтение) и проверка новых писем (через cron)
 
 export default router;
 
