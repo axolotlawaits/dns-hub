@@ -267,10 +267,12 @@ export default function CorrespondenceList() {
   }, [setHeader, clearHeader]);
 
   const userOptions = useMemo(() => {
-    return state.users.map(u => ({
-      value: u.id,
-      label: formatName(u.name)
-    }));
+    return state.users
+      .filter(u => u.name) // Фильтруем пользователей без имени
+      .map(u => ({
+        value: u.id,
+        label: formatName(u.name)
+      }));
   }, [state.users]);
 
   const senderTypeOptions = useMemo(() => {

@@ -30,7 +30,11 @@ export const decodeRussianFileName = (fileName: string): string => {
   }
 };
 
-export const formatName = (name: string): string => {
+export const formatName = (name: string | null | undefined): string => {
+  if (!name || typeof name !== 'string') {
+    return 'Не указано';
+  }
+  
   const nameArray = name.split(' ');
   if (nameArray.length === 1) {
     return nameArray[0];

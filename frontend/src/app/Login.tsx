@@ -649,10 +649,14 @@ function Login() {
       const json = await response.json();
       
       if (response.ok) {
-        localStorage.setItem(LAST_LOGIN_KEY, userData.login);
-        contextLogin(json.user, json.token);
+        // Сохраняем токен и пользователя в localStorage ПЕРЕД вызовом contextLogin
+        // чтобы компоненты могли получить токен сразу после навигации
         localStorage.setItem('user', JSON.stringify(json.user));
         localStorage.setItem('token', json.token);
+        localStorage.setItem(LAST_LOGIN_KEY, userData.login);
+        
+        // Устанавливаем токен в контекст
+        contextLogin(json.user, json.token);
         
         // Принудительно обновляем аватар пользователя из базы данных
         try {
@@ -662,7 +666,11 @@ function Login() {
           console.error('Ошибка обновления аватара:', error);
         }
         
-        navigate('/');
+        // Небольшая задержка для обновления контекста перед навигацией
+        // Это гарантирует, что компоненты получат актуальный токен
+        requestAnimationFrame(() => {
+          navigate('/');
+        });
       } else {
         setValidationErrors(json.errors || {});
         setLdapError(json.ldapError || 'Ошибка аутентификации');

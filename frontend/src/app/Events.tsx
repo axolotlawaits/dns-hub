@@ -115,6 +115,11 @@ export default function Events() {
 
   // Load calendar events
   const loadCalendarEvents = useCallback(async () => {
+    if (!user?.email) {
+      setEventsError('Пользователь не авторизован');
+      return;
+    }
+    
     const authToken = token || localStorage.getItem('token');
     
     if (!authToken) {
@@ -167,17 +172,23 @@ export default function Events() {
     } finally {
       setLoadingEvents(false);
     }
-  }, [token]);
+  }, [token, user]);
 
 
   useEffect(() => {
-    const authToken = token || localStorage.getItem('token');
+    // Загружаем дни рождения только если пользователь авторизован
+    if (!user?.email) {
+      return;
+    }
+    
     fetchUpcomingBirthdays();
-    // Загружаем календарь вместе с днями рождения
-    if (authToken) {
+    
+    // Загружаем календарь только если есть токен и пользователь авторизован
+    const authToken = token || localStorage.getItem('token');
+    if (authToken && user) {
       loadCalendarEvents().catch(() => {});
     }
-  }, [fetchUpcomingBirthdays, token, loadCalendarEvents]);
+  }, [user, token, fetchUpcomingBirthdays, loadCalendarEvents]);
 
   useEffect(() => {
     setHeader({
