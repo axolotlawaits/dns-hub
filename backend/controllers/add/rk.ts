@@ -6,6 +6,111 @@ import fs from 'fs/promises';
 import path from 'path';
 import multer from 'multer';
 
+// Функция для проверки доступа к управлению доступом для RK
+const checkRKAccess = async (userId: string): Promise<boolean> => {
+  try {
+    // Получаем пользователя и его роль
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { 
+        role: true,
+        email: true,
+      }
+    });
+
+    if (!user) {
+      return false;
+    }
+
+    // DEVELOPER всегда имеет доступ
+    if (user.role === 'DEVELOPER') {
+      return true;
+    }
+
+    // Ищем инструмент add/rk
+    const rkTool = await prisma.tool.findFirst({
+      where: {
+        OR: [
+          { link: 'add/rk' },
+          { link: '/add/rk' }
+        ]
+      }
+    });
+
+    if (!rkTool) {
+      return false;
+    }
+
+    // Проверяем доступ только для ADMIN с полными правами
+    if (user.role === 'ADMIN') {
+      // Проверяем доступ на уровне пользователя - только FULL доступ
+      const userAccess = await prisma.userToolAccess.findFirst({
+        where: {
+          userId: userId,
+          toolId: rkTool.id,
+          accessLevel: 'FULL'
+        }
+      });
+
+      if (userAccess) {
+        return true;
+      }
+
+      // Получаем UserData для проверки доступа по должности и группе
+      const userData = await prisma.userData.findUnique({
+        where: { email: user.email },
+        select: {
+          position: {
+            select: {
+              uuid: true,
+              group: {
+                select: { uuid: true }
+              }
+            }
+          }
+        }
+      });
+
+      // Проверяем доступ на уровне должности - только FULL доступ
+      const positionId = userData?.position?.uuid;
+      if (positionId) {
+        const positionAccess = await prisma.positionToolAccess.findFirst({
+          where: {
+            positionId: positionId,
+            toolId: rkTool.id,
+            accessLevel: 'FULL'
+          }
+        });
+
+        if (positionAccess) {
+          return true;
+        }
+      }
+
+      // Проверяем доступ на уровне группы - только FULL доступ
+      const groupId = userData?.position?.group?.uuid;
+      if (groupId) {
+        const groupAccess = await prisma.groupToolAccess.findFirst({
+          where: {
+            groupId: groupId,
+            toolId: rkTool.id,
+            accessLevel: 'FULL'
+          }
+        });
+
+        if (groupAccess) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  } catch (error) {
+    console.error('[RK] Error checking RK access:', error);
+    return false;
+  }
+};
+
 // Конфигурация Multer для загрузки файлов
 const upload = multer({ dest: 'uploads/' });
 const __dirname = path.resolve()
