@@ -83,12 +83,18 @@ const ProfileInfo = () => {
   const [telegramModalOpened, { open: openTelegramModal, close: closeTelegramModal }] = useDisclosure(false);
   const [photoForm, setPhotoForm] = useState({ password: '' });
 
+  // Обработчик закрытия модалки пароля с очисткой формы
+  const handlePasswordModalClose = () => {
+    setPhotoForm({ password: '' });
+    closePasswordModal();
+  };
+
   // Конфигурация полей для формы фото
   const photoFields: FormField[] = [
     {
       name: 'password',
       label: 'Пароль',
-      type: 'text',
+      type: 'password',
       required: true,
       placeholder: 'Введите пароль для подтверждения'
     }
@@ -1473,7 +1479,7 @@ const ProfileInfo = () => {
       />
       <DynamicFormModal
         opened={passwordModalOpened}
-        onClose={closePasswordModal}
+        onClose={handlePasswordModalClose}
         title="Подтвердите смену фото"
         mode="create"
         fields={photoFields}

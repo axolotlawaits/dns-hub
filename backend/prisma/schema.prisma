@@ -137,7 +137,7 @@ model Branch {
   supplyDocs    SupplyDocs[]   @relation("SupplyDocs_Branch")
   userData      UserData[]
   shops         Shop[]
-  shopRequests  ShopRequest[]  @relation("ShopRequestRequesterBranch")
+  shopReserves  ShopReserve[] @relation("ShopReserveBranch")
 }
 
 model Group {
@@ -250,7 +250,8 @@ model User {
   MerchAttachments       MerchAttachment[]
   auditLogs              AuditLog[]
   shops                  Shop[]
-  shopRequests           ShopRequest[] @relation("ShopRequestRequester")
+  shopReserves           ShopReserve[] @relation("ShopReserveRequester")
+  comments               Comment[] @relation("CommentSender")
   scanSessions           ScanSession[]
   pollsCreated           Poll[]        @relation("PollCreator")
   pollVotes              PollVote[]    @relation("PollVoter")
@@ -981,7 +982,7 @@ enum ItemCondition {
 
 model Shop {
   id          String      @id @default(uuid())
-  title       String
+  title       String      // Название товара (было title)
   description String?     @db.Text
   categoryId  String
   category    Type        @relation(fields: [categoryId], references: [id])
@@ -990,17 +991,17 @@ model Shop {
   status      ShopStatus  @default(ACTIVE)
   userId      String
   user        User        @relation(fields: [userId], references: [id])
-  contactName String?
-  contactPhone String?
-  contactEmail String?
+  // Поля товара (объявление = товар)
+  quantity    Int         @default(1) // Количество
+  article     String?     // Артикул
+  condition   ItemCondition @default(GOOD) // Состояние
   views       Int         @default(0)
   isPromoted  Boolean     @default(false) // Платное продвижение
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   publishedAt DateTime?   // Дата публикации
-  images      ShopImage[]
-  items       ShopItem[]
-  requests    ShopRequest[]
+  attachments ShopAttachment[]
+  reserves    ShopReserve[]
 
   @@index([categoryId])
   @@index([branchId])
@@ -1011,25 +1012,7 @@ model Shop {
   @@index([isPromoted, status])
 }
 
-model ShopItem {
-  id          String        @id @default(uuid())
-  shopId      String
-  shop        Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  name        String        // Наименование
-  quantity    Int           @default(1) // Количество
-  article     String?       // Артикул (необязателен)
-  description String?       @db.Text // Описание
-  condition   ItemCondition @default(GOOD) // Состояние
-  sortOrder   Int           @default(0)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  reserves    ShopItemReserve[] // Резервы по этому товару
-
-  @@index([shopId])
-  @@index([shopId, sortOrder])
-}
-
-model ShopImage {
+model ShopAttachment {
   id        String   @id @default(uuid())
   shopId    String
   shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
@@ -1042,49 +1025,46 @@ model ShopImage {
   @@index([shopId, sortOrder])
 }
 
-enum ShopRequestStatus {
-  PENDING   // Ожидает подтверждения
-  APPROVED // Подтвержден
-  REJECTED // Отклонен
-  COMPLETED // Завершен (документ отгрузки добавлен)
-}
-
-model ShopRequest {
-  id              String          @id @default(uuid())
-  shopId          String
-  shop            Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  requesterId     String          // Кто запросил
-  requester       User            @relation("ShopRequestRequester", fields: [requesterId], references: [id], onDelete: Cascade)
-  requesterBranchId String?       // Филиал запросившего
-  requesterBranch Branch?         @relation("ShopRequestRequesterBranch", fields: [requesterBranchId], references: [uuid], onDelete: SetNull)
-  status          ShopRequestStatus @default(PENDING)
-  shipmentDocNumber String?       // Номер документа отгрузки
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  approvedAt      DateTime?       // Дата подтверждения
-  completedAt     DateTime?       // Дата завершения (когда добавлен номер документа)
-  reserves        ShopItemReserve[] // Резервы по товарам
+model ShopReserve {
+  id          String   @id @default(uuid())
+  shopId      String
+  shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  requesterId String   // Кто запросил резерв
+  requester   User     @relation("ShopReserveRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  branchId    String?  // Филиал запросившего (опционально)
+  branch      Branch?   @relation("ShopReserveBranch", fields: [branchId], references: [uuid], onDelete: SetNull)
+  quantity    Int      // Количество в резерве
+  status      String   @default("PENDING") // PENDING, APPROVED, REJECTED, COMPLETED
+  shipmentDocNumber String? // Номер документа отгрузки
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  approvedAt  DateTime?
+  completedAt DateTime?
 
   @@index([shopId])
   @@index([requesterId])
-  @@index([requesterBranchId])
   @@index([status])
-  @@index([shopId, status])
 }
 
-model ShopItemReserve {
-  id          String      @id @default(uuid())
-  requestId   String
-  request     ShopRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  itemId      String
-  item        ShopItem    @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  quantity    Int         // Количество в резерве
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+// Универсальная модель комментариев
+model Comment {
+  id         String   @id @default(uuid())
+  entityType String   // Тип сущности (SHOP, POST, etc.)
+  entityId   String   // ID сущности
+  senderId   String   // Отправитель комментария
+  sender     User     @relation("CommentSender", fields: [senderId], references: [id], onDelete: Cascade)
+  message    String   @db.Text
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  readAt     DateTime? // Когда прочитано владельцем сущности
+  parentId   String?  // ID родительского комментария (для вложенных комментариев)
+  parent     Comment? @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies    Comment[] @relation("CommentReplies")
 
-  @@unique([requestId, itemId])
-  @@index([requestId])
-  @@index([itemId])
+  @@index([entityType, entityId])
+  @@index([senderId])
+  @@index([entityType, entityId, createdAt])
+  @@index([parentId])
 }
 
 // Универсальная таблица обратной связи

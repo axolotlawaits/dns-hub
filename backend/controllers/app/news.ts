@@ -68,6 +68,44 @@ export const createNews = async (
       include: { user: true },
     });
 
+    // Отправляем уведомления всем пользователям
+    try {
+      const { NotificationController } = await import('./notification.js');
+      
+      // Получаем всех пользователей
+      const allUsers = await prisma.user.findMany({
+        select: { id: true },
+      });
+
+      // Отправляем уведомление каждому пользователю
+      const notificationPromises = allUsers.map(user => 
+        NotificationController.create({
+          type: 'INFO',
+          channels: ['IN_APP', 'TELEGRAM', 'EMAIL'],
+          title: 'Новая новость',
+          message: newNews.name.length > 50 ? `${newNews.name.substring(0, 50)}...` : newNews.name,
+          senderId: validatedData.userId,
+          receiverId: user.id,
+          priority: 'MEDIUM',
+          action: {
+            type: 'NAVIGATE',
+            url: '/news',
+          },
+        }).catch(error => {
+          console.error(`[News] Error sending notification to user ${user.id}:`, error);
+          return null;
+        })
+      );
+
+      // Ждем отправки всех уведомлений (не блокируем ответ)
+      Promise.all(notificationPromises).catch(error => {
+        console.error('[News] Error sending notifications:', error);
+      });
+    } catch (notifError) {
+      console.error('[News] Error sending notifications:', notifError);
+      // Не прерываем выполнение, если уведомления не отправились
+    }
+
     res.status(201).json(newNews);
   } catch (error) {
     if (error instanceof z.ZodError) {

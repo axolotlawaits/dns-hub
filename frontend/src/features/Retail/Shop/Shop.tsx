@@ -10,12 +10,11 @@ import {
   SimpleGrid,
   Badge,
   Image,
-  Modal,
   TextInput,
   Textarea,
-  NumberInput,
   Select,
   Tabs,
+  Modal,
   ActionIcon,
   Pagination,
   Box,
@@ -23,24 +22,25 @@ import {
   Avatar,
   Divider,
   Title,
-  FileInput,
+  Grid,
+  ScrollArea,
   Checkbox,
+  NumberInput,
 } from '@mantine/core';
 import {
   IconSearch,
   IconPlus,
-  IconTrash,
   IconPhoto,
   IconMapPin,
-  IconPhone,
-  IconMail,
   IconEye,
   IconFilter,
-  IconShoppingCart,
-  IconCheck,
-  IconX,
-  IconFileText,
+  IconChevronLeft,
+  IconChevronRight,
+  IconMessage,
 } from '@tabler/icons-react';
+import { Carousel } from '@mantine/carousel';
+import { CustomModal } from '../../../utils/CustomModal';
+import { DynamicFormModal } from '../../../utils/formModal';
 import { useUserContext } from '../../../hooks/useUserContext';
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { notificationSystem } from '../../../utils/Push';
@@ -64,15 +64,6 @@ interface ShopImage {
   sortOrder: number;
 }
 
-interface ShopItem {
-  id: string;
-  name: string;
-  quantity: number;
-  article?: string;
-  description?: string;
-  condition: 'NEW' | 'EXCELLENT' | 'GOOD' | 'SATISFACTORY' | 'POOR';
-  sortOrder: number;
-}
 
 interface Branch {
   uuid: string;
@@ -96,17 +87,17 @@ interface Shop {
     id: string;
     name: string;
     email: string;
+    image?: string;
   };
-  contactName?: string;
-  contactPhone?: string;
-  contactEmail?: string;
+  // Поля товара (объявление = товар)
+  quantity: number;
+  article?: string;
+  condition: 'NEW' | 'EXCELLENT' | 'GOOD' | 'SATISFACTORY' | 'POOR';
   views: number;
   isPromoted: boolean;
   createdAt: string;
   publishedAt?: string;
-  images: ShopImage[];
-  items: ShopItem[];
-  _count?: { items: number };
+  attachments: ShopImage[]; // Переименовано из images
 }
 
 function Shop() {
@@ -121,12 +112,13 @@ function Shop() {
   const [selectedShop, setSelectedShop] = useState<Shop | null>(null);
   const [modalOpened, setModalOpened] = useState(false);
   const [createModalOpened, setCreateModalOpened] = useState(false);
-  // Избранное удалено
-  const [shopRequests, setShopRequests] = useState<any[]>([]);
-  const [requestsModalOpened, setRequestsModalOpened] = useState(false);
-  const [shipmentDocModalOpened, setShipmentDocModalOpened] = useState(false);
-  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
-  const [shipmentDocNumber, setShipmentDocNumber] = useState('');
+  const [editModalOpened, setEditModalOpened] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [comments, setComments] = useState<any[]>([]);
+  const [commentText, setCommentText] = useState('');
+  const [fileAttachments, setFileAttachments] = useState<Record<string, File[]>>({});
+  const [reserveModalOpened, setReserveModalOpened] = useState(false);
+  const [reserveQuantity, setReserveQuantity] = useState(1);
   
   // Фильтры
   const [search, setSearch] = useState('');
@@ -233,117 +225,54 @@ function Shop() {
       if (response?.ok) {
         const data = await response.json();
         setSelectedShop(data);
+        setCurrentImageIndex(0);
         setModalOpened(true);
-        // Если пользователь - создатель объявления, загружаем запросы
-        if (user && data.userId === user.id) {
-          fetchShopRequests(data.id);
-        }
+        fetchComments(data.id);
       }
     } catch (error) {
       console.error('Error fetching shop:', error);
     }
   };
 
-  const fetchShopRequests = async (shopId: string) => {
+  const fetchComments = async (shopId: string) => {
     try {
-      const response = await authFetch(`${API}/retail/shop/shops/${shopId}/requests`);
+      const response = await authFetch(`${API}/comments?entityType=SHOP&entityId=${shopId}`);
       if (response?.ok) {
         const data = await response.json();
-        setShopRequests(data);
+        setComments(data.comments || []);
       }
     } catch (error) {
-      console.error('Error fetching requests:', error);
+      console.error('Error fetching comments:', error);
     }
   };
 
-  const handleCreateRequest = async (shopId: string) => {
+  const handleSendComment = async () => {
+    if (!selectedShop || !commentText.trim()) return;
+    
     try {
-      const response = await authFetch(`${API}/retail/shop/shops/${shopId}/request`, {
-        method: 'POST',
-      });
-      if (response && response.ok) {
-        notificationSystem.addNotification('Успешно', 'Запрос отправлен создателю объявления', 'success');
-        setModalOpened(false);
-      } else if (response) {
-        const error = await response.json();
-        notificationSystem.addNotification('Ошибка', error.error || 'Не удалось создать запрос', 'error');
-      }
-    } catch (error) {
-      console.error('Error creating request:', error);
-      notificationSystem.addNotification('Ошибка', 'Не удалось создать запрос', 'error');
-    }
-  };
-
-  const handleApproveRequest = async (requestId: string) => {
-    try {
-      const response = await authFetch(`${API}/retail/shop/shops/requests/${requestId}/approve`, {
-        method: 'POST',
-      });
-      if (response?.ok) {
-        notificationSystem.addNotification('Успешно', 'Запрос подтвержден', 'success');
-        if (selectedShop) {
-          fetchShopRequests(selectedShop.id);
-        }
-        setShipmentDocModalOpened(true);
-        setSelectedRequestId(requestId);
-      } else if (response) {
-        const error = await response.json();
-        notificationSystem.addNotification('Ошибка', error.error || 'Не удалось подтвердить запрос', 'error');
-      }
-    } catch (error) {
-      console.error('Error approving request:', error);
-      notificationSystem.addNotification('Ошибка', 'Не удалось подтвердить запрос', 'error');
-    }
-  };
-
-  const handleRejectRequest = async (requestId: string) => {
-    try {
-      const response = await authFetch(`${API}/retail/shop/shops/requests/${requestId}/reject`, {
-        method: 'POST',
-      });
-      if (response?.ok) {
-        notificationSystem.addNotification('Успешно', 'Запрос отклонен', 'success');
-        if (selectedShop) {
-          fetchShopRequests(selectedShop.id);
-        }
-      } else if (response) {
-        const error = await response.json();
-        notificationSystem.addNotification('Ошибка', error.error || 'Не удалось отклонить запрос', 'error');
-      }
-    } catch (error) {
-      console.error('Error rejecting request:', error);
-      notificationSystem.addNotification('Ошибка', 'Не удалось отклонить запрос', 'error');
-    }
-  };
-
-  const handleAddShipmentDoc = async () => {
-    if (!selectedRequestId || !shipmentDocNumber.trim()) {
-      notificationSystem.addNotification('Ошибка', 'Введите номер документа', 'error');
-      return;
-    }
-    try {
-      const response = await authFetch(`${API}/retail/shop/shops/requests/${selectedRequestId}/shipment-doc`, {
+      const response = await authFetch(`${API}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shipmentDocNumber: shipmentDocNumber.trim() }),
+        body: JSON.stringify({
+          entityType: 'SHOP',
+          entityId: selectedShop.id,
+          message: commentText.trim(),
+        }),
       });
+      
       if (response?.ok) {
-        notificationSystem.addNotification('Успешно', 'Номер документа добавлен', 'success');
-        setShipmentDocModalOpened(false);
-        setShipmentDocNumber('');
-        setSelectedRequestId(null);
-        if (selectedShop) {
-          fetchShopRequests(selectedShop.id);
-        }
-      } else if (response) {
-        const error = await response.json();
-        notificationSystem.addNotification('Ошибка', error.error || 'Не удалось добавить номер документа', 'error');
+        setCommentText('');
+        fetchComments(selectedShop.id);
+        notificationSystem.addNotification('Успешно', 'Комментарий отправлен', 'success');
+      } else {
+        notificationSystem.addNotification('Ошибка', 'Не удалось отправить комментарий', 'error');
       }
     } catch (error) {
-      console.error('Error adding shipment doc:', error);
-      notificationSystem.addNotification('Ошибка', 'Не удалось добавить номер документа', 'error');
+      console.error('Error sending comment:', error);
+      notificationSystem.addNotification('Ошибка', 'Не удалось отправить комментарий', 'error');
     }
   };
+
 
   const categoryOptions = useMemo(() => {
     const flatten = (cats: ShopCategory[]): { value: string; label: string }[] => {
@@ -365,6 +294,22 @@ function Shop() {
       label: `${b.name} (${b.code}) - ${b.city}`,
     }));
   }, [branches]);
+  
+  // Находим филиал пользователя по умолчанию
+  const userBranchId = useMemo(() => {
+    if (!user?.branch || branches.length === 0) return '';
+    // Проверяем, является ли user.branch UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (uuidRegex.test(user.branch)) {
+      // Если это UUID, ищем филиал по UUID
+      const branch = branches.find(b => b.uuid === user.branch);
+      return branch?.uuid || '';
+    } else {
+      // Если это имя, ищем филиал по имени
+      const branch = branches.find(b => b.name === user.branch || b.code === user.branch);
+      return branch?.uuid || '';
+    }
+  }, [user?.branch, branches]);
 
   const myShops = useMemo(() => {
     if (!user) return [];
@@ -376,7 +321,7 @@ function Shop() {
     
     // Фильтр "только с фото"
     if (onlyWithPhotos) {
-      result = result.filter(shop => shop.images && shop.images.length > 0);
+      result = result.filter(shop => shop.attachments && shop.attachments.length > 0);
     }
     
     return result;
@@ -464,9 +409,9 @@ function Shop() {
                     onClick={() => handleViewShop(shop)}
                   >
                     <Card.Section>
-                      {shop.images && shop.images.length > 0 ? (
+                      {shop.attachments && shop.attachments.length > 0 ? (
                         <Image
-                          src={`${API}/public/${shop.images[0].source}`}
+                          src={`${API}/public/${shop.attachments[0].source}`}
                           height={200}
                           alt={shop.title}
                           fallbackSrc="https://via.placeholder.com/300x200?text=No+Image"
@@ -503,16 +448,9 @@ function Shop() {
                         {shop.branch.name} • {shop.branch.city}
                       </Text>
                       <Group justify="space-between" mt="xs">
-                        <Group gap="xs">
                           <Text size="xs" c="dimmed">
                             {shop.category.name}
                           </Text>
-                          {shop._count?.items && (
-                            <Badge size="xs" variant="light">
-                              {shop._count.items} {shop._count.items === 1 ? 'товар' : 'товаров'}
-                            </Badge>
-                          )}
-                        </Group>
                         <Group gap={4}>
                           <Text size="xs" c="dimmed">
                             <IconEye size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> {shop.views}
@@ -542,123 +480,280 @@ function Shop() {
         </Tabs.Panel>
       </Tabs>
 
-      {/* Модалка просмотра объявления */}
-      <Modal
+      {/* Модалка просмотра объявления в стиле Avito */}
+      <CustomModal
         opened={modalOpened}
-        onClose={() => setModalOpened(false)}
-        title={selectedShop?.title}
+        onClose={() => {
+          setModalOpened(false);
+          setCurrentImageIndex(0);
+          setCommentText('');
+        }}
+        title={selectedShop?.title || ''}
         size="xl"
-        centered
+        width="95vw"
+        maxWidth="1400px"
+        maxHeight="90vh"
+        styles={{
+          body: { padding: 0, maxHeight: 'calc(90vh - 80px)', overflowY: 'auto' },
+        }}
       >
         {selectedShop && (
-          <Stack gap="md">
-            {/* Изображения */}
-            {selectedShop.images && selectedShop.images.length > 0 && (
-              <Box>
+          <Grid gutter={0}>
+              {/* Левая колонка: Фото и информация */}
+              <Grid.Col span={{ base: 12, md: 8 }}>
+                <Stack gap={0}>
+                  {/* Фотографии */}
+                  {selectedShop.attachments && selectedShop.attachments.length > 0 ? (
+                    <Box p="md">
+                      <Box pos="relative" style={{ width: '100%', aspectRatio: '4/3' }}>
                 <Image
-                  src={`${API}/public/${selectedShop.images[0].source}`}
+                          src={`${API}/public/${selectedShop.attachments[currentImageIndex]?.source}`}
                   alt={selectedShop.title}
-                  radius="md"
-                />
+                          fit="cover"
+                          style={{ width: '100%', height: '100%' }}
+                        />
+                        {selectedShop.attachments.length > 1 && (
+                          <>
+                            <ActionIcon
+                              variant="filled"
+                              size="lg"
+                              pos="absolute"
+                              left={10}
+                              top="50%"
+                              style={{ transform: 'translateY(-50%)', zIndex: 10 }}
+                              onClick={() => setCurrentImageIndex((prev) => 
+                                prev === 0 ? selectedShop.attachments.length - 1 : prev - 1
+                              )}
+                            >
+                              <IconChevronLeft size={20} />
+                            </ActionIcon>
+                            <ActionIcon
+                              variant="filled"
+                              size="lg"
+                              pos="absolute"
+                              right={10}
+                              top="50%"
+                              style={{ transform: 'translateY(-50%)', zIndex: 10 }}
+                              onClick={() => setCurrentImageIndex((prev) => 
+                                prev === selectedShop.attachments.length - 1 ? 0 : prev + 1
+                              )}
+                            >
+                              <IconChevronRight size={20} />
+                            </ActionIcon>
+                          </>
+                        )}
+                      </Box>
+                      {selectedShop.attachments.length > 1 && (
+                        <Box p="md" style={{ borderTop: '1px solid var(--mantine-color-gray-3)' }}>
+                          <Carousel
+                            slideSize="80px"
+                            slideGap="xs"
+                            withIndicators={false}
+                            withControls={selectedShop.attachments.length > 5}
+                            styles={{
+                              control: {
+                                '&[data-inactive]': {
+                                  opacity: 0,
+                                  cursor: 'default',
+                                },
+                              },
+                            }}
+                          >
+                            {selectedShop.attachments.map((img, idx) => (
+                              <Carousel.Slide key={img.id}>
+                                <Box
+                                  style={{
+                                    cursor: 'pointer',
+                                    border: idx === currentImageIndex ? '3px solid var(--mantine-color-blue-6)' : '2px solid var(--mantine-color-gray-3)',
+                                    borderRadius: '4px',
+                                    overflow: 'hidden',
+                                    transition: 'border-color 0.2s',
+                                  }}
+                                  onClick={() => setCurrentImageIndex(idx)}
+                                >
+                                  <Image
+                                    src={`${API}/public/${img.source}`}
+                                    alt={`${selectedShop.title} ${idx + 1}`}
+                                    h={80}
+                                    w={80}
+                                    fit="cover"
+                                  />
+                                </Box>
+                              </Carousel.Slide>
+                            ))}
+                          </Carousel>
+                        </Box>
+                      )}
+                    </Box>
+                  ) : (
+                    <Box h={500} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--mantine-color-gray-1)' }}>
+                      <IconPhoto size={64} color="var(--mantine-color-gray-5)" />
               </Box>
             )}
 
-            {/* Филиал и статус */}
-            <Group justify="space-between">
-              <Group gap="xs">
-                <IconMapPin size={16} />
-                <Text fw={500}>{selectedShop.branch.name}</Text>
-                <Text size="sm" c="dimmed">({selectedShop.branch.city})</Text>
+                  {/* Информация о товаре */}
+                  <Stack gap="md" p="md">
+                    <Title order={2}>{selectedShop.title}</Title>
+                    
+                    {/* Характеристики */}
+                    <Stack gap="xs">
+                      <Text size="sm" fw={500}>Характеристики:</Text>
+                      <Group gap="md">
+                        <Text size="sm">
+                          <strong>Категория:</strong> {selectedShop.category.name}
+                        </Text>
+                        <Text size="sm">
+                          <strong>Состояние:</strong>{' '}
+                          {selectedShop.condition === 'NEW' ? 'Новое' :
+                           selectedShop.condition === 'EXCELLENT' ? 'Отличное' :
+                           selectedShop.condition === 'GOOD' ? 'Хорошее' :
+                           selectedShop.condition === 'SATISFACTORY' ? 'Удовлетворительное' : 'Плохое'}
+                        </Text>
+                        <Text size="sm">
+                          <strong>Количество:</strong> {selectedShop.quantity} шт.
+                        </Text>
+                        {selectedShop.article && (
+                          <Text size="sm">
+                            <strong>Артикул:</strong> {selectedShop.article}
+                          </Text>
+                        )}
               </Group>
-              <Badge
-                color={
-                  selectedShop.status === 'ACTIVE' ? 'green' :
-                  selectedShop.status === 'SOLD' ? 'gray' : 'blue'
-                }
-              >
-                {selectedShop.status === 'ACTIVE' ? 'Активно' :
-                 selectedShop.status === 'SOLD' ? 'Продано' :
-                 selectedShop.status === 'ARCHIVED' ? 'Архив' : 'На модерации'}
-              </Badge>
-            </Group>
+                    </Stack>
+
+                    <Divider />
 
             {/* Описание */}
             {selectedShop.description && (
+                      <Stack gap="xs">
+                        <Text size="sm" fw={500}>Описание:</Text>
               <Text>{selectedShop.description}</Text>
+                      </Stack>
             )}
 
-            {/* Товары */}
-            {selectedShop.items && selectedShop.items.length > 0 && (
-              <>
                 <Divider />
-                <Stack gap="md">
-                  <Title order={5}>Товары ({selectedShop.items.length})</Title>
-                  {selectedShop.items.map((item: ShopItem, index: number) => (
-                    <Paper key={item.id || index} p="md" withBorder>
+
+                    {/* Местоположение */}
                       <Stack gap="xs">
+                      <Text size="sm" fw={500}>Местоположение:</Text>
+                      <Group gap="xs">
+                        <IconMapPin size={16} />
+                        <Text>{selectedShop.branch.name} ({selectedShop.branch.city})</Text>
+                      </Group>
+                    </Stack>
+
+                    <Divider />
+
+                    {/* Комментарии */}
+                    <Stack gap="md">
+                      <Title order={4}>Комментарии ({comments.length})</Title>
+                      
+                      {/* Список комментариев */}
+                      <ScrollArea h={300}>
+                        <Stack gap="md">
+                          {comments.map((comment) => {
+                            const senderImage = comment.sender?.image 
+                              ? `data:image/jpeg;base64,${comment.sender.image}` 
+                              : undefined;
+                            return (
+                              <Paper key={comment.id} p="md" withBorder>
+                                <Group gap="md" align="flex-start">
+                                  <Avatar 
+                                    src={senderImage} 
+                                    radius="xl"
+                                  >
+                                    {comment.sender?.name?.[0] || '?'}
+                                  </Avatar>
+                                  <Stack gap="xs" style={{ flex: 1 }}>
                         <Group justify="space-between">
-                          <Text fw={600}>{item.name}</Text>
-                          <Badge color="blue" variant="light">
-                            Кол-во: {item.quantity}
-                          </Badge>
+                                      <Text fw={500}>{comment.sender?.name || 'Неизвестный'}</Text>
+                                      <Text size="xs" c="dimmed">
+                                        {new Date(comment.createdAt).toLocaleString('ru-RU')}
+                                      </Text>
                         </Group>
-                        {item.article && (
-                          <Text size="sm" c="dimmed">
-                            Артикул: {item.article}
+                                    <Text size="sm">{comment.text || comment.message}</Text>
+                                  </Stack>
+                                </Group>
+                              </Paper>
+                            );
+                          })}
+                          {comments.length === 0 && (
+                            <Text c="dimmed" ta="center" py="xl">
+                              Пока нет комментариев
                           </Text>
                         )}
-                        {item.description && (
-                          <Text size="sm">{item.description}</Text>
-                        )}
-                        <Badge
-                          color={
-                            item.condition === 'NEW' ? 'green' :
-                            item.condition === 'EXCELLENT' ? 'cyan' :
-                            item.condition === 'GOOD' ? 'blue' :
-                            item.condition === 'SATISFACTORY' ? 'yellow' : 'red'
-                          }
-                          variant="light"
-                          size="sm"
-                        >
-                          {item.condition === 'NEW' ? 'Новое' :
-                           item.condition === 'EXCELLENT' ? 'Отличное' :
-                           item.condition === 'GOOD' ? 'Хорошее' :
-                           item.condition === 'SATISFACTORY' ? 'Удовлетворительное' : 'Плохое'}
-                        </Badge>
-                      </Stack>
-                    </Paper>
-                  ))}
+                        </Stack>
+                      </ScrollArea>
+
+                      {/* Поле для комментария */}
+                      {user && (
+                        <Group gap="xs" align="flex-end">
+                          <Textarea
+                            placeholder="Здравствуйте!"
+                            value={commentText}
+                            onChange={(e) => setCommentText(e.target.value)}
+                            style={{ flex: 1 }}
+                            minRows={2}
+                            maxRows={4}
+                          />
+                          <ActionIcon
+                            size="lg"
+                            color="blue"
+                            variant="filled"
+                            onClick={handleSendComment}
+                            disabled={!commentText.trim()}
+                          >
+                            <IconMessage size={20} />
+                          </ActionIcon>
+                        </Group>
+                      )}
+                    </Stack>
+                  </Stack>
                 </Stack>
-              </>
-            )}
+              </Grid.Col>
 
-            <Divider />
+              {/* Правая колонка: Действия */}
+              <Grid.Col span={{ base: 12, md: 4 }}>
+                <Box p="md">
+                  <Paper p="md" withBorder style={{ position: 'sticky', top: 0 }}>
+                  <Stack gap="md">
+                    {/* Статус */}
+                        <Badge
+                      size="lg"
+                          color={
+                        selectedShop.status === 'ACTIVE' ? 'green' :
+                        selectedShop.status === 'SOLD' ? 'gray' : 'blue'
+                      }
+                      fullWidth
+                    >
+                      {selectedShop.status === 'ACTIVE' ? 'Активно' :
+                       selectedShop.status === 'SOLD' ? 'Продано' :
+                       selectedShop.status === 'ARCHIVED' ? 'Архив' : 'На модерации'}
+                        </Badge>
 
-            {/* Контакты */}
+                    {/* Продавец */}
             <Stack gap="xs">
-              <Title order={5}>Контакты</Title>
-              {selectedShop.contactName && (
+                      <Text size="sm" fw={500}>Продавец:</Text>
                 <Group gap="xs">
-                  <Avatar size="sm" radius="xl">{selectedShop.contactName[0]}</Avatar>
-                  <Text>{selectedShop.contactName}</Text>
+                        <Avatar 
+                          src={selectedShop.user.image 
+                            ? `data:image/jpeg;base64,${selectedShop.user.image}` 
+                            : undefined
+                          } 
+                          radius="xl"
+                        >
+                          {selectedShop.user.name[0]}
+                        </Avatar>
+                        <Stack gap={0}>
+                          <Text fw={500}>{selectedShop.user.name}</Text>
+                          <Text size="xs" c="dimmed">{selectedShop.user.email}</Text>
+                        </Stack>
                 </Group>
-              )}
-              {selectedShop.contactPhone && (
-                <Group gap="xs">
-                  <IconPhone size={16} />
-                  <Text>{selectedShop.contactPhone}</Text>
-                </Group>
-              )}
-              {selectedShop.contactEmail && (
-                <Group gap="xs">
-                  <IconMail size={16} />
-                  <Text>{selectedShop.contactEmail}</Text>
-                </Group>
-              )}
             </Stack>
 
+                    <Divider />
+
             {/* Статистика */}
-            <Group gap="md">
+                    <Stack gap="xs">
               <Text size="sm" c="dimmed">
                 Просмотров: {selectedShop.views}
               </Text>
@@ -667,531 +762,354 @@ function Shop() {
                   ? new Date(selectedShop.publishedAt).toLocaleDateString('ru-RU')
                   : 'Не опубликовано'}
               </Text>
-            </Group>
+                    </Stack>
 
-            {/* Кнопка "Запросить в карточку" или управление запросами */}
+                    {/* Кнопки действий */}
             {user && selectedShop.userId === user.id ? (
-              <>
-                <Divider />
-                <Group justify="space-between">
-                  <Title order={5}>Запросы в карточку ({shopRequests.length})</Title>
-                  <Button
-                    variant="light"
-                    onClick={() => setRequestsModalOpened(true)}
-                  >
-                    Показать все
-                  </Button>
-                </Group>
-                {shopRequests.length > 0 ? (
                   <Stack gap="xs">
-                    {shopRequests.slice(0, 3).map((request) => (
-                      <Paper key={request.id} p="md" withBorder>
-                        <Group justify="space-between">
-                          <Stack gap="xs">
-                            <Text fw={500}>{request.requester.name}</Text>
-                            {request.requesterBranch && (
-                              <Text size="sm" c="dimmed">
-                                Филиал: {request.requesterBranch.name} ({request.requesterBranch.city})
-                              </Text>
-                            )}
-                            {request.reserves && request.reserves.length > 0 && (
-                              <Stack gap="xs">
-                                <Text size="sm" fw={500}>Резерв:</Text>
-                                {request.reserves.map((reserve: any) => (
-                                  <Text key={reserve.id} size="xs" c="dimmed">
-                                    {reserve.item.name}: {reserve.quantity} шт.
-                                  </Text>
-                                ))}
-                              </Stack>
-                            )}
-                            <Badge
-                              color={
-                                request.status === 'PENDING' ? 'yellow' :
-                                request.status === 'APPROVED' ? 'blue' :
-                                request.status === 'COMPLETED' ? 'green' : 'red'
-                              }
-                            >
-                              {request.status === 'PENDING' ? 'Ожидает' :
-                               request.status === 'APPROVED' ? 'Подтвержден' :
-                               request.status === 'COMPLETED' ? 'Завершен' : 'Отклонен'}
-                            </Badge>
-                            {request.shipmentDocNumber && (
-                              <Text size="sm" c="dimmed">
-                                Документ: {request.shipmentDocNumber}
-                              </Text>
-                            )}
-                          </Stack>
-                          {request.status === 'PENDING' && (
-                            <Group gap="xs">
                               <Button
-                                size="xs"
-                                color="green"
-                                leftSection={<IconCheck size={16} />}
-                                onClick={() => handleApproveRequest(request.id)}
-                              >
-                                Подтвердить
-                              </Button>
-                              <Button
-                                size="xs"
-                                color="red"
+                          fullWidth
                                 variant="light"
-                                leftSection={<IconX size={16} />}
-                                onClick={() => handleRejectRequest(request.id)}
-                              >
-                                Отклонить
-                              </Button>
-                            </Group>
-                          )}
-                          {request.status === 'APPROVED' && !request.shipmentDocNumber && (
-                            <Button
-                              size="xs"
-                              leftSection={<IconFileText size={16} />}
+                          color="blue"
                               onClick={() => {
-                                setSelectedRequestId(request.id);
-                                setShipmentDocModalOpened(true);
+                            setEditModalOpened(true);
+                            setModalOpened(false);
                               }}
                             >
-                              Добавить документ
+                          Редактировать
                             </Button>
-                          )}
-                        </Group>
-                      </Paper>
-                    ))}
-                  </Stack>
-                ) : (
-                  <Text size="sm" c="dimmed">Нет запросов</Text>
-                )}
-              </>
-            ) : user && selectedShop.userId !== user.id ? (
-              <>
-                <Divider />
                 <Button
                   fullWidth
-                  leftSection={<IconShoppingCart size={18} />}
-                  onClick={() => handleCreateRequest(selectedShop.id)}
-                >
-                  Запросить в карточку
+                          variant="light"
+                          color="red"
+                          onClick={async () => {
+                            if (confirm('Вы уверены, что хотите удалить это объявление?')) {
+                              try {
+                                const response = await authFetch(`${API}/retail/shop/shops/${selectedShop.id}`, {
+                                  method: 'DELETE',
+                                });
+                                if (response?.ok) {
+                                  notificationSystem.addNotification('Успешно', 'Объявление удалено', 'success');
+                                  setModalOpened(false);
+                                  fetchShops();
+                                } else {
+                                  notificationSystem.addNotification('Ошибка', 'Не удалось удалить объявление', 'error');
+                                }
+                              } catch (error) {
+                                console.error('Error deleting shop:', error);
+                                notificationSystem.addNotification('Ошибка', 'Не удалось удалить объявление', 'error');
+                              }
+                            }
+                          }}
+                        >
+                          Удалить
                 </Button>
-              </>
-            ) : null}
           </Stack>
-        )}
-      </Modal>
-
-      {/* Модалка управления запросами */}
-      <Modal
-        opened={requestsModalOpened}
-        onClose={() => setRequestsModalOpened(false)}
-        title="Запросы в карточку"
-        size="lg"
-      >
-        {shopRequests.length > 0 ? (
-          <Stack gap="md">
-            {shopRequests.map((request) => (
-              <Paper key={request.id} p="md" withBorder>
-                <Group justify="space-between">
-                  <Stack gap="xs">
-                    <Text fw={500}>{request.requester.name}</Text>
-                    <Text size="sm" c="dimmed">{request.requester.email}</Text>
-                    {request.requesterBranch && (
-                      <Text size="sm" c="dimmed">
-                        Филиал: {request.requesterBranch.name} ({request.requesterBranch.city})
-                      </Text>
-                    )}
-                    {request.reserves && request.reserves.length > 0 && (
+                    ) : user && selectedShop.status === 'ACTIVE' ? (
                       <Stack gap="xs">
-                        <Text size="sm" fw={500}>Резерв по товарам:</Text>
-                        {request.reserves.map((reserve: any) => (
-                          <Text key={reserve.id} size="sm" c="dimmed">
-                            • {reserve.item.name}: {reserve.quantity} шт.
-                          </Text>
-                        ))}
+                        <Button
+                          fullWidth
+                          color="blue"
+                          onClick={() => {
+                            setReserveQuantity(1);
+                            setReserveModalOpened(true);
+                          }}
+                        >
+                          Забронировать
+                        </Button>
+                        <Button
+                          fullWidth
+                          variant="light"
+                          leftSection={<IconMessage size={18} />}
+                          onClick={() => {
+                            // Фокус на поле комментария
+                            const textarea = document.querySelector('textarea[placeholder="Здравствуйте!"]') as HTMLTextAreaElement;
+                            if (textarea) {
+                              textarea.focus();
+                              textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                          }}
+                        >
+                          Написать продавцу
+                        </Button>
                       </Stack>
-                    )}
-                    <Badge
-                      color={
-                        request.status === 'PENDING' ? 'yellow' :
-                        request.status === 'APPROVED' ? 'blue' :
-                        request.status === 'COMPLETED' ? 'green' : 'red'
-                      }
-                    >
-                      {request.status === 'PENDING' ? 'Ожидает' :
-                       request.status === 'APPROVED' ? 'Подтвержден' :
-                       request.status === 'COMPLETED' ? 'Завершен' : 'Отклонен'}
-                    </Badge>
-                    {request.shipmentDocNumber && (
-                      <Text size="sm">
-                        <strong>Документ отгрузки:</strong> {request.shipmentDocNumber}
-                      </Text>
-                    )}
-                    <Text size="xs" c="dimmed">
-                      Создан: {new Date(request.createdAt).toLocaleString('ru-RU')}
-                    </Text>
-                  </Stack>
-                  {request.status === 'PENDING' && (
-                    <Group gap="xs">
+                    ) : user ? (
                       <Button
-                        size="sm"
-                        color="green"
-                        leftSection={<IconCheck size={16} />}
-                        onClick={() => handleApproveRequest(request.id)}
-                      >
-                        Подтвердить
-                      </Button>
-                      <Button
-                        size="sm"
-                        color="red"
+                        fullWidth
                         variant="light"
-                        leftSection={<IconX size={16} />}
-                        onClick={() => handleRejectRequest(request.id)}
+                        leftSection={<IconMessage size={18} />}
+                        onClick={() => {
+                          // Фокус на поле комментария
+                          const textarea = document.querySelector('textarea[placeholder="Здравствуйте!"]') as HTMLTextAreaElement;
+                          if (textarea) {
+                            textarea.focus();
+                            textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          }
+                        }}
                       >
-                        Отклонить
+                        Написать продавцу
                       </Button>
-                    </Group>
-                  )}
-                  {request.status === 'APPROVED' && !request.shipmentDocNumber && (
-                    <Button
-                      size="sm"
-                      leftSection={<IconFileText size={16} />}
-                      onClick={() => {
-                        setSelectedRequestId(request.id);
-                        setShipmentDocModalOpened(true);
-                        setRequestsModalOpened(false);
-                      }}
-                    >
-                      Добавить документ
-                    </Button>
-                  )}
-                </Group>
-              </Paper>
-            ))}
+                    ) : null}
           </Stack>
-        ) : (
-          <Text c="dimmed">Нет запросов</Text>
+                </Paper>
+                </Box>
+              </Grid.Col>
+            </Grid>
         )}
-      </Modal>
+      </CustomModal>
 
-      {/* Модалка добавления номера документа отгрузки */}
-      <Modal
-        opened={shipmentDocModalOpened}
+
+      {/* Модалка создания/редактирования объявления */}
+      <DynamicFormModal
+        opened={createModalOpened || editModalOpened}
         onClose={() => {
-          setShipmentDocModalOpened(false);
-          setShipmentDocNumber('');
-          setSelectedRequestId(null);
+          setCreateModalOpened(false);
+          setEditModalOpened(false);
+          setSelectedShop(null);
+          setFileAttachments({});
         }}
-        title="Добавить номер документа отгрузки"
+        title={editModalOpened ? 'Редактировать объявление' : 'Создать объявление'}
+        size="xl"
+        mode={editModalOpened ? 'edit' : 'create'}
+        initialValues={{
+          title: selectedShop?.title || '',
+          description: selectedShop?.description || '',
+          categoryId: selectedShop?.categoryId || '',
+          branchId: selectedShop?.branchId || userBranchId || '',
+          quantity: selectedShop?.quantity || 1,
+          article: selectedShop?.article || '',
+          condition: selectedShop?.condition || 'GOOD',
+        }}
+        fields={[
+          {
+            name: 'title',
+            label: 'Заголовок',
+            type: 'text',
+            required: true,
+            placeholder: 'Название объявления',
+          },
+          {
+            name: 'description',
+            label: 'Описание',
+            type: 'textarea',
+            placeholder: 'Описание объявления (необязательно)',
+          },
+          {
+            name: 'categoryId',
+            label: 'Категория',
+            type: 'select',
+            required: true,
+            data: categoryOptions,
+            groupWith: ['branchId'],
+            groupSize: 2,
+          },
+          {
+            name: 'branchId',
+            label: 'Филиал',
+            type: 'select',
+            required: true,
+            data: branchOptions,
+            searchable: true,
+            groupWith: ['categoryId'],
+            groupSize: 2,
+          },
+          {
+            name: 'quantity',
+            label: 'Количество',
+            type: 'number',
+            required: true,
+            min: 1,
+            placeholder: '1',
+          },
+          {
+            name: 'article',
+            label: 'Артикул',
+            type: 'text',
+            placeholder: 'Артикул товара (необязательно)',
+          },
+          {
+            name: 'condition',
+            label: 'Состояние',
+            type: 'select',
+            data: [
+              { value: 'NEW', label: 'Новое' },
+              { value: 'EXCELLENT', label: 'Отличное' },
+              { value: 'GOOD', label: 'Хорошее' },
+              { value: 'SATISFACTORY', label: 'Удовлетворительное' },
+              { value: 'POOR', label: 'Плохое' },
+            ],
+          },
+        ]}
+        fileAttachments={fileAttachments}
+        onFileAttachmentsChange={(fileId, files) => {
+          setFileAttachments(prev => ({ ...prev, [fileId]: files }));
+        }}
+        attachmentLabel="Фотографии товара"
+        attachmentAccept="image/*"
+        existingDocuments={editModalOpened && selectedShop?.attachments ? {
+          photos: selectedShop.attachments.map(att => ({
+            id: att.id,
+            source: att.source,
+            name: att.source.split('/').pop() || 'photo',
+          }))
+        } : undefined}
+        onDeleteExistingDocument={async (_fileId, documentId) => {
+          if (selectedShop) {
+            try {
+              const response = await authFetch(`${API}/retail/shop/shops/${selectedShop.id}/attachments/${documentId}`, {
+                method: 'DELETE',
+              });
+              if (response?.ok) {
+                notificationSystem.addNotification('Успешно', 'Фотография удалена', 'success');
+                fetchShops();
+                const updatedShop = shops.find(s => s.id === selectedShop.id);
+                if (updatedShop) {
+                  setSelectedShop(updatedShop);
+                }
+              }
+            } catch (error) {
+              console.error('Error deleting image:', error);
+            }
+          }
+        }}
+        onSubmit={async (values) => {
+          try {
+            const isEdit = !!selectedShop;
+            const url = isEdit ? `${API}/retail/shop/shops/${selectedShop.id}` : `${API}/retail/shop/shops`;
+            const method = isEdit ? 'PUT' : 'POST';
+            
+            const response = await authFetch(url, {
+              method,
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                title: values.title,
+                description: values.description || null,
+                categoryId: values.categoryId,
+                branchId: values.branchId,
+                quantity: values.quantity,
+                article: values.article || null,
+                condition: values.condition,
+              }),
+            });
+
+            if (response?.ok) {
+              const shopData = await response.json();
+              const shopId = shopData.id || selectedShop?.id;
+              
+              // Загружаем фото объявления, если они есть
+              const photos = fileAttachments['photos'] || [];
+              if (photos.length > 0 && shopId) {
+                try {
+                  const formDataPhotos = new FormData();
+                  photos.forEach((photo) => {
+                    formDataPhotos.append('attachments', photo);
+                  });
+                  
+                  const photoResponse = await authFetch(`${API}/retail/shop/shops/${shopId}/attachments`, {
+                    method: 'POST',
+                    body: formDataPhotos,
+                  });
+                  
+                  if (!photoResponse?.ok) {
+                    console.error('Failed to upload photos');
+                    notificationSystem.addNotification('Предупреждение', 'Объявление сохранено, но не удалось загрузить фото', 'warning');
+                  }
+                } catch (photoError) {
+                  console.error('Error uploading photos:', photoError);
+                  notificationSystem.addNotification('Предупреждение', 'Объявление сохранено, но не удалось загрузить фото', 'warning');
+                }
+              }
+
+              notificationSystem.addNotification('Успех', isEdit ? 'Объявление обновлено' : 'Объявление создано', 'success');
+            setCreateModalOpened(false);
+              setEditModalOpened(false);
+              setSelectedShop(null);
+              setFileAttachments({});
+            fetchShops();
+              if (!isEdit && activeTab !== 'my') setActiveTab('my');
+            } else if (response) {
+              const error = await response.json();
+              notificationSystem.addNotification('Ошибка', error.error || (isEdit ? 'Не удалось обновить объявление' : 'Не удалось создать объявление'), 'error');
+            }
+          } catch (error) {
+            console.error('Error saving ad:', error);
+            notificationSystem.addNotification('Ошибка', selectedShop ? 'Не удалось обновить объявление' : 'Не удалось создать объявление', 'error');
+          }
+        }}
+        submitButtonText={editModalOpened ? 'Сохранить' : 'Создать'}
+      />
+
+      {/* Модалка резервирования */}
+      <Modal
+        opened={reserveModalOpened}
+        onClose={() => {
+          setReserveModalOpened(false);
+          setReserveQuantity(1);
+        }}
+        title="Забронировать товар"
+        centered
       >
         <Stack gap="md">
-          <TextInput
-            label="Номер документа отгрузки"
-            placeholder="Введите номер документа"
-            value={shipmentDocNumber}
-            onChange={(e) => setShipmentDocNumber(e.target.value)}
+          <Text size="sm" c="dimmed">
+            Товар: {selectedShop?.title}
+          </Text>
+          <Text size="sm" c="dimmed">
+            Доступно: {selectedShop?.quantity} шт.
+          </Text>
+          
+          <NumberInput
+            label="Количество"
+            value={reserveQuantity}
+            onChange={(val: string | number) => setReserveQuantity(Number(val) || 1)}
+            min={1}
+            max={selectedShop?.quantity || 1}
             required
           />
-          <Group justify="flex-end">
+
+          <Group justify="flex-end" mt="md">
             <Button
-              variant="light"
+              variant="outline"
               onClick={() => {
-                setShipmentDocModalOpened(false);
-                setShipmentDocNumber('');
-                setSelectedRequestId(null);
+                setReserveModalOpened(false);
+                setReserveQuantity(1);
               }}
             >
               Отмена
             </Button>
             <Button
-              onClick={handleAddShipmentDoc}
-              disabled={!shipmentDocNumber.trim()}
+              onClick={async () => {
+                if (!selectedShop || !user) return;
+                
+                try {
+                  const response = await authFetch(`${API}/retail/shop/shops/${selectedShop.id}/reserve`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      quantity: reserveQuantity,
+                      branchId: userBranchId || null,
+                    }),
+                  });
+
+                  if (response?.ok) {
+                    notificationSystem.addNotification('Успешно', 'Запрос на резервирование отправлен', 'success');
+                    setReserveModalOpened(false);
+                    setReserveQuantity(1);
+                  } else {
+                    const error = await response?.json();
+                    notificationSystem.addNotification('Ошибка', error?.error || 'Не удалось создать резерв', 'error');
+                  }
+                } catch (error) {
+                  console.error('Error creating reserve:', error);
+                  notificationSystem.addNotification('Ошибка', 'Не удалось создать резерв', 'error');
+                }
+              }}
             >
-              Сохранить
+              Забронировать
             </Button>
           </Group>
         </Stack>
       </Modal>
-
-      {/* Модалка создания объявления */}
-      <Modal
-        opened={createModalOpened}
-        onClose={() => setCreateModalOpened(false)}
-        title="Создать объявление"
-        size="xl"
-      >
-        <CreateShopForm
-          categories={categoryOptions}
-          branches={branchOptions}
-          onSuccess={() => {
-            setCreateModalOpened(false);
-            fetchShops();
-            if (activeTab !== 'my') setActiveTab('my');
-          }}
-        />
-      </Modal>
     </Container>
-  );
-}
-
-// Компонент формы создания объявления
-function CreateShopForm({ categories, branches, onSuccess }: { 
-  categories: { value: string; label: string }[]; 
-  branches: { value: string; label: string }[];
-  onSuccess: () => void;
-}) {
-  const { user } = useUserContext();
-  const authFetch = useAuthFetch();
-  const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    categoryId: '',
-    branchId: '',
-    contactName: user?.name || '',
-    contactPhone: '',
-    contactEmail: user?.email || '',
-  });
-  const [items, setItems] = useState<Array<{
-    name: string;
-    quantity: number;
-    article: string;
-    description: string;
-    condition: 'NEW' | 'EXCELLENT' | 'GOOD' | 'SATISFACTORY' | 'POOR';
-  }>>([
-    { name: '', quantity: 1, article: '', description: '', condition: 'GOOD' },
-  ]);
-  const [photos, setPhotos] = useState<File[]>([]);
-
-  const addItem = () => {
-    setItems([...items, { name: '', quantity: 1, article: '', description: '', condition: 'GOOD' }]);
-  };
-
-  const removeItem = (index: number) => {
-    setItems(items.filter((_, i) => i !== index));
-  };
-
-  const updateItem = (index: number, field: string, value: any) => {
-    const newItems = [...items];
-    newItems[index] = { ...newItems[index], [field]: value };
-    setItems(newItems);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.title || !formData.categoryId || !formData.branchId) {
-      notificationSystem.addNotification('Ошибка', 'Заполните все обязательные поля', 'error');
-      return;
-    }
-
-    if (items.length === 0 || items.some(item => !item.name)) {
-      notificationSystem.addNotification('Ошибка', 'Добавьте хотя бы один товар с наименованием', 'error');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const response = await authFetch(`${API}/retail/shop/shops`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          items: items.map(item => ({
-            name: item.name,
-            quantity: item.quantity,
-            article: item.article || null,
-            description: item.description || null,
-            condition: item.condition,
-          })),
-        }),
-      });
-
-      if (response?.ok) {
-        const createdShop = await response.json();
-        
-        // Загружаем фото, если они есть
-        if (photos.length > 0 && createdShop.id) {
-          try {
-            const formData = new FormData();
-            photos.forEach((photo) => {
-              formData.append('images', photo);
-            });
-            
-            const photoResponse = await authFetch(`${API}/retail/shop/shops/${createdShop.id}/images`, {
-              method: 'POST',
-              body: formData,
-              // Не устанавливаем Content-Type для FormData - браузер сделает это автоматически
-            });
-            
-            if (!photoResponse?.ok) {
-              console.error('Failed to upload photos');
-              notificationSystem.addNotification('Предупреждение', 'Объявление создано, но не удалось загрузить фото', 'warning');
-            }
-          } catch (photoError) {
-            console.error('Error uploading photos:', photoError);
-            notificationSystem.addNotification('Предупреждение', 'Объявление создано, но не удалось загрузить фото', 'warning');
-          }
-        }
-        
-        notificationSystem.addNotification('Успех', 'Объявление создано', 'success');
-        onSuccess();
-      } else {
-        notificationSystem.addNotification('Ошибка', 'Не удалось создать объявление', 'error');
-      }
-    } catch (error) {
-      console.error('Error creating ad:', error);
-      notificationSystem.addNotification('Ошибка', 'Не удалось создать объявление', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit}>
-      <Stack gap="md">
-        <TextInput
-          label="Заголовок"
-          placeholder="Название объявления"
-          required
-          value={formData.title}
-          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-        />
-        <Textarea
-          label="Описание (необязательно)"
-          placeholder="Общее описание объявления"
-          minRows={3}
-          value={formData.description}
-          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-        />
-        <Select
-          label="Категория"
-          placeholder="Выберите категорию"
-          required
-          data={categories}
-          value={formData.categoryId}
-          onChange={(val) => setFormData({ ...formData, categoryId: val || '' })}
-        />
-        <Select
-          label="Филиал"
-          placeholder="Выберите филиал"
-          required
-          data={branches}
-          value={formData.branchId}
-          onChange={(val) => setFormData({ ...formData, branchId: val || '' })}
-          searchable
-        />
-
-        <Divider label="Товары" labelPosition="center" />
-
-        {items.map((item, index) => (
-          <Paper key={index} p="md" withBorder>
-            <Stack gap="md">
-              <Group justify="space-between">
-                <Text fw={500}>Товар {index + 1}</Text>
-                {items.length > 1 && (
-                  <ActionIcon
-                    color="red"
-                    variant="light"
-                    onClick={() => removeItem(index)}
-                  >
-                    <IconTrash size={16} />
-                  </ActionIcon>
-                )}
-              </Group>
-              <TextInput
-                label="Наименование"
-                placeholder="Название товара"
-                required
-                value={item.name}
-                onChange={(e) => updateItem(index, 'name', e.target.value)}
-              />
-              <Group grow>
-                <NumberInput
-                  label="Количество"
-                  placeholder="1"
-                  required
-                  min={1}
-                  value={item.quantity}
-                  onChange={(val) => updateItem(index, 'quantity', val || 1)}
-                />
-                <TextInput
-                  label="Артикул (необязательно)"
-                  placeholder="Артикул товара"
-                  value={item.article}
-                  onChange={(e) => updateItem(index, 'article', e.target.value)}
-                />
-              </Group>
-              <Textarea
-                label="Описание (необязательно)"
-                placeholder="Описание товара"
-                minRows={2}
-                value={item.description}
-                onChange={(e) => updateItem(index, 'description', e.target.value)}
-              />
-              <Select
-                label="Состояние"
-                data={[
-                  { value: 'NEW', label: 'Новое' },
-                  { value: 'EXCELLENT', label: 'Отличное' },
-                  { value: 'GOOD', label: 'Хорошее' },
-                  { value: 'SATISFACTORY', label: 'Удовлетворительное' },
-                  { value: 'POOR', label: 'Плохое' },
-                ]}
-                value={item.condition}
-                onChange={(val) => updateItem(index, 'condition', val || 'GOOD')}
-              />
-            </Stack>
-          </Paper>
-        ))}
-
-        <Button
-          type="button"
-          variant="light"
-          leftSection={<IconPlus size={16} />}
-          onClick={addItem}
-        >
-          Добавить товар
-        </Button>
-
-        <Divider label="Фото" labelPosition="center" />
-
-        <FileInput
-          label="Фотографии объявления"
-          placeholder="Выберите фотографии"
-          accept="image/*"
-          multiple
-          value={photos}
-          onChange={setPhotos}
-          clearable
-        />
-        {photos.length > 0 && (
-          <Text size="sm" c="dimmed">
-            Выбрано фотографий: {photos.length}
-          </Text>
-        )}
-
-        <Divider />
-
-        <TextInput
-          label="Имя"
-          value={formData.contactName}
-          onChange={(e) => setFormData({ ...formData, contactName: e.target.value })}
-        />
-        <TextInput
-          label="Телефон"
-          value={formData.contactPhone}
-          onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
-        />
-        <TextInput
-          label="Email"
-          type="email"
-          value={formData.contactEmail}
-          onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
-        />
-        <Group justify="flex-end" mt="md">
-          <Button type="submit" loading={loading}>
-            Создать
-          </Button>
-        </Group>
-      </Stack>
-    </form>
   );
 }
 

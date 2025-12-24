@@ -12,24 +12,28 @@ import {
   createAd,
   updateAd,
   deleteAd,
-  createAdRequest,
-  getAdRequests,
-  getUserAdRequests,
-  approveAdRequest,
-  rejectAdRequest,
-  addShipmentDocNumber,
+  createReserve,
 } from '../../controllers/retail/shop.js';
 import { prisma } from '../../server.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const router = Router();
 
 // Настройка multer для загрузки изображений
-const uploadDir = path.join(process.cwd(), 'backend', 'public', 'retail', 'shop');
+const uploadDir = path.join(__dirname, '..', '..', 'public', 'retail', 'shop');
+const itemsUploadDir = path.join(__dirname, '..', '..', 'public', 'retail', 'shop', 'items');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
+}
+if (!fs.existsSync(itemsUploadDir)) {
+  fs.mkdirSync(itemsUploadDir, { recursive: true });
 }
 
 const storage = multer.diskStorage({
@@ -45,6 +49,33 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    if (extname && mimetype) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'));
+    }
+  },
+});
+
+// Multer для фотографий товаров
+const itemsStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, itemsUploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, `item-${uniqueSuffix}${ext}`);
+  },
+});
+
+const itemsUpload = multer({
+  storage: itemsStorage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
   fileFilter: (req, file, cb) => {
     const allowedTypes = /jpeg|jpg|png|gif|webp/;
@@ -114,7 +145,7 @@ router.post('/shops/:id/images', upload.array('images', 10), async (req: any, re
     }
 
     // Получаем текущие изображения для определения sortOrder
-    const existingImages = await prisma.shopImage.findMany({
+    const existingImages = await (prisma as any).shopAttachment.findMany({
       where: { shopId: id },
       orderBy: { sortOrder: 'desc' },
       take: 1,
@@ -125,7 +156,7 @@ router.post('/shops/:id/images', upload.array('images', 10), async (req: any, re
 
     const images = await Promise.all(
       files.map(async (file, index) => {
-        return await prisma.shopImage.create({
+        return await (prisma as any).shopAttachment.create({
           data: {
             shopId: id,
             source: `retail/shop/${file.filename}`,
@@ -170,7 +201,7 @@ router.delete('/shops/:id/images/:imageId', async (req: any, res: any) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    const image = await prisma.shopImage.findUnique({
+    const image = await (prisma as any).shopAttachment.findUnique({
       where: { id: imageId },
     });
 
@@ -184,7 +215,7 @@ router.delete('/shops/:id/images/:imageId', async (req: any, res: any) => {
       fs.unlinkSync(filePath);
     }
 
-    await prisma.shopImage.delete({
+    await (prisma as any).shopAttachment.delete({
       where: { id: imageId },
     });
 
@@ -230,7 +261,7 @@ router.put('/shops/:id/images/order', async (req: any, res: any) => {
     // Обновляем порядок
     await Promise.all(
       imageIds.map((imageId: string, index: number) =>
-        prisma.shopImage.update({
+        (prisma as any).shopAttachment.update({
           where: { id: imageId },
           data: {
             sortOrder: index,
@@ -248,24 +279,133 @@ router.put('/shops/:id/images/order', async (req: any, res: any) => {
 });
 
 // ==================== AdRequest Routes ====================
+// Удалено: ShopRequest больше не используется, вместо этого используется универсальная система комментариев
 
-// Создать запрос в карточку
-router.post('/shops/:id/request', authenticateToken, createAdRequest);
+// ==================== ShopItem Images Routes ====================
+// Удалено - товар теперь = объявление, все фотографии в ShopAttachment
 
-// Получить запросы для объявления (для создателя)
-router.get('/shops/:id/requests', authenticateToken, getAdRequests);
+// Загрузить фотографии товара (удалено)
+/* router.post('/shops/items/:itemId/images', itemsUpload.array('images', 10), async (req: any, res: any) => {
+  try {
+    const { itemId } = req.params;
+    const token = req.token;
+    if (!token?.userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
 
-// Получить запросы пользователя (для того, кто запрашивает)
-router.get('/shops/requests/my', authenticateToken, getUserAdRequests);
+    // Проверяем права - получаем товар и его объявление
+    const item = await prisma.shopItem.findUnique({
+      where: { id: itemId },
+      include: {
+        shop: {
+          select: { userId: true },
+        },
+      },
+    });
 
-// Подтвердить запрос
-router.post('/shops/requests/:requestId/approve', authenticateToken, approveAdRequest);
+    if (!item) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
 
-// Отклонить запрос
-router.post('/shops/requests/:requestId/reject', authenticateToken, rejectAdRequest);
+    const user = await prisma.user.findUnique({
+      where: { id: token.userId },
+      select: { role: true },
+    });
 
-// Добавить номер документа отгрузки
-router.post('/shops/requests/:requestId/shipment-doc', authenticateToken, addShipmentDocNumber);
+    if (item.shop.userId !== token.userId && user?.role !== 'ADMIN' && user?.role !== 'DEVELOPER') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const files = req.files as Express.Multer.File[];
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: 'No files uploaded' });
+    }
+
+    // Получаем текущие изображения для определения sortOrder
+    const existingImages = await prisma.shopItemImage.findMany({
+      where: { itemId },
+      orderBy: { sortOrder: 'desc' },
+      take: 1,
+    });
+
+    let nextSortOrder = existingImages.length > 0 ? existingImages[0].sortOrder + 1 : 0;
+    const isFirstImage = existingImages.length === 0;
+
+    const images = await Promise.all(
+      files.map(async (file, index) => {
+        return await prisma.shopItemImage.create({
+          data: {
+            itemId,
+            source: `retail/shop/items/${file.filename}`,
+            sortOrder: nextSortOrder + index,
+            isMain: isFirstImage && index === 0,
+          },
+        });
+      })
+    );
+
+    res.json(images);
+  } catch (error) {
+    console.error('[Ads] Error uploading item images:', error);
+    res.status(500).json({ error: 'Failed to upload images' });
+  }
+});
+
+// Удалить фотографию товара
+router.delete('/shops/items/:itemId/images/:imageId', async (req: any, res: any) => {
+  try {
+    const { itemId, imageId } = req.params;
+    const token = req.token;
+    if (!token?.userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const item = await prisma.shopItem.findUnique({
+      where: { id: itemId },
+      include: {
+        shop: {
+          select: { userId: true },
+        },
+      },
+    });
+
+    if (!item) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: token.userId },
+      select: { role: true },
+    });
+
+    if (item.shop.userId !== token.userId && user?.role !== 'ADMIN' && user?.role !== 'DEVELOPER') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const image = await prisma.shopItemImage.findUnique({
+      where: { id: imageId },
+    });
+
+    if (!image || image.itemId !== itemId) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+
+    // Удаляем файл
+    const filePath = path.join(process.cwd(), 'backend', 'public', image.source);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    await prisma.shopItemImage.delete({
+      where: { id: imageId },
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[Ads] Error deleting item image:', error);
+    res.status(500).json({ error: 'Failed to delete image' });
+  }
+}); */
 
 export default router;
 
