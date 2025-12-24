@@ -5,7 +5,6 @@ import { accessPrivateKey } from "../../server.js";
 import { encrypt } from "../../utils/encryption.js";
 import { checkPasswordRateLimit, maskLogin } from "../../utils/rateLimiter.js";
 import { logUserAction } from "../../middleware/audit.js";
-import { exchangeService } from "../../services/exchange.js";
 
 export const updateUserSettings = async (req: Request, res: Response):Promise<any> => {
   const token = (req as any).token;
@@ -403,12 +402,6 @@ export const login = async (req: Request, res: Response): Promise<any> => {
         userAgent || undefined
       ).catch(() => {});
       
-      // Проверяем новые письма для авторизованного пользователя (асинхронно, не блокируем ответ)
-      if (newUser.email && exchangeService.isConfigured()) {
-        exchangeService.checkNewEmailsAndNotify(newUser.id, newUser.email).catch((err: any) => {
-          console.error(`[Login] Error checking emails for new user ${newUser.id}:`, err.message);
-        });
-      }
       
       return res.status(200).json({user: newUser, token})
     }
@@ -500,12 +493,6 @@ export const login = async (req: Request, res: Response): Promise<any> => {
       userAgent || undefined
     ).catch(() => {});
     
-    // Проверяем новые письма для авторизованного пользователя (асинхронно, не блокируем ответ)
-    if (user.email && exchangeService.isConfigured()) {
-      exchangeService.checkNewEmailsAndNotify(user.id, user.email).catch((err: any) => {
-        console.error(`[Login] Error checking emails for user ${user.id}:`, err.message);
-      });
-    }
     
     return res.status(200).json({user, token})
   } catch (error) {

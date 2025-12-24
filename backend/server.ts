@@ -37,7 +37,6 @@ import trassirRouter from './routes/retail/trassir.js'
 import shopRouter from './routes/retail/shop.js'
 import adminRouter from './routes/admin.js'
 import telegramRouter  from './routes/app/telegram.js'
-import exchangeRouter from './routes/app/exchange.js'
 import bugReportsRouter from './routes/app/bugReports.js'
 import branchesRouter from './routes/admin/branches.js'
 import usersRouter from './routes/admin/users.js'
@@ -165,9 +164,6 @@ app.use('/hub-api/radio', radioRouter)
 app.use('/hub-api/profile', profileRouter)
 app.use('/hub-api/telegram', telegramRouter)
 
-// Exchange роутер
-
-app.use('/hub-api/exchange', exchangeRouter)
 
 // Ленивая загрузка merch-bot роутера (только если боты включены)
 if (process.env.ENABLE_BOTS !== 'false') {

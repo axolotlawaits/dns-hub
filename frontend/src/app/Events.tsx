@@ -45,46 +45,13 @@ type UserData = {
   };
 };
 
-interface CalendarEvent {
-  id: string;
-  subject: string;
-  start: {
-    dateTime: string;
-    timeZone: string;
-  };
-  end: {
-    dateTime: string;
-    timeZone: string;
-  };
-  location?: {
-    displayName: string;
-  };
-  attendees?: Array<{
-    emailAddress: {
-      address: string;
-      name?: string;
-    };
-    type: string;
-  }>;
-  isAllDay?: boolean;
-  body?: {
-    content?: string;
-    contentType?: string;
-  };
-}
 
 export default function Events() {
-  const { user, token } = useUserContext();
+  const { user } = useUserContext();
   const { setHeader } = usePageHeader();
   const [usersData, setUsersData] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  // Calendar state
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [loadingEvents, setLoadingEvents] = useState(false);
-  const [eventsError, setEventsError] = useState<string | null>(null);
-  const [last503ErrorTime, setLast503ErrorTime] = useState<number | null>(null);
   
   
   // Load birthdays
@@ -114,107 +81,6 @@ export default function Events() {
     }
   }, [user?.email]);
 
-  // Load calendar events
-  const loadCalendarEvents = useCallback(async () => {
-    // Проверяем user из контекста или localStorage
-    const currentUser = user || (() => {
-      const storedUser = localStorage.getItem('user');
-      return storedUser ? JSON.parse(storedUser) : null;
-    })();
-    
-    if (!currentUser?.email) {
-      setEventsError('Пользователь не авторизован');
-      return;
-    }
-    
-    const authToken = token || localStorage.getItem('token');
-    
-    if (!authToken) {
-      setEventsError('Токен авторизации отсутствует');
-      return;
-    }
-    
-    // Если была ошибка 503 менее 30 секунд назад, не делаем повторный запрос
-    if (last503ErrorTime && Date.now() - last503ErrorTime < 30000) {
-      return;
-    }
-    
-    setLoadingEvents(true);
-    setEventsError(null);
-    try {
-      const startDate = new Date();
-      const endDate = new Date();
-      endDate.setMonth(endDate.getMonth() + 1);
-      
-      const url = `${API}/exchange/calendar/events?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`;
-      
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${authToken}`
-        },
-        credentials: 'include'
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch {
-          errorData = { error: 'Failed to load calendar events' };
-        }
-        
-        // Специальная обработка для 503 (Service Unavailable)
-        if (response.status === 503) {
-          const errorMessage = errorData.message || errorData.error || 'Сервис календаря временно недоступен. События календаря не будут отображены.';
-          setEventsError(errorMessage);
-          setEvents([]); // Очищаем события, но не блокируем работу приложения
-          setLast503ErrorTime(Date.now()); // Запоминаем время ошибки 503
-          setLoadingEvents(false);
-          return;
-        }
-        
-        // Специальная обработка для 401 (Unauthorized) - если это просто отсутствие пароля Exchange, не показываем ошибку
-        if (response.status === 401) {
-          const errorMessage = errorData.error || errorData.message || '';
-          // Если это ошибка о том, что пароль Exchange не настроен, просто не показываем события
-          if (errorMessage.includes('password not configured') || errorMessage.includes('User Exchange password')) {
-            setEvents([]);
-            setEventsError(null); // Не показываем ошибку, если это просто отсутствие пароля
-            setLoadingEvents(false);
-            return;
-          }
-        }
-        
-        const errorMessage = errorData.error || errorData.message || `Ошибка загрузки событий: ${response.status}`;
-        setEventsError(errorMessage);
-        setEvents([]);
-        setLoadingEvents(false);
-        return;
-      }
-      
-      const data = await response.json();
-      
-      if (data.events && Array.isArray(data.events)) {
-        setEvents(data.events);
-        setEventsError(null);
-      } else {
-        setEvents([]);
-        setEventsError(null);
-      }
-    } catch (err) {
-      // Обработка сетевых ошибок и других исключений
-      const errorMessage = err instanceof Error 
-        ? (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')
-            ? 'Не удалось подключиться к серверу календаря. Проверьте подключение к интернету.'
-            : err.message)
-        : 'Неизвестная ошибка при загрузке событий';
-      setEventsError(errorMessage);
-      setEvents([]); // Очищаем события при ошибке
-    } finally {
-      setLoadingEvents(false);
-    }
-  }, [token, user, last503ErrorTime]);
 
 
   useEffect(() => {
@@ -230,19 +96,7 @@ export default function Events() {
     }
     
     fetchUpcomingBirthdays();
-    
-    // Загружаем календарь только если есть токен и пользователь авторизован
-    // Используем небольшую задержку, чтобы убедиться, что контекст обновился после логина
-    const authToken = token || localStorage.getItem('token');
-    if (authToken && currentUser) {
-      // Используем setTimeout для небольшой задержки при входе через lastlogin
-      const timer = setTimeout(() => {
-        loadCalendarEvents().catch(() => {});
-      }, 100);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [user, token, fetchUpcomingBirthdays, loadCalendarEvents]);
+  }, [user?.id, fetchUpcomingBirthdays]);
 
   useEffect(() => {
     setHeader({
@@ -293,15 +147,15 @@ export default function Events() {
     }
   }, []);
 
-    // Объединяем дни рождения и события календаря в один список
+    // Получаем список дней рождения
     const getAllEvents = useCallback(() => {
       const today = dayjs().startOf('day');
       
       const allEvents: Array<{
-        type: 'birthday' | 'calendar';
+        type: 'birthday';
         date: Date;
         daysUntil: number; // Количество дней до события
-        data: any;
+        data: UserData;
       }> = [];
 
       // Добавляем дни рождения
@@ -332,54 +186,16 @@ export default function Events() {
         });
       });
 
-      // Добавляем события календаря
-      events.forEach((event) => {
-        const startDate = typeof event.start === 'object' && event.start?.dateTime 
-          ? event.start.dateTime 
-          : typeof event.start === 'string' 
-            ? event.start 
-            : null;
-        
-        if (startDate) {
-          // Парсим дату события
-          // dayjs автоматически конвертирует UTC (с Z) в локальное время браузера
-          const parsedDate = dayjs(startDate);
-          
-          // Используем только дату (без времени) для всех событий
-          // Это гарантирует корректное сравнение независимо от часового пояса
-          const eventDate = parsedDate.startOf('day');
-          
-          // Вычисляем разницу в днях между датой события и сегодняшней датой
-          // Оба в локальном времени, начало дня
-          const daysUntil = eventDate.diff(today, 'day');
-          
-          allEvents.push({
-            type: 'calendar',
-            date: eventDate.toDate(),
-            daysUntil: daysUntil,
-            data: event
-          });
-        }
-      });
-
       // Сортируем по количеству дней до события (daysUntil)
-      // Сначала события, которые происходят раньше (меньше daysUntil)
       const sorted = allEvents.sort((a, b) => {
-        // Сначала сортируем по daysUntil
-        // События с daysUntil >= 1000 (прошедшие дни рождения в выходные) идут в конец
         if (a.daysUntil !== b.daysUntil) {
           return a.daysUntil - b.daysUntil;
         }
-        // Если daysUntil одинаковый, сортируем по типу (сначала дни рождения, потом события календаря)
-        if (a.type !== b.type) {
-          return a.type === 'birthday' ? -1 : 1;
-        }
-        // Если тип тоже одинаковый, сортируем по дате
         return a.date.getTime() - b.date.getTime();
       });
       
       return sorted;
-    }, [usersData, events]);
+    }, [usersData]);
 
   const allEvents = getAllEvents();
 
@@ -403,174 +219,88 @@ export default function Events() {
         <Title order={2}>События</Title>
       </Group>
 
-      {/* Объединенный список событий */}
+      {/* Список дней рождения */}
       <Box>
-        {eventsError && (
-          <Alert 
-            icon={<IconAlertCircle size={16} />} 
-            title={eventsError.includes('недоступен') || eventsError.includes('503') ? 'Сервис календаря недоступен' : 'Ошибка загрузки событий'} 
-            color={eventsError.includes('недоступен') || eventsError.includes('503') ? 'yellow' : 'red'} 
-            mb="md"
-          >
-            {eventsError}
-            {!eventsError.includes('недоступен') && !eventsError.includes('503') && (
-              <Text size="xs" mt="xs" c="dimmed">
-                Проверьте консоль браузера (F12) для деталей ошибки
-              </Text>
-            )}
-          </Alert>
-        )}
-
-        {(loading || loadingEvents) ? (
-          <LoadingOverlay visible={loading || loadingEvents} />
-        ) : allEvents.length === 0 && !eventsError ? (
+        {loading ? (
+          <LoadingOverlay visible={loading} />
+        ) : allEvents.length === 0 ? (
           <Alert icon={<IconCalendar size={16} />} title="Нет событий" color="blue">
-            Нет предстоящих дней рождения и событий календаря.
+            Нет предстоящих дней рождения.
           </Alert>
-        ) : allEvents.length > 0 ? (
+        ) : (
           <ScrollArea.Autosize mah={600}>
             <Stack gap="md">
               {allEvents.map((item, index) => {
-                if (item.type === 'birthday') {
-                  const userData = item.data as UserData;
-                  const status = getBirthdayStatus(userData);
-                  const isToday = userData.daysUntil === 0;
-                  const isTomorrow = userData.daysUntil === 1;
-                  const branchName =
-                    userData.branch && 'name' in userData.branch
-                      ? (userData.branch.name as string)
-                      : '';
+                const userData = item.data as UserData;
+                const status = getBirthdayStatus(userData);
+                const isToday = userData.daysUntil === 0;
+                const isTomorrow = userData.daysUntil === 1;
+                const branchName =
+                  userData.branch && 'name' in userData.branch
+                    ? (userData.branch.name as string)
+                    : '';
 
-                  return (
-                    <Card
-                      key={`birthday-${userData.uuid || userData.email || index}`}
-                      shadow="sm"
-                      radius="md"
-                      padding="md"
-                      style={{ position: 'relative' }}
-                    >
-                      <Group justify="space-between" align="flex-start">
-                        <Group gap="sm" style={{ flex: 1 }}>
-                          <Avatar
-                            size="md"
-                            src={userData.image}
-                            name={userData.fio}
-                            radius="md"
-                          />
-                          <Box style={{ flex: 1}}>
-                            <Text size="sm" fw={600} mb={4}>
-                              {userData.fio}
-                            </Text>
-                            <Group gap="xs">
-                              <Badge
-                                size="sm"
-                                color={status.color}
-                                variant={status.variant}
-                                leftSection={
-                                  isToday ? <IconGift size={12} /> :
-                                    isTomorrow ? <IconClock size={12} /> :
-                                      <IconCalendar size={12} />
-                                }
-                              >
-                                {status.text}
-                              </Badge>
-                            </Group>
-                          </Box>
-                        </Group>
-
-                        {isToday && (
-                          <ThemeIcon size="lg" color="red" variant="light">
-                            <IconGift size={20} />
-                          </ThemeIcon>
-                        )}
-                      </Group>
-                      {branchName && (
-                        <Box
-                          mt={4}
-                          style={{
-                            width: '100%',
-                          }}
-                        >
-                          <Text size="xs" fw={700} style={{ textAlign: 'right', wordBreak: 'break-word', lineHeight: 1.4 }}>
-                            {branchName}
+                return (
+                  <Card
+                    key={`birthday-${userData.uuid || userData.email || index}`}
+                    shadow="sm"
+                    radius="md"
+                    padding="md"
+                    style={{ position: 'relative' }}
+                  >
+                    <Group justify="space-between" align="flex-start">
+                      <Group gap="sm" style={{ flex: 1 }}>
+                        <Avatar
+                          size="md"
+                          src={userData.image}
+                          name={userData.fio}
+                          radius="md"
+                        />
+                        <Box style={{ flex: 1}}>
+                          <Text size="sm" fw={600} mb={4}>
+                            {userData.fio}
                           </Text>
+                          <Group gap="xs">
+                            <Badge
+                              size="sm"
+                              color={status.color}
+                              variant={status.variant}
+                              leftSection={
+                                isToday ? <IconGift size={12} /> :
+                                  isTomorrow ? <IconClock size={12} /> :
+                                    <IconCalendar size={12} />
+                              }
+                            >
+                              {status.text}
+                            </Badge>
+                          </Group>
                         </Box>
-                      )}
-                    </Card>
-                  );
-                } else {
-                  const event = item.data as CalendarEvent;
-                  // Используем daysUntil из уже отсортированного события (вычислено в getAllEvents)
-                  // Это гарантирует правильное значение, так как там используется startOf('day')
-                  const daysUntil = item.daysUntil;
-                  const isToday = daysUntil === 0;
-                  const isTomorrow = daysUntil === 1;
-                  
-                  return (
-                    <Card
-                      key={event.id || `event-${index}`}
-                      shadow="sm"
-                      radius="md"
-                      padding="md"
-                      style={{ position: 'relative' }}
-                    >
-                      <Group justify="space-between" align="flex-start">
-                        <Group gap="sm" style={{ flex: 1 }}>
-                          <Avatar
-                            size="md"
-                            radius="md"
-                            color="blue"
-                            style={{
-                              backgroundColor: 'var(--mantine-color-blue-0)',
-                              color: 'var(--mantine-color-blue-6)',
-                            }}
-                          >
-                            <IconCalendar size={20} />
-                          </Avatar>
-                          <Box style={{ flex: 1 }}>
-                            <Text size="sm" fw={600} mb={4}>
-                              {event.subject}
-                            </Text>
-                            <Group gap="xs">
-                              <Badge
-                                size="sm"
-                                color={isToday ? 'red' : isTomorrow ? 'orange' : 'blue'}
-                                variant={isToday ? 'filled' : 'light'}
-                                leftSection={
-                                  isToday ? <IconGift size={12} /> :
-                                    isTomorrow ? <IconClock size={12} /> :
-                                      <IconCalendar size={12} />
-                                }
-                              >
-                                {isToday ? 'Сегодня!' : 
-                                  isTomorrow ? 'Завтра' : 
-                                    daysUntil !== undefined && daysUntil > 1 ? `Через ${daysUntil} дн.` : 
-                                    daysUntil === 1 ? 'Завтра' : 'Скоро'}
-                              </Badge>
-                            </Group>
-                            {event.location && (
-                              <Text size="xs" c="dimmed" mt={4}>
-                                📍 {typeof event.location === 'string' 
-                                  ? event.location 
-                                  : (event.location as any)?.displayName || ''}
-                              </Text>
-                            )}
-                          </Box>
-                        </Group>
-
-                        {isToday && (
-                          <ThemeIcon size="lg" color="red" variant="light">
-                            <IconGift size={20} />
-                          </ThemeIcon>
-                        )}
                       </Group>
-                    </Card>
-                  );
-                }
+
+                      {isToday && (
+                        <ThemeIcon size="lg" color="red" variant="light">
+                          <IconGift size={20} />
+                        </ThemeIcon>
+                      )}
+                    </Group>
+                    {branchName && (
+                      <Box
+                        mt={4}
+                        style={{
+                          width: '100%',
+                        }}
+                      >
+                        <Text size="xs" fw={700} style={{ textAlign: 'right', wordBreak: 'break-word', lineHeight: 1.4 }}>
+                          {branchName}
+                        </Text>
+                      </Box>
+                    )}
+                  </Card>
+                );
               })}
             </Stack>
           </ScrollArea.Autosize>
-        ) : null}
+        )}
       </Box>
     </Box>
   );

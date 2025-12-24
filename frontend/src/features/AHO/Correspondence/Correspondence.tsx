@@ -617,7 +617,7 @@ export default function CorrespondenceList() {
               }}
             >
               {senderTypeLabel}
-            </Text>
+        </Text>
           </Tooltip>
         );
       },
@@ -650,7 +650,7 @@ export default function CorrespondenceList() {
               }}
             >
               {senderName || '-'}
-            </Text>
+        </Text>
           </Tooltip>
         );
       },
@@ -683,8 +683,8 @@ export default function CorrespondenceList() {
                 cursor: type ? 'help' : 'default'
               }}
             >
-              {type}
-            </Badge>
+            {type}
+          </Badge>
           </Tooltip>
         );
       },
@@ -718,7 +718,7 @@ export default function CorrespondenceList() {
               }}
             >
               {documentNumber || '-'}
-            </Text>
+        </Text>
           </Tooltip>
         );
       },
@@ -857,9 +857,9 @@ export default function CorrespondenceList() {
             multiline={!isTrackNumber}
             w={!isTrackNumber ? 300 : undefined}
           >
-            <Text 
-              size="sm" 
-              c="var(--theme-text-primary)"
+          <Text 
+            size="sm" 
+            c="var(--theme-text-primary)"
               style={{ 
                 cursor: (isTrackNumber || trackNumber) ? 'help' : 'default',
                 overflow: 'hidden',
@@ -928,18 +928,18 @@ export default function CorrespondenceList() {
             <Text 
               size="sm" 
               c="var(--theme-text-secondary)"
-              style={{ 
-                display: '-webkit-box',
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: 'vertical',
-                overflow: 'hidden',
-                lineHeight: 1.4,
+            style={{ 
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              lineHeight: 1.4,
                 maxWidth: '300px',
                 cursor: comments ? 'help' : 'default'
-              }}
-            >
+            }}
+          >
               {comments || '-'}
-            </Text>
+          </Text>
           </Tooltip>
         );
       },
@@ -1014,7 +1014,7 @@ export default function CorrespondenceList() {
           ? (userImage.startsWith('data:') ? userImage : `data:image/jpeg;base64,${userImage}`)
           : null;
         return (
-          <Group gap="sm">
+        <Group gap="sm">
             <Avatar 
               size="sm" 
               radius="md" 
@@ -1022,11 +1022,11 @@ export default function CorrespondenceList() {
               src={avatarSrc || undefined}
             >
               {userName.charAt(0).toUpperCase()}
-            </Avatar>
-            <Text size="sm" c="var(--theme-text-primary)">
+          </Avatar>
+          <Text size="sm" c="var(--theme-text-primary)">
               {userName}
-            </Text>
-          </Group>
+          </Text>
+        </Group>
         );
       },
     },
