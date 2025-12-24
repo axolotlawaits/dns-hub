@@ -400,17 +400,23 @@ const getCalendarEventsViaEWS = async (
       // Проверяем на ошибки аутентификации
       if (response.statusCode === 401) {
         let authError = 'Unauthorized access to Exchange';
-        if (userPasswordMissing) {
-          // Это нормальная ситуация - пользователь просто не настроил пароль Exchange
-          // Не логируем как ошибку, это ожидаемое поведение
-          authError = 'User Exchange password not configured. Please set your Exchange password in settings, or check Impersonation service account credentials (LDAP_SERVICE_USER and LDAP_SERVICE_PASSWORD)';
-        } else if (useImpersonation) {
-          authError = 'Impersonation authentication failed. Check LDAP_SERVICE_USER, LDAP_SERVICE_PASSWORD, and Impersonation permissions';
+        
+        // Если использовали impersonation, но получили 401 - проблема с сервисной учеткой
+        if (useImpersonation) {
+          if (userPasswordMissing) {
+            // Пароль пользователя не настроен, но impersonation тоже не работает
+            authError = 'Impersonation authentication failed. Check LDAP_SERVICE_USER, LDAP_SERVICE_PASSWORD credentials and Impersonation permissions on Exchange server';
+          } else {
+            // Impersonation использовался по другой причине, но не работает
+            authError = 'Impersonation authentication failed. Check LDAP_SERVICE_USER, LDAP_SERVICE_PASSWORD, and Impersonation permissions';
+          }
           console.error(`[Exchange] [getCalendarEventsViaEWS] ${authError}`);
         } else {
+          // Использовали прямой пароль пользователя, но получили 401
           authError = 'User authentication failed. Check Exchange password in settings';
           console.error(`[Exchange] [getCalendarEventsViaEWS] ${authError}`);
         }
+        
         const error: any = new Error(`EWS authentication failed (401): ${authError}`);
         error.userPasswordMissing = userPasswordMissing;
         error.useImpersonation = useImpersonation;
