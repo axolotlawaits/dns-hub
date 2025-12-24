@@ -7,6 +7,7 @@ import { DynamicFormModal } from '../../../utils/formModal';
 import { DndProviderWrapper } from '../../../utils/dnd';
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { useUserContext } from '../../../hooks/useUserContext';
+import { useAccessContext } from '../../../hooks/useAccessContext';
 import './AppStore.css';
 
 // Типы данных
@@ -40,6 +41,9 @@ const AppStore: React.FC = () => {
   const [apps, setApps] = useState<App[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedApp, setSelectedApp] = useState<App | null>(null);
+  
+  // Для инструментов вне ProtectedRoute доступ есть у всех авторизованных пользователей
+  // Проверка доступа не требуется, так как маршрут не находится в ProtectedRoute
   
   // Модальные окна
   const [createAppModalOpen, setCreateAppModalOpen] = useState(false);
