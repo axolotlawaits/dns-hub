@@ -705,71 +705,233 @@ export const notifyRK = async (req: Request, res: Response, next: NextFunction):
   }
 };
 
-export const dailyRKJob = async () => {
-  const hubUrl = process.env.HUB_API_URL || 'http://localhost:2000/hub-api/notifications';
-  const systemSenderId = process.env.SYSTEM_SENDER_ID || null;
-  const thresholds = new Set([180, 90, 30]);
+// Функция для получения всех пользователей с полным доступом к инструменту RK
+const getUsersWithFullRKAccess = async (): Promise<string[]> => {
+  try {
+    // Находим инструмент RK
+    const rkTool = await prisma.tool.findFirst({
+      where: {
+        OR: [
+          { link: 'add/rk' },
+          { link: '/add/rk' },
+          { name: { contains: 'RK', mode: 'insensitive' } },
+          { name: { contains: 'Рекламные конструкции', mode: 'insensitive' } }
+        ]
+      }
+    });
 
-  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const daysDiff = (future: Date, base: Date) => Math.floor((startOfDay(future).getTime() - startOfDay(base).getTime()) / (24 * 3600 * 1000));
+    if (!rkTool) {
+      console.warn('[RK] RK tool not found');
+      return [];
+    }
 
-  const rks = await prisma.rK.findMany({
-    include: {
-      userAdd: { select: { id: true, name: true, email: true } },
-      branch: true,
-      rkAttachment: true,
-    },
-  });
+    const userIds = new Set<string>();
 
-  const today = new Date();
+    // Получаем DEVELOPER и ADMIN - они имеют доступ ко всем инструментам
+    const developersAndAdmins = await prisma.user.findMany({
+      where: {
+        role: { in: ['DEVELOPER', 'ADMIN'] }
+      },
+      select: { id: true }
+    });
+    developersAndAdmins.forEach(u => userIds.add(u.id));
 
-  for (const rk of rks) {
-    for (const att of rk.rkAttachment) {
-      if (!att.agreedTo) continue; // нет даты — не уведомляем
+    // Получаем пользователей с полным доступом на уровне пользователя
+    const userAccesses = await prisma.userToolAccess.findMany({
+      where: {
+        toolId: rkTool.id,
+        accessLevel: 'FULL'
+      },
+      select: { userId: true }
+    });
+    userAccesses.forEach(a => userIds.add(a.userId));
 
-      const remaining = daysDiff(new Date(att.agreedTo), today);
-      if (!thresholds.has(remaining)) continue; // уведомляем только на 180/90/30
+    // Получаем пользователей с полным доступом на уровне должности
+    const positionAccesses = await prisma.positionToolAccess.findMany({
+      where: {
+        toolId: rkTool.id,
+        accessLevel: 'FULL'
+      },
+      select: {
+        positionId: true
+      }
+    });
 
-      const title = `Срок действия скоро истекает: ${remaining} дней`;
-      const message = [
-        `Филиал: ${rk.branch?.name || '-'}`,
-        `ID записи: ${rk.id}`,
-        `Вложение: ${att.source.split('/').pop()}`,
-        `До даты: ${startOfDay(new Date(att.agreedTo)).toLocaleDateString('ru-RU')}`,
-        `Осталось дней: ${remaining}`,
-      ].join('\n');
+    const positionIds = positionAccesses.map(a => a.positionId);
+    if (positionIds.length > 0) {
+      const usersWithPositionAccess = await prisma.userData.findMany({
+        where: {
+          positionId: { in: positionIds }
+        },
+        select: {
+          email: true
+        }
+      });
 
-      await fetch(hubUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'WARNING',
-          channels: ['IN_APP', 'TELEGRAM', 'EMAIL'],
-          title,
-          message,
-          senderId: systemSenderId,
-          receiverId: rk.userAddId,
-        }),
-      }).catch(() => {});
-
-      // Дополнительно отправляем e-mail сотрудникам с целевыми должностями в филиале
-      try {
-        const managers = await prisma.userData.findMany({
-          where: {
-            branch_uuid: rk.branchId,
-            position: { is: { name: { in: RK_MANAGER_POSITIONS } } },
-          },
-          select: { fio: true, email: true },
-        });
-        await Promise.all(
-          managers
-            .filter((m) => !!m.email)
-            .map((m) => emailService.sendRaw(m.email as string, title, `${message}\n\n${m.fio}`))
-        );
-      } catch (e) {
-        console.error('[RK] Failed to send emails to managers:', e);
+      for (const userData of usersWithPositionAccess) {
+        if (userData.email) {
+          const user = await prisma.user.findUnique({
+            where: { email: userData.email },
+            select: { id: true }
+          });
+          if (user) {
+            userIds.add(user.id);
+          }
+        }
       }
     }
+
+    // Получаем пользователей с полным доступом на уровне группы
+    const groupAccesses = await prisma.groupToolAccess.findMany({
+      where: {
+        toolId: rkTool.id,
+        accessLevel: 'FULL'
+      },
+      select: {
+        groupId: true
+      }
+    });
+
+    const groupIds = groupAccesses.map(a => a.groupId);
+    if (groupIds.length > 0) {
+      const positionsInGroups = await prisma.position.findMany({
+        where: {
+          groupUuid: { in: groupIds }
+        },
+        select: {
+          uuid: true
+        }
+      });
+
+      const positionIdsFromGroups = positionsInGroups.map(p => p.uuid);
+      if (positionIdsFromGroups.length > 0) {
+        const usersWithGroupAccess = await prisma.userData.findMany({
+          where: {
+            positionId: { in: positionIdsFromGroups }
+          },
+          select: {
+            email: true
+          }
+        });
+
+        for (const userData of usersWithGroupAccess) {
+          if (userData.email) {
+            const user = await prisma.user.findUnique({
+              where: { email: userData.email },
+              select: { id: true }
+            });
+            if (user) {
+              userIds.add(user.id);
+            }
+          }
+        }
+      }
+    }
+
+    return Array.from(userIds);
+  } catch (error) {
+    console.error('[RK] Error getting users with full RK access:', error);
+    return [];
+  }
+};
+
+export const dailyRKJob = async () => {
+  try {
+    const { NotificationController } = await import('../app/notification.js');
+    
+    // Получаем системного отправителя (первый DEVELOPER или первый пользователь с полным доступом)
+    const systemSender = await prisma.user.findFirst({
+      where: { role: 'DEVELOPER' },
+      select: { id: true }
+    }) || await prisma.user.findFirst({
+      select: { id: true }
+    });
+
+    if (!systemSender) {
+      console.error('[RK] No system sender found');
+      return;
+    }
+    
+    // Получаем всех пользователей с полным доступом к инструменту RK
+    const usersWithFullAccess = await getUsersWithFullRKAccess();
+    
+    if (usersWithFullAccess.length === 0) {
+      console.log('[RK] No users with full access to RK tool found');
+      return;
+    }
+
+    const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const daysDiff = (future: Date, base: Date) => Math.floor((startOfDay(future).getTime() - startOfDay(base).getTime()) / (24 * 3600 * 1000));
+
+    const rks = await prisma.rK.findMany({
+      include: {
+        userAdd: { select: { id: true, name: true, email: true } },
+        branch: true,
+        rkAttachment: {
+          where: {
+            typeAttachment: 'CONSTRUCTION' // Только конструкции, не документы
+          }
+        },
+      },
+    });
+
+    const today = new Date();
+    const targetDays = 30; // Уведомляем только за месяц до истечения
+
+    // Находим инструмент RK для toolId в уведомлениях
+    const rkTool = await prisma.tool.findFirst({
+      where: {
+        OR: [
+          { link: 'add/rk' },
+          { link: '/add/rk' }
+        ]
+      },
+      select: { id: true }
+    });
+
+    for (const rk of rks) {
+      for (const att of rk.rkAttachment) {
+        if (!att.agreedTo) continue; // нет даты — не уведомляем
+
+        const remaining = daysDiff(new Date(att.agreedTo), today);
+        if (remaining !== targetDays) continue; // уведомляем только за месяц (30 дней)
+
+        const title = `Срок действия конструкции истекает через месяц`;
+        const message = [
+          `Филиал: ${rk.branch?.name || '-'}`,
+          `ID записи: ${rk.id}`,
+          `Вложение: ${att.source.split('/').pop()}`,
+          `Дата истечения: ${startOfDay(new Date(att.agreedTo)).toLocaleDateString('ru-RU')}`,
+          `Осталось дней: ${remaining}`,
+        ].join('\n');
+
+        // Отправляем уведомления всем пользователям с полным доступом
+        const notificationPromises = usersWithFullAccess.map(userId =>
+          NotificationController.create({
+            type: 'WARNING',
+            channels: ['IN_APP', 'TELEGRAM', 'EMAIL'],
+            title,
+            message,
+            senderId: systemSender.id, // Системное уведомление от системного пользователя
+            receiverId: userId,
+            toolId: rkTool?.id,
+            priority: 'MEDIUM',
+            action: {
+              type: 'NAVIGATE',
+              url: `/add/rk?rkId=${rk.id}`,
+            },
+          }).catch(error => {
+            console.error(`[RK] Failed to send notification to user ${userId}:`, error);
+            return null;
+          })
+        );
+
+        await Promise.all(notificationPromises);
+        console.log(`[RK] Sent expiration notifications for RK ${rk.id}, attachment ${att.id} to ${usersWithFullAccess.length} users`);
+      }
+    }
+  } catch (error) {
+    console.error('[RK] Error in dailyRKJob:', error);
   }
 };
 
