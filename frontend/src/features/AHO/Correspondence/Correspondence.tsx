@@ -1380,8 +1380,30 @@ export default function CorrespondenceList() {
                     icon: IconUser,
                     color: 'green',
                     fields: [
-                      { label: 'Тип отправителя', value: formattedItem.senderTypeLabel, icon: IconUser },
-                      { label: 'Наименование/ФИО', value: formattedItem.senderName, icon: IconUser },
+                      { 
+                        label: 'Тип отправителя', 
+                        value: formattedItem.senderType?.name || 'Не указан', 
+                        icon: IconUser,
+                        show: true
+                      },
+                      { 
+                        label: 'Подтип отправителя', 
+                        value: formattedItem.senderSubType?.name, 
+                        icon: IconUser,
+                        show: !!formattedItem.senderSubType
+                      },
+                      { 
+                        label: 'Подподтип отправителя', 
+                        value: formattedItem.senderSubSubType?.name, 
+                        icon: IconUser,
+                        show: !!formattedItem.senderSubSubType
+                      },
+                      { 
+                        label: 'Наименование/ФИО', 
+                        value: formattedItem.senderName, 
+                        icon: IconUser,
+                        show: !!formattedItem.senderName
+                      },
                     ]
                   },
                   {
@@ -1432,7 +1454,9 @@ export default function CorrespondenceList() {
                           </Text>
                         </Group>
                         <Stack gap="md">
-                          {group.fields.map((field, fieldIndex) => (
+                          {group.fields
+                            .filter((field: any) => field.show !== false)
+                            .map((field: any, fieldIndex: number) => (
                             <Box key={fieldIndex}>
                               <Group gap="xs" mb={4}>
                                 <field.icon size={16} style={{ color: 'var(--theme-text-secondary)' }} />

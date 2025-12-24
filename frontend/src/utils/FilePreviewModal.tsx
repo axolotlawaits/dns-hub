@@ -227,12 +227,21 @@ const PdfThumbnail = ({ src, className }: PdfThumbnailProps) => {
 
   const onDocumentLoadSuccess = useCallback(() => {
     setLoading(false);
+    setError(false);
   }, []);
 
   const onDocumentLoadError = useCallback((error: Error) => {
     console.error('Error loading PDF:', error);
-    setError(true);
-    setLoading(false);
+    // Игнорируем ошибки типа ResponseException с status 0, так как они могут быть связаны с CORS
+    // но не являются критическими для отображения
+    if (error.name === 'ResponseException' && (error as any).status === 0) {
+      console.warn('PDF load warning (CORS/network):', error.message);
+      // Пробуем продолжить загрузку
+      setLoading(false);
+    } else {
+      setError(true);
+      setLoading(false);
+    }
   }, []);
 
   const onPageLoadSuccess = useCallback(() => {
@@ -260,6 +269,13 @@ const PdfThumbnail = ({ src, className }: PdfThumbnailProps) => {
         onLoadError={onDocumentLoadError}
         loading={null}
         className="pdf-thumbnail-document"
+        options={{
+          httpHeaders: {},
+          withCredentials: false,
+          verbosity: 0, // Уменьшаем уровень логирования
+          cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
+          cMapPacked: true,
+        }}
       >
         <Page
           pageNumber={pageNumber}

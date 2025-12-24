@@ -530,9 +530,41 @@ const notifyResponsible = async (
         `Дата получения: ${new Date(correspondence.ReceiptDate).toLocaleDateString('ru-RU')}`;
     
     // Отправляем уведомление ответственному
+    // Проверяем настройки email уведомлений
+    const emailSettings = await prisma.userSettings.findUnique({
+      where: {
+        userId_parameter: {
+          userId: correspondence.responsibleId,
+          parameter: 'notifications.email',
+        },
+      },
+    });
+
+    const wantsEmail = emailSettings ? emailSettings.value === 'true' : true; // По умолчанию включено
+
+    // Получаем информацию о получателе для проверки telegramChatId и email
+    const responsibleUser = await prisma.user.findUnique({
+      where: { id: correspondence.responsibleId },
+      select: {
+        telegramChatId: true,
+        email: true
+      }
+    });
+
+    // Формируем каналы: всегда IN_APP, TELEGRAM если есть привязка, EMAIL если включен
+    const channels: Array<'IN_APP' | 'TELEGRAM' | 'EMAIL'> = ['IN_APP'];
+    
+    if (responsibleUser?.telegramChatId) {
+      channels.push('TELEGRAM');
+    }
+    
+    if (wantsEmail && responsibleUser?.email) {
+      channels.push('EMAIL');
+    }
+
     await NotificationController.create({
       type: 'INFO',
-      channels: ['IN_APP'],
+      channels: channels,
       title,
       message,
       senderId: senderId,
