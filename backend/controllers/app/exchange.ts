@@ -53,15 +53,7 @@ export const getMyCalendarEvents = async (req: Request, res: Response): Promise<
 
       res.json({ events });
     } catch (exchangeError: any) {
-      console.error('[Exchange Controller] Exchange service error:', exchangeError);
-      console.error('[Exchange Controller] Error stack:', exchangeError.stack);
-      console.error('[Exchange Controller] Error details:', {
-        message: exchangeError.message,
-        code: exchangeError.code,
-        isNetworkError: exchangeError.isNetworkError,
-        userId: token?.userId,
-        userEmail
-      });
+      console.error('[Exchange Controller] Exchange service error:', exchangeError.message);
       
       // Определяем тип ошибки для правильного HTTP статуса
       const errorMessage = exchangeError.message || 'Unknown error occurred while fetching calendar events';
@@ -113,13 +105,7 @@ export const getMyCalendarEvents = async (req: Request, res: Response): Promise<
       });
     }
   } catch (error: any) {
-    console.error('[Exchange Controller] Error getting calendar events:', error);
-    console.error('[Exchange Controller] Error stack:', error.stack);
-    console.error('[Exchange Controller] Error details:', {
-      message: error.message,
-      name: error.name,
-      userId: (req as any).token?.userId
-    });
+    console.error('[Exchange Controller] Error getting calendar events:', error.message);
     res.status(500).json({ 
       error: 'Failed to get calendar events', 
       message: error.message || 'Unknown error occurred'

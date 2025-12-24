@@ -7,17 +7,7 @@ import { authenticateToken } from '../../middleware/auth.js';
 
 const router = express.Router();
 
-// Логирование всех запросов к Exchange API
-router.use((req, res, next) => {
-  console.log(`[Exchange Router] 📨 ${req.method} ${req.path} - Request received`);
-  console.log(`[Exchange Router] 📨 Full URL: ${req.originalUrl}`);
-  console.log(`[Exchange Router] 📨 Query:`, req.query);
-  console.log(`[Exchange Router] 📨 Headers:`, {
-    authorization: req.headers.authorization ? 'present' : 'missing',
-    'content-type': req.headers['content-type'] || 'not set'
-  });
-  next();
-});
+// Логирование только ошибок происходит в контроллерах
 
 // Все роуты требуют аутентификации
 router.use(authenticateToken);

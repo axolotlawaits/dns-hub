@@ -67,7 +67,6 @@ export const initToolsCron = () => {
         return; // Нет активных пользователей
       }
 
-      console.log(`[Exchange] [Cron] Checking emails for ${connectedUserIds.length} active users...`);
 
       // Получаем email для каждого активного пользователя
       const allUsers = await prisma.user.findMany({
@@ -83,7 +82,6 @@ export const initToolsCron = () => {
       // Фильтруем только пользователей с email
       const users = allUsers.filter(user => user.email !== null && user.email !== undefined);
 
-      console.log(`[Exchange] [Cron] Found ${users.length} active users with email`);
 
       // Проверяем письма для каждого активного пользователя
       for (const user of users) {
@@ -99,7 +97,6 @@ export const initToolsCron = () => {
         }
       }
 
-      console.log(`[Exchange] [Cron] ✅ Finished checking emails for active users`);
     } catch (e) {
       console.error('[Exchange] [Cron] Email check error:', e);
     }

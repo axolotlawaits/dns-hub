@@ -228,7 +228,6 @@ export async function trackParcel(trackNumber: string): Promise<PochtaTrackingRe
                           operationHistoryData.historyRecord;
 
     if (!historyRecords) {
-      console.log(`[PochtaTracking] No history records found for track ${cleanTrackNumber}`);
       return {
         trackNumber: cleanTrackNumber,
         trackingEvents: [],

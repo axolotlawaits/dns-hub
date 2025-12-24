@@ -388,8 +388,7 @@ const getCalendarEventsViaEWS = async (
     if (response.statusCode !== 200) {
       const responseBody = response.body || '';
       
-      console.error(`[Exchange] [getCalendarEventsViaEWS] ❌ EWS request failed with status code ${response.statusCode}`);
-      console.error(`[Exchange] [getCalendarEventsViaEWS] ❌ Full response body:`, responseBody);
+      console.error(`[Exchange] [getCalendarEventsViaEWS] EWS request failed with status code ${response.statusCode}`);
       
       // Проверяем на специфичные ошибки Exchange
       if (responseBody.includes('ErrorNonExistentMailbox')) {
@@ -410,14 +409,13 @@ const getCalendarEventsViaEWS = async (
         } else {
           authError = 'User authentication failed. Check Exchange password in settings';
         }
-        console.error(`[Exchange] [getCalendarEventsViaEWS] ❌ ${authError}`);
+        console.error(`[Exchange] [getCalendarEventsViaEWS] ${authError}`);
         const error: any = new Error(`EWS authentication failed (401): ${authError}`);
         error.userPasswordMissing = userPasswordMissing;
         error.useImpersonation = useImpersonation;
         throw error;
       }
       
-      console.error(`[Exchange] [getCalendarEventsViaEWS] Response body (first 2000 chars):`, responseBody.substring(0, 2000));
       throw new Error(`EWS request failed with status code ${response.statusCode}`);
     }
 
@@ -445,16 +443,6 @@ const getCalendarEventsViaEWS = async (
     }
     
     console.error('[Exchange] [getCalendarEventsViaEWS] Error:', error.message);
-    console.error('[Exchange] [getCalendarEventsViaEWS] Error stack:', error.stack);
-    console.error('[Exchange] [getCalendarEventsViaEWS] Error details:', {
-      message: error.message,
-      code: error.code,
-      name: error.name,
-      userId,
-      userEmail,
-      useImpersonation,
-      userPasswordMissing
-    });
     throw error;
   }
 };
@@ -1320,7 +1308,6 @@ export const getRooms = async (
     // Если через ResolveNames не получилось найти комнаты, пробуем альтернативный способ
     // - поиск через GetRoomLists (если настроены списки комнат)
     if (rooms.length === 0) {
-      console.log('[Exchange] [getRooms] No rooms found via ResolveNames, trying GetRoomLists...');
       
       const getRoomListsSoap = `<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -1424,7 +1411,6 @@ export const getRooms = async (
       }
     }
 
-    console.log(`[Exchange] [getRooms] Found ${rooms.length} rooms`);
     return rooms;
   } catch (error: any) {
     console.error('[Exchange] [getRooms] Error:', error.message);

@@ -165,14 +165,7 @@ app.use('/hub-api/radio', radioRouter)
 app.use('/hub-api/profile', profileRouter)
 app.use('/hub-api/telegram', telegramRouter)
 
-// Логирование всех запросов к Exchange ДО роутера
-app.use('/hub-api/exchange', (req, res, next) => {
-  console.log(`[Server] 🌐 Exchange request received: ${req.method} ${req.path}`);
-  console.log(`[Server] 🌐 Full URL: ${req.url}`);
-  console.log(`[Server] 🌐 Query:`, req.query);
-  console.log(`[Server] 🌐 Headers authorization:`, req.headers.authorization ? 'present' : 'missing');
-  next();
-});
+// Exchange роутер
 
 app.use('/hub-api/exchange', exchangeRouter)
 
@@ -312,20 +305,16 @@ server.listen(port, async function() {
   // Условная инициализация cron задач
   if (process.env.ENABLE_CRON !== 'false') {
     setImmediate(() => {
-      console.log('⏰ [Server] Инициализируем cron задачи...');
       initToolsCron();
     });
   } else {
-    console.log('🚫 [Server] Cron tasks disabled (ENABLE_CRON=false)');
   }
   
   // Условная загрузка ботов (только если включены)
   if (process.env.ENABLE_BOTS !== 'false') {
-    console.log('🤖 [Server] Bots enabled, starting in background...');
     
     // Запуск ботов асинхронно в фоне (не блокируем старт сервера)
     setImmediate(async () => {
-      console.log('🔄 [Server] setImmediate выполняется...');
       
       // Загрузка дверей Trassir
       trassirService.loadDoors().catch(err => console.error('Failed to load Trassir doors:', err));
@@ -333,119 +322,59 @@ server.listen(port, async function() {
       // Запуск Telegram бота (не блокируем Merch бота)
       (async () => {
         try {
-          console.log('🤖 [Server] Запускаем Telegram бота...');
-          console.log('⏳ [Server] Вызываем telegramService.launch()...');
           const botStarted = await telegramService.launch();
-          console.log('✅ [Server] telegramService.launch() завершен, результат:', botStarted);
           if (botStarted) {
             console.log('✅ [Server] Telegram bot started successfully');
           } else {
             console.log('❌ [Server] Telegram bot failed to start - check .env file');
           }
         } catch (error) {
-          console.error('❌ [Server] Ошибка в блоке try для Telegram бота:', error);
-          if (error instanceof Error && error.message.includes('Conflict: terminated by other getUpdates request')) {
-            console.log('⚠️ [Server] Telegram bot conflict detected - another instance may be running');
-          } else {
-            console.error('❌ [Server] Failed to start Telegram bot:', error);
+          if (error instanceof Error && !error.message.includes('Conflict') && !error.message.includes('terminated by other getUpdates request')) {
+            console.error('[Server] Failed to start Telegram bot:', error.message);
           }
         }
       })();
 
-      console.log('✅ [Server] Telegram bot запущен в фоне, переходим к Merch боту...');
 
       // Ленивая загрузка и запуск Merch бота (независимо от Telegram бота)
       // Используем более длительную задержку для продакшена, чтобы убедиться, что все готово
       const merchBotDelay = process.env.NODE_ENV === 'production' ? 10000 : 5000;
-      console.log(`⏳ [Server] Планируем запуск Merch бота через ${merchBotDelay / 1000} секунд...`);
       setTimeout(async () => {
         try {
-          console.log('🤖 [Server] Загружаем и запускаем Merch бота...');
-          console.log('📦 [Server] Импортируем модуль merchBot...');
           
           // Проверяем переменные окружения ДО импорта
           const hasToken = !!process.env.MERCH_BOT_TOKEN;
           const hasBotName = !!process.env.MERCH_BOT_NAME;
           const enableBots = process.env.ENABLE_BOTS !== 'false';
           
-          console.log('🔍 [Server] Проверка переменных окружения:');
-          console.log('  - ENABLE_BOTS:', enableBots ? 'включено' : 'выключено');
-          console.log('  - MERCH_BOT_TOKEN:', hasToken ? 'найден' : 'НЕ НАЙДЕН');
-          console.log('  - MERCH_BOT_NAME:', hasBotName ? `найден (${process.env.MERCH_BOT_NAME})` : 'НЕ НАЙДЕН');
-          
           if (!enableBots) {
-            console.log('⚠️ [Server] Боты отключены (ENABLE_BOTS=false), пропускаем запуск Merch бота');
             return;
           }
           
           if (!hasToken) {
-            console.error('❌ [Server] MERCH_BOT_TOKEN не найден в переменных окружения');
-            console.error('❌ [Server] Merch бот не может быть запущен без токена');
-            console.error('❌ [Server] Проверьте, что переменная окружения MERCH_BOT_TOKEN установлена');
+            console.error('[Server] MERCH_BOT_TOKEN not found');
             return;
           }
           
           if (!hasBotName) {
-            console.error('❌ [Server] MERCH_BOT_NAME не найден в переменных окружения');
-            console.error('❌ [Server] Merch бот не может быть запущен без имени бота');
-            console.error('❌ [Server] Проверьте, что переменная окружения MERCH_BOT_NAME установлена');
+            console.error('[Server] MERCH_BOT_NAME not found');
             return;
           }
           
-          // merchBotService уже импортирован статически сверху
-          console.log('✅ [Server] merchBotService доступен (статический импорт)');
-          
-          // Проверяем статус до запуска
           const statusBefore = merchBotService.status;
-          console.log('📊 [Server] Статус Merch бота до запуска:', JSON.stringify(statusBefore, null, 2));
           
           if (!statusBefore.botInitialized) {
-            console.error('❌ [Server] Merch бот не инициализирован');
-            console.error('❌ [Server] Возможные причины:');
-            console.error('  - Неверный формат токена');
-            console.error('  - Отсутствует MERCH_BOT_TOKEN');
-            console.error('  - Отсутствует MERCH_BOT_NAME');
-            console.error('❌ [Server] Бот не будет запущен автоматически. Используйте /hub-api/retail/merch/bot-start для ручного запуска');
+            console.error('[Server] Merch bot not initialized');
             return;
           }
           
-          console.log('🚀 [Server] Запускаем Merch бота...');
           const merchBotStarted = await merchBotService.launch();
           
-          // Проверяем статус после запуска
-          const statusAfter = merchBotService.status;
-          console.log('📊 [Server] Статус Merch бота после запуска:', JSON.stringify(statusAfter, null, 2));
-          
-          if (merchBotStarted) {
-            console.log('✅ [Server] Merch bot started successfully');
-            console.log('📊 [Server] Final status:', statusAfter);
-          } else {
-            console.error('❌ [Server] Merch bot failed to start');
-            console.error('📊 [Server] Status:', statusAfter);
-            console.error('❌ [Server] Возможные причины:');
-            console.error('  - Ошибка подключения к Telegram API');
-            console.error('  - Неверный токен');
-            console.error('  - Конфликт с другим экземпляром бота');
-            console.error('❌ [Server] Бот не запущен. Используйте /hub-api/retail/merch/bot-start для повторной попытки');
-            
-            // В продакшене логируем более детально
-            if (process.env.NODE_ENV === 'production') {
-              console.error('⚠️ [Server] PRODUCTION: Merch bot не запущен автоматически');
-              console.error('⚠️ [Server] Проверьте логи выше для деталей ошибки');
-            }
+          if (!merchBotStarted) {
+            console.error('[Server] Merch bot failed to start');
           }
         } catch (error) {
-          console.error('❌ [Server] Failed to load/start Merch bot:', error);
-          if (error instanceof Error) {
-            console.error('❌ [Server] Error message:', error.message);
-            console.error('❌ [Server] Error stack:', error.stack);
-            
-            // В продакшене логируем более детально
-            if (process.env.NODE_ENV === 'production') {
-              console.error('⚠️ [Server] PRODUCTION: Ошибка при попытке запустить Merch bot');
-              console.error('⚠️ [Server] Используйте /hub-api/retail/merch/bot-start для ручного запуска');
-            }
-          }
+          console.error('[Server] Failed to load/start Merch bot:', error instanceof Error ? error.message : error);
         }
 
       }, merchBotDelay);
@@ -455,18 +384,14 @@ server.listen(port, async function() {
         try {
           // TrassirBot отключен - функционал дверей перенесен в основной Telegram бот
           if (process.env.TRASSIR_ADDRESS) {
-            console.log('✅ [Server] Trassir API настроен, двери доступны через основной Telegram бот');
           } else {
-            console.log('⚠️ [Server] TRASSIR_ADDRESS не найден, функционал дверей отключен');
           }
         } catch (error) {
-          console.error('❌ [Server] Failed to start Trassir bot:', error);
+          console.error('[Server] Failed to start Trassir bot:', error instanceof Error ? error.message : error);
         }
       }, 3000);
     });
   } else {
-    console.log('🚫 [Server] Bots disabled (ENABLE_BOTS=false)');
   }
   
-  console.log('🎉 [Server] Startup completed successfully!');
 });

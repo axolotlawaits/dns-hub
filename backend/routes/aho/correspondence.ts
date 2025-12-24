@@ -32,38 +32,10 @@ router.get('/', getCorrespondences);
 router.get('/:id', getCorrespondenceById);
 
 // Create a new correspondence with file uploads
-router.post('/', uploadCorrespondence.any(), (req, res, next) => {
-  // Log the request
-  console.log('Request Body:', req.body);
-  console.log('Request Files:', req.files);
-
-  // Check for files
-  if (!req.files || req.files.length === 0) {
-    console.log('No files uploaded');
-  } else {
-    console.log('Files uploaded:', req.files);
-  }
-
-  // Call the create correspondence controller
-  createCorrespondence(req, res, next);
-});
+router.post('/', uploadCorrespondence.any(), createCorrespondence);
 
 // Update an existing correspondence with new file uploads
-router.put('/:id', uploadCorrespondence.any(), (req, res, next) => {
-  // Log the request
-  console.log('Request Body:', req.body);
-  console.log('Request Files:', req.files);
-
-  // Check for files
-  if (!req.files || req.files.length === 0) {
-    console.log('No files uploaded');
-  } else {
-    console.log('Files uploaded:', req.files);
-  }
-
-  // Call the update correspondence controller
-  updateCorrespondence(req, res, next);
-});
+router.put('/:id', uploadCorrespondence.any(), updateCorrespondence);
 
 // Delete a correspondence
 router.delete('/:id', deleteCorrespondence);

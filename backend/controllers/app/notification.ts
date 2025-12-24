@@ -83,9 +83,6 @@ const buildIncludeOptions = (include?: string[]) => {
 };
 
 const dispatchNotification = async (notification: NotificationWithRelations) => {
-  console.log(`[Notification] Dispatching notification ${notification.id} to ${notification.receiverId}`);
-  console.log(`[Notification] Channels: ${notification.channel.join(', ')}`);
-  
   const userSettings = await prisma.userSettings.findUnique({
     where: {
       userId_parameter: {
@@ -97,8 +94,6 @@ const dispatchNotification = async (notification: NotificationWithRelations) => 
 
   const shouldSendInApp = notification.channel.includes('IN_APP');
   const wantsEmail = userSettings ? userSettings.value === 'true' : true;
-
-  console.log(`[Notification] IN_APP: ${shouldSendInApp}, EMAIL enabled: ${wantsEmail}, TELEGRAM: ${notification.channel.includes('TELEGRAM') && !!notification.receiver?.telegramChatId}`);
 
   if (shouldSendInApp) {
     try {
@@ -114,44 +109,32 @@ const dispatchNotification = async (notification: NotificationWithRelations) => 
         tool: notification.tool,
         action: notification.action,
       });
-      console.log(`[Notification] ✅ IN_APP sent to ${receiverId}`);
     } catch (error) {
-      console.error(`[Notification] ❌ Failed to send IN_APP to ${notification.receiverId}:`, error);
+      console.error(`[Notification] Failed to send IN_APP to ${notification.receiverId}:`, error);
     }
   }
 
   if (notification.channel.includes('EMAIL') && wantsEmail) {
     try {
       await emailService.send(notification);
-      console.log(`[Notification] ✅ EMAIL sent to ${notification.receiver?.email || 'unknown'}`);
     } catch (error) {
-      console.error(`[Notification] ❌ Failed to send EMAIL:`, error);
+      console.error(`[Notification] Failed to send EMAIL:`, error);
     }
   }
 
   if (notification.channel.includes('TELEGRAM') && notification.receiver?.telegramChatId) {
     try {
       const sent = await telegramService.sendNotification(notification as any, notification.receiver.telegramChatId);
-      if (sent) {
-        console.log(`[Notification] ✅ TELEGRAM sent to ${notification.receiver.telegramChatId}`);
-      } else {
-        console.warn(`[Notification] ⚠️ TELEGRAM send returned false for ${notification.receiver.telegramChatId}`);
+      if (!sent) {
+        console.warn(`[Notification] TELEGRAM send returned false for ${notification.receiver.telegramChatId}`);
       }
     } catch (error) {
-      console.error(`[Notification] ❌ Failed to send TELEGRAM:`, error);
+      console.error(`[Notification] Failed to send TELEGRAM:`, error);
     }
   }
 };
 
 const createNotification = async (data: z.infer<typeof createNotificationSchema>) => {
-  console.log(`[NotificationController] Creating notification:`, {
-    type: data.type,
-    channels: data.channels,
-    title: data.title,
-    senderId: data.senderId,
-    receiverId: data.receiverId
-  });
-
   // Создаем уведомление
   const notification = await prisma.notifications.create({
     data: {
@@ -168,7 +151,6 @@ const createNotification = async (data: z.infer<typeof createNotificationSchema>
     },
   });
 
-  console.log(`[NotificationController] Notification created with ID: ${notification.id}`);
 
   // Получаем полные данные с отношениями
   const notificationWithRelations = await prisma.notifications.findUnique({
@@ -184,11 +166,6 @@ const createNotification = async (data: z.infer<typeof createNotificationSchema>
     throw new Error(`Failed to retrieve created notification ${notification.id}`);
   }
 
-  console.log(`[NotificationController] Receiver data:`, {
-    id: notificationWithRelations.receiver?.id ?? notification.receiverId,
-    email: notificationWithRelations.receiver?.email ?? null,
-    telegramChatId: notificationWithRelations.receiver?.telegramChatId ?? null
-  });
 
   await dispatchNotification(notificationWithRelations as NotificationWithRelations);
   return notificationWithRelations;
