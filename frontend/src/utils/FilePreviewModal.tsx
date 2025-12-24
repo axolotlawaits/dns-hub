@@ -281,6 +281,7 @@ interface Attachment {
   source: string | File;
   name?: string;
   mimeType?: string;
+  previewUrl?: string;
 }
 
 interface FilePreviewModalProps {
@@ -384,9 +385,16 @@ export const FilePreviewModal = ({
       const isVideo = SUPPORTED_VIDEO_EXTS.includes(ext) || (providedMime || '').startsWith('video/');
       const isPdf = SUPPORTED_PDF_EXTS.includes(ext) || providedMime === 'application/pdf';
 
-      const resolvedUrl = typeof source === 'string'
-        ? (source.startsWith('http') || source.startsWith('blob:') ? source : `${API}/${source}`)
-        : URL.createObjectURL(source);
+      // Используем previewUrl если он есть и является полным URL, иначе формируем из source
+      const resolvedUrl = (attachment.previewUrl && (attachment.previewUrl.startsWith('http') || attachment.previewUrl.startsWith('blob:')))
+        ? attachment.previewUrl
+        : (typeof source === 'string'
+          ? (source.startsWith('http') || source.startsWith('blob:') 
+              ? source 
+              : (source.includes('/') || source.includes('\\')
+                  ? `${API}/${source}` // Уже содержит полный путь
+                  : attachment.previewUrl || null)) // Только имя файла - используем previewUrl, если передан
+          : URL.createObjectURL(source));
 
       // Используем providedName если есть, иначе извлекаем из source
       let inferredName = providedName;
@@ -421,7 +429,7 @@ export const FilePreviewModal = ({
   useEffect(() => {
     return () => {
       attachmentMeta.forEach((meta) => {
-        if (meta.shouldRevoke && meta.previewUrl.startsWith('blob:')) {
+        if (meta.shouldRevoke && meta.previewUrl && meta.previewUrl.startsWith('blob:')) {
           try {
             URL.revokeObjectURL(meta.previewUrl);
           } catch (error) {
@@ -577,11 +585,19 @@ export const FilePreviewModal = ({
       isVideo,
       fileName: baseFileName,
       fileUrl: typeof source === 'string'
-        ? source.startsWith('http') || source.startsWith('blob:') ? source : `${API}/${source}`
+        ? (source.startsWith('http') || source.startsWith('blob:') 
+            ? source 
+            : (source.includes('/') || source.includes('\\')
+                ? `${API}/${source}` // Уже содержит полный путь
+                : (currentAttachment.previewUrl || null))) // Только имя файла - используем previewUrl, если передан
         : URL.createObjectURL(source),
       fileExt: ext,
       downloadUrl: typeof source === 'string'
-        ? (source.startsWith('http') || source.startsWith('blob:') ? source : `${API}/${source}`)
+        ? (source.startsWith('http') || source.startsWith('blob:') 
+            ? source 
+            : (source.includes('/') || source.includes('\\')
+                ? `${API}/${source}` // Уже содержит полный путь
+                : (currentAttachment.previewUrl || ''))) // Только имя файла - используем previewUrl, если передан
         : ''
     };
   }, [currentAttachment, API, fileMimeType]);
@@ -841,6 +857,11 @@ export const FilePreviewModal = ({
     if (!currentAttachment) return;
     
     try {
+      if (!fileUrl) {
+        console.error('File URL is empty');
+        return;
+      }
+
       const fetchWithAuthRetry = async () => {
         const doFetch = async (token?: string | null) => {
           const headers: Record<string, string> = {};
@@ -865,7 +886,7 @@ export const FilePreviewModal = ({
           }, 60000);
         };
 
-        if (fileUrl.startsWith('http')) {
+        if (fileUrl && fileUrl.startsWith('http')) {
           try {
             const token = localStorage.getItem('token');
             const blob = await doFetch(token);
@@ -890,7 +911,7 @@ export const FilePreviewModal = ({
             }
             throw err;
           }
-        } else {
+        } else if (fileUrl) {
           // Для локальных файлов или других протоколов открываем напрямую
           window.open(fileUrl, '_blank');
         }
@@ -900,10 +921,12 @@ export const FilePreviewModal = ({
     } catch (error) {
       console.error('Ошибка при открытии файла в новой вкладке:', error);
       // Fallback: пытаемся открыть напрямую
-      try {
-        window.open(fileUrl, '_blank');
-      } catch (fallbackError) {
-        console.error('Fallback также не сработал:', fallbackError);
+      if (fileUrl) {
+        try {
+          window.open(fileUrl, '_blank');
+        } catch (fallbackError) {
+          console.error('Fallback также не сработал:', fallbackError);
+        }
       }
     }
   }, [currentAttachment, fileUrl, requireAuth]);
@@ -1009,14 +1032,19 @@ export const FilePreviewModal = ({
     }
 
     // Вычисляем fileUrl для использования в эффекте
-    const computedFileUrl = typeof currentAttachment.source === 'string'
-      ? (currentAttachment.source.startsWith('http') || currentAttachment.source.startsWith('blob:') 
-          ? currentAttachment.source 
-          : `${API}/${currentAttachment.source}`)
-      : URL.createObjectURL(currentAttachment.source);
+    // Используем previewUrl если он есть, иначе формируем из source
+    const computedFileUrl = currentAttachment.previewUrl
+      ? currentAttachment.previewUrl
+      : (typeof currentAttachment.source === 'string'
+        ? (currentAttachment.source.startsWith('http') || currentAttachment.source.startsWith('blob:') 
+            ? currentAttachment.source 
+            : (currentAttachment.source.includes('/') || currentAttachment.source.includes('\\')
+                ? `${API}/${currentAttachment.source}` // Уже содержит полный путь
+                : currentAttachment.previewUrl || '')) // Только имя файла - используем previewUrl, если передан
+        : URL.createObjectURL(currentAttachment.source));
 
     // Получаем MIME-тип файла для правильного определения типа, только если он не был предоставлен
-    if (!currentAttachment.mimeType && typeof currentAttachment.source === 'string' && computedFileUrl.startsWith('http') && !computedFileUrl.startsWith('blob:')) {
+    if (!currentAttachment.mimeType && typeof currentAttachment.source === 'string' && computedFileUrl && computedFileUrl.startsWith('http') && !computedFileUrl.startsWith('blob:')) {
       const headers: HeadersInit = {};
       const token = localStorage.getItem('token');
       if (token) {
@@ -1044,7 +1072,7 @@ export const FilePreviewModal = ({
       const headers: HeadersInit = {};
       
       // Добавляем токен авторизации для внешних URL
-      if (computedFileUrl.startsWith('http') && !computedFileUrl.startsWith('blob:')) {
+      if (computedFileUrl && computedFileUrl.startsWith('http') && !computedFileUrl.startsWith('blob:')) {
         const token = localStorage.getItem('token');
         if (token) {
           headers['Authorization'] = `Bearer ${token}`;
@@ -1081,7 +1109,7 @@ export const FilePreviewModal = ({
 
     return () => {
       // Очистка blob URL только если это локальный файл
-      if (currentAttachment && typeof currentAttachment.source !== 'string' && computedFileUrl.startsWith('blob:')) {
+      if (currentAttachment && typeof currentAttachment.source !== 'string' && computedFileUrl && computedFileUrl.startsWith('blob:')) {
         try {
           URL.revokeObjectURL(computedFileUrl);
         } catch (error) {
@@ -1613,7 +1641,7 @@ export const FilePreviewModal = ({
     }
 
     // Если файл не определен, попробуем отобразить его как iframe
-    if (currentAttachment && typeof currentAttachment.source === 'string' && fileUrl.startsWith('http')) {
+    if (currentAttachment && typeof currentAttachment.source === 'string' && fileUrl && fileUrl.startsWith('http')) {
       return (
         <Box className="file-preview-modal__iframe-wrapper">
           <Group justify="space-between" align="center">
@@ -1753,6 +1781,7 @@ export const FilePreviewModal = ({
                   onClick={async () => {
                     try {
                       const url = downloadUrl || fileUrl;
+                      if (!url) return;
                       // Создаем URL для скачивания, заменяя /view на /download
                       const finalUrl = url.replace(/\/view(?=(\?|#|$))/i, '/download');
                       if (url.startsWith('http')) {
@@ -1778,8 +1807,11 @@ export const FilePreviewModal = ({
                       }
                     } catch (e) {
                       // Фоллбэк — открыть в новой вкладке по /download
-                      const fallbackUrl = (downloadUrl || fileUrl).replace(/\/view(?=(\?|#|$))/i, '/download');
-                      window.open(fallbackUrl, '_blank');
+                      const fallbackUrl = (downloadUrl || fileUrl);
+                      if (fallbackUrl) {
+                        const finalFallbackUrl = fallbackUrl.replace(/\/view(?=(\?|#|$))/i, '/download');
+                        window.open(finalFallbackUrl, '_blank');
+                      }
                     }
                   }}
                   className="file-preview-modal__action-btn"

@@ -5,7 +5,8 @@ import {
   getAllPolls,
   createPoll,
   updatePoll,
-  deletePoll
+  deletePoll,
+  deleteVote
 } from '../../controllers/app/poll.js';
 import { authenticateToken } from '../../middleware/auth.js';
 
@@ -17,6 +18,7 @@ router.use(authenticateToken);
 // Публичные роуты (для всех авторизованных пользователей)
 router.get('/active', getActivePolls);
 router.post('/:pollId/vote', votePoll);
+router.delete('/:pollId/vote', deleteVote);
 
 // Админские роуты
 router.get('/', getAllPolls);

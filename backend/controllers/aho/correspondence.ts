@@ -3,6 +3,8 @@ import { prisma } from '../../server.js';
 import { z } from 'zod';
 import fs from 'fs/promises';
 import path from 'path';
+import { NotificationController } from '../app/notification.js';
+import { trackParcel, getLastStatus } from '../../services/pochta-tracking.js';
 
 // Types
 type MulterFiles = Express.Multer.File[] | undefined;
@@ -21,22 +23,14 @@ const CorrespondenceSchema = z.object({
   senderSubSubTypeId: z.string().uuid().optional(),
   senderName: z.string().min(1, 'Наименование отправителя обязательно'),
   documentTypeId: z.string().uuid('Тип документа должен быть выбран'),
+  documentNumber: z.string().optional(),
+  trackNumber: z.string().optional(),
   comments: z.string().optional(),
   responsibleId: z.string().uuid('Ответственный должен быть выбран'),
-  // Старые поля для обратной совместимости
-  from: z.string().optional(),
-  to: z.string().optional(),
-  content: z.string().optional(),
-  typeMail: z.string().optional(),
-  numberMail: z.string().optional(),
   attachments: z.array(AttachmentSchema).optional(),
 });
 
 // Helper functions
-const logRequest = (req: Request) => {
-  console.log('[Correspondence] Request Body:', req.body);
-  console.log('[Correspondence] Request Files:', req.files);
-};
 
 const validateUserExists = async (userId: string) => {
   return prisma.user.findUnique({ where: { id: userId } });
@@ -45,7 +39,6 @@ const validateUserExists = async (userId: string) => {
 const deleteFileSafely = async (filePath: string) => {
   try {
     await fs.unlink(filePath);
-    console.log(`[Correspondence] File deleted successfully: ${filePath}`);
   } catch (error) {
     console.error(`[Correspondence] Error deleting file at ${filePath}:`, error);
   }
@@ -70,11 +63,13 @@ export const getCorrespondences = async (
     
     const where: any = {};
     
-    // Поиск по тексту (в комментариях и наименовании отправителя)
+    // Поиск по тексту (в комментариях, наименовании отправителя, номере документа и трек-номере)
     if (search && typeof search === 'string') {
       where.OR = [
         { comments: { contains: search, mode: 'insensitive' } },
         { senderName: { contains: search, mode: 'insensitive' } },
+        { documentNumber: { contains: search, mode: 'insensitive' } },
+        { trackNumber: { contains: search, mode: 'insensitive' } },
       ];
     }
     
@@ -233,7 +228,6 @@ export const createCorrespondence = async (
   next: NextFunction
 ): Promise<any> => {
   try {
-    logRequest(req);
     const validatedData = CorrespondenceSchema.parse(req.body);
     const files = req.files as MulterFiles;
 
@@ -264,14 +258,10 @@ export const createCorrespondence = async (
         senderSubSubTypeId: validatedData.senderSubSubTypeId || null,
         senderName: validatedData.senderName,
         documentTypeId: validatedData.documentTypeId,
+        documentNumber: validatedData.documentNumber || null,
+        trackNumber: validatedData.trackNumber || null,
         comments: validatedData.comments || null,
         responsibleId: validatedData.responsibleId,
-        // Старые поля для обратной совместимости
-        from: validatedData.from || '',
-        to: validatedData.to || '',
-        content: validatedData.content || '',
-        typeMail: validatedData.typeMail || '',
-        numberMail: validatedData.numberMail || '',
       },
     });
 
@@ -281,15 +271,56 @@ export const createCorrespondence = async (
       where: { id: newCorrespondence.id },
       include: { 
         attachments: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            image: true
+          }
+        },
+        senderType: {
+          select: {
+            id: true,
+            name: true,
+            chapter: true
+          }
+        },
+        senderSubType: {
+          select: {
+            id: true,
+            name: true,
+            chapter: true
+          }
+        },
+        senderSubSubType: {
+          select: {
+            id: true,
+            name: true,
+            chapter: true
+          }
+        },
+        documentType: {
+          select: {
+            id: true,
+            name: true,
+            chapter: true
+          }
+        },
         responsible: {
           select: {
             id: true,
             name: true,
-            email: true
+            email: true,
+            image: true
           }
         }
       },
     });
+
+    // Отправляем уведомление ответственному
+    if (result && result.responsibleId && result.responsibleId !== userAdd) {
+      await notifyResponsible(result, 'create', userAdd);
+    }
 
     res.status(201).json(result);
   } catch (error) {
@@ -374,14 +405,10 @@ export const updateCorrespondence = async (
       senderSubSubTypeId: validatedUpdateData.senderSubSubTypeId !== undefined ? validatedUpdateData.senderSubSubTypeId : undefined,
       senderName: validatedUpdateData.senderName,
       documentTypeId: validatedUpdateData.documentTypeId,
+      documentNumber: validatedUpdateData.documentNumber !== undefined ? validatedUpdateData.documentNumber : undefined,
+      trackNumber: validatedUpdateData.trackNumber !== undefined ? validatedUpdateData.trackNumber : undefined,
       comments: validatedUpdateData.comments !== undefined ? validatedUpdateData.comments : undefined,
       responsibleId: validatedUpdateData.responsibleId,
-      // Старые поля для обратной совместимости
-      from: validatedUpdateData.from,
-      to: validatedUpdateData.to,
-      content: validatedUpdateData.content,
-      typeMail: validatedUpdateData.typeMail,
-      numberMail: validatedUpdateData.numberMail,
     };
     
     // Удаляем undefined значения
@@ -396,15 +423,60 @@ export const updateCorrespondence = async (
       data: updateData,
       include: { 
         attachments: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            image: true
+          }
+        },
+        senderType: {
+          select: {
+            id: true,
+            name: true,
+            chapter: true
+          }
+        },
+        senderSubType: {
+          select: {
+            id: true,
+            name: true,
+            chapter: true
+          }
+        },
+        senderSubSubType: {
+          select: {
+            id: true,
+            name: true,
+            chapter: true
+          }
+        },
+        documentType: {
+          select: {
+            id: true,
+            name: true,
+            chapter: true
+          }
+        },
         responsible: {
           select: {
             id: true,
             name: true,
-            email: true
+            email: true,
+            image: true
           }
         }
       },
     });
+
+    // Отправляем уведомление ответственному (если он изменился или это обновление)
+    const senderId = validatedUpdateData.userAdd || body.userAdd;
+    if (updatedCorrespondence && updatedCorrespondence.responsibleId && senderId) {
+      // Отправляем уведомление только если ответственный отличается от автора изменений
+      if (updatedCorrespondence.responsibleId !== senderId) {
+        await notifyResponsible(updatedCorrespondence, 'update', senderId);
+      }
+    }
 
     res.status(200).json(updatedCorrespondence);
   } catch (error) {
@@ -413,27 +485,71 @@ export const updateCorrespondence = async (
   }
 };
 
-// Получить Tool для корреспонденции (создать если не существует)
+// Получить Tool для корреспонденции
 const getCorrespondenceTool = async () => {
-  let tool = await prisma.tool.findFirst({
+  const tool = await prisma.tool.findFirst({
     where: { link: 'aho/correspondence' },
   });
 
   if (!tool) {
-    // Создаем Tool для корреспонденции
-    tool = await prisma.tool.create({
-      data: {
-        name: 'Корреспонденция',
-        icon: '📮',
-        link: 'aho/correspondence',
-        description: 'Управление входящей и исходящей корреспонденцией',
-        order: 100,
-        included: true,
-      },
-    });
+    throw new Error('Tool для корреспонденции не найден в базе данных');
   }
 
   return tool;
+};
+
+// Функция для отправки уведомления ответственному
+const notifyResponsible = async (
+  correspondence: any,
+  mode: 'create' | 'update',
+  senderId: string
+) => {
+  try {
+    // Получаем tool для корреспонденции
+    const tool = await getCorrespondenceTool();
+    
+    // Формируем сообщение в зависимости от режима
+    const title = mode === 'create' 
+      ? 'Новая корреспонденция назначена вам'
+      : 'Корреспонденция обновлена';
+    
+    // Формируем текст сообщения
+    const senderTypeLabel = correspondence.senderType?.name || 'Не указан';
+    const documentTypeLabel = correspondence.documentType?.name || 'Не указан';
+    const senderName = correspondence.senderName || 'Не указано';
+    
+    const message = mode === 'create'
+      ? `Вам назначена новая корреспонденция:\n\n` +
+        `Отправитель: ${senderTypeLabel}${senderName ? ` - ${senderName}` : ''}\n` +
+        `Тип документа: ${documentTypeLabel}\n` +
+        `Дата получения: ${new Date(correspondence.ReceiptDate).toLocaleDateString('ru-RU')}\n` +
+        (correspondence.comments ? `Комментарии: ${correspondence.comments}` : '')
+      : `Корреспонденция была обновлена:\n\n` +
+        `Отправитель: ${senderTypeLabel}${senderName ? ` - ${senderName}` : ''}\n` +
+        `Тип документа: ${documentTypeLabel}\n` +
+        `Дата получения: ${new Date(correspondence.ReceiptDate).toLocaleDateString('ru-RU')}`;
+    
+    // Отправляем уведомление ответственному
+    await NotificationController.create({
+      type: 'INFO',
+      channels: ['IN_APP'],
+      title,
+      message,
+      senderId: senderId,
+      receiverId: correspondence.responsibleId,
+      toolId: tool.id,
+      priority: 'MEDIUM',
+      action: {
+        type: 'NAVIGATE',
+        path: `/aho/correspondence`,
+        params: { id: correspondence.id }
+      }
+    });
+    
+  } catch (error) {
+    console.error(`[Correspondence] Failed to send notification to responsible user:`, error);
+    // Не прерываем выполнение, если уведомление не отправилось
+  }
 };
 
 // Получить типы отправителей
@@ -492,6 +608,204 @@ export const getDocumentTypes = async (
     res.status(200).json(types);
   } catch (error) {
     next(error);
+  }
+};
+
+// Получить уникальные значения senderName для autocomplete
+export const getSenderNames = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<any> => {
+  try {
+    const { search } = req.query;
+    
+    const where: any = {};
+    
+    // Если есть поисковый запрос, фильтруем по нему
+    if (search && typeof search === 'string' && search.trim() !== '') {
+      where.senderName = {
+        contains: search,
+        mode: 'insensitive' as const
+      };
+    }
+    
+    // Получаем уникальные значения senderName
+    const correspondences = await prisma.correspondence.findMany({
+      where,
+      select: {
+        senderName: true,
+      },
+      distinct: ['senderName'],
+      orderBy: {
+        senderName: 'asc',
+      },
+      take: 50, // Ограничиваем количество результатов
+    });
+    
+    const senderNames = correspondences
+      .map(c => c.senderName)
+      .filter((name): name is string => name !== null && name.trim() !== '')
+      .filter((name, index, self) => self.indexOf(name) === index); // Убираем дубликаты
+    
+    res.status(200).json(senderNames);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Отслеживание посылки по трек-номеру
+export const trackMail = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<any> => {
+  try {
+    const { trackNumber, correspondenceId } = req.query;
+    
+    if (!trackNumber || typeof trackNumber !== 'string') {
+      return res.status(400).json({ error: 'Track number is required' });
+    }
+    
+    const trackingData = await trackParcel(trackNumber);
+    
+    if (!trackingData) {
+      return res.status(404).json({ error: 'Tracking information not found' });
+    }
+    
+    if (trackingData.error) {
+      return res.status(200).json({
+        trackNumber: trackingData.trackNumber,
+        error: trackingData.error,
+      });
+    }
+    
+    const lastStatus = await getLastStatus(trackNumber);
+    
+    // Отправляем уведомления, если указан correspondenceId
+    if (correspondenceId && typeof correspondenceId === 'string') {
+      try {
+        await sendTrackingNotification(correspondenceId, trackNumber, lastStatus, trackingData.trackingEvents || []);
+      } catch (notifError) {
+        console.error('[Correspondence] Failed to send tracking notification:', notifError);
+        // Не прерываем выполнение, если уведомление не отправилось
+      }
+    }
+    
+    res.status(200).json({
+      trackNumber: trackingData.trackNumber,
+      events: trackingData.trackingEvents || [],
+      lastStatus,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Отправка уведомлений об изменении статуса отслеживания
+const sendTrackingNotification = async (
+  correspondenceId: string,
+  trackNumber: string,
+  lastStatus: { status: string; date: string; location?: string } | null,
+  events: any[]
+) => {
+  try {
+    // Получаем информацию о корреспонденции
+    const correspondence = await prisma.correspondence.findUnique({
+      where: { id: correspondenceId },
+      include: {
+        responsible: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            telegramChatId: true,
+          }
+        },
+        documentType: {
+          select: {
+            name: true,
+          }
+        },
+        senderType: {
+          select: {
+            name: true,
+          }
+        }
+      }
+    });
+
+    if (!correspondence) {
+      return;
+    }
+
+    // Получаем tool ID для корреспонденции
+    const tool = await getCorrespondenceTool();
+    
+    if (!tool) {
+      return;
+    }
+
+    // Проверяем настройки email уведомлений
+    const emailSettings = await prisma.userSettings.findUnique({
+      where: {
+        userId_parameter: {
+          userId: correspondence.responsibleId,
+          parameter: 'notifications.email',
+        },
+      },
+    });
+
+    const wantsEmail = emailSettings ? emailSettings.value === 'true' : true;
+
+    // Формируем каналы: всегда IN_APP, TELEGRAM если есть привязка, EMAIL если включен
+    const channels: Array<'IN_APP' | 'TELEGRAM' | 'EMAIL'> = ['IN_APP'];
+    
+    if (correspondence.responsible.telegramChatId) {
+      channels.push('TELEGRAM');
+    }
+    
+    if (wantsEmail && correspondence.responsible.email) {
+      channels.push('EMAIL');
+    }
+
+    const systemSenderId = process.env.SYSTEM_SENDER_ID || null;
+    if (!systemSenderId) {
+      return;
+    }
+
+    // Формируем сообщение
+    const statusText = lastStatus ? lastStatus.status : 'Статус неизвестен';
+    const locationText = lastStatus?.location ? `\nМесто: ${lastStatus.location}` : '';
+    const dateText = lastStatus?.date ? `\nДата: ${new Date(lastStatus.date).toLocaleString('ru-RU')}` : '';
+    const eventsCount = events.length > 0 ? `\nСобытий в истории: ${events.length}` : '';
+
+    const title = `Обновление статуса отслеживания: ${trackNumber}`;
+    const message = 
+      `Тип документа: ${correspondence.documentType.name}\n` +
+      `Отправитель: ${correspondence.senderType.name}\n` +
+      `Статус: ${statusText}${locationText}${dateText}${eventsCount}`;
+
+    // Отправляем уведомление
+    await NotificationController.create({
+      type: 'INFO',
+      channels: channels,
+      title,
+      message,
+      senderId: systemSenderId,
+      receiverId: correspondence.responsibleId,
+      toolId: tool.id,
+      priority: 'MEDIUM',
+      action: {
+        type: 'NAVIGATE',
+        path: `/aho/correspondence`,
+        params: { id: correspondence.id }
+      }
+    });
+
+  } catch (error) {
+    console.error(`[Correspondence] Failed to send tracking notification:`, error);
+    throw error;
   }
 };
 

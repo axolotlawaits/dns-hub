@@ -473,7 +473,51 @@
 /* Стили для Checkbox и Radio в темной теме */
 [data-mantine-color-scheme="dark"] .mantine-Checkbox-label,
 [data-mantine-color-scheme="dark"] .mantine-Radio-label {
-  color: #ffffff !important;
+  color: var(--theme-text-primary) !important;
+}
+
+/* Стили для Radio элемента в темной теме */
+[data-mantine-color-scheme="dark"] .mantine-Radio-radio {
+  border-color: #ffffff !important;
+  
+  border-width: 2px !important;
+  opacity: 0.7 !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-Radio-radio:hover {
+  border-color: var(--mantine-color-blue-5) !important;
+  opacity: 1 !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-Radio-radio:checked {
+  border-color: var(--mantine-color-blue-6) !important;
+  opacity: 1 !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-Radio-inner {
+  border-color: var(--mantine-color-blue-6) !important;
+}
+
+[data-mantine-color-scheme="dark"] .mantine-Radio-radio[data-disabled="true"] {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+}
+
+/* Стили для Radio в светлой теме */
+[data-mantine-color-scheme="light"] .mantine-Radio-radio {
+  border-color: var(--mantine-color-gray-6) !important;
+  background-color: transparent !important;
+  border-width: 2px !important;
+}
+
+[data-mantine-color-scheme="light"] .mantine-Radio-radio:hover {
+  border-color: var(--mantine-color-blue-5) !important;
+  background-color: transparent !important;
+}
+
+[data-mantine-color-scheme="light"] .mantine-Radio-radio:checked {
+  border-color: var(--mantine-color-blue-6) !important;
+  background-color: transparent !important;
 }
 
 /* Стили для Switch в темной теме */

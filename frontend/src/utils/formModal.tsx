@@ -1,4 +1,4 @@
-import { Modal, TextInput, Select, Button, Alert, Stack, Textarea, Text, Group, Card, Paper, ActionIcon, MultiSelect, Badge, Switch } from '@mantine/core';
+import { Modal, TextInput, Select, Button, Alert, Stack, Textarea, Text, Group, Card, Paper, ActionIcon, MultiSelect, Badge, Switch, Autocomplete } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useState, useEffect, useCallback, useMemo, useRef, JSX, memo } from 'react';
 import dayjs from 'dayjs';
@@ -8,7 +8,8 @@ import * as TablerIcons from '@tabler/icons-react';
 import { FilePreviewModal } from './FilePreviewModal';
 import { IconPicker } from '../components/IconPicker';
 import './styles/formModal.css';
-import { saveAs } from 'file-saver'
+import { saveAs } from 'file-saver';
+import { API } from '../config/constants';
 
 // Хук для управления blob URL с автоматической очисткой
 const useBlobUrl = (file: File | null): string | null => {
@@ -127,7 +128,7 @@ const COMMON_FIELD_PROPS = {
 const DECORATIVE_CLASS = 'decorative-element';
 
 // Types and interfaces
-export type FieldType = 'text' | 'number' | 'select' | 'selectSearch' | 'date' | 'datetime' | 'textarea' | 'file' | 'boolean' | 'multiselect' | 'icon';
+export type FieldType = 'text' | 'number' | 'select' | 'selectSearch' | 'autocomplete' | 'date' | 'datetime' | 'textarea' | 'file' | 'boolean' | 'multiselect' | 'icon';
 
 interface FileFieldConfig {
   name: string;
@@ -309,17 +310,37 @@ const FilePreview = memo(({
             padding: '8px'
           }}>
             {isImageFile(originalName) ? (
-              <img 
-                src={typeof attachment.source === 'string' ? previewUrl : (blobUrl || '')} 
-                alt={originalName} 
-                style={{ 
-                  height: 60, 
-                  width: 100, 
-                  objectFit: 'contain', 
-                  borderRadius: '8px',
-                  display: 'block'
-                }} 
-              />
+              (() => {
+                const imageSrc = typeof attachment.source === 'string' ? previewUrl : (blobUrl || '');
+                if (!imageSrc || imageSrc.trim() === '') {
+                  return (
+                    <div style={{
+                      height: 60,
+                      width: 100,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'var(--theme-text-secondary)',
+                      fontSize: '12px'
+                    }}>
+                      Нет превью
+                    </div>
+                  );
+                }
+                return (
+                  <img 
+                    src={imageSrc} 
+                    alt={originalName} 
+                    style={{ 
+                      height: 60, 
+                      width: 100, 
+                      objectFit: 'contain', 
+                      borderRadius: '8px',
+                      display: 'block'
+                    }} 
+                  />
+                );
+              })()
             ) : (
               <div style={{
                 height: 60,
@@ -742,17 +763,31 @@ const FileFieldsCard = memo(({
                     : (blobUrl || '');
 
                   return isImage ? (
-                    <img 
-                      src={imageUrl} 
-                      alt={fileName} 
-                      style={{ 
-                        height: 120, 
-                        width: 'auto', 
-                        objectFit: 'contain', 
-                        borderRadius: '8px',
-                        display: 'block'
-                      }} 
-                    />
+                    !imageUrl || imageUrl.trim() === '' ? (
+                      <div style={{
+                        height: 120,
+                        width: 100,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'var(--theme-text-secondary)',
+                        fontSize: '12px'
+                      }}>
+                        Нет превью
+                      </div>
+                    ) : (
+                      <img 
+                        src={imageUrl} 
+                        alt={fileName} 
+                        style={{ 
+                          height: 120, 
+                          width: 'auto', 
+                          objectFit: 'contain', 
+                          borderRadius: '8px',
+                          display: 'block'
+                        }} 
+                      />
+                    )
                   ) : (
                     <div style={{
                       height: 60,
@@ -1400,6 +1435,30 @@ export const DynamicFormModal = ({
           />
         );
       }
+      case 'autocomplete': {
+        const singleValue = (form.getInputProps(field.name) as any)?.value ?? '';
+        const options = getFieldOptions(field);
+        const optionsData = options.map(opt => opt.value);
+        return (
+          <Autocomplete
+            key={field.name}
+            {...commonProps}
+            data={optionsData}
+            value={singleValue}
+            onChange={(val: string) => {
+              form.setFieldValue(field.name, val);
+              field.onChange?.(val, form.setFieldValue);
+              // Вызываем onSearchChange для динамической загрузки данных
+              if (field.onSearchChange && val.trim().length >= 2) {
+                field.onSearchChange(val);
+              }
+            }}
+            disabled={disabledValue}
+            placeholder={placeholderValue}
+            comboboxProps={{ withinPortal: true, zIndex: 10001 }}
+          />
+        );
+      }
       case 'multiselect': {
         const current: string[] = (form.getInputProps(field.name) as any)?.value || [];
         const multiselectOptions: Array<{ value: string; label: string; icon?: JSX.Element }> = 
@@ -1587,7 +1646,20 @@ export const DynamicFormModal = ({
       ? attachment.source.split('\\').pop() || 'Файл'
       : attachment.source.name;
     // Используем previewUrl из attachment (должен передаваться из инструмента)
-    const fileUrl = (attachment as any).previewUrl || '';
+    // Если previewUrl не передан, формируем его из source
+    let fileUrl = (attachment as any).previewUrl || '';
+    if (!fileUrl && typeof attachment.source === 'string') {
+      const source = attachment.source;
+      if (source.startsWith('http') || source.startsWith('blob:')) {
+        fileUrl = source;
+      } else if (source.includes('/') || source.includes('\\')) {
+        // Уже содержит полный путь
+        fileUrl = `${API}/${source}`;
+      }
+      // Если только имя файла без пути - previewUrl должен быть передан из инструмента
+    } else if (!fileUrl && attachment.source instanceof File) {
+      fileUrl = URL.createObjectURL(attachment.source);
+    }
     const isImage = isImageFile(fileName);
     const fileId = attachment.id || `temp-${fileName}-${Math.random().toString(36).slice(2, 11)}`;
     return (
@@ -1597,18 +1669,32 @@ export const DynamicFormModal = ({
             setPreviewId(fileId);
           }} style={{ cursor: 'pointer', flex: 1 }}>
             {isImage ? (
-              <img 
-                src={fileUrl} 
-                alt='preview' 
-                className="file-preview"
-                style={{ 
-                  height: 70, 
-                  width: 'auto', 
-                  objectFit: 'contain',
-                  borderRadius: 'var(--radius-sm)',
-                  border: '1px solid var(--theme-border)'
-                }} 
-              />
+              !fileUrl || fileUrl.trim() === '' ? (
+                <div style={{
+                  height: 70,
+                  width: 100,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--theme-text-secondary)',
+                  fontSize: '12px'
+                }}>
+                  Нет превью
+                </div>
+              ) : (
+                <img 
+                  src={fileUrl} 
+                  alt='preview' 
+                  className="file-preview"
+                  style={{ 
+                    height: 70, 
+                    width: 'auto', 
+                    objectFit: 'contain',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--theme-border)'
+                  }} 
+                />
+              )
             ) : (
               <div className="file-icon" style={{
                 width: 48,
@@ -1702,6 +1788,16 @@ export const DynamicFormModal = ({
             {typeof viewExtraContent === 'function' && (
               <div>
                 {viewExtraContent(initialValues)}
+              </div>
+            )}
+            {typeof extraContent === 'function' && mode !== 'view' && (
+              <div>
+                {extraContent(form.values, form.setFieldValue)}
+              </div>
+            )}
+            {typeof viewExtraContent === 'function' && mode !== 'view' && (
+              <div>
+                {viewExtraContent(form.values)}
               </div>
             )}
           </Stack>
@@ -1976,12 +2072,19 @@ export const DynamicFormModal = ({
           const base: any[] = (initialValues as any)[attachmentsKey] || [];
           const extras: any[] = (viewSecondaryAttachments || []).flatMap(s => s.list || []);
           const all = [...base, ...extras];
-          const mapped = all.map((a: any) => ({
-            id: String(a.id || `temp-${Math.random().toString(36).slice(2, 11)}`),
-            name: typeof a.source === 'string' ? (a.source.split('\\').pop() || 'Файл') : (a.source?.name || 'Файл'),
-            // Используем previewUrl из attachment (должен передаваться из инструмента)
-            source: (a as any).previewUrl || (typeof a.source === 'string' ? a.source : ''),
-          }));
+          const mapped = all.map((a: any) => {
+            const previewUrl = (a as any).previewUrl;
+            // Если previewUrl не является полным URL, не передаем его, чтобы сработал fallback
+            const validPreviewUrl = previewUrl && (previewUrl.startsWith('http') || previewUrl.startsWith('blob:'))
+              ? previewUrl
+              : undefined;
+            return {
+              id: String(a.id || `temp-${Math.random().toString(36).slice(2, 11)}`),
+              name: typeof a.source === 'string' ? (a.source.split('\\').pop()?.split('/').pop() || 'Файл') : (a.source?.name || 'Файл'),
+              source: typeof a.source === 'string' ? a.source : (a.source || ''),
+              previewUrl: validPreviewUrl,
+            };
+          });
           return mapped;
         })()}
       />

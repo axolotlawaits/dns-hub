@@ -856,16 +856,34 @@ export async function updateUserPhoto(req: Request, res: Response): Promise<void
             await client.modify(userDn, change);
             console.log(`[Photo Update] Photo updated in LDAP for user: ${maskedLogin}`);
 
-            // Обновление фото в базе данных
+            // Обновление фото в базе данных (используем id для безопасности)
+            let dbUpdateSuccess = false;
             try {
                 await prisma.user.update({
-                    where: { login },
+                    where: { id: token.userId },
                     data: { image: photoBase64 }
                 });
                 console.log(`[Photo Update] Photo updated in database for user: ${maskedLogin}`);
+                dbUpdateSuccess = true;
             } catch (dbError) {
                 console.error('[Photo Update] Database update failed:', dbError);
-                // Не прерываем выполнение, так как LDAP обновление успешно
+                // Логируем ошибку БД, но не прерываем выполнение, так как LDAP обновление успешно
+                await logUserAction(
+                    token.userId,
+                    user.email || null,
+                    'PHOTO_UPDATE_PARTIAL',
+                    'User',
+                    token.userId,
+                    {
+                        login: maskedLogin,
+                        ipAddress: Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
+                        userAgent,
+                        reason: 'Database update failed after successful LDAP update',
+                        error: dbError instanceof Error ? dbError.message : 'Unknown database error'
+                    },
+                    Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
+                    userAgent || undefined
+                ).catch(() => {});
             }
 
             // Логируем успешное обновление фото
@@ -895,12 +913,15 @@ export async function updateUserPhoto(req: Request, res: Response): Promise<void
 
             // Успешный ответ
             res.status(200).json({
-                message: 'Photo updated successfully in both LDAP and database',
+                message: dbUpdateSuccess 
+                    ? 'Photo updated successfully in both LDAP and database'
+                    : 'Photo updated in LDAP, but database update failed',
                 details: {
                     originalSize: photoSize,
                     processedSize: photoBuffer.length,
                     compressionRatio: `${Math.round(photoBuffer.length / photoSize * 100)}%`,
-                    updatedInDatabase: true
+                    updatedInLDAP: true,
+                    updatedInDatabase: dbUpdateSuccess
                 }
             });
 

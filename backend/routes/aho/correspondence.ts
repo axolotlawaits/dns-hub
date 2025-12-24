@@ -8,6 +8,8 @@ import {
   deleteAttachment,
   getSenderTypes,
   getDocumentTypes,
+  getSenderNames,
+  trackMail,
 } from '../../controllers/aho/correspondence.js';
 import uploadCorrespondence from '../../middleware/uploaderCorrespondence.js'; // Use default import
 
@@ -16,6 +18,12 @@ const router = Router();
 // Get types (публичные роуты)
 router.get('/types/sender', getSenderTypes);
 router.get('/types/document', getDocumentTypes);
+
+// Get unique sender names for autocomplete
+router.get('/sender-names', getSenderNames);
+
+// Track mail by track number
+router.get('/track', trackMail);
 
 // Get all correspondences
 router.get('/', getCorrespondences);

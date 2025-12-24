@@ -28,6 +28,47 @@ import './styles/Navigation.css';
 import { DynamicFormModal, type FormField } from '../utils/formModal';
 import { notificationSystem } from '../utils/Push';
 
+// Утилита для запросов с автоматическим обновлением токена
+const fetchWithTokenRefresh = async (url: string, options: RequestInit = {}): Promise<Response> => {
+  const token = localStorage.getItem('token');
+  const headers = new Headers(options.headers);
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  
+  let response = await fetch(url, {
+    ...options,
+    headers,
+  });
+
+  // Если получили 401, пробуем обновить токен
+  if (response.status === 401) {
+    try {
+      const refreshResponse = await fetch(`${API}/refresh-token`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      if (refreshResponse.ok) {
+        const newToken = await refreshResponse.json();
+        localStorage.setItem('token', newToken);
+        
+        // Повторяем запрос с новым токеном
+        headers.set('Authorization', `Bearer ${newToken}`);
+        response = await fetch(url, {
+          ...options,
+          headers,
+        });
+      }
+      // Если refresh не удался, просто возвращаем исходный ответ (401)
+    } catch (refreshError) {
+      // Игнорируем ошибку refresh, возвращаем исходный ответ
+    }
+  }
+
+  return response;
+};
+
 interface Tool {
   id: string;
   parent_id: string | null;
@@ -93,15 +134,18 @@ const Navigation: React.FC<NavigationProps> = ({ navOpened, toggleNav }) => {
           return;
         }
 
-        const response = await fetch(`${API}/merch-bot/feedback/tools`, {
+        const response = await fetchWithTokenRefresh(`${API}/merch-bot/feedback/tools`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
           }
         });
 
         if (!response.ok) {
+          // Если все еще 401 после попытки обновления, просто выходим
+          if (response.status === 401) {
+            return;
+          }
           return;
         }
 
@@ -109,6 +153,7 @@ const Navigation: React.FC<NavigationProps> = ({ navOpened, toggleNav }) => {
         setFeedbackParentTools(data.parentTools || []);
         setToolsData(data); // Сохраняем все данные для использования в другом useEffect
       } catch (err) {
+        // Игнорируем ошибки при загрузке инструментов обратной связи
       }
     };
 

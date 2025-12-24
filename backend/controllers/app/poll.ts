@@ -15,10 +15,25 @@ export const getActivePolls = async (req: Request, res: Response, next: NextFunc
 
     const userId = token.userId;
 
-    // Получаем активные опросы с опциями
+    // Получаем активные опросы с опциями (учитываем даты)
+    const now = new Date();
     const polls = await prisma.poll.findMany({
       where: {
-        isActive: true
+        isActive: true,
+        AND: [
+          {
+            OR: [
+              { startDate: null }, // Бессрочный опрос (нет даты начала)
+              { startDate: { lte: now } } // Дата начала уже наступила или прошла
+            ]
+          },
+          {
+            OR: [
+              { endDate: null }, // Бессрочный опрос (нет даты окончания)
+              { endDate: { gte: now } } // Дата окончания еще не наступила
+            ]
+          }
+        ]
       },
       include: {
         options: {
@@ -49,6 +64,8 @@ export const getActivePolls = async (req: Request, res: Response, next: NextFunc
         id: poll.id,
         question: poll.question,
         isActive: poll.isActive,
+        startDate: poll.startDate,
+        endDate: poll.endDate,
         createdAt: poll.createdAt,
         userVote: userVote,
         totalVotes: totalVotes,
@@ -242,6 +259,8 @@ export const getAllPolls = async (req: Request, res: Response, next: NextFunctio
         id: poll.id,
         question: poll.question,
         isActive: poll.isActive,
+        startDate: poll.startDate,
+        endDate: poll.endDate,
         createdAt: poll.createdAt,
         updatedAt: poll.updatedAt,
         createdBy: poll.createdBy,
@@ -284,10 +303,16 @@ export const createPoll = async (req: Request, res: Response, next: NextFunction
       return;
     }
 
-    const { question, options } = req.body;
+    const { question, options, startDate, endDate } = req.body;
 
     if (!question || !options || !Array.isArray(options) || options.length < 2) {
       res.status(400).json({ error: 'Question and at least 2 options are required' });
+      return;
+    }
+
+    // Валидация дат
+    if (startDate && endDate && new Date(startDate) >= new Date(endDate)) {
+      res.status(400).json({ error: 'Start date must be before end date' });
       return;
     }
 
@@ -296,6 +321,8 @@ export const createPoll = async (req: Request, res: Response, next: NextFunction
       data: {
         question: question,
         isActive: true,
+        startDate: startDate ? new Date(startDate) : null,
+        endDate: endDate ? new Date(endDate) : null,
         createdById: token.userId,
         options: {
           create: options.map((option: string, index: number) => ({
@@ -324,6 +351,8 @@ export const createPoll = async (req: Request, res: Response, next: NextFunction
       id: poll.id,
       question: poll.question,
       isActive: poll.isActive,
+      startDate: poll.startDate,
+      endDate: poll.endDate,
       createdAt: poll.createdAt,
       createdBy: poll.createdBy,
       totalVotes: 0,
@@ -363,11 +392,21 @@ export const updatePoll = async (req: Request, res: Response, next: NextFunction
     }
 
     const pollId = req.params.pollId;
-    const { question, isActive } = req.body;
+    const { question, isActive, startDate, endDate } = req.body;
+
+    // Валидация дат
+    if (startDate !== undefined && endDate !== undefined && startDate && endDate) {
+      if (new Date(startDate) >= new Date(endDate)) {
+        res.status(400).json({ error: 'Start date must be before end date' });
+        return;
+      }
+    }
 
     const updateData: any = {};
     if (question !== undefined) updateData.question = question;
     if (isActive !== undefined) updateData.isActive = isActive;
+    if (startDate !== undefined) updateData.startDate = startDate ? new Date(startDate) : null;
+    if (endDate !== undefined) updateData.endDate = endDate ? new Date(endDate) : null;
 
     const poll = await prisma.poll.update({
       where: { id: pollId },
@@ -397,11 +436,93 @@ export const updatePoll = async (req: Request, res: Response, next: NextFunction
       id: poll.id,
       question: poll.question,
       isActive: poll.isActive,
+      startDate: poll.startDate,
+      endDate: poll.endDate,
       createdAt: poll.createdAt,
       updatedAt: poll.updatedAt,
       createdBy: poll.createdBy,
       totalVotes: totalVotes,
       options: poll.options.map(option => ({
+        id: option.id,
+        text: option.text,
+        votes: option.votes.length,
+        order: option.order
+      }))
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * DELETE /api/polls/:pollId/vote
+ * Удалить свой голос в опросе
+ */
+export const deleteVote = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const token = (req as any).token;
+    if (!token || !token.userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const userId = token.userId;
+    const pollId = req.params.pollId;
+
+    // Проверяем, существует ли опрос
+    const poll = await prisma.poll.findUnique({
+      where: { id: pollId }
+    });
+
+    if (!poll) {
+      res.status(404).json({ error: 'Poll not found' });
+      return;
+    }
+
+    // Удаляем голос пользователя
+    await prisma.pollVote.deleteMany({
+      where: {
+        pollId: pollId,
+        userId: userId
+      }
+    });
+
+    // Возвращаем обновленный опрос
+    const updatedPoll = await prisma.poll.findUnique({
+      where: { id: pollId },
+      include: {
+        options: {
+          orderBy: {
+            order: 'asc'
+          },
+          include: {
+            votes: true
+          }
+        },
+        votes: {
+          where: {
+            userId: userId
+          }
+        }
+      }
+    });
+
+    if (!updatedPoll) {
+      res.status(404).json({ error: 'Poll not found' });
+      return;
+    }
+
+    const totalVotes = updatedPoll.options.reduce((sum, option) => sum + option.votes.length, 0);
+    const userVote = updatedPoll.votes.length > 0 ? updatedPoll.votes[0].optionId : null;
+
+    res.status(200).json({
+      id: updatedPoll.id,
+      question: updatedPoll.question,
+      isActive: updatedPoll.isActive,
+      createdAt: updatedPoll.createdAt,
+      userVote: userVote,
+      totalVotes: totalVotes,
+      options: updatedPoll.options.map(option => ({
         id: option.id,
         text: option.text,
         votes: option.votes.length,

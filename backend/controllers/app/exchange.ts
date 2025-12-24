@@ -74,11 +74,34 @@ export const getMyCalendarEvents = async (req: Request, res: Response): Promise<
                             errorMessage.includes('unavailable') ||
                             errorMessage.includes('unreachable');
       
+      // Проверяем ошибки аутентификации (401)
+      const isAuthError = errorMessage.includes('401') || 
+                         errorMessage.includes('authentication failed') ||
+                         errorMessage.includes('password not configured') ||
+                         errorMessage.includes('credentials') ||
+                         errorMessage.includes('Unauthorized');
+      
+      // Проверяем ошибки конфигурации
+      const isConfigError = errorMessage.includes('not configured') ||
+                           errorMessage.includes('password not configured') ||
+                           errorMessage.includes('credentials') ||
+                           exchangeError.userPasswordMissing;
+      
       // Если Exchange сервер недоступен или не отвечает, возвращаем 503
       if (isNetworkError) {
         res.status(503).json({ 
           error: 'Exchange service unavailable',
           message: 'Сервис календаря временно недоступен. Пожалуйста, попробуйте позже.'
+        });
+        return;
+      }
+      
+      // Если ошибка аутентификации или конфигурации, возвращаем 401 или 400
+      if (isAuthError || isConfigError) {
+        res.status(401).json({ 
+          error: 'Exchange authentication failed',
+          message: 'Не удалось аутентифицироваться в Exchange. Пожалуйста, проверьте настройки пароля Exchange в вашем профиле или обратитесь к администратору.',
+          requiresPassword: exchangeError.userPasswordMissing || false
         });
         return;
       }

@@ -60,6 +60,28 @@ export const UserContextProvider = ({ children }: Props) => {
     }
   });
 
+  const refreshAccessToken = async (): Promise<string | null> => {
+    const response = await fetch(`${API}/refresh-token`, {
+      method: 'POST',
+      credentials: 'include'
+    });
+
+    if (response.ok) {
+      const newToken = await response.json(); // Backend возвращает токен напрямую
+      setToken(newToken);
+      localStorage.setItem('token', newToken);
+      return newToken;
+    } else {
+      // Если refresh не удался, делаем logout и выбрасываем ошибку
+      setUser(null);
+      setToken(null);
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      localStorage.removeItem('domain');
+      throw new Error('Failed to refresh token');
+    }
+  };
+
   const refreshUserData = async () => {
     if (user) {
       try {
@@ -89,17 +111,48 @@ export const UserContextProvider = ({ children }: Props) => {
           }
         }
 
-        const response = await fetch(`${API}/user/${user.id}`, {
+        let response = await fetch(`${API}/user/${user.id}`, {
           headers: {
             'Authorization': `Bearer ${currentToken || ''}`
           }
         });
         
+        // Если получили 401, пытаемся обновить токен
+        if (response.status === 401) {
+          try {
+            const newToken = await refreshAccessToken();
+            if (newToken) {
+              // Повторяем запрос с новым токеном
+              response = await fetch(`${API}/user/${user.id}`, {
+                headers: {
+                  'Authorization': `Bearer ${newToken}`
+                }
+              });
+            } else {
+              // Если токен не обновился, очищаем данные
+              console.warn('[UserContext] Не удалось обновить токен, очищаем localStorage');
+              localStorage.removeItem('user');
+              localStorage.removeItem('token');
+              setUser(null);
+              setToken(null);
+              return;
+            }
+          } catch (refreshError) {
+            // Если refresh не удался, очищаем данные
+            console.warn('[UserContext] Ошибка при обновлении токена, очищаем localStorage:', refreshError);
+            localStorage.removeItem('user');
+            localStorage.removeItem('token');
+            setUser(null);
+            setToken(null);
+            return;
+          }
+        }
+        
         // Проверяем статус перед парсингом JSON
         if (!response.ok) {
-          if (response.status === 401 || response.status === 403) {
-            // Неавторизован - очищаем данные
-            console.warn('[UserContext] Пользователь не авторизован, очищаем localStorage');
+          if (response.status === 403) {
+            // Доступ запрещен - очищаем данные
+            console.warn('[UserContext] Доступ запрещен, очищаем localStorage');
             localStorage.removeItem('user');
             localStorage.removeItem('token');
             setUser(null);
@@ -181,24 +234,6 @@ export const UserContextProvider = ({ children }: Props) => {
     localStorage.removeItem('user');
     localStorage.removeItem('token');
     localStorage.removeItem('domain');
-  };
-
-  const refreshAccessToken = async (): Promise<string | null> => {
-    const response = await fetch(`${API}/refresh-token`, {
-      method: 'POST',
-      credentials: 'include'
-    });
-
-    if (response.ok) {
-      const newToken = await response.json(); // Backend возвращает токен напрямую
-      setToken(newToken);
-      localStorage.setItem('token', newToken);
-      return newToken;
-    } else {
-      // Если refresh не удался, делаем logout и выбрасываем ошибку
-      logout();
-      throw new Error('Failed to refresh token');
-    }
   };
 
   return (

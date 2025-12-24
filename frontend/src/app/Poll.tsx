@@ -11,17 +11,25 @@ import {
   Alert,
   Button,
   TextInput,
-  ActionIcon
+  ActionIcon,
+  Modal,
+  ScrollArea,
+  Badge,
+  Divider,
+  Progress
 } from '@mantine/core';
-import { IconAlertCircle, IconCheck, IconPlus, IconX } from '@tabler/icons-react';
+import { DatePickerInput } from '@mantine/dates';
+import { IconAlertCircle, IconCheck, IconPlus, IconX, IconHistory, IconRotateClockwise } from '@tabler/icons-react';
 import { API } from '../config/constants';
 import { useUserContext } from '../hooks/useUserContext';
 import { DynamicFormModal, FormField } from '../utils/formModal';
+import dayjs from 'dayjs';
 
 interface PollOption {
   id: string;
   text: string;
   votes?: number;
+  order?: number;
 }
 
 interface Poll {
@@ -31,6 +39,18 @@ interface Poll {
   isActive: boolean;
   userVote?: string;
   totalVotes?: number;
+  createdAt?: string;
+  startDate?: string | null;
+  endDate?: string | null;
+}
+
+interface HistoryPoll extends Poll {
+  createdBy?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  updatedAt?: string;
 }
 
 export default function Poll() {
@@ -42,6 +62,11 @@ export default function Poll() {
   // Модальное окно создания опроса
   const [createModalOpened, setCreateModalOpened] = useState(false);
   const [creating, setCreating] = useState(false);
+  
+  // Модальное окно истории опросов
+  const [historyModalOpened, setHistoryModalOpened] = useState(false);
+  const [historyPolls, setHistoryPolls] = useState<HistoryPoll[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   
   // Проверка прав доступа (только DEVELOPER и ADMIN)
   const canCreatePoll = user?.role === 'DEVELOPER' || user?.role === 'ADMIN';
@@ -98,11 +123,103 @@ export default function Poll() {
         throw new Error('Ошибка при голосовании');
       }
 
-      // Обновляем опросы после голосования
-      await loadPolls();
+      // Получаем обновленные данные опроса из ответа
+      const updatedPoll = await response.json();
+      
+      // Обновляем конкретный опрос в состоянии с полными данными
+      setPolls(prevPolls => 
+        prevPolls.map(poll => {
+          if (poll.id === pollId) {
+            // Создаем новый объект опроса с обновленными данными
+            return {
+              ...poll,
+              userVote: updatedPoll.userVote,
+              totalVotes: updatedPoll.totalVotes,
+              options: updatedPoll.options.map((updatedOpt: PollOption) => ({
+                id: updatedOpt.id,
+                text: updatedOpt.text,
+                votes: updatedOpt.votes,
+                order: updatedOpt.order
+              }))
+            };
+          }
+          return poll;
+        })
+      );
     } catch (err) {
       console.error('Error voting:', err);
       setError(err instanceof Error ? err.message : 'Ошибка при голосовании');
+      // Перезагружаем опросы в случае ошибки
+      await loadPolls();
+    }
+  };
+
+  const handleDeleteVote = async (pollId: string) => {
+    try {
+      const authToken = token || localStorage.getItem('token');
+      const response = await fetch(`${API}/polls/${pollId}/vote`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Ошибка при отмене голоса');
+      }
+
+      // Получаем обновленные данные опроса из ответа
+      const updatedPoll = await response.json();
+      
+      // Обновляем конкретный опрос в состоянии с полными данными
+      setPolls(prevPolls => 
+        prevPolls.map(poll => {
+          if (poll.id === pollId) {
+            // Создаем новый объект опроса с обновленными данными
+            return {
+              ...poll,
+              userVote: updatedPoll.userVote,
+              totalVotes: updatedPoll.totalVotes,
+              options: updatedPoll.options.map((updatedOpt: PollOption) => ({
+                id: updatedOpt.id,
+                text: updatedOpt.text,
+                votes: updatedOpt.votes,
+                order: updatedOpt.order
+              }))
+            };
+          }
+          return poll;
+        })
+      );
+    } catch (err) {
+      console.error('Error deleting vote:', err);
+      setError(err instanceof Error ? err.message : 'Ошибка при отмене голоса');
+      // Перезагружаем опросы в случае ошибки
+      await loadPolls();
+    }
+  };
+
+  const loadHistoryPolls = async () => {
+    try {
+      setLoadingHistory(true);
+      const authToken = token || localStorage.getItem('token');
+      const response = await fetch(`${API}/polls`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Ошибка загрузки истории опросов');
+      }
+
+      const data = await response.json();
+      setHistoryPolls(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Error loading history polls:', err);
+      setError(err instanceof Error ? err.message : 'Ошибка загрузки истории опросов');
+    } finally {
+      setLoadingHistory(false);
     }
   };
 
@@ -116,21 +233,45 @@ export default function Poll() {
       return;
     }
 
+    // Валидация дат
+    if (values.hasDates) {
+      if (values.startDate && values.endDate) {
+        const start = dayjs(values.startDate);
+        const end = dayjs(values.endDate);
+        if (start.isAfter(end)) {
+          setError('Дата начала должна быть раньше даты окончания');
+          return;
+        }
+      }
+    }
+
     try {
       setCreating(true);
       setError(null);
       
       const authToken = token || localStorage.getItem('token');
+      const requestBody: any = {
+        question: values.question.trim(),
+        options: validOptions
+      };
+
+      // Добавляем даты только если они установлены
+      if (values.hasDates) {
+        if (values.startDate) {
+          requestBody.startDate = dayjs(values.startDate).toISOString();
+        }
+        if (values.endDate) {
+          requestBody.endDate = dayjs(values.endDate).toISOString();
+        }
+      }
+
       const response = await fetch(`${API}/polls`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${authToken}`
         },
-        body: JSON.stringify({
-          question: values.question.trim(),
-          options: validOptions
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
@@ -159,6 +300,12 @@ export default function Poll() {
       type: 'text',
       required: true,
       placeholder: 'Введите вопрос опроса'
+    },
+    {
+      name: 'hasDates',
+      label: 'Установить даты проведения',
+      type: 'boolean',
+      required: false
     }
   ], []);
 
@@ -204,14 +351,26 @@ export default function Poll() {
     <Box style={{ padding: '0 12px 12px 0', width: '100%' }}>
       <Group justify="space-between" mb="md">
         <Title order={2}>Опросы</Title>
-        {canCreatePoll && (
+        <Group gap="xs">
           <Button
-            leftSection={<IconPlus size={18} />}
-            onClick={() => setCreateModalOpened(true)}
+            variant="light"
+            leftSection={<IconHistory size={18} />}
+            onClick={() => {
+              setHistoryModalOpened(true);
+              loadHistoryPolls();
+            }}
           >
-            Создать опрос
+            История опросов
           </Button>
-        )}
+          {canCreatePoll && (
+            <Button
+              leftSection={<IconPlus size={18} />}
+              onClick={() => setCreateModalOpened(true)}
+            >
+              Создать опрос
+            </Button>
+          )}
+        </Group>
       </Group>
       
       {polls.length === 0 && !loading && (
@@ -220,65 +379,101 @@ export default function Poll() {
         </Card>
       )}
       <Stack gap="md">
-        {polls.map((poll) => (
+        {polls.map((poll) => {
+          const isUnlimited = !poll.startDate && !poll.endDate;
+          const startDate = poll.startDate ? dayjs(poll.startDate) : null;
+          const endDate = poll.endDate ? dayjs(poll.endDate) : null;
+          const hasVoted = !!poll.userVote;
+          
+          return (
           <Card key={poll.id} shadow="sm" radius="md" padding="md">
-            <Text fw={600} mb="md">{poll.question}</Text>
-            <Stack gap="xs">
-              {poll.options.map((option) => {
-                const isVoted = poll.userVote === option.id;
-                const percentage = poll.totalVotes && poll.totalVotes > 0
-                  ? Math.round((option.votes || 0) / poll.totalVotes * 100)
-                  : 0;
+            <Stack gap="sm">
+              <Group justify="space-between" align="flex-start">
+                <Text fw={600} size="lg">{poll.question}</Text>
+                {!isUnlimited && (
+                  <Badge variant="light" color="blue" size="sm">
+                    {startDate && endDate 
+                      ? `${startDate.format('DD.MM')} - ${endDate.format('DD.MM.YYYY')}`
+                      : startDate 
+                      ? `С ${startDate.format('DD.MM.YYYY')}`
+                      : endDate 
+                      ? `До ${endDate.format('DD.MM.YYYY')}`
+                      : ''}
+                  </Badge>
+                )}
+              </Group>
+              
+              <Stack gap="sm">
+                {poll.options.map((option) => {
+                  const isVoted = poll.userVote === option.id;
+                  const percentage = poll.totalVotes && poll.totalVotes > 0
+                    ? Math.round((option.votes || 0) / poll.totalVotes * 100)
+                    : 0;
 
-                return (
-                  <Box key={option.id}>
-                    <Group justify="space-between" mb={4}>
-                      <Radio
-                        label={option.text}
-                        value={option.id}
-                        checked={isVoted}
-                        onChange={() => !poll.userVote && handleVote(poll.id, option.id)}
-                        disabled={!!poll.userVote}
-                      />
-                      {poll.userVote && (
-                        <Group gap="xs">
-                          <Text size="sm" c="dimmed">
-                            {percentage}%
-                          </Text>
-                          {isVoted && <IconCheck size={16} color="green" />}
-                        </Group>
-                      )}
-                    </Group>
-                    {poll.userVote && (
-                      <Box
-                        style={{
-                          height: 8,
-                          backgroundColor: 'var(--mantine-color-gray-2)',
-                          borderRadius: 4,
-                          overflow: 'hidden'
-                        }}
-                      >
-                        <Box
-                          style={{
-                            height: '100%',
-                            width: `${percentage}%`,
-                            backgroundColor: isVoted ? 'var(--mantine-color-blue-6)' : 'var(--mantine-color-gray-4)',
-                            transition: 'width 0.3s ease'
-                          }}
+                  return (
+                    <Box key={option.id}>
+                      {!hasVoted ? (
+                        // До голосования - показываем Radio
+                        <Radio
+                          label={option.text}
+                          value={option.id}
+                          checked={false}
+                          onChange={() => handleVote(poll.id, option.id)}
+                          color="blue"
+                          size="md"
                         />
-                      </Box>
-                    )}
-                  </Box>
-                );
-              })}
+                      ) : (
+                        // После голосования - показываем результаты
+                        <Box>
+                          <Group justify="space-between" mb={4}>
+                            <Group gap="xs">
+                              {isVoted && <IconCheck size={16} color="green" />}
+                              <Text size="sm" fw={isVoted ? 500 : 400}>
+                                {option.text}
+                              </Text>
+                            </Group>
+                            <Group gap="xs">
+                              <Text size="sm" c="dimmed">
+                                {option.votes || 0} голосов
+                              </Text>
+                              <Badge variant="light" color={isVoted ? 'blue' : 'gray'} size="sm">
+                                {percentage}%
+                              </Badge>
+                            </Group>
+                          </Group>
+                          <Progress 
+                            value={percentage} 
+                            color={isVoted ? 'blue' : 'gray'}
+                            size="sm"
+                            radius="md"
+                            mt={4}
+                          />
+                        </Box>
+                      )}
+                    </Box>
+                  );
+                })}
+              </Stack>
+              
+              {hasVoted && (
+                <Group justify="space-between" mt="sm" pt="sm" style={{ borderTop: '1px solid var(--theme-border)' }}>
+                  <Text size="xs" c="dimmed">
+                    Всего голосов: {poll.totalVotes || 0}
+                  </Text>
+                  <Button
+                    variant="subtle"
+                    size="xs"
+                    leftSection={<IconRotateClockwise size={14} />}
+                    onClick={() => handleDeleteVote(poll.id)}
+                  >
+                    Отменить голос
+                  </Button>
+                </Group>
+              )}
             </Stack>
-            {poll.userVote && poll.totalVotes && (
-              <Text size="xs" c="dimmed" mt="md" ta="center">
-                Всего голосов: {poll.totalVotes}
-              </Text>
-            )}
           </Card>
-        ))}
+          );
+        })}
       </Stack>
 
       {/* Модальное окно создания опроса */}
@@ -293,13 +488,37 @@ export default function Poll() {
         fields={pollFormFields}
         initialValues={{
           question: '',
-          options: ['', '']
+          options: ['', ''],
+          hasDates: false,
+          startDate: null,
+          endDate: null
         }}
         onSubmit={handleCreatePoll}
         error={error}
         loading={creating}
         extraContent={(values, setFieldValue) => (
           <Box>
+            {/* Поля дат (условно отображаются) */}
+            {values.hasDates && (
+              <Stack gap="md" mb="md">
+                <DatePickerInput
+                  label="Дата начала"
+                  placeholder="Выберите дату начала (необязательно)"
+                  value={values.startDate ? dayjs(values.startDate).toDate() : null}
+                  onChange={(date) => setFieldValue('startDate', date ? dayjs(date).format('YYYY-MM-DD') : null)}
+                  clearable
+                />
+                <DatePickerInput
+                  label="Дата окончания"
+                  placeholder="Выберите дату окончания (необязательно)"
+                  value={values.endDate ? dayjs(values.endDate).toDate() : null}
+                  onChange={(date) => setFieldValue('endDate', date ? dayjs(date).format('YYYY-MM-DD') : null)}
+                  clearable
+                  minDate={values.startDate ? dayjs(values.startDate).toDate() : undefined}
+                />
+              </Stack>
+            )}
+            
             <Group justify="space-between" align="center" mb="xs">
               <Text size="sm" fw={500}>Варианты ответа (минимум 2)</Text>
               <Button
@@ -337,6 +556,98 @@ export default function Poll() {
           </Box>
         )}
       />
+
+      {/* Модальное окно истории опросов */}
+      <Modal
+        opened={historyModalOpened}
+        onClose={() => setHistoryModalOpened(false)}
+        title="История опросов"
+        size="xl"
+      >
+        <ScrollArea h={500}>
+          {loadingHistory ? (
+            <LoadingOverlay visible />
+          ) : historyPolls.length === 0 ? (
+            <Text c="dimmed" ta="center" py="xl">
+              Нет опросов в истории
+            </Text>
+          ) : (
+            <Stack gap="md">
+              {historyPolls.map((poll) => {
+                const totalVotes = poll.totalVotes || 0;
+                return (
+                  <Card key={poll.id} shadow="sm" radius="md" padding="md" withBorder>
+                    <Group justify="space-between" mb="xs">
+                      <Text fw={600}>{poll.question}</Text>
+                      <Group gap="xs">
+                        <Badge color={poll.isActive ? 'green' : 'gray'} variant="light">
+                          {poll.isActive ? 'Активен' : 'Завершен'}
+                        </Badge>
+                        {poll.startDate || poll.endDate ? (
+                          <Badge variant="light" color="blue" size="sm">
+                            {poll.startDate && poll.endDate 
+                              ? `${dayjs(poll.startDate).format('DD.MM.YYYY')} - ${dayjs(poll.endDate).format('DD.MM.YYYY')}`
+                              : poll.startDate 
+                              ? `С ${dayjs(poll.startDate).format('DD.MM.YYYY')}`
+                              : poll.endDate 
+                              ? `До ${dayjs(poll.endDate).format('DD.MM.YYYY')}`
+                              : ''}
+                          </Badge>
+                        ) : (
+                          <Badge variant="light" color="gray" size="sm">
+                            Бессрочно
+                          </Badge>
+                        )}
+                      </Group>
+                    </Group>
+                    {poll.createdBy && (
+                      <Text size="xs" c="dimmed" mb="xs">
+                        Создан: {poll.createdBy.name} {poll.createdAt && `• ${dayjs(poll.createdAt).format('DD.MM.YYYY HH:mm')}`}
+                      </Text>
+                    )}
+                    <Divider my="xs" />
+                    <Stack gap="xs">
+                      {poll.options.map((option) => {
+                        const percentage = totalVotes > 0
+                          ? Math.round((option.votes || 0) / totalVotes * 100)
+                          : 0;
+                        const isVoted = poll.userVote === option.id;
+                        return (
+                          <Box key={option.id}>
+                            <Group justify="space-between" mb={4}>
+                              <Group gap="xs">
+                                <Text size="sm">{option.text}</Text>
+                                {isVoted && <IconCheck size={14} color="green" />}
+                              </Group>
+                              <Group gap="xs">
+                                <Text size="sm" c="dimmed">
+                                  {option.votes || 0} голосов ({percentage}%)
+                                </Text>
+                              </Group>
+                            </Group>
+                            <Progress 
+                              value={percentage} 
+                              color={isVoted ? 'blue' : 'gray'}
+                              size="sm"
+                              radius="md"
+                              mt={4}
+                            />
+                          </Box>
+                        );
+                      })}
+                    </Stack>
+                    {totalVotes > 0 && (
+                      <Text size="xs" c="dimmed" mt="md" ta="center">
+                        Всего голосов: {totalVotes}
+                      </Text>
+                    )}
+                  </Card>
+                );
+              })}
+            </Stack>
+          )}
+        </ScrollArea>
+      </Modal>
     </Box>
   );
 }

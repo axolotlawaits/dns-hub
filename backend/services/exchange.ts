@@ -411,7 +411,10 @@ const getCalendarEventsViaEWS = async (
           authError = 'User authentication failed. Check Exchange password in settings';
         }
         console.error(`[Exchange] [getCalendarEventsViaEWS] ❌ ${authError}`);
-        throw new Error(`EWS authentication failed (401): ${authError}`);
+        const error: any = new Error(`EWS authentication failed (401): ${authError}`);
+        error.userPasswordMissing = userPasswordMissing;
+        error.useImpersonation = useImpersonation;
+        throw error;
       }
       
       console.error(`[Exchange] [getCalendarEventsViaEWS] Response body (first 2000 chars):`, responseBody.substring(0, 2000));

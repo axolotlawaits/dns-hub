@@ -19,11 +19,10 @@ import {
   Divider,
   Box
 } from '@mantine/core';
-import { IconEdit, IconTrash, IconPlus, IconAlertCircle, IconTags, IconFolder, IconChevronRight, IconChevronDown, IconDownload } from '@tabler/icons-react';
+import { IconEdit, IconTrash, IconPlus, IconAlertCircle, IconTags, IconFolder, IconChevronRight, IconChevronDown } from '@tabler/icons-react';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { FilterGroup } from '../../../utils/filter';
 import useAuthFetch from '../../../hooks/useAuthFetch';
-import { useUserContext } from '../../../hooks/useUserContext';
 import { API } from '../../../config/constants';
 
 interface Type {
@@ -63,10 +62,8 @@ export default function TypesManagement() {
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [loadingCorrespondenceTypes, setLoadingCorrespondenceTypes] = useState(false);
 
   const authFetch = useAuthFetch();
-  const { user } = useUserContext();
 
   useEffect(() => {
     fetchTypes();
@@ -237,33 +234,6 @@ export default function TypesManagement() {
     } catch (error) {
       console.error('Error deleting type:', error);
       setError('Ошибка удаления типа');
-    }
-  };
-
-  const handleLoadCorrespondenceTypes = async () => {
-    try {
-      setLoadingCorrespondenceTypes(true);
-      setError(null);
-      
-      const response = await authFetch(`${API}/type/load-correspondence-types`, {
-        method: 'POST',
-      });
-      
-      if (response && response.ok) {
-        await response.json();
-        await fetchTypes();
-        setError(null);
-        // Показываем успешное сообщение через alert (можно заменить на notification)
-        alert('Типы корреспонденции успешно загружены!');
-      } else {
-        const errorData = await response?.json();
-        setError(errorData?.error || errorData?.message || 'Ошибка загрузки типов корреспонденции');
-      }
-    } catch (error) {
-      console.error('Error loading correspondence types:', error);
-      setError('Ошибка загрузки типов корреспонденции');
-    } finally {
-      setLoadingCorrespondenceTypes(false);
     }
   };
 
@@ -490,22 +460,9 @@ export default function TypesManagement() {
       <Stack gap="md">
         <Group justify="space-between">
           <Title order={2}>Управление типами</Title>
-          <Group gap="sm">
-            {(user?.role === 'DEVELOPER' || user?.role === 'ADMIN') && (
-              <Button 
-                leftSection={<IconDownload size={18} />} 
-                onClick={handleLoadCorrespondenceTypes}
-                loading={loadingCorrespondenceTypes}
-                variant="light"
-                color="blue"
-              >
-                Загрузить типы корреспонденции
-              </Button>
-            )}
-            <Button leftSection={<IconPlus size={18} />} onClick={handleCreate}>
-              Добавить тип
-            </Button>
-          </Group>
+          <Button leftSection={<IconPlus size={18} />} onClick={handleCreate}>
+            Добавить тип
+          </Button>
         </Group>
 
         {error && (
@@ -765,7 +722,7 @@ export default function TypesManagement() {
                             }
                             return baseColor;
                           };
-
+                          
                           return (
                             <Table.Tr 
                               key={type.id}
@@ -778,7 +735,7 @@ export default function TypesManagement() {
                                   {/* Индикатор уровня с визуальными элементами */}
                                   <Group gap={6} style={{ position: 'relative', zIndex: 1 }}>
                                     {/* Отступы для уровней */}
-                                    {level > 0 && (
+                                  {level > 0 && (
                                       <Group gap={2} style={{ width: `${(level - 1) * 20}px`, justifyContent: 'flex-end' }}>
                                         {/* Вертикальная линия для каждого уровня */}
                                         {Array.from({ length: level }).map((_, idx) => (
@@ -804,17 +761,17 @@ export default function TypesManagement() {
                                             opacity: 0.5,
                                           }}
                                         />
-                                        <IconChevronRight 
-                                          size={14} 
-                                          style={{ 
+                                    <IconChevronRight 
+                                      size={14} 
+                                      style={{ 
                                             opacity: 0.7,
                                             color: parentType?.colorHex || 'var(--mantine-color-gray-6)',
                                             marginLeft: '-4px',
                                             marginRight: '2px'
-                                          }} 
-                                        />
+                                      }} 
+                                    />
                                       </Group>
-                                    )}
+                                  )}
                                     {/* Иконка типа */}
                                     {hasChildren ? (
                                       <IconFolder 
@@ -850,14 +807,14 @@ export default function TypesManagement() {
                                       </Box>
                                     )}
                                     {/* Название типа */}
-                                    <Text 
+                                  <Text 
                                       fw={level === 0 ? 600 : level === 1 ? 500 : 400}
                                       c={type.colorHex || (level === 0 ? undefined : 'dimmed')}
                                       size="sm"
                                       style={{ flex: 1 }}
-                                    >
-                                      {type.name}
-                                    </Text>
+                                  >
+                                    {type.name}
+                                  </Text>
                                   </Group>
                                 </Group>
                               </Table.Td>

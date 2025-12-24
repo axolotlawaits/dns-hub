@@ -16,6 +16,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 registerLocale('ru', ru as any);
 dayjs.locale('ru');
 
+// Устанавливаем title в зависимости от окружения
+if (import.meta.env.DEV) {
+  document.title = 'DNS HUB DEV';
+} else {
+  document.title = 'DNS HUB';
+}
+
 const queryClient = new QueryClient()
 
 function Root() {

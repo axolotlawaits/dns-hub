@@ -5,15 +5,17 @@ import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { notificationSystem } from '../../../utils/Push';
 import { formatName } from '../../../utils/format';
 import { dateRange, FilterGroup } from '../../../utils/filter';
-import { Box, LoadingOverlay, Group, ActionIcon, Text, Badge, Avatar, Card } from '@mantine/core';
+import { Box, LoadingOverlay, Group, ActionIcon, Text, Badge, Avatar, Card, Tooltip, Loader, Stepper, Stack, ScrollArea, SimpleGrid, ThemeIcon } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
-import { IconPencil, IconTrash, IconPlus } from '@tabler/icons-react';
+import { IconPencil, IconTrash, IconPlus, IconSearch, IconCheck, IconX, IconFile, IconCalendar, IconUser, IconFileText, IconMessage, IconUserCheck, IconClock, IconPackage } from '@tabler/icons-react';
 import { ColumnDef, ColumnFiltersState, SortingState } from '@tanstack/react-table';
 import { DndProviderWrapper } from '../../../utils/dnd';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { TableComponent } from '../../../utils/table';
 import FloatingActionButton from '../../../components/FloatingActionButton';
+import { CustomModal } from '../../../utils/CustomModal';
+import { FilePreviewModal } from '../../../utils/FilePreviewModal';
 
 interface User {
   id: string;
@@ -57,12 +59,14 @@ interface Correspondence {
   comments?: string;
   responsibleId: string;
   responsible?: User;
+  documentNumber?: string;
+  trackNumber?: string;
   // Старые поля для обратной совместимости
   from?: string;
   to?: string;
   content?: string;
   typeMail?: string;
-  numberMail?: string;
+  numberMail?: string; // Для обратной совместимости
   attachments: CorrespondenceAttachment[];
   user: User;
 }
@@ -84,6 +88,8 @@ interface CorrespondenceForm {
   senderSubSubTypeId?: string;
   senderName: string;
   documentTypeId: string;
+  documentNumber?: string;
+  trackNumber?: string;
   comments?: string;
   responsibleId: string;
   attachments: Array<{ id?: string; userAdd?: string; source: File | string }>;
@@ -96,6 +102,8 @@ const DEFAULT_CORRESPONDENCE_FORM: CorrespondenceForm = {
   senderSubSubTypeId: undefined,
   senderName: '',
   documentTypeId: '',
+  documentNumber: '',
+  trackNumber: '',
   comments: '',
   responsibleId: '',
   attachments: [],
@@ -128,6 +136,7 @@ const formatTableData = (data: Correspondence[]): CorrespondenceWithFormattedDat
       senderTypeLabel,
       documentTypeLabel,
       responsibleName: item.responsible?.name ? formatName(item.responsible.name) : 'Не указан',
+      comments: item.comments || '',
     };
   });
 };
@@ -157,6 +166,13 @@ export default function CorrespondenceList() {
     documentTypes: [] as Type[],
     users: [] as User[],
     loadingUsers: false,
+    senderNames: [] as string[],
+    loadingSenderNames: false,
+    trackingStatus: null as { status: string; date?: string; location?: string; error?: boolean } | null,
+    trackingLoading: false,
+    trackingData: null as { trackNumber: string; events?: Array<{ date: string; description: string; location?: string }>; lastStatus?: { status: string; date: string; location?: string }; error?: { code: string; description: string } } | null,
+    trackingCache: {} as Record<string, { status: string; date?: string; location?: string; error?: boolean; loading?: boolean }>,
+    previewId: null as string | null,
   });
 
   const modals = {
@@ -164,6 +180,7 @@ export default function CorrespondenceList() {
     edit: useDisclosure(false),
     create: useDisclosure(false),
     delete: useDisclosure(false),
+    tracking: useDisclosure(false),
   };
 
   const showNotification = useCallback((type: 'success' | 'error', message: string) => {
@@ -214,11 +231,12 @@ export default function CorrespondenceList() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [correspondenceData, usersData, senderTypesData, documentTypesData] = await Promise.all([
+        const [correspondenceData, usersData, senderTypesData, documentTypesData, senderNamesData] = await Promise.all([
           fetchData(`${API}/aho/correspondence`),
           fetchUsers(),
           fetchData(`${API}/aho/correspondence/types/sender`),
-          fetchData(`${API}/aho/correspondence/types/document`)
+          fetchData(`${API}/aho/correspondence/types/document`),
+          fetchData(`${API}/aho/correspondence/sender-names`).catch(() => []) // Загружаем существующие наименования
         ]);
         
         // Извлекаем подтипы и подподтипы из иерархии senderTypes
@@ -243,6 +261,7 @@ export default function CorrespondenceList() {
           senderSubTypes,
           senderSubSubTypes,
           documentTypes: documentTypesData,
+          senderNames: Array.isArray(senderNamesData) ? senderNamesData.sort() : [],
           loading: false
         }));
       } catch (error) {
@@ -392,14 +411,31 @@ export default function CorrespondenceList() {
           }
           return 'Наименование';
         },
-        type: 'text' as const,
+        type: 'autocomplete' as const,
         required: true,
         placeholder: (values: any) => {
           const selectedType = state.senderTypes.find(t => t.id === values.senderTypeId);
           if (selectedType?.name === 'Физическое лицо') {
-            return 'Введите ФИО физического лица';
+            return 'Введите или выберите ФИО физического лица';
           }
-          return 'Введите наименование отправителя';
+          return 'Введите или выберите наименование отправителя';
+        },
+        options: state.senderNames.map(name => ({ value: name, label: name })),
+        onSearchChange: async (search: string) => {
+          if (search.trim().length >= 2) {
+            try {
+              setState(prev => ({ ...prev, loadingSenderNames: true }));
+              const names = await fetchData(`${API}/aho/correspondence/sender-names?search=${encodeURIComponent(search)}`);
+              setState(prev => ({
+                ...prev,
+                senderNames: Array.from(new Set([...prev.senderNames, ...names])).sort(),
+                loadingSenderNames: false
+              }));
+            } catch (error) {
+              console.error('Failed to load sender names:', error);
+              setState(prev => ({ ...prev, loadingSenderNames: false }));
+            }
+          }
         }
       },
       {
@@ -408,8 +444,29 @@ export default function CorrespondenceList() {
         type: 'select' as const,
         options: documentTypeOptions,
         required: true,
-        groupWith: ['responsibleId'],
-        groupSize: 2 as const,
+        groupWith: ['documentNumber', 'trackNumber'],
+        groupSize: 3 as const,
+      },
+      {
+        name: 'documentNumber',
+        label: 'Номер документа',
+        type: 'text' as const,
+        required: false,
+        placeholder: 'Введите номер документа',
+      },
+      {
+        name: 'trackNumber',
+        label: 'Трек-номер',
+        type: 'text' as const,
+        required: false,
+        placeholder: 'Введите трек-номер Почты России (13-14 цифр)',
+        description: 'Для отслеживания посылок введите трек-номер',
+        onChange: async (value: string) => {
+          // Сбрасываем статус при изменении значения
+          if (!value || !/^\d{13,14}$/.test(value.replace(/\s+/g, ''))) {
+            setState(prev => ({ ...prev, trackingStatus: null }));
+          }
+        },
       },
       {
         name: 'comments',
@@ -440,17 +497,8 @@ export default function CorrespondenceList() {
       }
     ],
     initialValues: DEFAULT_CORRESPONDENCE_FORM,
-  }), [userOptions, senderTypeOptions, documentTypeOptions, state.senderTypes, state.senderSubTypes, state.senderSubSubTypes]);
+  }), [userOptions, senderTypeOptions, documentTypeOptions, state.senderTypes, state.senderSubTypes, state.senderSubSubTypes, state.senderNames, fetchData]);
 
-  const viewFieldsConfig = useMemo(() => [
-    { label: 'Дата получения', value: (item: CorrespondenceWithFormattedData) => item.formattedReceiptDate },
-    { label: 'Отправитель', value: (item: CorrespondenceWithFormattedData) => `${item.senderTypeLabel} - ${item.senderName}` },
-    { label: 'Тип документа', value: (item: CorrespondenceWithFormattedData) => item.documentTypeLabel },
-    { label: 'Комментарии', value: (item: CorrespondenceWithFormattedData) => item.comments || 'Нет комментариев' },
-    { label: 'Ответственный', value: (item: CorrespondenceWithFormattedData) => item.responsibleName },
-    { label: 'Создал', value: (item: CorrespondenceWithFormattedData) => item.user?.name ? formatName(item.user.name) : 'Unknown' },
-    { label: 'Дата создания', value: (item: CorrespondenceWithFormattedData) => item.formattedCreatedAt },
-  ], []);
 
 
   const tableData = useMemo(() => formatTableData(state.correspondence), [state.correspondence]);
@@ -483,12 +531,40 @@ export default function CorrespondenceList() {
       width: 250,
     },
     {
+      type: 'text' as const,
+      columnId: 'senderName',
+      label: 'Наименование/ФИО',
+      placeholder: 'Поиск по наименованию отправителя',
+      width: 250,
+    },
+    {
       type: 'select' as const,
       columnId: 'documentTypeLabel',
       label: 'Тип документа',
       placeholder: 'Выберите тип',
       options: filterOptions.documentType,
       width: 200,
+    },
+    {
+      type: 'text' as const,
+      columnId: 'documentNumber',
+      label: 'Номер документа',
+      placeholder: 'Поиск по номеру документа',
+      width: 200,
+    },
+    {
+      type: 'text' as const,
+      columnId: 'trackNumber',
+      label: 'Трек-номер',
+      placeholder: 'Поиск по трек-номеру',
+      width: 200,
+    },
+    {
+      type: 'text' as const,
+      columnId: 'comments',
+      label: 'Комментарии',
+      placeholder: 'Поиск по комментариям',
+      width: 250,
     },
     {
       type: 'select' as const,
@@ -518,10 +594,31 @@ export default function CorrespondenceList() {
       filterFn: 'includesString',
       cell: ({ row }) => {
         const item = row.original;
+        const senderTypeLabel = item.senderTypeLabel;
         return (
-          <Text size="sm" c="var(--theme-text-primary)">
-            {item.senderTypeLabel}
-          </Text>
+          <Tooltip
+            label={senderTypeLabel}
+            disabled={!senderTypeLabel}
+            withArrow
+            position="top"
+            openDelay={300}
+            multiline
+            w={300}
+          >
+            <Text 
+              size="sm" 
+              c="var(--theme-text-primary)"
+              style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                maxWidth: '200px',
+                cursor: senderTypeLabel ? 'help' : 'default'
+              }}
+            >
+              {senderTypeLabel}
+            </Text>
+          </Tooltip>
         );
       },
     },
@@ -529,11 +626,34 @@ export default function CorrespondenceList() {
       accessorKey: 'senderName',
       header: 'Наименование/ФИО',
       filterFn: 'includesString',
-      cell: ({ getValue }) => (
-        <Text size="sm" c="var(--theme-text-primary)">
-          {getValue() as string}
-        </Text>
-      ),
+      cell: ({ getValue }) => {
+        const senderName = getValue() as string;
+        return (
+          <Tooltip
+            label={senderName}
+            disabled={!senderName}
+            withArrow
+            position="top"
+            openDelay={300}
+            multiline
+            w={300}
+          >
+            <Text 
+              size="sm" 
+              c="var(--theme-text-primary)"
+              style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                maxWidth: '250px',
+                cursor: senderName ? 'help' : 'default'
+              }}
+            >
+              {senderName || '-'}
+            </Text>
+          </Tooltip>
+        );
+      },
     },
     {
       accessorKey: 'documentTypeLabel',
@@ -542,9 +662,217 @@ export default function CorrespondenceList() {
       cell: ({ getValue }) => {
         const type = getValue() as string;
         return (
-          <Badge color="blue" variant="light" size="sm">
-            {type}
-          </Badge>
+          <Tooltip
+            label={type}
+            disabled={!type}
+            withArrow
+            position="top"
+            openDelay={300}
+            multiline
+            w={300}
+          >
+            <Badge 
+              color="blue" 
+              variant="light" 
+              size="sm"
+              style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                maxWidth: '200px',
+                cursor: type ? 'help' : 'default'
+              }}
+            >
+              {type}
+            </Badge>
+          </Tooltip>
+        );
+      },
+    },
+    {
+      accessorKey: 'documentNumber',
+      header: 'Номер документа',
+      filterFn: 'includesString',
+      cell: ({ getValue }) => {
+        const documentNumber = getValue() as string;
+        return (
+          <Tooltip
+            label={documentNumber}
+            disabled={!documentNumber}
+            withArrow
+            position="top"
+            openDelay={300}
+            multiline
+            w={300}
+          >
+            <Text 
+              size="sm" 
+              c="var(--theme-text-primary)"
+              style={{ 
+                cursor: documentNumber ? 'help' : 'default',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                maxWidth: '200px',
+                display: 'block'
+              }}
+            >
+              {documentNumber || '-'}
+            </Text>
+          </Tooltip>
+        );
+      },
+    },
+    {
+      accessorKey: 'trackNumber',
+      header: 'Трек-номер',
+      filterFn: 'includesString',
+      cell: ({ getValue, row }) => {
+        const trackNumber = getValue() as string;
+        const cleanTrackNumber = trackNumber?.trim().replace(/\s+/g, '');
+        const isTrackNumber = cleanTrackNumber && /^\d{13,14}$/.test(cleanTrackNumber);
+        const trackingInfo = isTrackNumber ? state.trackingCache[cleanTrackNumber] : null;
+        
+        const handleMouseEnter = async () => {
+          if (!isTrackNumber) return;
+          
+          // Проверяем, нужно ли загружать данные
+          const cached = state.trackingCache[cleanTrackNumber];
+          if (cached?.loading) {
+            // Уже загружается
+            return;
+          }
+          if (cached && cached.status && !cached.loading && !cached.error) {
+            // Уже загружено успешно
+            return;
+          }
+          
+          // Устанавливаем флаг загрузки
+          setState(prev => ({
+            ...prev,
+            trackingCache: {
+              ...prev.trackingCache,
+              [cleanTrackNumber]: { 
+                status: 'Загрузка...',
+                loading: true 
+              }
+            }
+          }));
+          
+          try {
+            // Загружаем данные только для этого конкретного трек-номера при наведении
+            const correspondenceId = row.original.id;
+            const response = await fetchData(`${API}/aho/correspondence/track?trackNumber=${encodeURIComponent(cleanTrackNumber)}&correspondenceId=${correspondenceId}`);
+            
+            // Обрабатываем события
+            const events = response.events || response.trackingEvents || [];
+            
+            // Получаем последний статус из ответа или из первого события
+            let lastStatus = response.lastStatus;
+            if (!lastStatus && events.length > 0) {
+              const firstEvent = events[0];
+              lastStatus = {
+                status: firstEvent.description || 
+                        firstEvent.operationParameters?.operationType?.name || 
+                        'Информация получена',
+                date: firstEvent.date,
+                location: firstEvent.addressParameters?.operationAddress?.description || 
+                         firstEvent.addressParameters?.destinationAddress?.description ||
+                         firstEvent.location,
+              };
+            }
+
+            // Текущий статус - это последний статус из ответа
+            const currentStatus = lastStatus?.status || 
+                                 (response.error ? 'Ошибка при получении информации' : 'Информация получена');
+
+            setState(prev => ({
+              ...prev,
+              trackingCache: {
+                ...prev.trackingCache,
+                [cleanTrackNumber]: {
+                  status: currentStatus,
+                  date: lastStatus?.date,
+                  location: lastStatus?.location,
+                  error: response.error ? true : false,
+                  loading: false,
+                }
+              }
+            }));
+          } catch (error) {
+            setState(prev => ({
+              ...prev,
+              trackingCache: {
+                ...prev.trackingCache,
+                [cleanTrackNumber]: {
+                  status: 'Ошибка при получении информации',
+                  error: true,
+                  loading: false,
+                }
+              }
+            }));
+          }
+        };
+
+        return (
+          <Tooltip
+            label={
+              isTrackNumber ? (
+                <Box style={{ maxWidth: 250 }}>
+                  <Stack gap="xs" p="xs">
+                    <Text size="sm" fw={500}>Текущий статус</Text>
+                    {trackingInfo?.loading ? (
+                      <Loader size="sm" />
+                    ) : trackingInfo?.error ? (
+                      <Text size="xs" c="red">Ошибка при получении информации</Text>
+                    ) : trackingInfo ? (
+                      <>
+                        <Text size="sm" fw={500} c={trackingInfo.error ? 'red' : 'green'}>
+                          {trackingInfo.status}
+                        </Text>
+                        {trackingInfo.date && (
+                          <Text size="xs" c="dimmed">
+                            Дата: {dayjs(trackingInfo.date).format('DD.MM.YYYY HH:mm')}
+                          </Text>
+                        )}
+                        {trackingInfo.location && (
+                          <Text size="xs" c="dimmed">
+                            Место: {trackingInfo.location}
+                          </Text>
+                        )}
+                      </>
+                    ) : (
+                      <Text size="xs" c="dimmed">Загрузка информации...</Text>
+                    )}
+                  </Stack>
+                </Box>
+              ) : trackNumber ? (
+                trackNumber
+              ) : null
+            }
+            disabled={!isTrackNumber && !trackNumber}
+            withArrow
+            position="top"
+            openDelay={300}
+            multiline={!isTrackNumber}
+            w={!isTrackNumber ? 300 : undefined}
+          >
+            <Text 
+              size="sm" 
+              c="var(--theme-text-primary)"
+              style={{ 
+                cursor: (isTrackNumber || trackNumber) ? 'help' : 'default',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                maxWidth: '200px',
+                display: 'block'
+              }}
+              onMouseEnter={handleMouseEnter}
+            >
+              {trackNumber || '-'}
+            </Text>
+          </Tooltip>
         );
       },
     },
@@ -552,32 +880,67 @@ export default function CorrespondenceList() {
       accessorKey: 'responsibleName',
       header: 'Ответственный',
       filterFn: 'includesString',
-      cell: ({ getValue }) => (
-        <Text size="sm" c="var(--theme-text-secondary)">
-          {getValue() as string}
-        </Text>
-      ),
+      cell: ({ getValue }) => {
+        const responsibleName = getValue() as string;
+        return (
+          <Tooltip
+            label={responsibleName}
+            disabled={!responsibleName}
+            withArrow
+            position="top"
+            openDelay={300}
+            multiline
+            w={300}
+          >
+            <Text 
+              size="sm" 
+              c="var(--theme-text-secondary)"
+              style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                maxWidth: '200px',
+                cursor: responsibleName ? 'help' : 'default'
+              }}
+            >
+              {responsibleName || '-'}
+            </Text>
+          </Tooltip>
+        );
+      },
     },
     {
       accessorKey: 'comments',
       header: 'Комментарии',
+      filterFn: 'includesString',
       cell: ({ getValue }) => {
-        const content = getValue() as string;
+        const comments = getValue() as string;
         return (
-          <Text 
-            size="sm" 
-            c="var(--theme-text-primary)"
-            style={{ 
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
-              lineHeight: 1.4,
-              maxWidth: '300px'
-            }}
+          <Tooltip
+            label={comments}
+            disabled={!comments}
+            withArrow
+            position="top"
+            openDelay={300}
+            multiline
+            w={400}
           >
-            {content}
-          </Text>
+            <Text 
+              size="sm" 
+              c="var(--theme-text-secondary)"
+              style={{ 
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+                lineHeight: 1.4,
+                maxWidth: '300px',
+                cursor: comments ? 'help' : 'default'
+              }}
+            >
+              {comments || '-'}
+            </Text>
+          </Tooltip>
         );
       },
     },
@@ -711,18 +1074,115 @@ export default function CorrespondenceList() {
           senderSubSubTypeId: data.senderSubSubTypeId,
           senderName: data.senderName,
           documentTypeId: data.documentTypeId,
+          documentNumber: data.documentNumber || data.numberMail || '', // Для обратной совместимости
+          trackNumber: data.trackNumber || (data.numberMail && /^\d{13,14}$/.test(data.numberMail.trim().replace(/\s+/g, '')) ? data.numberMail : '') || '',
           comments: data.comments || '',
           responsibleId: data.responsibleId,
           attachments: data.attachments.map(a => ({
             id: a.id,
             userAdd: a.userAdd,
             source: a.source,
+            previewUrl: `${API}/public/aho/correspondence/${a.source}`,
           })),
         }
       }));
     }
     modals[action][1].open();
   }, [modals]);
+
+  const handleTrackMail = useCallback(async (trackNumber: string, silent = false) => {
+    if (!trackNumber || !/^\d{13,14}$/.test(trackNumber.replace(/\s+/g, ''))) {
+      return;
+    }
+
+    const cleanTrackNumber = trackNumber.trim().replace(/\s+/g, '');
+    setState(prev => ({ ...prev, trackingLoading: true }));
+    try {
+      // Добавляем correspondenceId, если есть выбранная корреспонденция
+      const correspondenceId = state.selectedCorrespondence?.id;
+      const url = `${API}/aho/correspondence/track?trackNumber=${encodeURIComponent(cleanTrackNumber)}${correspondenceId ? `&correspondenceId=${correspondenceId}` : ''}`;
+      const response = await fetchData(url);
+      
+      // Обрабатываем события для таймлайна
+      const events = response.events || response.trackingEvents || [];
+      const processedEvents = events.map((event: any) => ({
+        date: event.date,
+        description: event.description || event.operationParameters?.operationType?.name || 'Событие',
+        location: event.addressParameters?.operationAddress?.description || 
+                 event.addressParameters?.destinationAddress?.description ||
+                 event.operationParameters?.operationAttribute?.name,
+      }));
+
+      // Обрабатываем последний статус
+      const lastStatus = response.lastStatus || (events.length > 0 ? {
+        status: events[0].description || events[0].operationParameters?.operationType?.name || 'Информация получена',
+        date: events[0].date,
+        location: events[0].addressParameters?.operationAddress?.description || 
+                 events[0].addressParameters?.destinationAddress?.description,
+      } : null);
+
+      setState(prev => ({
+        ...prev,
+        trackingStatus: lastStatus ? {
+          status: lastStatus.status || 'Информация получена',
+          date: lastStatus.date,
+          location: lastStatus.location,
+          error: response.error ? true : false,
+        } : {
+          status: response.error ? 'Ошибка при получении информации' : 'Информация получена',
+          error: response.error ? true : false,
+        },
+        trackingData: {
+          ...response,
+          events: processedEvents,
+        },
+        trackingLoading: false,
+      }));
+      if (!silent) {
+        if (response.error) {
+          showNotification('error', response.error.description || 'Не удалось получить информацию об отправлении');
+        } else {
+          showNotification('success', 'Информация об отправлении получена');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to track mail:', error);
+      setState(prev => ({
+        ...prev,
+        trackingStatus: {
+          status: 'Ошибка при получении информации',
+          error: true,
+        },
+        trackingData: null,
+        trackingLoading: false,
+      }));
+      if (!silent) {
+        showNotification('error', 'Не удалось получить информацию об отправлении');
+      }
+    }
+  }, [fetchData, showNotification]);
+
+  // Загружаем данные об отслеживании при открытии модального окна просмотра
+  useEffect(() => {
+    if (!modals.view[0]) {
+      // При закрытии модального окна сбрасываем данные
+      setState(prev => ({ ...prev, trackingData: null, trackingStatus: null, trackingLoading: false }));
+      return;
+    }
+
+    // Загружаем только при открытии модального окна и наличии трек-номера
+    const trackNumber = state.selectedCorrespondence?.trackNumber || 
+                       (state.selectedCorrespondence?.numberMail ? state.selectedCorrespondence.numberMail.trim().replace(/\s+/g, '') : null);
+    if (trackNumber && /^\d{13,14}$/.test(trackNumber)) {
+      // Сбрасываем данные при открытии нового модального окна
+      setState(prev => ({ ...prev, trackingData: null, trackingStatus: null, trackingLoading: false }));
+      // Загружаем данные только для этого конкретного трек-номера
+      handleTrackMail(trackNumber, true); // Загружаем без уведомлений
+    } else {
+      // Если это не трек-номер, сбрасываем данные
+      setState(prev => ({ ...prev, trackingData: null, trackingStatus: null, trackingLoading: false }));
+    }
+  }, [modals.view[0], state.selectedCorrespondence?.id]); // Убрали handleTrackMail из зависимостей
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!state.selectedCorrespondence) return;
@@ -857,13 +1317,7 @@ export default function CorrespondenceList() {
               onColumnFiltersChange={handleColumnFiltersChange}
             />
         {/* Таблица корреспонденции */}
-        <Card style={{
-          background: 'var(--theme-bg-elevated)',
-          borderRadius: '16px',
-          border: '1px solid var(--theme-border-primary)',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-          overflow: 'hidden'
-        }}>
+
           <TableComponent<CorrespondenceWithFormattedData>
             data={tableData}
             columns={columns}
@@ -887,37 +1341,504 @@ export default function CorrespondenceList() {
               { value: '100', label: '100' },
             ]}
           />
-        </Card>
-        <DynamicFormModal
+        
+        <CustomModal
           opened={modals.view[0]}
-          onClose={modals.view[1].close}
-          title="Просмотр корреспонденции"
-          mode="view"
-          initialValues={{
-            ...state.selectedCorrespondence,
-            attachments: state.selectedCorrespondence?.attachments || [],
+          onClose={() => {
+            modals.view[1].close();
+            setState(prev => ({ ...prev, trackingData: null, trackingStatus: null, trackingLoading: false }));
           }}
-          viewFieldsConfig={viewFieldsConfig}
+          title="Просмотр корреспонденции"
+          size="xl"
+          width="95vw"
+          maxWidth="1400px"
+          height="90vh"
+          maxHeight="90vh"
+        >
+          <ScrollArea h="calc(90vh - 120px)">
+            <Stack gap="xl">
+              {(() => {
+                const item = state.selectedCorrespondence;
+                if (!item) return null;
+                const formattedItem = formatTableData([item])[0];
+                
+                // Группируем поля по категориям
+                const fieldGroups = [
+                  {
+                    title: 'Основная информация',
+                    icon: IconFileText,
+                    color: 'blue',
+                    fields: [
+                      { label: 'Дата получения', value: formattedItem.formattedReceiptDate, icon: IconCalendar },
+                      { label: 'Тип документа', value: formattedItem.documentTypeLabel, icon: IconFileText },
+                      { label: 'Номер документа', value: formattedItem.documentNumber || formattedItem.numberMail || 'Не указан', icon: IconFileText },
+                      { label: 'Трек-номер', value: formattedItem.trackNumber || (formattedItem.numberMail && /^\d{13,14}$/.test(formattedItem.numberMail.trim().replace(/\s+/g, '')) ? formattedItem.numberMail : null) || 'Не указан', icon: IconPackage },
+                    ]
+                  },
+                  {
+                    title: 'Отправитель',
+                    icon: IconUser,
+                    color: 'green',
+                    fields: [
+                      { label: 'Тип отправителя', value: formattedItem.senderTypeLabel, icon: IconUser },
+                      { label: 'Наименование/ФИО', value: formattedItem.senderName, icon: IconUser },
+                    ]
+                  },
+                  {
+                    title: 'Ответственность',
+                    icon: IconUserCheck,
+                    color: 'orange',
+                    fields: [
+                      { label: 'Ответственный', value: formattedItem.responsibleName, icon: IconUserCheck },
+                      { label: 'Создал', value: formattedItem.user?.name ? formatName(formattedItem.user.name) : 'Unknown', icon: IconUser },
+                      { label: 'Дата создания', value: formattedItem.formattedCreatedAt, icon: IconClock },
+                    ]
+                  },
+                  {
+                    title: 'Дополнительно',
+                    icon: IconMessage,
+                    color: 'violet',
+                    fields: [
+                      { label: 'Комментарии', value: formattedItem.comments || 'Нет комментариев', icon: IconMessage },
+                    ]
+                  }
+                ];
+
+                return (
+                  <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
+                    {fieldGroups.map((group, groupIndex) => (
+                      <Card 
+                        key={groupIndex}
+                        p="lg" 
+                        withBorder 
+                        radius="md"
+                        style={{
+                          background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
+                          border: '1px solid var(--theme-border)',
+                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
+                        }}
+                      >
+                        <Group gap="sm" mb="md">
+                          <ThemeIcon 
+                            size="lg" 
+                            radius="md" 
+                            variant="light"
+                            color={group.color}
+                          >
+                            <group.icon size={20} />
+                          </ThemeIcon>
+                          <Text fw={600} size="lg" c="var(--theme-text-primary)">
+                            {group.title}
+                          </Text>
+                        </Group>
+                        <Stack gap="md">
+                          {group.fields.map((field, fieldIndex) => (
+                            <Box key={fieldIndex}>
+                              <Group gap="xs" mb={4}>
+                                <field.icon size={16} style={{ color: 'var(--theme-text-secondary)' }} />
+                                <Text size="xs" fw={500} c="var(--theme-text-secondary)" tt="uppercase" style={{ letterSpacing: '0.5px' }}>
+                                  {field.label}
+                                </Text>
+                              </Group>
+                              <Text 
+                                size="sm" 
+                                c="var(--theme-text-primary)"
+                                style={{ 
+                                  padding: '8px 12px',
+                                  background: 'var(--theme-bg-primary)',
+                                  borderRadius: '6px',
+                                  border: '1px solid var(--theme-border)',
+                                  minHeight: '32px',
+                                  display: 'flex',
+                                  alignItems: 'center'
+                                }}
+                              >
+                                {field.value || '-'}
+                              </Text>
+                            </Box>
+                          ))}
+                        </Stack>
+                      </Card>
+                    ))}
+                  </SimpleGrid>
+                );
+              })()}
+
+              {/* Вложения */}
+              {state.selectedCorrespondence?.attachments && state.selectedCorrespondence.attachments.length > 0 && (
+                <Card 
+                  p="lg" 
+                  withBorder 
+                  radius="md"
+                  style={{
+                    background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
+                    border: '1px solid var(--theme-border)',
+                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
+                  }}
+                >
+                  <Group gap="sm" mb="md">
+                    <ThemeIcon 
+                      size="lg" 
+                      radius="md" 
+                      variant="light"
+                      color="cyan"
+                    >
+                      <IconFile size={20} />
+                    </ThemeIcon>
+                    <Text fw={600} size="lg" c="var(--theme-text-primary)">
+                      Приложения ({state.selectedCorrespondence.attachments.length})
+                    </Text>
+                  </Group>
+                  <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md">
+                    {state.selectedCorrespondence.attachments.map((attachment) => {
+                      const fileName = typeof attachment.source === 'string'
+                        ? attachment.source.split('\\').pop()?.split('/').pop() || 'Файл'
+                        : 'Файл';
+                      const fileUrl = `${API}/public/aho/correspondence/${attachment.source}`;
+                      const fileId = attachment.id || `attachment-${Math.random().toString(36).slice(2, 11)}`;
+                      const isImage = fileName.toLowerCase().match(/\.(jpg|jpeg|png|gif|bmp|svg|webp|ico)$/);
+                      
+                      return (
+                        <Card 
+                          key={fileId} 
+                          p="md" 
+                          withBorder
+                          radius="md"
+                          style={{
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            border: '1px solid var(--theme-border)',
+                            background: 'var(--theme-bg-primary)',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.1)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = 'none';
+                          }}
+                          onClick={() => {
+                            setState(prev => ({ ...prev, previewId: fileId }));
+                          }}
+                        >
+                          <Stack gap="sm" align="center">
+                            {isImage ? (
+                              <img 
+                                src={fileUrl} 
+                                alt={fileName}
+                                style={{ 
+                                  height: 100, 
+                                  width: '100%', 
+                                  objectFit: 'contain',
+                                  borderRadius: '8px',
+                                  border: '1px solid var(--theme-border)'
+                                }} 
+                              />
+                            ) : (
+                              <ThemeIcon 
+                                size={60} 
+                                radius="md" 
+                                variant="light"
+                                color="blue"
+                              >
+                                <IconFile size={32} />
+                              </ThemeIcon>
+                            )}
+                            <Text 
+                              size="sm" 
+                              fw={500} 
+                              c="var(--theme-text-primary)"
+                              ta="center"
+                              lineClamp={2}
+                              style={{ wordBreak: 'break-word' }}
+                            >
+                              {fileName}
+                            </Text>
+                          </Stack>
+                        </Card>
+                      );
+                    })}
+                  </SimpleGrid>
+                </Card>
+              )}
+
+              {/* Отслеживание посылки */}
+              {(() => {
+                const trackNumber = state.selectedCorrespondence?.trackNumber?.trim().replace(/\s+/g, '') || 
+                                  (state.selectedCorrespondence?.numberMail ? state.selectedCorrespondence.numberMail.trim().replace(/\s+/g, '') : null);
+                if (!trackNumber || !/^\d{13,14}$/.test(trackNumber)) {
+                  return null;
+                }
+
+                const events = state.trackingData?.events || [];
+                const sortedEvents = [...events].sort((a, b) => 
+                  new Date(b.date).getTime() - new Date(a.date).getTime()
+                );
+
+                return (
+                  <Card 
+                    p="lg" 
+                    withBorder 
+                    radius="md"
+                    style={{
+                      background: 'linear-gradient(135deg, var(--theme-bg-elevated) 0%, var(--theme-bg-secondary) 100%)',
+                      border: '1px solid var(--theme-border)',
+                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
+                    }}
+                  >
+                    <Group justify="space-between" mb="md">
+                      <Group gap="sm">
+                        <ThemeIcon 
+                          size="lg" 
+                          radius="md" 
+                          variant="light"
+                          color="teal"
+                        >
+                          <IconPackage size={20} />
+                        </ThemeIcon>
+                        <Box>
+                          <Text fw={600} size="lg" c="var(--theme-text-primary)">
+                            Отслеживание посылки
+                          </Text>
+                          <Text size="xs" c="var(--theme-text-secondary)">
+                            Трек-номер: {trackNumber}
+                          </Text>
+                        </Box>
+                      </Group>
+                      <Group gap="xs">
+                        {state.trackingLoading ? (
+                          <Loader size="sm" />
+                        ) : (
+                          <ActionIcon
+                            variant="light"
+                            color="teal"
+                            onClick={() => handleTrackMail(trackNumber)}
+                            radius="md"
+                          >
+                            <IconSearch size={18} />
+                          </ActionIcon>
+                        )}
+                      </Group>
+                    </Group>
+                    {state.trackingData?.error ? (
+                      <Text size="sm" c="red">
+                        {state.trackingData.error.description || 'Ошибка при получении информации'}
+                      </Text>
+                    ) : state.trackingStatus ? (
+                      <Box>
+                        <Group gap="xs" mb="xs">
+                          {state.trackingStatus.error ? (
+                            <IconX size={16} color="red" />
+                          ) : (
+                            <IconCheck size={16} color="green" />
+                          )}
+                          <Text size="sm" c={state.trackingStatus.error ? 'red' : 'green'}>
+                            {state.trackingStatus.status}
+                          </Text>
+                        </Group>
+                        {state.trackingStatus.date && (
+                          <Text size="xs" c="dimmed">
+                            Дата: {dayjs(state.trackingStatus.date).format('DD.MM.YYYY HH:mm')}
+                          </Text>
+                        )}
+                        {state.trackingStatus.location && (
+                          <Text size="xs" c="dimmed">
+                            Место: {state.trackingStatus.location}
+                          </Text>
+                        )}
+                        {sortedEvents.length > 0 && (
+                          <Box mt="md">
+                            <Text fw={500} mb="sm">История событий</Text>
+                            <Stepper active={sortedEvents.length - 1} orientation="horizontal" size="sm">
+                              {sortedEvents.map((event, index) => {
+                                const eventWithParams = event as any;
+                                const location = event.location || 
+                                  eventWithParams.addressParameters?.operationAddress?.description || 
+                                  eventWithParams.addressParameters?.destinationAddress?.description;
+                                return (
+                                  <Stepper.Step
+                                    key={index}
+                                    label={event.description || 'Событие'}
+                                    description={
+                                      <Box>
+                                        <Text size="xs" c="dimmed">
+                                          {dayjs(event.date).format('DD.MM.YYYY HH:mm')}
+                                        </Text>
+                                        {location && (
+                                          <Text size="xs" c="dimmed">
+                                            {location}
+                                          </Text>
+                                        )}
+                                      </Box>
+                                    }
+                                    icon={<IconCheck size={16} />}
+                                  />
+                                );
+                              })}
+                            </Stepper>
+                          </Box>
+                        )}
+                      </Box>
+                    ) : state.trackingLoading ? (
+                      <Loader size="sm" />
+                    ) : (
+                      <Text size="sm" c="dimmed">
+                        Нажмите на иконку поиска для получения информации об отправлении
+                      </Text>
+                    )}
+                  </Card>
+                );
+              })()}
+            </Stack>
+          </ScrollArea>
+        </CustomModal>
+        <FilePreviewModal
+          opened={!!state.previewId}
+          onClose={() => setState(prev => ({ ...prev, previewId: null }))}
+          attachments={state.selectedCorrespondence?.attachments?.map(a => ({
+            ...a,
+            previewUrl: `${API}/public/aho/correspondence/${a.source}`,
+          })) || []}
+          initialIndex={state.selectedCorrespondence?.attachments?.findIndex(a => 
+            (a.id || `attachment-${Math.random().toString(36).slice(2, 11)}`) === state.previewId
+          ) || 0}
         />
         <DynamicFormModal
           opened={modals.edit[0]}
-          onClose={modals.edit[1].close}
+          onClose={() => {
+            modals.edit[1].close();
+            setState(prev => ({ ...prev, trackingStatus: null, trackingLoading: false }));
+          }}
           title="Редактирование корреспонденции"
           mode="edit"
           fields={formConfig.fields}
           initialValues={state.correspondenceForm}
           onSubmit={(values) => handleFormSubmit(values, 'edit')}
           error={state.uploadError}
+          viewExtraContent={(values) => {
+            const trackNumber = values.trackNumber?.trim().replace(/\s+/g, '') || 
+                               (values.numberMail ? values.numberMail.trim().replace(/\s+/g, '') : null);
+            if (!trackNumber || !/^\d{13,14}$/.test(trackNumber)) {
+              return <></>;
+            }
+            return (
+              <Card mt="md" p="md" withBorder>
+                <Group justify="space-between" mb="xs">
+                  <Text fw={500}>Отслеживание посылки</Text>
+                  <Group gap="xs">
+                    {state.trackingLoading ? (
+                      <Loader size="sm" />
+                    ) : (
+                      <ActionIcon
+                        variant="light"
+                        onClick={() => handleTrackMail(trackNumber)}
+                      >
+                        <IconSearch size={16} />
+                      </ActionIcon>
+                    )}
+                  </Group>
+                </Group>
+                {state.trackingStatus && (
+                  <Box>
+                    <Group gap="xs" mb="xs">
+                      {state.trackingStatus.error ? (
+                        <IconX size={16} color="red" />
+                      ) : (
+                        <IconCheck size={16} color="green" />
+                      )}
+                      <Text size="sm" c={state.trackingStatus.error ? 'red' : 'green'}>
+                        {state.trackingStatus.status}
+                      </Text>
+                    </Group>
+                    {state.trackingStatus.date && (
+                      <Text size="xs" c="dimmed">
+                        Дата: {dayjs(state.trackingStatus.date).format('DD.MM.YYYY HH:mm')}
+                      </Text>
+                    )}
+                    {state.trackingStatus.location && (
+                      <Text size="xs" c="dimmed">
+                        Место: {state.trackingStatus.location}
+                      </Text>
+                    )}
+                  </Box>
+                )}
+                {!state.trackingStatus && !state.trackingLoading && (
+                  <Text size="sm" c="dimmed">
+                    Нажмите на иконку поиска для получения информации об отправлении
+                  </Text>
+                )}
+              </Card>
+            );
+          }}
         />
         <DynamicFormModal
           opened={modals.create[0]}
-          onClose={modals.create[1].close}
+          onClose={() => {
+            modals.create[1].close();
+            setState(prev => ({ ...prev, trackingStatus: null, trackingLoading: false }));
+          }}
           title="Добавить корреспонденцию"
           mode="create"
           fields={formConfig.fields}
           initialValues={state.correspondenceForm}
           onSubmit={(values) => handleFormSubmit(values, 'create')}
           error={state.uploadError}
+          viewExtraContent={(values) => {
+            const trackNumber = values.trackNumber?.trim().replace(/\s+/g, '') || 
+                               (values.numberMail ? values.numberMail.trim().replace(/\s+/g, '') : null);
+            if (!trackNumber || !/^\d{13,14}$/.test(trackNumber)) {
+              return <></>;
+            }
+            return (
+              <Card mt="md" p="md" withBorder>
+                <Group justify="space-between" mb="xs">
+                  <Text fw={500}>Отслеживание посылки</Text>
+                  <Group gap="xs">
+                    {state.trackingLoading ? (
+                      <Loader size="sm" />
+                    ) : (
+                      <ActionIcon
+                        variant="light"
+                        onClick={() => handleTrackMail(trackNumber)}
+                      >
+                        <IconSearch size={16} />
+                      </ActionIcon>
+                    )}
+                  </Group>
+                </Group>
+                {state.trackingStatus && (
+                  <Box>
+                    <Group gap="xs" mb="xs">
+                      {state.trackingStatus.error ? (
+                        <IconX size={16} color="red" />
+                      ) : (
+                        <IconCheck size={16} color="green" />
+                      )}
+                      <Text size="sm" c={state.trackingStatus.error ? 'red' : 'green'}>
+                        {state.trackingStatus.status}
+                      </Text>
+                    </Group>
+                    {state.trackingStatus.date && (
+                      <Text size="xs" c="dimmed">
+                        Дата: {dayjs(state.trackingStatus.date).format('DD.MM.YYYY HH:mm')}
+                      </Text>
+                    )}
+                    {state.trackingStatus.location && (
+                      <Text size="xs" c="dimmed">
+                        Место: {state.trackingStatus.location}
+                      </Text>
+                    )}
+                  </Box>
+                )}
+                {!state.trackingStatus && !state.trackingLoading && (
+                  <Text size="sm" c="dimmed">
+                    Нажмите на иконку поиска для получения информации об отправлении
+                  </Text>
+                )}
+              </Card>
+            );
+          }}
         />
         <DynamicFormModal
           opened={modals.delete[0]}
@@ -927,6 +1848,78 @@ export default function CorrespondenceList() {
           initialValues={state.selectedCorrespondence || {}}
           onConfirm={handleDeleteConfirm}
         />
+        <CustomModal
+          opened={modals.tracking[0]}
+          onClose={modals.tracking[1].close}
+          title="Таймлайн отслеживания посылки"
+          size="xl"
+          width="95vw"
+          maxWidth="1400px"
+        >
+          {(() => {
+            const trackNumber = state.selectedCorrespondence?.trackNumber?.trim().replace(/\s+/g, '') || 
+                               (state.selectedCorrespondence?.numberMail ? state.selectedCorrespondence.numberMail.trim().replace(/\s+/g, '') : null);
+            if (!trackNumber || !/^\d{13,14}$/.test(trackNumber)) {
+              return <Text>Неверный номер отслеживания</Text>;
+            }
+
+            const events = state.trackingData?.events || [];
+            const sortedEvents = [...events].sort((a, b) => 
+              new Date(a.date).getTime() - new Date(b.date).getTime()
+            );
+
+            if (state.trackingData?.error) {
+              return (
+                <Text size="sm" c="red">
+                  {state.trackingData.error.description || 'Ошибка при получении информации'}
+                </Text>
+              );
+            }
+
+            if (sortedEvents.length === 0) {
+              return (
+                <Text size="sm" c="dimmed">
+                  События отслеживания отсутствуют
+                </Text>
+              );
+            }
+
+            return (
+              <Box>
+                <Group justify="space-between" mb="md">
+                  <Text fw={500}>Трек-номер: {trackNumber}</Text>
+                  <ActionIcon
+                    variant="light"
+                    onClick={() => handleTrackMail(trackNumber)}
+                  >
+                    <IconSearch size={16} />
+                  </ActionIcon>
+                </Group>
+                <Stepper active={sortedEvents.length - 1} orientation="horizontal" size="sm">
+                  {sortedEvents.map((event, index) => (
+                    <Stepper.Step
+                      key={index}
+                      label={event.description || 'Событие'}
+                      description={
+                        <Box>
+                          <Text size="xs" c="dimmed">
+                            {dayjs(event.date).format('DD.MM.YYYY HH:mm')}
+                          </Text>
+                          {event.location && (
+                            <Text size="xs" c="dimmed">
+                              {event.location}
+                            </Text>
+                          )}
+                        </Box>
+                      }
+                      icon={<IconCheck size={16} />}
+                    />
+                  ))}
+                </Stepper>
+              </Box>
+            );
+          })()}
+        </CustomModal>
       </Box>
       <FloatingActionButton />
     </DndProviderWrapper>

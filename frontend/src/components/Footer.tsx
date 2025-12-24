@@ -1,10 +1,50 @@
 import { AppShell } from "@mantine/core";
 import { IconAlien, IconAppWindow, IconBasket, IconBrandRumble, IconBrandUnity, IconBriefcase, IconDashboard, IconNews } from "@tabler/icons-react";
-import { useState, useEffect, useContext } from "react";
+import { useState, useEffect } from "react";
 import "./styles/Footer.css";
-import { ThemeContext } from "../contexts/ThemeContext";
 import { useUserContext } from "../hooks/useUserContext";
 import { API } from "../config/constants";
+
+// Утилита для запросов с автоматическим обновлением токена
+const fetchWithTokenRefresh = async (url: string, options: RequestInit = {}): Promise<Response> => {
+  const token = localStorage.getItem('token');
+  const headers = new Headers(options.headers);
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  
+  let response = await fetch(url, {
+    ...options,
+    headers,
+  });
+
+  // Если получили 401, пробуем обновить токен
+  if (response.status === 401) {
+    try {
+      const refreshResponse = await fetch(`${API}/refresh-token`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      if (refreshResponse.ok) {
+        const newToken = await refreshResponse.json();
+        localStorage.setItem('token', newToken);
+        
+        // Повторяем запрос с новым токеном
+        headers.set('Authorization', `Bearer ${newToken}`);
+        response = await fetch(url, {
+          ...options,
+          headers,
+        });
+      }
+      // Если refresh не удался, просто возвращаем исходный ответ (401)
+    } catch (refreshError) {
+      // Игнорируем ошибку refresh, возвращаем исходный ответ
+    }
+  }
+
+  return response;
+};
 
 const navLinks = [
   {
@@ -58,7 +98,6 @@ const navLinks = [
 ];
 
 function Footer() {
-  const themeContext = useContext(ThemeContext);
   const { user } = useUserContext();
   
   // Состояния для футера
@@ -78,16 +117,15 @@ function Footer() {
       }
       
       try {
-        const response = await fetch(`${API}/user/settings/${user.id}/auto_hide_footer`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        });
+        const response = await fetchWithTokenRefresh(`${API}/user/settings/${user.id}/auto_hide_footer`);
         if (response.ok) {
           const data = await response.json();
           setAutoHideEnabled(data.value === 'true');
         } else if (response.status === 404) {
           // Если настройка не найдена, используем значение по умолчанию (отключено)
+          setAutoHideEnabled(false);
+        } else if (response.status === 401) {
+          // Если все еще 401 после попытки обновления, используем значение по умолчанию
           setAutoHideEnabled(false);
         }
       } catch (error) {
