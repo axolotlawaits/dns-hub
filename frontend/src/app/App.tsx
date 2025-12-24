@@ -95,27 +95,39 @@ function App() {
           // Пытаемся загрузить из БД
           const token = localStorage.getItem('token');
           if (token) {
-            const response = await fetch(`${API}/user/settings/${user.id}/nav_menu_mode`, {
-              headers: {
-                'Authorization': `Bearer ${token}`
-              }
-            });
-            if (response.ok) {
-              const data = await response.json();
-              if (data.value && ['auto', 'always_open', 'always_closed'].includes(data.value)) {
-                setNavMenuMode(data.value);
-                localStorage.setItem('nav_menu_mode', data.value);
-                if (data.value === 'always_open') {
-                  openNav();
-                } else if (data.value === 'always_closed') {
-                  closeNav();
+            try {
+              const response = await fetch(`${API}/user/settings/${user.id}/nav_menu_mode`, {
+                headers: {
+                  'Authorization': `Bearer ${token}`
                 }
+              });
+              if (response.ok) {
+                const data = await response.json();
+                if (data.value && ['auto', 'always_open', 'always_closed'].includes(data.value)) {
+                  setNavMenuMode(data.value);
+                  localStorage.setItem('nav_menu_mode', data.value);
+                  if (data.value === 'always_open') {
+                    openNav();
+                  } else if (data.value === 'always_closed') {
+                    closeNav();
+                  }
+                }
+              } else if (response.status === 404) {
+                // Настройка не найдена - используем значение по умолчанию
+                setNavMenuMode('auto');
+                localStorage.setItem('nav_menu_mode', 'auto');
               }
+            } catch (fetchError) {
+              // Игнорируем ошибки сети, используем значение по умолчанию
+              setNavMenuMode('auto');
+              localStorage.setItem('nav_menu_mode', 'auto');
             }
           }
         }
       } catch (error) {
-        console.error('Error loading nav menu mode setting:', error);
+        // Используем значение по умолчанию при любой ошибке
+        setNavMenuMode('auto');
+        localStorage.setItem('nav_menu_mode', 'auto');
       }
     };
 
@@ -221,6 +233,7 @@ function App() {
                 <Route path='/employee/:id' element={<Employee />} />
                 <Route path='/no-access' element={<NoAccess />} />
 
+                {/* Защищенные маршруты (требуют доступа через ProtectedRoute) */}
                 <Route element={<ProtectedRoute />}>
                   <Route path="/aho/meter-reading" element={<MeterReading />} />
                   <Route path="/aho/correspondence" element={<Correspondence />} />

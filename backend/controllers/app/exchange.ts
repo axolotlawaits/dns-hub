@@ -53,8 +53,6 @@ export const getMyCalendarEvents = async (req: Request, res: Response): Promise<
 
       res.json({ events });
     } catch (exchangeError: any) {
-      console.error('[Exchange Controller] Exchange service error:', exchangeError.message);
-      
       // Определяем тип ошибки для правильного HTTP статуса
       const errorMessage = exchangeError.message || 'Unknown error occurred while fetching calendar events';
       const isNetworkError = exchangeError.isNetworkError || 
@@ -78,6 +76,13 @@ export const getMyCalendarEvents = async (req: Request, res: Response): Promise<
                            errorMessage.includes('password not configured') ||
                            errorMessage.includes('credentials') ||
                            exchangeError.userPasswordMissing;
+      
+      // Если это просто отсутствие пароля у пользователя - не логируем как ошибку
+      if (exchangeError.userPasswordMissing) {
+        // Тихо возвращаем 401 без логирования ошибки
+      } else {
+        console.error('[Exchange Controller] Exchange service error:', exchangeError.message);
+      }
       
       // Если Exchange сервер недоступен или не отвечает, возвращаем 503
       if (isNetworkError) {

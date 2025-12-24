@@ -19,14 +19,17 @@ const updatePhotoSchema = z.object({
 
 const router = express.Router();
 
+// Специфичные маршруты должны быть определены ПЕРЕД параметризованными маршрутами
 router.get('/users-with-email', authenticateToken, getUsersWithEmail)
 router.get('/users-for-responsible', authenticateToken, getUsersForResponsible)
-router.get('/:id', authenticateToken, getUserData)
 router.post('/login', validateData(ldapLoginSchema), ldapAuth, clearSensitiveData, login);
 router.get('/last-user/:login', getLastUser);
-router.patch('/:id', updateUser)
 router.put('/update-photo', authenticateToken, validateData(updatePhotoSchema), updateUserPhoto);
 router.put('/settings', authenticateToken, updateUserSettings);
 router.get('/settings/:userId/:parameter', authenticateToken, getUserSettings);
+
+// Параметризованные маршруты должны быть последними
+router.get('/:id', authenticateToken, getUserData)
+router.patch('/:id', updateUser)
 
 export default router;

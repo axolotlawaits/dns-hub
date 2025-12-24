@@ -10,8 +10,8 @@ import { NotificationController } from '../controllers/app/notification.js';
 const EXCHANGE_CONFIG = {
   ewsUrl: process.env.EXCHANGE_EWS_URL || '',
   owaUrl: process.env.EXCHANGE_OWA_URL || '',
-  ewsUsername: process.env.EXCHANGE_EWS_USERNAME || process.env.LDAP_SERVICE_USER || '',
-  ewsPassword: process.env.EXCHANGE_EWS_PASSWORD || process.env.LDAP_SERVICE_PASSWORD || '',
+  ewsUsername: process.env.LDAP_SERVICE_USER || '',
+  ewsPassword: process.env.LDAP_SERVICE_PASSWORD || '',
   ewsDomain: process.env.EXCHANGE_EWS_DOMAIN || '',
   ewsVersion: process.env.EXCHANGE_EWS_VERSION || 'Exchange2016',
 };
@@ -388,8 +388,6 @@ const getCalendarEventsViaEWS = async (
     if (response.statusCode !== 200) {
       const responseBody = response.body || '';
       
-      console.error(`[Exchange] [getCalendarEventsViaEWS] EWS request failed with status code ${response.statusCode}`);
-      
       // Проверяем на специфичные ошибки Exchange
       if (responseBody.includes('ErrorNonExistentMailbox')) {
         return [];
@@ -403,13 +401,16 @@ const getCalendarEventsViaEWS = async (
       if (response.statusCode === 401) {
         let authError = 'Unauthorized access to Exchange';
         if (userPasswordMissing) {
-          authError = 'User Exchange password not configured. Please set your Exchange password in settings, or check Impersonation service account credentials (EXCHANGE_EWS_USERNAME and EXCHANGE_EWS_PASSWORD)';
+          // Это нормальная ситуация - пользователь просто не настроил пароль Exchange
+          // Не логируем как ошибку, это ожидаемое поведение
+          authError = 'User Exchange password not configured. Please set your Exchange password in settings, or check Impersonation service account credentials (LDAP_SERVICE_USER and LDAP_SERVICE_PASSWORD)';
         } else if (useImpersonation) {
-          authError = 'Impersonation authentication failed. Check EXCHANGE_EWS_USERNAME, EXCHANGE_EWS_PASSWORD, and Impersonation permissions';
+          authError = 'Impersonation authentication failed. Check LDAP_SERVICE_USER, LDAP_SERVICE_PASSWORD, and Impersonation permissions';
+          console.error(`[Exchange] [getCalendarEventsViaEWS] ${authError}`);
         } else {
           authError = 'User authentication failed. Check Exchange password in settings';
+          console.error(`[Exchange] [getCalendarEventsViaEWS] ${authError}`);
         }
-        console.error(`[Exchange] [getCalendarEventsViaEWS] ${authError}`);
         const error: any = new Error(`EWS authentication failed (401): ${authError}`);
         error.userPasswordMissing = userPasswordMissing;
         error.useImpersonation = useImpersonation;
@@ -861,7 +862,89 @@ const getNewEmailCount = async (
       if (responseBody.includes('ErrorNonExistentMailbox') || responseBody.includes('no mailbox')) {
         return { count: 0 };
       }
-      throw new Error(`EWS request failed with status code ${response.statusCode}`);
+      
+      // Если ошибка 401 и мы пытались использовать пароль пользователя, пробуем через impersonation
+      if (response.statusCode === 401 && !useImpersonation && userId) {
+        // Пробуем через impersonation
+        try {
+          const impersonationResponse = await makeEwsRequest(
+            ewsUrl,
+            soapEnvelope.replace(
+              impersonationHeader,
+              `
+    <t:ExchangeImpersonation>
+      <t:ConnectingSID>
+        <t:PrimarySmtpAddress>${userEmail.toLowerCase()}</t:PrimarySmtpAddress>
+      </t:ConnectingSID>
+    </t:ExchangeImpersonation>`
+            ),
+            'http://schemas.microsoft.com/exchange/services/2006/messages/FindItem',
+            EXCHANGE_CONFIG.ewsUsername,
+            EXCHANGE_CONFIG.ewsPassword,
+            EXCHANGE_CONFIG.ewsDomain
+          );
+          
+          if (impersonationResponse.statusCode === 200) {
+            // Парсим ответ от impersonation запроса
+            const parsed = xmlParser.parse(impersonationResponse.body || '');
+            const envelope = parsed['s:Envelope'] || parsed['soap:Envelope'] || parsed.Envelope;
+            const body = envelope?.['s:Body'] || envelope?.['soap:Body'] || envelope?.Body;
+            const findItemResponse = body?.['m:FindItemResponse'] || body?.FindItemResponse;
+            const responseMessages = findItemResponse?.['m:ResponseMessages'] || findItemResponse?.ResponseMessages;
+            const findItemResponseMessage = responseMessages?.['m:FindItemResponseMessage'] || responseMessages?.FindItemResponseMessage;
+            
+            const responseMessagesArray = Array.isArray(findItemResponseMessage) 
+              ? findItemResponseMessage 
+              : findItemResponseMessage ? [findItemResponseMessage] : [];
+
+            let newCount = 0;
+            let lastMessageTime: Date | undefined;
+            let lastMessageId: string | undefined;
+
+            for (const responseMsg of responseMessagesArray) {
+              const responseCode = responseMsg?.['m:ResponseCode'] || responseMsg?.ResponseCode;
+              if (responseCode !== 'NoError' && responseCode !== 'Success') {
+                continue;
+              }
+
+              const rootFolder = responseMsg?.['m:RootFolder'] || responseMsg?.RootFolder;
+              const items = rootFolder?.['t:Items'] || rootFolder?.Items;
+              const message = items?.['t:Message'] || items?.Message;
+              const messagesArray = Array.isArray(message) ? message : message ? [message] : [];
+
+              for (const msg of messagesArray) {
+                const itemId = msg['t:ItemId']?.['@_Id'] || msg.ItemId?.['@_Id'] || '';
+                const receivedDateTime = msg['t:DateTimeReceived'] || msg.DateTimeReceived || '';
+                
+                if (receivedDateTime) {
+                  const msgDate = new Date(receivedDateTime);
+                  
+                  if (!lastCheckTime || msgDate > lastCheckTime) {
+                    newCount++;
+                  }
+                  
+                  if (!lastMessageTime || msgDate > lastMessageTime) {
+                    lastMessageTime = msgDate;
+                    lastMessageId = itemId;
+                  }
+                }
+              }
+            }
+
+            return { 
+              count: newCount,
+              lastMessageTime,
+              lastMessageId
+            };
+          }
+        } catch (impersonationError: any) {
+          // Если impersonation тоже не сработал, возвращаем 0
+          return { count: 0 };
+        }
+      }
+      
+      // Для других ошибок возвращаем 0, чтобы не прерывать работу cron задачи
+      return { count: 0 };
     }
 
     try {
@@ -926,7 +1009,9 @@ const getNewEmailCount = async (
     if (errorBody.includes('ErrorNonExistentMailbox') || errorBody.includes('no mailbox')) {
       return { count: 0 };
     }
-    console.error('[Exchange] [getNewEmailCount] Error:', error.message);
+    
+    // Для всех ошибок возвращаем 0, чтобы не прерывать работу cron задачи
+    // Ошибки аутентификации уже обработаны выше в блоке response.statusCode !== 200
     return { count: 0 };
   }
 };

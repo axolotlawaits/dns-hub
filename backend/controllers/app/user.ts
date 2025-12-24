@@ -210,7 +210,31 @@ export const getUserSettings = async (req: Request, res: Response):Promise<any> 
       },
     });
 
+    // Если настройка не найдена, возвращаем значение по умолчанию для определенных параметров
     if (!setting) {
+      const defaultValues: Record<string, string> = {
+        'nav_menu_mode': 'auto',
+        'auto_hide_footer': 'false',
+        'notificationSoundEnabled': 'true',
+        'notificationSound': 'default',
+        'bookmarks_cards_per_row': '3',
+        'telegram_door_opening_enabled': 'true',
+        'telegram_notifications_enabled': 'true',
+        'telegram_additional_doors_enabled': 'false',
+        'notifications.email': 'true'
+      };
+
+      if (defaultValues[parameter]) {
+        return res.status(200).json({ 
+          id: '',
+          userId: userId,
+          parameter: parameter,
+          value: defaultValues[parameter],
+          type: 'string'
+        });
+      }
+
+      // Для других параметров (например, exchange.password) возвращаем 404
       return res.status(404).json({ error: 'Setting not found' });
     }
 

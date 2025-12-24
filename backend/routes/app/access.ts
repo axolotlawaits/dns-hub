@@ -9,12 +9,27 @@ import {
   getUserAccessInfo, 
   updateGroupAccessInfo, 
   updatePositionAccessInfo, 
-  updateUserAccessInfo 
+  updateUserAccessInfo,
+  requestToolAccess,
+  getProtectedTools,
+  getAccessRequests,
+  approveAccessRequest,
+  rejectAccessRequest
 } from '../../controllers/app/access.js';
+import { authenticateToken } from '../../middleware/auth.js';
 
 const router = express.Router();
 
-router.get('/:id', getFullAccessInfo)
+// Специфичные маршруты должны быть определены ПЕРЕД параметризованными маршрутами
+router.get('/protected-tools', getProtectedTools)
+
+router.get('/requests/all', authenticateToken, getAccessRequests)
+
+router.post('/requests/:requestId/approve', authenticateToken, approveAccessRequest)
+
+router.post('/requests/:requestId/reject', authenticateToken, rejectAccessRequest)
+
+router.post('/request', authenticateToken, requestToolAccess)
 
 router.get('/user/:id', getUserAccessInfo)
 
@@ -33,5 +48,8 @@ router.get('/position/:id', getPositionAccessInfo)
 router.patch('/position/:id', updatePositionAccessInfo)
 
 router.delete('/position/:id', deletePositionAccessInfo)
+
+// Параметризованный маршрут должен быть последним
+router.get('/:id', getFullAccessInfo)
 
 export default router

@@ -4,10 +4,11 @@ import {
   Card,
   Box
 } from "@mantine/core"
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import ProfileInfo from "./ProfileInfo";
 import '../styles/Profile.css'
 import { useUserContext } from "../../hooks/useUserContext";
+import { useAccessContext } from "../../hooks/useAccessContext";
 import Management from "./Management";
 import AdminPanel from "./AdminPanel";
 import { 
@@ -17,11 +18,53 @@ import {
   IconSettings
 } from '@tabler/icons-react';
 import { usePageHeader } from "../../contexts/PageHeaderContext";
+import { API } from "../../config/constants";
 
 function Profile() {
   const { user } = useUserContext()
+  const { access } = useAccessContext()
   const [activeTab, setActiveTab] = useState<string | null>('first');
+  const [protectedToolLinks, setProtectedToolLinks] = useState<string[]>([]);
   const { setHeader, clearHeader } = usePageHeader();
+  
+  // Загружаем список защищенных инструментов
+  useEffect(() => {
+    const loadProtectedTools = async () => {
+      try {
+        const response = await fetch(`${API}/access/protected-tools`);
+        if (response.ok) {
+          const links = await response.json();
+          setProtectedToolLinks(links);
+        }
+      } catch (error) {
+        console.error('Error loading protected tools:', error);
+      }
+    };
+    loadProtectedTools();
+  }, []);
+  
+  // Проверяем, может ли пользователь управлять доступом
+  const canManageAccess = useMemo(() => {
+    if (!user) return false
+    // DEVELOPER имеет приоритетный доступ ко всему
+    if (user.role === 'DEVELOPER') {
+      return true
+    }
+    // Админы могут управлять доступом только к тем инструментам, к которым у них есть FULL доступ
+    if (user.role === 'ADMIN') {
+      return access.some(a => {
+        const isProtected = protectedToolLinks.includes(a.link) || 
+                           protectedToolLinks.some(link => a.link.startsWith(link + '/'));
+        return isProtected && a.accessLevel === 'FULL'
+      })
+    }
+    // Пользователи с FULL доступом хотя бы к одному защищенному инструменту могут управлять доступом
+    return access.some(a => {
+      const isProtected = protectedToolLinks.includes(a.link) || 
+                         protectedToolLinks.some(link => a.link.startsWith(link + '/'));
+      return isProtected && a.accessLevel === 'FULL'
+    })
+  }, [user, access, protectedToolLinks])
 
   useEffect(() => {
     setHeader({
@@ -58,7 +101,7 @@ function Profile() {
               >
                 Ваши данные
               </Tabs.Tab>
-              {user?.role !== 'EMPLOYEE' && (
+              {canManageAccess && (
                 <Tabs.Tab 
                   value="second" 
                   leftSection={<IconShield size={18} />}

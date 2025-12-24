@@ -1,11 +1,13 @@
 import { useEffect, useState, useMemo, useCallback } from "react"
 import { API } from "../../config/constants"
-import { ActionIcon, Select, MultiSelect, TextInput, Tooltip, Box, Title, Text, Group, Card, Badge, LoadingOverlay, Progress } from "@mantine/core"
+import { ActionIcon, Select, MultiSelect, TextInput, Tooltip, Box, Title, Text, Group, Card, Badge, LoadingOverlay, Progress, Button, Stack } from "@mantine/core"
 import { useDisclosure } from "@mantine/hooks"
 import { Tool } from "../../components/Tools"
-import { IconExternalLink, IconLockAccess, IconSearch, IconUsers, IconUser, IconBriefcase, IconShield } from "@tabler/icons-react"
+import { IconExternalLink, IconLockAccess, IconSearch, IconUsers, IconUser, IconBriefcase, IconShield, IconCheck, IconX, IconClock } from "@tabler/icons-react"
 import { useNavigate } from "react-router"
 import { User, UserRole } from "../../contexts/UserContext"
+import { useUserContext } from "../../hooks/useUserContext"
+import { useAccessContext } from "../../hooks/useAccessContext"
 import { DynamicFormModal } from "../../utils/formModal"
 import { notificationSystem } from "../../utils/Push"
 
@@ -47,6 +49,8 @@ const rolesData: RolesTypeObject[] = [
 ]
 
 function Management() {
+  const { user } = useUserContext()
+  const { access } = useAccessContext()
   const [entityType, setEntityType] = useState<EntityType>('group')
   const [groups, setGroups] = useState([])
   const [positions, setPositions] = useState([])
@@ -62,11 +66,179 @@ function Management() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null)
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<string | null>(null)
+  const [accessRequests, setAccessRequests] = useState<any[]>([])
+  const [protectedToolLinks, setProtectedToolLinks] = useState<string[]>([])
   const navigate = useNavigate()
-
+  
+  // Загружаем список защищенных инструментов
+  useEffect(() => {
+    const loadProtectedTools = async () => {
+      try {
+        const response = await fetch(`${API}/access/protected-tools`);
+        if (response.ok) {
+          const links = await response.json();
+          setProtectedToolLinks(links);
+        }
+      } catch (error) {
+        console.error('Error loading protected tools:', error);
+      }
+    };
+    loadProtectedTools();
+  }, []);
+  
+  // Проверка, является ли инструмент защищенным (требует доступа)
+  const checkIsProtectedTool = useCallback((tool: Tool): boolean => {
+    return protectedToolLinks.includes(tool.link) || 
+           protectedToolLinks.some(link => tool.link.startsWith(link + '/'))
+  }, [protectedToolLinks])
+  
+  // Проверка, может ли пользователь управлять доступом к инструменту
+  const canManageToolAccess = useCallback((tool: Tool): boolean => {
+    if (!user) return false
+    
+    // DEVELOPER имеет приоритетный доступ ко всему - может управлять всеми инструментами
+    if (user.role === 'DEVELOPER') {
+      return true
+    }
+    
+    // Админы могут управлять только теми защищенными инструментами, к которым у них есть FULL доступ
+    if (user.role === 'ADMIN') {
+      // Если список еще не загружен, не показываем инструменты
+      if (protectedToolLinks.length === 0) {
+        return false
+      }
+      
+      // Проверяем, что инструмент защищенный
+      if (!checkIsProtectedTool(tool)) {
+        return false
+      }
+      
+      // Проверяем, что у админа есть FULL доступ к этому инструменту
+      const toolAccess = access.find(a => a.toolId === tool.id || a.link === tool.link)
+      return toolAccess?.accessLevel === 'FULL'
+    }
+    
+    // Пользователи с FULL доступом к защищенному инструменту могут управлять им
+    // Если список еще не загружен, не показываем инструмент
+    if (protectedToolLinks.length === 0) {
+      return false
+    }
+    
+    if (!checkIsProtectedTool(tool)) {
+      return false // Открытые инструменты не требуют управления доступом
+    }
+    
+    const toolAccess = access.find(a => a.toolId === tool.id || a.link === tool.link)
+    return toolAccess?.accessLevel === 'FULL'
+  }, [user, access, checkIsProtectedTool, protectedToolLinks])
+  
+  // Загрузка запросов на доступ
+  const loadAccessRequests = useCallback(async () => {
+    if (!user) return
+    
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`${API}/access/requests/all`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setAccessRequests(data)
+      } else {
+        console.error('Failed to load access requests')
+      }
+    } catch (error) {
+      console.error('Error loading access requests:', error)
+    }
+  }, [user])
+  
+  useEffect(() => {
+    loadAccessRequests()
+  }, [loadAccessRequests])
+  
+  // Одобрение запроса на доступ
+  const handleApproveRequest = useCallback(async (requestId: string, accessLevel: AccessLevel = 'READONLY') => {
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`${API}/access/requests/${requestId}/approve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ accessLevel })
+      })
+      
+      if (response.ok) {
+        notificationSystem.addNotification(
+          'Успех',
+          'Доступ успешно предоставлен',
+          'success'
+        )
+        loadAccessRequests()
+      } else {
+        const error = await response.json()
+        notificationSystem.addNotification(
+          'Ошибка',
+          error.error || 'Не удалось предоставить доступ',
+          'error'
+        )
+      }
+    } catch (error) {
+      notificationSystem.addNotification(
+        'Ошибка',
+        'Ошибка при предоставлении доступа',
+        'error'
+      )
+    }
+  }, [loadAccessRequests])
+  
+  // Отклонение запроса на доступ
+  const handleRejectRequest = useCallback(async (requestId: string, reason?: string) => {
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`${API}/access/requests/${requestId}/reject`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ reason })
+      })
+      
+      if (response.ok) {
+        notificationSystem.addNotification(
+          'Успех',
+          'Запрос отклонен',
+          'success'
+        )
+        loadAccessRequests()
+      } else {
+        const error = await response.json()
+        notificationSystem.addNotification(
+          'Ошибка',
+          error.error || 'Не удалось отклонить запрос',
+          'error'
+        )
+      }
+    } catch (error) {
+      notificationSystem.addNotification(
+        'Ошибка',
+        'Ошибка при отклонении запроса',
+        'error'
+      )
+    }
+  }, [loadAccessRequests])
+  
   const modals = {
     changeAccess: useDisclosure(false),
+    approveRequest: useDisclosure(false),
   }
+  
+  const [selectedRequest, setSelectedRequest] = useState<any | null>(null)
 
   const getEntities = useCallback(async () => {
     setLoading(true)
@@ -343,13 +515,37 @@ function Management() {
     }
   }, [entityType, selectedEntities])
 
-  // Мемоизированные данные
+  // Мемоизированные данные - фильтруем инструменты по доступу пользователя
   const filteredTools = useMemo(() => {
-    if (!searchQuery) return tools
-    return tools.filter(tool => 
-      tool.name.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-  }, [tools, searchQuery])
+    // DEVELOPER видит все инструменты
+    if (user?.role === 'DEVELOPER') {
+      let allTools = tools;
+      if (searchQuery) {
+        allTools = allTools.filter(tool => 
+          tool.name.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      }
+      return allTools;
+    }
+    
+    // Для остальных: сначала фильтруем только защищенные инструменты
+    // Если список еще не загружен, не показываем инструменты (кроме DEVELOPER)
+    let protectedTools = protectedToolLinks.length > 0 
+      ? tools.filter(tool => checkIsProtectedTool(tool))
+      : [];
+    
+    // Затем фильтруем по доступу пользователя для управления
+    let accessibleTools = protectedTools.filter(tool => canManageToolAccess(tool))
+    
+    // Затем применяем поисковый запрос
+    if (searchQuery) {
+      accessibleTools = accessibleTools.filter(tool => 
+        tool.name.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    }
+    
+    return accessibleTools
+  }, [tools, searchQuery, canManageToolAccess, checkIsProtectedTool, protectedToolLinks, user])
 
   // Получаем информацию о выбранных сущностях
   const selectedEntitiesInfo = useMemo(() => {
@@ -410,7 +606,24 @@ function Management() {
   }, [entityType, groups, positions, users, selectedGroupFilter])
 
   const statistics = useMemo(() => {
-    const totalTools = tools.length
+    // DEVELOPER видит все инструменты
+    if (user?.role === 'DEVELOPER') {
+      return {
+        totalTools: tools.length,
+        accessedTools: aggregatedAccess.size,
+        readonlyCount: 0,
+        contributorCount: 0,
+        fullCount: 0,
+        selectedCount: selectedEntities.length
+      }
+    }
+    
+    // Учитываем только защищенные инструменты, к которым у пользователя есть доступ для управления
+    const protectedTools = protectedToolLinks.length > 0 
+      ? tools.filter(tool => checkIsProtectedTool(tool))
+      : []
+    const manageableTools = protectedTools.filter(tool => canManageToolAccess(tool))
+    const totalTools = manageableTools.length
     const accessedTools = aggregatedAccess.size
     
     // Подсчитываем уровни доступа (если у всех выбранных сущностей одинаковый уровень)
@@ -435,9 +648,45 @@ function Management() {
       fullCount,
       selectedCount: selectedEntities.length
     }
-  }, [tools.length, aggregatedAccess, selectedEntities.length])
+  }, [tools, aggregatedAccess, selectedEntities.length, canManageToolAccess, checkIsProtectedTool, protectedToolLinks, user])
+
+  // Показываем предупреждение, если у пользователя нет доступов для управления
+  const hasManageableTools = useMemo(() => {
+    // DEVELOPER всегда имеет доступ ко всем инструментам
+    if (user?.role === 'DEVELOPER') {
+      return tools.length > 0
+    }
+    // Для остальных проверяем наличие защищенных инструментов с доступом
+    return tools.some(tool => checkIsProtectedTool(tool) && canManageToolAccess(tool))
+  }, [tools, canManageToolAccess, checkIsProtectedTool, user])
 
   if (loading) return <LoadingOverlay visible />
+  
+  if (!hasManageableTools && !loading) {
+    return (
+      <Box style={{ 
+        background: 'var(--theme-bg-elevated)', 
+        borderRadius: '16px', 
+        padding: '48px 24px',
+        textAlign: 'center',
+        border: '1px solid var(--theme-border-primary)'
+      }}>
+        <IconShield size={64} color="var(--theme-text-secondary)" style={{ margin: '0 auto 24px', display: 'block' }} />
+        <Title order={3} mb="md" c="var(--theme-text-primary)">
+          Нет доступных инструментов для управления
+        </Title>
+        <Text c="var(--theme-text-secondary)" mb="lg">
+          У вас нет полного доступа ни к одному инструменту. 
+          {user?.role !== 'ADMIN' && user?.role !== 'DEVELOPER' && 
+            ' Для управления доступом к инструменту необходимо иметь полный (FULL) доступ к нему.'
+          }
+        </Text>
+        <Text size="sm" c="var(--theme-text-secondary)">
+          Запросите доступ к инструментам, чтобы получить возможность управлять правами доступа для других пользователей.
+        </Text>
+      </Box>
+    )
+  }
 
   return (
     <Box style={{ background: 'var(--theme-bg-primary)', minHeight: '100vh' }}>
@@ -658,6 +907,97 @@ function Management() {
         </Box>
       </Box>
 
+      {/* Запросы на доступ */}
+      {accessRequests.length > 0 && (
+        <Box style={{
+          background: 'var(--theme-bg-elevated)',
+          borderRadius: '16px',
+          padding: '24px',
+          border: '1px solid var(--theme-border-primary)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+          marginBottom: '24px'
+        }}>
+          <Group justify="space-between" mb="md">
+            <Group gap="sm">
+              <IconClock size={24} color="var(--theme-color-primary)" />
+              <Title order={3} c="var(--theme-text-primary)">
+                Запросы на доступ
+              </Title>
+              <Badge size="lg" variant="light" color="blue">
+                {accessRequests.length}
+              </Badge>
+            </Group>
+          </Group>
+          
+          <Stack gap="md">
+            {accessRequests.map((request) => {
+              const metadata = request.metadata as any
+              const toolName = metadata?.toolName || 'Неизвестный инструмент'
+              const requesterName = request.user?.name || metadata?.requestedByName || 'Неизвестный пользователь'
+              const requesterEmail = request.user?.email || metadata?.requestedByEmail || request.email
+              
+              return (
+                <Card
+                  key={request.id}
+                  style={{
+                    border: '1px solid var(--theme-border-primary)',
+                    borderRadius: '12px',
+                    background: 'var(--theme-bg-primary)'
+                  }}
+                  padding="md"
+                >
+                  <Group justify="space-between" align="flex-start">
+                    <Box style={{ flex: 1 }}>
+                      <Group gap="xs" mb="xs">
+                        <Text fw={600} size="md" c="var(--theme-text-primary)">
+                          {requesterName}
+                        </Text>
+                        <Badge size="sm" variant="light" color="blue">
+                          {requesterEmail}
+                        </Badge>
+                      </Group>
+                      <Text size="sm" c="var(--theme-text-secondary)" mb="xs">
+                        Запрашивает доступ к инструменту: <strong>{toolName}</strong>
+                      </Text>
+                      <Text size="xs" c="var(--theme-text-secondary)">
+                        {new Date(request.createdAt).toLocaleString('ru-RU')}
+                      </Text>
+                    </Box>
+                    <Group gap="xs">
+                      <Tooltip label="Одобрить с уровнем доступа">
+                        <Button
+                          size="sm"
+                          variant="light"
+                          color="green"
+                          leftSection={<IconCheck size={16} />}
+                          onClick={() => {
+                            setSelectedRequest(request)
+                            modals.approveRequest[1].open()
+                          }}
+                        >
+                          Одобрить
+                        </Button>
+                      </Tooltip>
+                      <Tooltip label="Отклонить запрос">
+                        <Button
+                          size="sm"
+                          variant="light"
+                          color="red"
+                          leftSection={<IconX size={16} />}
+                          onClick={() => handleRejectRequest(request.id)}
+                        >
+                          Отклонить
+                        </Button>
+                      </Tooltip>
+                    </Group>
+                  </Group>
+                </Card>
+              )
+            })}
+          </Stack>
+        </Box>
+      )}
+
       {/* Поиск и инструменты */}
       <Box style={{
         background: 'var(--theme-bg-elevated)',
@@ -876,6 +1216,35 @@ function Management() {
             updateGroupAccess(selectedTool.id, values.accessLevel as AccessLevel)
             modals.changeAccess[1].close()
             setSelectedTool(null)
+          }
+        }}
+      />
+      
+      <DynamicFormModal
+        opened={modals.approveRequest[0]}
+        onClose={() => {
+          modals.approveRequest[1].close()
+          setSelectedRequest(null)
+        }}
+        title={selectedRequest ? `Одобрение запроса на доступ: ${(selectedRequest.metadata as any)?.toolName || 'Инструмент'}` : 'Одобрение запроса'}
+        mode="edit"
+        fields={[
+          {
+            name: 'accessLevel',
+            label: 'Уровень доступа',
+            type: 'select',
+            required: true,
+            options: accessLevels.map(lvl => ({ value: lvl.type, label: lvl.name }))
+          }
+        ]}
+        initialValues={{ 
+          accessLevel: 'READONLY'
+        }}
+        onSubmit={(values) => {
+          if (selectedRequest) {
+            handleApproveRequest(selectedRequest.id, values.accessLevel as AccessLevel)
+            modals.approveRequest[1].close()
+            setSelectedRequest(null)
           }
         }}
       />

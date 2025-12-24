@@ -174,6 +174,18 @@ export default function Events() {
           return;
         }
         
+        // Специальная обработка для 401 (Unauthorized) - если это просто отсутствие пароля Exchange, не показываем ошибку
+        if (response.status === 401) {
+          const errorMessage = errorData.error || errorData.message || '';
+          // Если это ошибка о том, что пароль Exchange не настроен, просто не показываем события
+          if (errorMessage.includes('password not configured') || errorMessage.includes('User Exchange password')) {
+            setEvents([]);
+            setEventsError(null); // Не показываем ошибку, если это просто отсутствие пароля
+            setLoadingEvents(false);
+            return;
+          }
+        }
+        
         const errorMessage = errorData.error || errorData.message || `Ошибка загрузки событий: ${response.status}`;
         setEventsError(errorMessage);
         setEvents([]);

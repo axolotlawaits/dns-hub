@@ -250,13 +250,7 @@ app.use('/hub-api/scanner', async (req, res, next) => {
 });
 
 // Временный fallback для настроек пользователя (исключает 404 в dev и не ломает UI)
-app.get('/hub-api/user/settings/:userId/auto_hide_footer', (req, res) => {
-  res.json({ value: false });
-});
-
-app.get('/hub-api/user/settings/:userId/nav_menu_mode', (req, res) => {
-  res.json({ value: 'auto' });
-});
+// Эти endpoints больше не нужны - используем getUserSettings из контроллера
 
 // Ленивая загрузка safety journal роутера
 let safetyJournalRouterLoaded = false;
