@@ -3,29 +3,227 @@ import { prisma } from '../../server.js';
 import { z } from 'zod';
 
 // Схемы валидации
-const adItemSchema = z.object({
-  name: z.string().min(1),
-  quantity: z.number().int().positive().default(1),
-  article: z.string().optional().nullable(),
-  description: z.string().optional().nullable(),
-  condition: z.enum(['NEW', 'EXCELLENT', 'GOOD', 'SATISFACTORY', 'POOR']).default('GOOD'),
-});
-
 const createAdSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().optional().nullable(),
   categoryId: z.string().uuid(),
   branchId: z.string().uuid(),
-  contactName: z.string().optional().nullable(),
-  contactPhone: z.string().optional().nullable(),
-  contactEmail: z.string().email().optional().nullable(),
-  items: z.array(adItemSchema).min(1), // Минимум один товар
+  quantity: z.number().int().positive().default(1),
+  article: z.string().optional().nullable(),
+  condition: z.enum(['NEW', 'EXCELLENT', 'GOOD', 'SATISFACTORY', 'POOR']).default('GOOD'),
 });
 
 const updateAdSchema = createAdSchema.partial().extend({
   status: z.enum(['ACTIVE', 'SOLD', 'ARCHIVED', 'MODERATION']).optional(),
-  items: z.array(adItemSchema.extend({ id: z.string().uuid().optional() })).optional(), // Для обновления товаров
 });
+
+// Функция для проверки доступа к инструменту shop
+// Правила:
+// 1. DEVELOPER всегда имеет доступ
+// 2. ADMIN с полными правами (FULL) на инструмент retail/shop имеет доступ
+const checkShopAccess = async (userId: string): Promise<boolean> => {
+  try {
+    // Получаем пользователя и его роль
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { 
+        role: true,
+        email: true,
+      }
+    });
+
+    if (!user) {
+      return false;
+    }
+
+    // DEVELOPER всегда имеет доступ
+    if (user.role === 'DEVELOPER') {
+      return true;
+    }
+
+    // Ищем инструмент retail/shop
+    const shopTool = await prisma.tool.findFirst({
+      where: { link: 'retail/shop' }
+    });
+
+    if (!shopTool) {
+      return false;
+    }
+
+    // Проверяем доступ только для ADMIN с полными правами
+    if (user.role === 'ADMIN') {
+      // Проверяем доступ на уровне пользователя - только FULL доступ
+      const userAccess = await prisma.userToolAccess.findFirst({
+        where: {
+          userId: userId,
+          toolId: shopTool.id,
+          accessLevel: 'FULL'
+        }
+      });
+
+      if (userAccess) {
+        return true;
+      }
+
+      // Получаем UserData для проверки доступа по должности и группе
+      const userData = await prisma.userData.findUnique({
+        where: { email: user.email },
+        select: {
+          position: {
+            select: {
+              uuid: true,
+              group: {
+                select: { uuid: true }
+              }
+            }
+          }
+        }
+      });
+
+      // Проверяем доступ на уровне должности - только FULL доступ
+      const positionId = userData?.position?.uuid;
+      if (positionId) {
+        const positionAccess = await prisma.positionToolAccess.findFirst({
+          where: {
+            positionId: positionId,
+            toolId: shopTool.id,
+            accessLevel: 'FULL'
+          }
+        });
+
+        if (positionAccess) {
+          return true;
+        }
+      }
+
+      // Проверяем доступ на уровне группы - только FULL доступ
+      const groupId = userData?.position?.group?.uuid;
+      if (groupId) {
+        const groupAccess = await prisma.groupToolAccess.findFirst({
+          where: {
+            groupId: groupId,
+            toolId: shopTool.id,
+            accessLevel: 'FULL'
+          }
+        });
+
+        if (groupAccess) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  } catch (error) {
+    console.error('[Shop] Error checking shop access:', error);
+    return false;
+  }
+};
+
+// Функция для проверки доступа к редактированию/удалению объявлений
+const checkShopEditAccess = async (userId: string, shopUserId: string): Promise<boolean> => {
+  try {
+    // Автор (любой пользователь с базовыми правами) может редактировать/удалять свои объявления
+    if (shopUserId === userId) {
+      return true;
+    }
+
+    // Получаем пользователя и его роль
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { 
+        role: true,
+        email: true,
+        position: true
+      }
+    });
+
+    if (!user) {
+      return false;
+    }
+
+    // DEVELOPER может редактировать/удалять все объявления
+    if (user.role === 'DEVELOPER') {
+      return true;
+    }
+
+    // Ищем инструмент retail/shop
+    const shopTool = await prisma.tool.findFirst({
+      where: { link: 'retail/shop' }
+    });
+
+    if (!shopTool) {
+      return false;
+    }
+
+    // Проверяем доступ на уровне пользователя - только FULL доступ для ADMIN
+    if (user.role === 'ADMIN') {
+      const userAccess = await prisma.userToolAccess.findFirst({
+        where: {
+          userId: userId,
+          toolId: shopTool.id,
+          accessLevel: 'FULL'
+        }
+      });
+
+      if (userAccess) {
+        return true;
+      }
+
+      // Получаем UserData для проверки доступа по должности и группе
+      const userData = await prisma.userData.findUnique({
+        where: { email: user.email },
+        select: {
+          position: {
+            select: {
+              uuid: true,
+              group: {
+                select: { uuid: true }
+              }
+            }
+          }
+        }
+      });
+
+      // Проверяем доступ на уровне должности - только FULL доступ
+      const positionId = userData?.position?.uuid;
+      if (positionId) {
+        const positionAccess = await prisma.positionToolAccess.findFirst({
+          where: {
+            positionId: positionId,
+            toolId: shopTool.id,
+            accessLevel: 'FULL'
+          }
+        });
+
+        if (positionAccess) {
+          return true;
+        }
+      }
+
+      // Проверяем доступ на уровне группы - только FULL доступ
+      const groupId = userData?.position?.group?.uuid;
+      if (groupId) {
+        const groupAccess = await prisma.groupToolAccess.findFirst({
+          where: {
+            groupId: groupId,
+            toolId: shopTool.id,
+            accessLevel: 'FULL'
+          }
+        });
+
+        if (groupAccess) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  } catch (error) {
+    console.error('[Shop] Error checking shop edit access:', error);
+    return false;
+  }
+};
 
 const createCategorySchema = z.object({
   name: z.string().min(1).max(100),
@@ -34,33 +232,16 @@ const createCategorySchema = z.object({
   sortOrder: z.number().int().default(0),
 });
 
-// Получить Tool для доски объявлений (создать если не существует)
-const getAdsTool = async () => {
-  let tool = await prisma.tool.findFirst({
-    where: { link: 'retail/shop' },
-  });
-
-  if (!tool) {
-    // Создаем Tool для доски объявлений
-    tool = await prisma.tool.create({
-      data: {
-        name: 'Доска объявлений',
-        icon: '📢',
-        link: 'retail/shop',
-        description: 'Покупка и продажа товаров',
-        order: 100,
-        included: true,
-      },
-    });
-  }
-
-  return tool;
-};
-
 // Получить все категории
 export const getCategories = async (req: Request, res: Response) => {
   try {
-    const tool = await getAdsTool();
+    const tool = await prisma.tool.findFirst({
+      where: { link: 'retail/shop' },
+    });
+
+    if (!tool) {
+      return res.status(404).json({ error: 'Tool not found' });
+    }
     const categories = await prisma.type.findMany({
       where: {
         model_uuid: tool.id,
@@ -113,16 +294,18 @@ export const initCategories = async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: token.userId },
-      select: { role: true },
-    });
-
-    if (user?.role !== 'ADMIN' && user?.role !== 'DEVELOPER') {
+    // Проверяем доступ к инструменту shop
+    if (!(await checkShopAccess(token.userId))) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    const tool = await getAdsTool();
+    const tool = await prisma.tool.findFirst({
+      where: { link: 'retail/shop' },
+    });
+
+    if (!tool) {
+      return res.status(404).json({ error: 'Tool not found' });
+    }
 
     // Проверяем, есть ли уже категории
     const existingCount = await prisma.type.count({
@@ -181,7 +364,18 @@ export const createCategory = async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const tool = await getAdsTool();
+    // Проверяем доступ к инструменту shop
+    if (!(await checkShopAccess(token.userId))) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const tool = await prisma.tool.findFirst({
+      where: { link: 'retail/shop' },
+    });
+
+    if (!tool) {
+      return res.status(404).json({ error: 'Tool not found' });
+    }
     const data = createCategorySchema.parse(req.body);
     const category = await prisma.type.create({
       data: {
@@ -203,6 +397,16 @@ export const createCategory = async (req: Request, res: Response) => {
 // Обновить категорию
 export const updateCategory = async (req: Request, res: Response) => {
   try {
+    const token = (req as any).token;
+    if (!token?.userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Проверяем доступ к инструменту shop
+    if (!(await checkShopAccess(token.userId))) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
     const { id } = req.params;
     const data = createCategorySchema.partial().parse(req.body);
     const category = await prisma.type.update({
@@ -222,6 +426,16 @@ export const updateCategory = async (req: Request, res: Response) => {
 // Удалить категорию
 export const deleteCategory = async (req: Request, res: Response) => {
   try {
+    const token = (req as any).token;
+    if (!token?.userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Проверяем доступ к инструменту shop
+    if (!(await checkShopAccess(token.userId))) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
     const { id } = req.params;
     // Проверяем, есть ли объявления в этой категории
     const adsCount = await prisma.shop.count({
@@ -265,7 +479,7 @@ export const getAds = async (req: Request, res: Response) => {
       where.OR = [
         { title: { contains: String(search), mode: 'insensitive' } },
         { description: { contains: String(search), mode: 'insensitive' } },
-        { items: { some: { name: { contains: String(search), mode: 'insensitive' } } } },
+        { article: { contains: String(search), mode: 'insensitive' } },
       ];
     }
 
@@ -303,17 +517,12 @@ export const getAds = async (req: Request, res: Response) => {
               id: true,
               name: true,
               email: true,
+              image: true,
             },
           },
-          images: {
+          attachments: {
             orderBy: { sortOrder: 'asc' },
             take: 1, // Только первое изображение для списка
-          },
-          items: {
-            orderBy: { sortOrder: 'asc' },
-          },
-          _count: {
-            select: { items: true },
           },
         },
       }),
@@ -366,16 +575,11 @@ export const getAdById = async (req: Request, res: Response) => {
             id: true,
             name: true,
             email: true,
+            image: true,
           },
         },
-        images: {
+        attachments: {
           orderBy: { sortOrder: 'asc' },
-        },
-        items: {
-          orderBy: { sortOrder: 'asc' },
-        },
-        _count: {
-          select: { items: true },
         },
       },
     });
@@ -407,20 +611,13 @@ export const createAd = async (req: Request, res: Response) => {
     }
 
     const data = createAdSchema.parse(req.body);
-    const { items, ...shopData } = data;
     
     const shop = await prisma.shop.create({
       data: {
-        ...shopData,
+        ...data,
         userId: token.userId,
         status: 'ACTIVE',
         publishedAt: new Date(),
-        items: {
-          create: items.map((item, index) => ({
-            ...item,
-            sortOrder: index,
-          })),
-        },
       },
       include: {
         category: {
@@ -444,9 +641,10 @@ export const createAd = async (req: Request, res: Response) => {
             id: true,
             name: true,
             email: true,
+            image: true,
           },
         },
-        items: {
+        attachments: {
           orderBy: { sortOrder: 'asc' },
         },
       },
@@ -480,50 +678,23 @@ export const updateAd = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Shop not found' });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: token.userId },
-      select: { role: true },
-    });
-
-    if (shop.userId !== token.userId && user?.role !== 'ADMIN' && user?.role !== 'DEVELOPER') {
+    // Проверяем доступ с помощью функции checkShopEditAccess
+    const hasAccess = await checkShopEditAccess(token.userId, shop.userId);
+    if (!hasAccess) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
     const data = updateAdSchema.parse(req.body);
-    const { items, ...shopData } = data;
     
     const currentAd = await prisma.shop.findUnique({
       where: { id },
       select: { publishedAt: true },
     });
 
-    // Обновляем товары если они переданы
-    if (items) {
-      // Удаляем старые товары
-      await prisma.shopItem.deleteMany({
-        where: { shopId: id },
-      });
-      
-      // Создаем новые товары
-      if (items.length > 0) {
-        await prisma.shopItem.createMany({
-          data: items.map((item, index) => ({
-            shopId: id,
-            name: item.name,
-            quantity: item.quantity,
-            article: item.article || null,
-            description: item.description || null,
-            condition: item.condition,
-            sortOrder: index,
-          })),
-        });
-      }
-    }
-
     const updatedAd = await prisma.shop.update({
       where: { id },
       data: {
-        ...shopData,
+        ...data,
         publishedAt: data.status === 'ACTIVE' && !currentAd?.publishedAt ? new Date() : undefined,
       },
       include: {
@@ -548,12 +719,10 @@ export const updateAd = async (req: Request, res: Response) => {
             id: true,
             name: true,
             email: true,
+            image: true,
           },
         },
-        images: {
-          orderBy: { sortOrder: 'asc' },
-        },
-        items: {
+        attachments: {
           orderBy: { sortOrder: 'asc' },
         },
       },
@@ -586,12 +755,9 @@ export const deleteAd = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Shop not found' });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: token.userId },
-      select: { role: true },
-    });
-
-    if (shop.userId !== token.userId && user?.role !== 'ADMIN' && user?.role !== 'DEVELOPER') {
+    // Проверяем доступ с помощью функции checkShopEditAccess
+    const hasAccess = await checkShopEditAccess(token.userId, shop.userId);
+    if (!hasAccess) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
@@ -609,8 +775,9 @@ export const deleteAd = async (req: Request, res: Response) => {
 
 // ==================== AdRequest Functions ====================
 
-// Создать запрос в карточку
-export const createAdRequest = async (req: Request, res: Response) => {
+// Удалено: функции работы с ShopRequest больше не нужны, так как ShopRequest удален из схемы
+// Вместо этого используется универсальная система комментариев (Comment)
+/* export const createAdRequest = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const userId = (req as any).token?.userId;
@@ -1186,6 +1353,148 @@ export const addShipmentDocNumber = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('[Ads] Error adding shipment doc number:', error);
     res.status(500).json({ error: 'Failed to add shipment doc number' });
+  }
+}; */
+
+// Создать резерв для объявления
+export const createReserve = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const token = (req as any).token;
+    if (!token?.userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { quantity, branchId } = req.body;
+
+    // Валидация
+    if (!quantity || quantity < 1) {
+      return res.status(400).json({ error: 'Количество должно быть больше 0' });
+    }
+
+    // Проверяем существование объявления
+    const shop = await prisma.shop.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        title: true,
+        quantity: true,
+        status: true,
+        userId: true,
+      },
+    });
+
+    if (!shop) {
+      return res.status(404).json({ error: 'Объявление не найдено' });
+    }
+
+    if (shop.status !== 'ACTIVE') {
+      return res.status(400).json({ error: 'Можно забронировать только активные объявления' });
+    }
+
+    // Проверяем, что пользователь не бронирует свое объявление
+    if (shop.userId === token.userId) {
+      return res.status(400).json({ error: 'Нельзя забронировать свое объявление' });
+    }
+
+    // Проверяем доступное количество
+    const existingReserves = await prisma.shopReserve.findMany({
+      where: {
+        shopId: id,
+        status: { in: ['PENDING', 'APPROVED'] },
+      },
+    });
+
+    const reservedQuantity = existingReserves.reduce((sum, reserve) => sum + reserve.quantity, 0);
+    const availableQuantity = shop.quantity - reservedQuantity;
+
+    if (quantity > availableQuantity) {
+      return res.status(400).json({ 
+        error: `Доступно только ${availableQuantity} шт. (всего: ${shop.quantity}, забронировано: ${reservedQuantity})` 
+      });
+    }
+
+    // Получаем филиал пользователя, если не указан
+    let userBranchId = branchId;
+    if (!userBranchId) {
+      const user = await prisma.user.findUnique({
+        where: { id: token.userId },
+        select: { branch: true },
+      });
+      if (user?.branch) {
+        // Пытаемся найти филиал по UUID или имени
+        const branch = await prisma.branch.findFirst({
+          where: {
+            OR: [
+              { uuid: user.branch },
+              { name: user.branch },
+              { code: user.branch },
+            ],
+          },
+        });
+        userBranchId = branch?.uuid || null;
+      }
+    }
+
+    // Создаем резерв
+    const reserve = await prisma.shopReserve.create({
+      data: {
+        shopId: id,
+        requesterId: token.userId,
+        branchId: userBranchId,
+        quantity: quantity,
+        status: 'PENDING',
+      },
+      include: {
+        requester: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        branch: {
+          select: {
+            uuid: true,
+            name: true,
+            code: true,
+            city: true,
+          },
+        },
+        shop: {
+          select: {
+            id: true,
+            title: true,
+            userId: true,
+          },
+        },
+      },
+    });
+
+    // Отправляем уведомление владельцу объявления
+    try {
+      const { NotificationController } = await import('../app/notification.js');
+      await NotificationController.create({
+        type: 'INFO',
+        channels: ['IN_APP', 'TELEGRAM', 'EMAIL'],
+        title: 'Новый запрос на резервирование',
+        message: `Пользователь ${reserve.requester.name} запросил резервирование ${quantity} шт. товара "${shop.title}"`,
+        senderId: token.userId,
+        receiverId: shop.userId,
+        priority: 'MEDIUM',
+        action: {
+          type: 'NAVIGATE',
+          url: `/retail/shop?reserveId=${reserve.id}`,
+        },
+      });
+    } catch (notifError) {
+      console.error('[Shop] Error sending notification:', notifError);
+    }
+
+    res.json(reserve);
+  } catch (error) {
+    console.error('[Shop] Error creating reserve:', error);
+    res.status(500).json({ error: 'Failed to create reserve' });
   }
 };
 

@@ -287,14 +287,14 @@ export const requestToolAccess = async (req: Request, res: Response): Promise<an
         toolId: tool.id,
         accessLevel: 'FULL'
       },
-      select: {
+      include: {
         user: {
-          select: { id: true, name: true, email: true }
+          select: { id: true, name: true, email: true, role: true }
         }
       }
     });
     
-    // Находим разработчиков
+    // Находим всех разработчиков
     const developers = await prisma.user.findMany({
       where: {
         role: 'DEVELOPER'
@@ -305,8 +305,9 @@ export const requestToolAccess = async (req: Request, res: Response): Promise<an
     // Объединяем получателей (убираем дубликаты)
     const recipients = new Map<string, { id: string; name: string; email: string }>();
     
+    // Добавляем только админов с полным доступом к инструменту
     fullAccessUsers.forEach(access => {
-      if (access.user.id !== user.id) {
+      if (access.user.id !== user.id && access.user.role === 'ADMIN') {
         recipients.set(access.user.id, {
           id: access.user.id,
           name: access.user.name,
@@ -315,6 +316,7 @@ export const requestToolAccess = async (req: Request, res: Response): Promise<an
       }
     });
     
+    // Добавляем всех разработчиков
     developers.forEach(dev => {
       if (dev.id !== user.id) {
         recipients.set(dev.id, {
@@ -332,11 +334,6 @@ export const requestToolAccess = async (req: Request, res: Response): Promise<an
     }
     
     // Создаем обратную связь
-    const systemSenderId = process.env.SYSTEM_SENDER_ID || null;
-    if (!systemSenderId) {
-      return res.status(500).json({ error: 'SYSTEM_SENDER_ID not configured' });
-    }
-    
     const feedbackText = `Запрос доступа к инструменту "${tool.name}"\n\nПользователь: ${user.name} (${user.email})\nИнструмент: ${tool.name} (${tool.link})\n\nПожалуйста, предоставьте доступ к этому инструменту.`;
     
     const feedback = await (prisma as any).feedback.create({
@@ -358,7 +355,7 @@ export const requestToolAccess = async (req: Request, res: Response): Promise<an
       }
     });
     
-    // Отправляем уведомления получателям
+    // Отправляем уведомления получателям от пользователя, который запрашивает доступ
     const { NotificationController } = await import('./notification.js');
     const toolRecord = await prisma.tool.findUnique({
       where: { id: tool.id },
@@ -372,7 +369,7 @@ export const requestToolAccess = async (req: Request, res: Response): Promise<an
           channels: ['IN_APP', 'EMAIL', 'TELEGRAM'],
           title: `Запрос доступа к инструменту: ${tool.name}`,
           message: `${user.name} (${user.email}) запрашивает доступ к инструменту "${tool.name}"`,
-          senderId: systemSenderId,
+          senderId: user.id, // Отправляем от пользователя, который запрашивает доступ
           receiverId: recipient.id,
           toolId: toolRecord?.id,
           priority: 'MEDIUM',
@@ -695,18 +692,16 @@ export const approveAccessRequest = async (req: Request, res: Response): Promise
       }
     });
     
-    // Отправляем уведомление запросившему пользователю
-    const { NotificationController } = await import('./notification.js');
-    const systemSenderId = process.env.SYSTEM_SENDER_ID || null;
-    
-    if (systemSenderId && request.user) {
+    // Отправляем уведомление запросившему пользователю от администратора, который одобрил
+    if (request.user) {
+      const { NotificationController } = await import('./notification.js');
       try {
         await NotificationController.create({
           type: 'SUCCESS',
           channels: ['IN_APP', 'EMAIL'],
           title: `Доступ предоставлен: ${metadata?.toolName || 'Инструмент'}`,
           message: `Вам предоставлен доступ к инструменту "${metadata?.toolName || 'Инструмент'}" с уровнем доступа "${accessLevel}"`,
-          senderId: systemSenderId,
+          senderId: user.id, // От администратора, который одобрил
           receiverId: requesterId,
           toolId: toolId,
           priority: 'MEDIUM',
@@ -814,19 +809,18 @@ export const rejectAccessRequest = async (req: Request, res: Response): Promise<
       }
     });
     
-    // Отправляем уведомление запросившему пользователю
-    const { NotificationController } = await import('./notification.js');
-    const systemSenderId = process.env.SYSTEM_SENDER_ID || null;
+    // Отправляем уведомление запросившему пользователю от администратора, который отклонил
     const requesterId = metadata?.requestedBy || request.userId;
     
-    if (systemSenderId && requesterId) {
+    if (requesterId) {
+      const { NotificationController } = await import('./notification.js');
       try {
         await NotificationController.create({
           type: 'WARNING',
           channels: ['IN_APP', 'EMAIL'],
           title: `Запрос доступа отклонен: ${metadata?.toolName || 'Инструмент'}`,
           message: reason || `Ваш запрос доступа к инструменту "${metadata?.toolName || 'Инструмент'}" был отклонен`,
-          senderId: systemSenderId,
+          senderId: user.id, // От администратора, который отклонил
           receiverId: requesterId,
           toolId: toolId,
           priority: 'MEDIUM'

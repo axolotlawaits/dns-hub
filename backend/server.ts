@@ -35,6 +35,7 @@ import printServiceRouter from './routes/retail/printService.js'
 import appStoreRouter from './routes/retail/appStore.js'
 import trassirRouter from './routes/retail/trassir.js'
 import shopRouter from './routes/retail/shop.js'
+import commentRouter from './routes/app/comment.js'
 import adminRouter from './routes/admin.js'
 import telegramRouter  from './routes/app/telegram.js'
 import bugReportsRouter from './routes/app/bugReports.js'
@@ -256,6 +257,7 @@ app.use('/hub-api/retail/merch', merchRouter) // Дублируем маршру
 app.use('/hub-api/retail/print-service', printServiceRouter);
 app.use('/hub-api/retail/app-store', appStoreRouter);
 app.use('/hub-api/retail/shop', shopRouter);
+app.use('/hub-api/comments', commentRouter);
 app.use('/hub-api/trassir', trassirRouter);
 
 // Остальные роуты

@@ -1,4 +1,4 @@
-import { Modal, TextInput, Select, Button, Alert, Stack, Textarea, Text, Group, Card, Paper, ActionIcon, MultiSelect, Badge, Switch, Autocomplete } from '@mantine/core';
+import { Modal, TextInput, Select, Button, Alert, Stack, Textarea, Text, Group, Card, Paper, ActionIcon, MultiSelect, Badge, Switch, Autocomplete, PasswordInput } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useState, useEffect, useCallback, useMemo, useRef, JSX, memo } from 'react';
 import dayjs from 'dayjs';
@@ -128,7 +128,7 @@ const COMMON_FIELD_PROPS = {
 const DECORATIVE_CLASS = 'decorative-element';
 
 // Types and interfaces
-export type FieldType = 'text' | 'number' | 'select' | 'selectSearch' | 'autocomplete' | 'date' | 'datetime' | 'textarea' | 'file' | 'boolean' | 'multiselect' | 'icon';
+export type FieldType = 'text' | 'password' | 'number' | 'select' | 'selectSearch' | 'autocomplete' | 'date' | 'datetime' | 'textarea' | 'file' | 'boolean' | 'multiselect' | 'icon';
 
 interface FileFieldConfig {
   name: string;
@@ -1339,6 +1339,20 @@ export const DynamicFormModal = ({
       case 'text':
         return (
           <TextInput
+            key={field.name}
+            {...commonProps}
+            onKeyDown={field.onKeyDown}
+            onChange={(e) => {
+              const raw = e.target.value;
+              const masked = typeof field.mask === 'function' ? field.mask(raw) : raw;
+              form.setFieldValue(field.name, masked);
+              field.onChange?.(masked, form.setFieldValue);
+            }}
+          />
+        );
+      case 'password':
+        return (
+          <PasswordInput
             key={field.name}
             {...commonProps}
             onKeyDown={field.onKeyDown}

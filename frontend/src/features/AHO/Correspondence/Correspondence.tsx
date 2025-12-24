@@ -1354,9 +1354,18 @@ export default function CorrespondenceList() {
           maxWidth="1400px"
           height="90vh"
           maxHeight="90vh"
+          styles={{
+            body: {
+              overflow: 'hidden',
+              padding: 0,
+              height: 'calc(90vh - 80px)',
+              display: 'flex',
+              flexDirection: 'column'
+            }
+          }}
         >
-          <ScrollArea h="calc(90vh - 120px)">
-            <Stack gap="xl">
+          <ScrollArea h="100%" style={{ flex: 1 }}>
+            <Stack gap="xl" p="xl">
               {(() => {
                 const item = state.selectedCorrespondence;
                 if (!item) return null;
