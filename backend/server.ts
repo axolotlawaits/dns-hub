@@ -55,9 +55,8 @@ import { telegramService } from './controllers/app/telegram.js';
 import { merchBotService } from './controllers/app/merchBot.js';
 import { trassirService } from './controllers/app/trassirService.js';
 import { initToolsCron } from './tasks/cron.js';
-import Prometheus from 'prom-client'
-import { memoryUsage } from "process"
-import { calculateCpuUsage } from './utils/metrics.js';
+import { metricsMiddleware } from './middleware/metrics.js';
+import { register } from './middleware/metrics.js';
 
 const app = express()
 
@@ -71,10 +70,6 @@ export const prisma = new PrismaClient({
 })
 
 const __dirname = path.resolve()
-
-// init Prometheus metrics collection
-const register = new Prometheus.Registry()
-Prometheus.collectDefaultMetrics({ register, prefix: "hub_" })
 
 // Настройка доверия к прокси для правильного определения IP адресов
 app.set('trust proxy', true);
@@ -112,51 +107,7 @@ const corsOptions: cors.CorsOptions = {
   exposedHeaders: ['Content-Disposition', 'Content-Type', 'Content-Length']
 }
 
-const httpRequestCount = new Prometheus.Counter({
-  name: 'hub_http_request_total',
-  help: 'Total number of HTTP requests',
-  labelNames: ['method', 'route', 'status'],
-  registers: [register]
-})
-
-const httpRequestDuration = new Prometheus.Histogram({
-  name: 'hub_http_request_duration_seconds',
-  help: 'HTTP request duration in seconds',
-  labelNames: ['method', 'route', 'status'],
-  buckets: [0.1, 0.5, 1, 2, 5],
-  registers: [register]
-})
-
-const nodejsMemory = new Prometheus.Gauge({
-  name: "hub_node_memory_usage_bytes",
-  help: "Current memory usage of the Node.js process in bytes",
-  registers: [register]
-})
-
-const nodejsCpuUsage = new Prometheus.Gauge({
-  name: "hub_node_cpu_usage_percent",
-  help: "CPU utilization of the Node.js process in percentage",
-  registers: [register]
-})
-
-app.use((req, res, next) => {
-  const end = httpRequestDuration.startTimer()
-  
-  const usedMemoryBefore = memoryUsage().rss
-  const usedCpuBefore = calculateCpuUsage()
-
-  res.on('finish', () => {
-    httpRequestCount.inc({ method: req.method, route: req.path, status: res.statusCode })
-    end({ method: req.method, route: req.path, status: res.statusCode })
-    
-    const usedMemoryAfter = memoryUsage().rss
-    const usedCpuaAfter = calculateCpuUsage()
-
-    nodejsMemory.set(usedMemoryAfter - usedMemoryBefore)
-    nodejsCpuUsage.set(usedCpuaAfter - usedCpuBefore)
-  })
-  next()
-})
+app.use(metricsMiddleware)
 
 // Trust proxy для правильного определения IP адресов
 app.set('trust proxy', 1);
