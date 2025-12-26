@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {  ActionIcon,  AppShell,  Avatar,  Menu,  Divider,  Group,  Text,  Tooltip, Transition, Box, Button, Badge, ThemeIcon, ScrollArea, Loader, Stack } from '@mantine/core';
-import {  IconBrightnessDown,  IconLogin,  IconLogout,  IconMoon,  IconUser, IconSearch, IconBell, IconAlertCircle, IconInfoCircle, IconCheck, IconX, IconMail } from '@tabler/icons-react';
+import {  IconBrightnessDown,  IconLogin,  IconLogout,  IconMoon,  IconUser, IconSearch, IconBell, IconAlertCircle, IconInfoCircle, IconCheck, IconX, IconMail, IconChristmasTree, IconSnowflake } from '@tabler/icons-react';
 import { useNavigate } from 'react-router';
 import { useUserContext } from '../hooks/useUserContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -15,6 +15,7 @@ import logoFullDark from '../assets/images/logo-dark.svg';
 import logoMiniLight from '../assets/images/logo-light-mini.svg';
 import logoFullLight from '../assets/images/logo-light.svg';
 import './styles/Header.css';
+import Snowfall from 'react-snowfall'
 
 interface HeaderProps {
   navOpened: boolean;
@@ -258,6 +259,13 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
 
   return (
     <AppShell.Header className="modern-header" data-header>
+      <Snowfall
+        speed={[0.1, 1.0]}
+        snowflakeCount={100}
+        radius={[0.5, 1.5]}
+        color={isDark ? '#dee4fd' : '#03a9f4'}
+      >
+      </Snowfall>
       <div className="header-content">
         {/* Левая часть */}
         <div className="header-left">
@@ -287,6 +295,7 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
                   DNS
                 </Text>
               </div>
+              <IconChristmasTree size={35} stroke={1.5} color='green'/>
             </div>
           </Group>
         </div>

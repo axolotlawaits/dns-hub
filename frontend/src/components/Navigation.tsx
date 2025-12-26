@@ -17,7 +17,7 @@ import {
   IconHome,
   IconChevronRight,
   IconAlertCircle,
-  IconMessageCircle
+  IconChristmasBall
 } from '@tabler/icons-react';
 import * as TablerIcons from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
@@ -27,6 +27,7 @@ import { useUserContext } from '../hooks/useUserContext';
 import './styles/Navigation.css';
 import { DynamicFormModal, type FormField } from '../utils/formModal';
 import { notificationSystem } from '../utils/Push';
+import Snowfall from 'react-snowfall'
 
 // Утилита для запросов с автоматическим обновлением токена
 const fetchWithTokenRefresh = async (url: string, options: RequestInit = {}): Promise<Response> => {
@@ -99,7 +100,7 @@ const Navigation: React.FC<NavigationProps> = ({ navOpened, toggleNav }) => {
   const [toolsData, setToolsData] = useState<any>(null);
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
-  const { } = useTheme();
+  const { isDark } = useTheme();
   const { user } = useUserContext();
   const navigate = useNavigate();
 
@@ -370,6 +371,7 @@ const Navigation: React.FC<NavigationProps> = ({ navOpened, toggleNav }) => {
         className={`nav-option ${isActive ? 'active' : ''}`}
         onClick={() => handleClick(`/${tool.link}`, tool.id, tool)}
       >
+ 
         <div className="nav-option-content">
           <div className="nav-option-icon">
             {IconComponent}
@@ -408,6 +410,13 @@ const Navigation: React.FC<NavigationProps> = ({ navOpened, toggleNav }) => {
 
   return (
     <AppShell.Navbar className={`modern-navbar ${!navOpened ? 'collapsed' : ''}`} data-navigation>
+      <Snowfall
+        speed={[0.1, 1]}
+        snowflakeCount={100}
+        radius={[0.5, 1.5]}
+        color={isDark ? '#dee4fd' : '#03a9f4'}
+      >
+      </Snowfall>
       <div className="navbar-content">
         {/* Кнопка сворачивания */}
         <div className="navbar-header">
@@ -477,7 +486,7 @@ const Navigation: React.FC<NavigationProps> = ({ navOpened, toggleNav }) => {
               {/* Кнопка обратной связи - прямо под меню */}
               <div className="navbar-feedback-section">
                 <Button
-                  leftSection={<IconMessageCircle size={20} />}
+                  leftSection={<IconChristmasBall size={20} />}
                   onClick={() => {
                     setFeedbackModalOpened(true);
                   }}
