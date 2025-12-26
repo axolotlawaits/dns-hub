@@ -231,7 +231,7 @@ export default function NewsList() {
         )}
       </Group>
       
-      <Flex gap="md" ref={containerRef} wrap="nowrap" style={{ overflowX: 'auto' }}>
+      <Flex gap="md" ref={containerRef} wrap="nowrap">
         {visibleNews.map((newsItem) => (
           <Card
             key={newsItem.id}
