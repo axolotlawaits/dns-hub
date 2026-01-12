@@ -27,7 +27,6 @@ import { useUserContext } from '../hooks/useUserContext';
 import './styles/Navigation.css';
 import { DynamicFormModal, type FormField } from '../utils/formModal';
 import { notificationSystem } from '../utils/Push';
-import Snowfall from 'react-snowfall'
 
 // Утилита для запросов с автоматическим обновлением токена
 const fetchWithTokenRefresh = async (url: string, options: RequestInit = {}): Promise<Response> => {
@@ -410,13 +409,6 @@ const Navigation: React.FC<NavigationProps> = ({ navOpened, toggleNav }) => {
 
   return (
     <AppShell.Navbar className={`modern-navbar ${!navOpened ? 'collapsed' : ''}`} data-navigation>
-      <Snowfall
-        speed={[0.1, 1]}
-        snowflakeCount={100}
-        radius={[0.5, 1.5]}
-        color={isDark ? '#dee4fd' : '#03a9f4'}
-      >
-      </Snowfall>
       <div className="navbar-content">
         {/* Кнопка сворачивания */}
         <div className="navbar-header">

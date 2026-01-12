@@ -15,7 +15,6 @@ import logoFullDark from '../assets/images/logo-dark.svg';
 import logoMiniLight from '../assets/images/logo-light-mini.svg';
 import logoFullLight from '../assets/images/logo-light.svg';
 import './styles/Header.css';
-import Snowfall from 'react-snowfall'
 
 interface HeaderProps {
   navOpened: boolean;
@@ -259,13 +258,6 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
 
   return (
     <AppShell.Header className="modern-header" data-header>
-      <Snowfall
-        speed={[0.1, 1.0]}
-        snowflakeCount={100}
-        radius={[0.5, 1.5]}
-        color={isDark ? '#dee4fd' : '#03a9f4'}
-      >
-      </Snowfall>
       <div className="header-content">
         {/* Левая часть */}
         <div className="header-left">
@@ -295,7 +287,6 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
                   DNS
                 </Text>
               </div>
-              <IconChristmasTree size={35} stroke={1.5} color='green'/>
             </div>
           </Group>
         </div>
