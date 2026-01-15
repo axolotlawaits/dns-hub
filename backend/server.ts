@@ -57,6 +57,8 @@ import { trassirService } from './controllers/app/trassirService.js';
 import { initToolsCron } from './tasks/cron.js';
 import { metricsMiddleware } from './middleware/metrics.js';
 import { register } from './middleware/metrics.js';
+import logger from './middleware/logger.js';
+import pinoHttp from 'pino-http'
 
 const app = express()
 
@@ -108,6 +110,7 @@ const corsOptions: cors.CorsOptions = {
 }
 
 app.use(metricsMiddleware)
+app.use(pinoHttp({ logger }))
 
 // Trust proxy для правильного определения IP адресов
 app.set('trust proxy', 1);
