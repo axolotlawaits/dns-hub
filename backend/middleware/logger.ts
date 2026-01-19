@@ -1,20 +1,22 @@
 import pino from 'pino'
 
-const transport = pino.transport({
-  target: 'pino-loki',
-  options: {
-    host: process.env.LOKI_URL, 
-    batching: true, 
-    colorize: true,
-    interval: 5, 
-    labels: {
-      application: 'hub', 
-    },
-  },
-});
+let logger;
 
-const logger = pino({
-  level: 'info', 
-}, transport)
+if (process.env.NODE_ENV !== 'production') {
+  logger = pino({ level: 'silent' })
+
+} else {
+  const transport = pino.transport({
+    target: 'pino-loki',
+    options: {
+      host: process.env.LOKI_URL, 
+      batching: true, 
+      interval: 5, 
+      labels: { application: 'hub' },
+    },
+  })
+  
+  logger = pino({ level: 'info' }, transport)
+}
 
 export default logger
