@@ -7,7 +7,6 @@ import { DynamicFormModal } from '../../../utils/formModal';
 import { DndProviderWrapper } from '../../../utils/dnd';
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { useUserContext } from '../../../hooks/useUserContext';
-import { useAccessContext } from '../../../hooks/useAccessContext';
 import './AppStore.css';
 
 // Типы данных

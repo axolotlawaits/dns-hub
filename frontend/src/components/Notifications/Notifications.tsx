@@ -19,6 +19,7 @@ import {
   IconCheck, 
   IconX
 } from '@tabler/icons-react';
+import { useNavigate } from 'react-router-dom';
 import { useUserContext } from '../../hooks/useUserContext';
 import { API } from '../../config/constants';
 import './Notifications.css';
@@ -58,6 +59,7 @@ const NOTIFICATION_COLORS = {
 
 function NotificationsList() {
   const { user } = useUserContext();
+  const navigate = useNavigate();
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,7 +84,11 @@ function NotificationsList() {
     }
   }, [user?.id]);
 
-  const markAsRead = useCallback(async (notificationId: string) => {
+  const markAsRead = useCallback(async (notificationId: string | undefined) => {
+    if (!notificationId) {
+      console.warn('[Notifications] markAsRead called with undefined notificationId');
+      return;
+    }
     try {
       const response = await fetch(`${API}/notifications/read/${notificationId}`, {
         method: 'PATCH',
@@ -219,6 +225,21 @@ function NotificationsList() {
             <div
                   key={notification.id}
               className={`notification-item ${isUnread ? 'notification-unread' : ''}`}
+              onClick={() => {
+                // Обрабатываем клик по уведомлению
+                if (notification.action && typeof notification.action === 'object') {
+                  const action = notification.action as any;
+                  if (action.type === 'NAVIGATE' && action.url) {
+                    // Переходим по URL из action
+                    navigate(action.url);
+                    // Отмечаем как прочитанное при клике
+                    if (isUnread && notification.id) {
+                      markAsRead(notification.id);
+                    }
+                  }
+                }
+              }}
+              style={{ cursor: notification.action ? 'pointer' : 'default' }}
             >
               <div className="notification-content">
                 <div className="notification-icon">
@@ -257,7 +278,11 @@ function NotificationsList() {
                         variant="subtle"
                     size="sm"
                     color="blue"
-                    onClick={() => markAsRead(notification.id)}
+                    onClick={() => {
+                      if (notification.id) {
+                        markAsRead(notification.id);
+                      }
+                    }}
                     title="Отметить как прочитанное"
                     className="notification-action"
                   >

@@ -214,27 +214,29 @@
 .filter-date-group {
   display: flex !important;
   flex-direction: row !important;
-  gap: 4px;
+  gap: 8px;
   align-items: flex-end;
   width: 100%;
+  box-sizing: border-box;
 }
 
 .filter-date-item {
-  flex: 1;
-  min-width: 120px;
-  max-width: 50%;
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: calc(50% - 4px);
+  box-sizing: border-box;
 }
-  
-  
-  .filter-date-group {
-    flex-direction: column !important;
-    gap: 8px;
-  }
-  
-  .filter-date-item {
-    min-width: 100%;
-    max-width: 100%;
-  }
+
+.filter-date-item .mantine-TextInput-root {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.filter-date-item .mantine-TextInput-input {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
 
 
 /* Темная тема - стили наследуются автоматически */

@@ -156,36 +156,125 @@ export const getUserAccessInfo = async (req: Request, res: Response): Promise<an
 }
 
 export const updateUserAccessInfo = async (req: Request, res: Response): Promise<any>  => {
-  const { toolId, accessLevel } = req.body
-  const userId = req.params.id
+  try {
+    const { toolId, accessLevel } = req.body
+    const userId = req.params.id
+    const token = (req as any).token;
+    const grantedBy = token?.userId;
 
-  const access = await prisma.userToolAccess.upsert({
-    where: { userId_toolId: { userId, toolId }},
-    update: { accessLevel },
-    create: { 
-      accessLevel,
-      tool: { connect: { id: toolId } },
-      user: { connect: { id: userId } }
+    // Проверяем, был ли доступ до этого
+    const existingAccess = await prisma.userToolAccess.findUnique({
+      where: { userId_toolId: { userId, toolId }}
+    });
+
+    const access = await prisma.userToolAccess.upsert({
+      where: { userId_toolId: { userId, toolId }},
+      update: { accessLevel },
+      create: { 
+        accessLevel,
+        tool: { connect: { id: toolId } },
+        user: { connect: { id: userId } }
+      },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true }
+        },
+        tool: {
+          select: { id: true, name: true, link: true }
+        }
+      }
+    })
+    
+    if (access) {
+      // Отправляем уведомление только если доступ был выдан без запроса (не было существующего доступа)
+      if (!existingAccess && userId !== grantedBy) {
+        const { NotificationController } = await import('./notification.js');
+        try {
+          await NotificationController.create({
+            type: 'SUCCESS',
+            channels: ['IN_APP', 'EMAIL'],
+            title: `Доступ предоставлен: ${access.tool.name}`,
+            message: `Вам предоставлен доступ к инструменту "${access.tool.name}" с уровнем доступа "${accessLevel}"`,
+            senderId: grantedBy || userId,
+            receiverId: userId,
+            toolId: toolId,
+            priority: 'MEDIUM',
+            action: {
+              type: 'NAVIGATE',
+              path: `/${access.tool.link}`,
+              params: {}
+            }
+          });
+        } catch (notifError) {
+          console.error('Failed to send access grant notification:', notifError);
+        }
+      }
+      
+      res.status(200).json(access)
+    } else {
+      res.status(400).json({error: 'ошибка обновления доступа'})
     }
-  })
-  if (access) {
-    res.status(200).json(access)
-  } else {
-    res.status(400).json({error: 'ошибка обновления доступа'})
+  } catch (error) {
+    console.error('Error updating user access:', error);
+    res.status(500).json({error: 'ошибка обновления доступа'})
   }
 }
 
 export const deleteUserAccessInfo = async (req: Request, res: Response): Promise<any>  => {
-  const { toolId } = req.body
-  const userId = req.params.id
+  try {
+    const { toolId } = req.body
+    const userId = req.params.id
+    const token = (req as any).token;
+    const revokedBy = token?.userId;
 
-  const access = await prisma.userToolAccess.delete({
-    where: { userId_toolId: { userId, toolId }}
-  })
-  if (access) {
-    res.status(200).json(access)
-  } else {
-    res.status(400).json({error: 'ошибка обновления доступа'})
+    // Получаем информацию о доступе перед удалением
+    const access = await prisma.userToolAccess.findUnique({
+      where: { userId_toolId: { userId, toolId }},
+      include: {
+        user: {
+          select: { id: true, name: true, email: true }
+        },
+        tool: {
+          select: { id: true, name: true, link: true }
+        }
+      }
+    });
+
+    if (!access) {
+      return res.status(404).json({error: 'Доступ не найден'})
+    }
+
+    const deletedAccess = await prisma.userToolAccess.delete({
+      where: { userId_toolId: { userId, toolId }}
+    })
+    
+    if (deletedAccess) {
+      // Отправляем уведомление пользователю о снятии доступа
+      if (userId !== revokedBy) {
+        const { NotificationController } = await import('./notification.js');
+        try {
+          await NotificationController.create({
+            type: 'WARNING',
+            channels: ['IN_APP', 'EMAIL'],
+            title: `Доступ снят: ${access.tool.name}`,
+            message: `Вам снят доступ к инструменту "${access.tool.name}"`,
+            senderId: revokedBy || userId,
+            receiverId: userId,
+            toolId: toolId,
+            priority: 'MEDIUM'
+          });
+        } catch (notifError) {
+          console.error('Failed to send access revocation notification:', notifError);
+        }
+      }
+      
+      res.status(200).json(deletedAccess)
+    } else {
+      res.status(400).json({error: 'ошибка обновления доступа'})
+    }
+  } catch (error) {
+    console.error('Error deleting user access:', error);
+    res.status(500).json({error: 'ошибка обновления доступа'})
   }
 }
 
@@ -486,13 +575,59 @@ export const getAccessRequests = async (req: Request, res: Response): Promise<an
       .map((req: any) => req.userId || (req.metadata as any)?.requestedBy)
       .filter((id: string | null | undefined): id is string => !!id);
     
-    const usersMap = new Map<string, { id: string; name: string; email: string }>();
+    const usersMap = new Map<string, { 
+      id: string; 
+      name: string; 
+      email: string;
+      branchRrs?: string;
+      branchName?: string;
+      positionName?: string;
+    }>();
     if (userIds.length > 0) {
       const users = await prisma.user.findMany({
         where: { id: { in: userIds } },
         select: { id: true, name: true, email: true }
       });
-      users.forEach(user => usersMap.set(user.id, user));
+      
+      // Получаем информацию о филиалах и должностях из UserData
+      const userEmails = users.map(u => u.email).filter(Boolean);
+      const userDataList = await prisma.userData.findMany({
+        where: { email: { in: userEmails } },
+        include: {
+          branch: {
+            select: {
+              rrs: true,
+              name: true
+            }
+          },
+          position: {
+            select: {
+              name: true
+            }
+          }
+        }
+      });
+      
+      // Создаем мапу email -> userData
+      const userDataMap = new Map<string, typeof userDataList[0]>();
+      userDataList.forEach(ud => {
+        if (ud.email) {
+          userDataMap.set(ud.email, ud);
+        }
+      });
+      
+      // Обогащаем пользователей данными о филиале и должности
+      users.forEach(user => {
+        const userData = user.email ? userDataMap.get(user.email) : null;
+        usersMap.set(user.id, {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          branchRrs: userData?.branch?.rrs || undefined,
+          branchName: userData?.branch?.name || undefined,
+          positionName: userData?.position?.name || undefined
+        });
+      });
     }
     
     // Добавляем информацию о пользователях к запросам
@@ -505,13 +640,31 @@ export const getAccessRequests = async (req: Request, res: Response): Promise<an
     });
     
     // Фильтруем запросы: показываем только те, к которым у пользователя есть FULL доступ или он ADMIN/DEVELOPER
+    // И исключаем запросы, для которых доступ уже выдан вручную
     const filteredRequests = [];
     
     for (const request of accessRequestsWithUsers) {
       const metadata = request.metadata as any;
       const toolId = metadata?.toolId;
+      const requesterId = request.userId || metadata?.requestedBy;
       
-      if (!toolId) continue;
+      if (!toolId || !requesterId) continue;
+      
+      // Проверяем, не выдан ли уже доступ вручную (через UserToolAccess)
+      // Если доступ уже есть, не показываем запрос
+      const existingAccess = await prisma.userToolAccess.findUnique({
+        where: {
+          userId_toolId: {
+            userId: requesterId,
+            toolId: toolId
+          }
+        }
+      });
+      
+      // Если доступ уже выдан вручную, пропускаем этот запрос
+      if (existingAccess) {
+        continue;
+      }
       
       // DEVELOPER имеет приоритетный доступ ко всему - видит все запросы
       if (user.role === 'DEVELOPER') {
@@ -569,16 +722,7 @@ export const approveAccessRequest = async (req: Request, res: Response): Promise
     
     // Получаем запрос
     const request = await (prisma as any).feedback.findUnique({
-      where: { id: requestId },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true
-          }
-        }
-      }
+      where: { id: requestId }
     });
     
     if (!request) {
@@ -592,6 +736,20 @@ export const approveAccessRequest = async (req: Request, res: Response): Promise
     
     const toolId = metadata?.toolId;
     const requesterId = metadata?.requestedBy || request.userId;
+    
+    // Получаем информацию о пользователе, который запросил доступ
+    const requester = await prisma.user.findUnique({
+      where: { id: requesterId },
+      select: {
+        id: true,
+        name: true,
+        email: true
+      }
+    });
+    
+    if (!requester) {
+      return res.status(404).json({ error: 'Requester user not found' });
+    }
     
     if (!toolId || !requesterId) {
       return res.status(400).json({ error: 'Invalid request data' });
@@ -693,27 +851,25 @@ export const approveAccessRequest = async (req: Request, res: Response): Promise
     });
     
     // Отправляем уведомление запросившему пользователю от администратора, который одобрил
-    if (request.user) {
-      const { NotificationController } = await import('./notification.js');
-      try {
-        await NotificationController.create({
-          type: 'SUCCESS',
-          channels: ['IN_APP', 'EMAIL'],
-          title: `Доступ предоставлен: ${metadata?.toolName || 'Инструмент'}`,
-          message: `Вам предоставлен доступ к инструменту "${metadata?.toolName || 'Инструмент'}" с уровнем доступа "${accessLevel}"`,
-          senderId: user.id, // От администратора, который одобрил
-          receiverId: requesterId,
-          toolId: toolId,
-          priority: 'MEDIUM',
-          action: {
-            type: 'NAVIGATE',
-            path: `/${metadata?.toolLink || ''}`,
-            params: {}
-          }
-        });
-      } catch (notifError) {
-        console.error('Failed to send approval notification:', notifError);
-      }
+    const { NotificationController } = await import('./notification.js');
+    try {
+      await NotificationController.create({
+        type: 'SUCCESS',
+        channels: ['IN_APP', 'EMAIL'],
+        title: `Доступ предоставлен: ${metadata?.toolName || 'Инструмент'}`,
+        message: `Вам предоставлен доступ к инструменту "${metadata?.toolName || 'Инструмент'}" с уровнем доступа "${accessLevel}"`,
+        senderId: user.id, // От администратора, который одобрил
+        receiverId: requesterId,
+        toolId: toolId,
+        priority: 'MEDIUM',
+        action: {
+          type: 'NAVIGATE',
+          path: `/${metadata?.toolLink || ''}`,
+          params: {}
+        }
+      });
+    } catch (notifError) {
+      console.error('Failed to send approval notification:', notifError);
     }
     
     res.status(200).json({

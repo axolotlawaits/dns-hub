@@ -1,4 +1,5 @@
 import { API } from '../../../../config/constants';
+import { fetchWithAuth } from '../../../../utils/fetchWithAuth';
 
 export type FeedbackStatus = 'NEW' | 'IN_PROGRESS' | 'RESOLVED' | 'REJECTED';
 export type FeedbackPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
@@ -77,51 +78,6 @@ export interface MerchFeedbackStats {
   avgResponseTime?: number; // Среднее время ответа в часах
 }
 
-// Функция для выполнения запросов с автоматическим обновлением токена при 401
-const fetchWithAuthRetry = async (url: string, options: RequestInit = {}): Promise<Response> => {
-  const token = localStorage.getItem('token');
-  const headers = new Headers(options.headers);
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
-  
-  let response = await fetch(url, {
-    ...options,
-    headers,
-  });
-
-  // Если получили 401, пробуем обновить токен и повторить запрос
-  if (response.status === 401) {
-    try {
-      const refreshResponse = await fetch(`${API}/refresh-token`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-
-      if (refreshResponse.ok) {
-        const newToken = await refreshResponse.json();
-        localStorage.setItem('token', newToken);
-        
-        // Повторяем запрос с новым токеном
-        headers.set('Authorization', `Bearer ${newToken}`);
-        response = await fetch(url, {
-          ...options,
-          headers,
-        });
-      } else if (refreshResponse.status === 403) {
-        localStorage.removeItem('user');
-        localStorage.removeItem('token');
-        throw new Error('Session expired. Please login again.');
-      }
-    } catch (refreshError) {
-      console.error('Token refresh failed:', refreshError);
-      throw refreshError;
-    }
-  }
-
-  return response;
-};
-
 export interface FeedbackFilters {
   page?: number;
   limit?: number;
@@ -190,7 +146,7 @@ export const fetchMerchFeedback = async (
 
     const url = `${API}/merch-bot/feedback?${params.toString()}`;
     
-    const response = await fetchWithAuthRetry(url, {
+    const response = await fetchWithAuth(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -214,7 +170,7 @@ export const markFeedbackAsRead = async (feedbackId: string): Promise<MerchFeedb
   try {
     const url = `${API}/merch-bot/feedback/${feedbackId}/read`;
     
-    const response = await fetchWithAuthRetry(url, {
+    const response = await fetchWithAuth(url, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -238,7 +194,7 @@ export const fetchMerchFeedbackStats = async (): Promise<MerchFeedbackStats> => 
   try {
     const url = `${API}/merch-bot/feedback/stats?tool=merch`;
     
-    const response = await fetchWithAuthRetry(url, {
+    const response = await fetchWithAuth(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -266,7 +222,7 @@ export const updateFeedbackStatus = async (
   try {
     const url = `${API}/merch-bot/feedback/${feedbackId}/status`;
     
-    const response = await fetchWithAuthRetry(url, {
+    const response = await fetchWithAuth(url, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -295,7 +251,7 @@ export const updateFeedbackPriority = async (
   try {
     const url = `${API}/merch-bot/feedback/${feedbackId}/priority`;
     
-    const response = await fetchWithAuthRetry(url, {
+    const response = await fetchWithAuth(url, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -324,7 +280,7 @@ export const updateFeedbackTags = async (
   try {
     const url = `${API}/merch-bot/feedback/${feedbackId}/tags`;
     
-    const response = await fetchWithAuthRetry(url, {
+    const response = await fetchWithAuth(url, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -353,7 +309,7 @@ export const assignFeedback = async (
   try {
     const url = `${API}/merch-bot/feedback/${feedbackId}/assign`;
     
-    const response = await fetchWithAuthRetry(url, {
+    const response = await fetchWithAuth(url, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -382,7 +338,7 @@ export const toggleFeedbackPin = async (
   try {
     const url = `${API}/merch-bot/feedback/${feedbackId}/pin`;
     
-    const response = await fetchWithAuthRetry(url, {
+    const response = await fetchWithAuth(url, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -412,7 +368,7 @@ export const addFeedbackResponse = async (
   try {
     const url = `${API}/merch-bot/feedback/${feedbackId}/response`;
     
-    const response = await fetchWithAuthRetry(url, {
+    const response = await fetchWithAuth(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -440,7 +396,7 @@ export const getFeedbackHistory = async (
   try {
     const url = `${API}/merch-bot/feedback/history?email=${encodeURIComponent(email)}&tool=merch`;
     
-    const response = await fetchWithAuthRetry(url, {
+    const response = await fetchWithAuth(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -483,7 +439,7 @@ export const exportFeedback = async (
 
     const url = `${API}/merch-bot/feedback/export?${params.toString()}`;
     
-    const response = await fetchWithAuthRetry(url, {
+    const response = await fetchWithAuth(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

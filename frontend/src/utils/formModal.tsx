@@ -1,5 +1,6 @@
-import { Modal, TextInput, Select, Button, Alert, Stack, Textarea, Text, Group, Card, Paper, ActionIcon, MultiSelect, Badge, Switch, Autocomplete, PasswordInput } from '@mantine/core';
+import { Modal, TextInput, Select, Button, Alert, Stack, Textarea, Text, Group, Card, Paper, ActionIcon, MultiSelect, Badge, Switch, Autocomplete, PasswordInput, Grid, Popover } from '@mantine/core';
 import { useForm } from '@mantine/form';
+import { HexColorPicker, HexColorInput } from 'react-colorful';
 import { useState, useEffect, useCallback, useMemo, useRef, JSX, memo } from 'react';
 import dayjs from 'dayjs';
 import { FileDropZone } from './dnd';
@@ -128,7 +129,7 @@ const COMMON_FIELD_PROPS = {
 const DECORATIVE_CLASS = 'decorative-element';
 
 // Types and interfaces
-export type FieldType = 'text' | 'password' | 'number' | 'select' | 'selectSearch' | 'autocomplete' | 'date' | 'datetime' | 'textarea' | 'file' | 'boolean' | 'multiselect' | 'icon';
+export type FieldType = 'text' | 'password' | 'number' | 'select' | 'selectSearch' | 'autocomplete' | 'date' | 'datetime' | 'textarea' | 'file' | 'boolean' | 'multiselect' | 'icon' | 'color';
 
 interface FileFieldConfig {
   name: string;
@@ -183,6 +184,9 @@ export interface FormField {
 export interface ViewFieldConfig {
   label: string;
   value: (item: any) => string | number | null | JSX.Element;
+  // Группировка полей в ряд
+  groupWith?: string[]; // Массив меток полей для группировки в ряд
+  groupSize?: 1 | 2 | 3; // Размер группы (1, 2 или 3 поля в ряд)
 }
 
 export interface FormConfig {
@@ -1125,6 +1129,9 @@ export const DynamicFormModal = ({
     });
   }, []);
 
+  // Отслеживаем предыдущие initialValues для определения изменений
+  const prevInitialValuesRef = useRef<Record<string, any>>(initialValues);
+  
   useEffect(() => {
     if (opened && !initializedRef.current) {
       try {
@@ -1157,6 +1164,7 @@ export const DynamicFormModal = ({
         form.setValues(preparedValues);
         setAttachmentsMap(nextMap);
         initializedRef.current = true;
+        prevInitialValuesRef.current = initialValues;
       } catch (error) {
         console.error('Error initializing form attachments:', error);
       }
@@ -1164,7 +1172,52 @@ export const DynamicFormModal = ({
     if (!opened) {
       initializedRef.current = false;
     }
-  }, [opened, fields, initialValues, buildNormalizedAttachments]);
+  }, [opened, fields, initialValues, buildNormalizedAttachments, attachmentsKey, form]);
+
+  // Обновляем значения формы при изменении initialValues (например, после загрузки данных)
+  useEffect(() => {
+    if (opened && initializedRef.current) {
+      // Проверяем, действительно ли изменились initialValues
+      const hasChanged = JSON.stringify(prevInitialValuesRef.current) !== JSON.stringify(initialValues);
+      
+      if (hasChanged) {
+        try {
+          const fileFieldNames = (fields || []).filter(f => f.type === 'file').map(f => f.name);
+          
+          const nextMap: Record<string, FileAttachment[]> = {};
+          for (const fieldName of fileFieldNames) {
+            const incomingValue = initialValues[fieldName];
+            const incoming: unknown[] = Array.isArray(incomingValue) ? incomingValue : [];
+            nextMap[fieldName] = buildNormalizedAttachments(incoming);
+          }
+
+          // Обновляем только не-file поля, чтобы не перезаписывать файлы, которые пользователь мог добавить
+          const preparedValues: Record<string, unknown> = { ...initialValues };
+          for (const k of Object.keys(nextMap)) preparedValues[k] = nextMap[k];
+          
+          // Обновляем только те поля, которые есть в initialValues и не являются файлами
+          const nonFileValues: Record<string, unknown> = {};
+          Object.keys(preparedValues).forEach(key => {
+            if (!fileFieldNames.includes(key)) {
+              nonFileValues[key] = preparedValues[key];
+            }
+          });
+          
+          if (Object.keys(nonFileValues).length > 0) {
+            form.setValues(nonFileValues);
+          }
+          
+          if (Object.keys(nextMap).length > 0) {
+            setAttachmentsMap(prev => ({ ...prev, ...nextMap }));
+          }
+          
+          prevInitialValuesRef.current = initialValues;
+        } catch (error) {
+          console.error('Error updating form values:', error);
+        }
+      }
+    }
+  }, [opened, initialValues, fields, buildNormalizedAttachments, form]);
 
   const handleMetaChangeFor = useCallback(
     (fieldName: string) => (id: string | undefined, meta: Record<string, any>) => {
@@ -1317,6 +1370,7 @@ export const DynamicFormModal = ({
     }
     return field.options;
   }, [form.values]);
+
 
   const renderField = useCallback((field: FormField) => {
     // Поддержка динамических label и placeholder через функции
@@ -1614,6 +1668,78 @@ export const DynamicFormModal = ({
         });
         return <IconPickerFieldComponent key={field.name} field={field} />;
       }
+      case 'color': {
+        const ColorPickerFieldComponent = memo(({ field }: { field: FormField }) => {
+          const [pickerOpened, setPickerOpened] = useState(false);
+          const colorValue = (form.getInputProps(field.name) as any)?.value || '#000000';
+          
+          return (
+            <>
+              <Group gap="xs" align="flex-end">
+                <Popover
+                  opened={pickerOpened}
+                  onChange={setPickerOpened}
+                  position="bottom"
+                  withArrow
+                  shadow="md"
+                  withinPortal
+                >
+                  <Popover.Target>
+                    <Button
+                      variant="light"
+                      onClick={() => setPickerOpened(!pickerOpened)}
+                      style={{
+                        backgroundColor: colorValue,
+                        color: '#fff',
+                        border: '1px solid var(--mantine-color-gray-4)',
+                        minWidth: 120
+                      }}
+                    >
+                      {colorValue}
+                    </Button>
+                  </Popover.Target>
+                  <Popover.Dropdown>
+                    <Stack gap="md" p="md" style={{ minWidth: 250 }}>
+                      <HexColorPicker
+                        color={colorValue}
+                        onChange={(hexColor) => {
+                          form.setFieldValue(field.name, hexColor);
+                          field.onChange?.(hexColor, form.setFieldValue);
+                        }}
+                      />
+                      <HexColorInput
+                        color={colorValue}
+                        onChange={(hexColor) => {
+                          form.setFieldValue(field.name, hexColor);
+                          field.onChange?.(hexColor, form.setFieldValue);
+                        }}
+                        prefixed
+                        alpha
+                      />
+                    </Stack>
+                  </Popover.Dropdown>
+                </Popover>
+                <TextInput
+                  label={labelValue}
+                  value={colorValue}
+                  readOnly
+                  placeholder={placeholderValue || 'Выберите цвет'}
+                  required={field.required}
+                  disabled={disabledValue}
+                  mb={field.mb}
+                  style={{ flex: 1 }}
+                />
+              </Group>
+              {field.description && (
+                <Text size="xs" c="dimmed" mt={-(typeof field.mb === 'number' ? field.mb : 16)} mb={field.mb || 'md'}>
+                  {field.description}
+                </Text>
+              )}
+            </>
+          );
+        });
+        return <ColorPickerFieldComponent key={field.name} field={field} />;
+      }
       default:
         return null;
     }
@@ -1654,6 +1780,47 @@ export const DynamicFormModal = ({
       </Text>
     </div>
   ), []);
+
+  // Группировка полей просмотра
+  const groupViewFields = useCallback((fields: ViewFieldConfig[]) => {
+    const grouped: (ViewFieldConfig | ViewFieldConfig[])[] = [];
+    const processed = new Set<string>();
+
+    for (let i = 0; i < fields.length; i++) {
+      const field = fields[i];
+      
+      if (processed.has(field.label)) continue;
+
+      // Проверяем, есть ли у поля группировка
+      if (field.groupWith && field.groupWith.length > 0) {
+        const groupFields: ViewFieldConfig[] = [field];
+        processed.add(field.label);
+
+        // Находим все поля в группе
+        for (const groupFieldLabel of field.groupWith) {
+          const groupField = fields.find(f => f.label === groupFieldLabel);
+          if (groupField && !processed.has(groupField.label)) {
+            groupFields.push(groupField);
+            processed.add(groupField.label);
+          }
+        }
+
+        // Сортируем группу по порядку в исходном массиве
+        groupFields.sort((a, b) => {
+          const aIndex = fields.findIndex(f => f.label === a.label);
+          const bIndex = fields.findIndex(f => f.label === b.label);
+          return aIndex - bIndex;
+        });
+
+        grouped.push(groupFields);
+      } else {
+        grouped.push(field);
+        processed.add(field.label);
+      }
+    }
+
+    return grouped;
+  }, []);
 
   const renderAttachmentCard = useCallback((attachment: FileAttachment) => {
     const fileName = typeof attachment.source === 'string'
@@ -1788,7 +1955,25 @@ export const DynamicFormModal = ({
             </Group>
             
             <Stack gap="md">
-              {viewFieldsConfig.map(config => renderViewField(config, initialValues))}
+              {groupViewFields(viewFieldsConfig).map((fieldOrGroup, index) => {
+                if (Array.isArray(fieldOrGroup)) {
+                  // Группа полей - рендерим в Grid
+                  const groupSize = fieldOrGroup[0]?.groupSize || 3;
+                  const span = 12 / groupSize;
+                  return (
+                    <Grid key={`group-${index}`} gutter="md">
+                      {fieldOrGroup.map((config) => (
+                        <Grid.Col key={config.label} span={span}>
+                          {renderViewField(config, initialValues)}
+                        </Grid.Col>
+                      ))}
+                    </Grid>
+                  );
+                } else {
+                  // Одиночное поле
+                  return renderViewField(fieldOrGroup, initialValues);
+                }
+              })}
             </Stack>
             
             {!hideDefaultViewAttachments && ((initialValues as any)[attachmentsKey]?.length > 0) && (
@@ -2039,8 +2224,8 @@ export const DynamicFormModal = ({
       {!hideButtons && mode !== 'view' && (
         <div style={{
           padding: 'var(--mantine-spacing-lg) var(--mantine-spacing-md)',
-          borderTop: '1px solid var(--mantine-color-gray-3)',
-          background: 'var(--mantine-color-gray-0)',
+          borderTop: '1px solid var(--theme-border-primary)',
+          background: 'var(--theme-bg-elevated)',
           display: 'flex',
           justifyContent: 'flex-end',
           gap: 'var(--mantine-spacing-md)',

@@ -252,9 +252,17 @@ model User {
   shops                  Shop[]
   shopReserves           ShopReserve[] @relation("ShopReserveRequester")
   comments               Comment[] @relation("CommentSender")
+  safetyJournalChats     SafetyJournalChat[] @relation("SafetyJournalChatChecker")
+  safetyJournalMessages  SafetyJournalChatMessage[] @relation("SafetyJournalChatMessageSender")
   scanSessions           ScanSession[]
   pollsCreated           Poll[]        @relation("PollCreator")
   pollVotes              PollVote[]    @relation("PollVoter")
+  knowledgeArticlesAuthored KnowledgeArticle[] @relation("KnowledgeArticleAuthor")
+  knowledgeArticlesUpdated  KnowledgeArticle[] @relation("KnowledgeArticleUpdater")
+  knowledgeArticleVersions  KnowledgeArticleVersion[] @relation("KnowledgeArticleVersionCreator")
+  knowledgeAttachments      KnowledgeAttachment[] @relation("KnowledgeAttachmentUploader")
+  knowledgeComments         KnowledgeComment[] @relation("KnowledgeCommentAuthor")
+  knowledgeFavorites        KnowledgeFavorite[] @relation("KnowledgeFavoriteUser")
 }
 
 model UserData {
@@ -1067,6 +1075,57 @@ model Comment {
   @@index([parentId])
 }
 
+// Чат для SafetyJournal
+model SafetyJournalChat {
+  id          String                      @id @default(uuid())
+  branchId    String                      // ID филиала (UUID из Branch)
+  checkerId   String                      // ID проверяющего (пользователь с полным доступом)
+  checker     User                        @relation("SafetyJournalChatChecker", fields: [checkerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime                    @default(now())
+  updatedAt   DateTime                    @updatedAt
+  messages    SafetyJournalChatMessage[]
+
+  @@unique([branchId, checkerId])
+  @@index([branchId])
+  @@index([checkerId])
+  @@index([updatedAt])
+}
+
+model SafetyJournalChatMessage {
+  id            String                   @id @default(uuid())
+  chatId        String
+  chat          SafetyJournalChat        @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  senderId      String
+  sender        User                     @relation("SafetyJournalChatMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  message       String                   @db.Text
+  readAt        DateTime?                // Когда сообщение прочитано получателем
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt // Время последнего обновления сообщения
+  isEdited      Boolean                  @default(false) // Флаг, указывающий, было ли сообщение отредактировано
+  quotedMessageId String?                // ID цитируемого сообщения
+  quotedMessage   SafetyJournalChatMessage? @relation("QuotedMessage", fields: [quotedMessageId], references: [id], onDelete: SetNull)
+  replies         SafetyJournalChatMessage[] @relation("QuotedMessage")
+  attachments   ChatMessageAttachment[]
+
+  @@index([chatId])
+  @@index([senderId])
+  @@index([chatId, createdAt])
+  @@index([quotedMessageId])
+}
+
+model ChatMessageAttachment {
+  id            String                 @id @default(uuid())
+  messageId     String
+  message       SafetyJournalChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  fileName      String
+  fileUrl       String
+  fileSize      Int?
+  mimeType      String?
+  uploadedAt    DateTime               @default(now())
+
+  @@index([messageId])
+}
+
 // Универсальная таблица обратной связи
 enum FeedbackStatus {
   NEW         // Новое
@@ -1210,4 +1269,130 @@ model TrassirDoorLog {
   @@index([tgId])
   @@index([openedAt])
   @@map("TrassirDoorLog")
+}
+
+// ========================================
+// БАЗА ЗНАНИЙ (DOCS)
+// ========================================
+
+// Статья базы знаний
+model KnowledgeArticle {
+  id          String   @id @default(uuid())
+  title       String
+  slug        String   @unique
+  content     String   @db.Text
+  excerpt     String?
+  icon        String?
+  categoryId  String?
+  category    KnowledgeCategory? @relation(fields: [categoryId], references: [id])
+  authorId    String
+  author      User     @relation("KnowledgeArticleAuthor", fields: [authorId], references: [id])
+  updatedById String?
+  updatedBy   User?    @relation("KnowledgeArticleUpdater", fields: [updatedById], references: [id])
+  tags        String[]
+  isPinned    Boolean  @default(false)
+  isPublished Boolean  @default(true)
+  viewCount   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  publishedAt DateTime?
+  attachments KnowledgeAttachment[]
+  comments    KnowledgeComment[]
+  versions    KnowledgeArticleVersion[]
+  favorites   KnowledgeFavorite[]
+  
+  @@index([categoryId])
+  @@index([authorId])
+  @@index([slug])
+  @@index([tags])
+  @@index([isPublished])
+  @@index([isPinned])
+  @@index([createdAt])
+  @@index([viewCount])
+}
+
+// Категория (отдел/раздел)
+model KnowledgeCategory {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  icon        String?
+  color       String?
+  parentId    String?
+  parent      KnowledgeCategory? @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    KnowledgeCategory[] @relation("CategoryHierarchy")
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  articles    KnowledgeArticle[]
+  
+  @@index([parentId])
+  @@index([order])
+}
+
+// Версии статей
+model KnowledgeArticleVersion {
+  id          String   @id @default(uuid())
+  articleId   String
+  article     KnowledgeArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  version     Int
+  title       String
+  content     String   @db.Text
+  excerpt     String?
+  createdById String
+  createdBy   User     @relation("KnowledgeArticleVersionCreator", fields: [createdById], references: [id])
+  changeNote  String?
+  createdAt   DateTime @default(now())
+  
+  @@unique([articleId, version])
+  @@index([articleId])
+  @@index([createdAt])
+}
+
+// Прикрепленные файлы
+model KnowledgeAttachment {
+  id          String   @id @default(uuid())
+  articleId   String
+  article     KnowledgeArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  fileName    String
+  fileUrl     String
+  fileSize    Int
+  mimeType    String
+  uploadedById String
+  uploadedBy   User     @relation("KnowledgeAttachmentUploader", fields: [uploadedById], references: [id])
+  createdAt   DateTime @default(now())
+  
+  @@index([articleId])
+}
+
+// Комментарии
+model KnowledgeComment {
+  id          String   @id @default(uuid())
+  articleId   String
+  article     KnowledgeArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation("KnowledgeCommentAuthor", fields: [userId], references: [id])
+  content     String   @db.Text
+  parentId    String?
+  parent      KnowledgeComment? @relation("CommentReplies", fields: [parentId], references: [id])
+  replies     KnowledgeComment[] @relation("CommentReplies")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([articleId])
+  @@index([userId])
+  @@index([parentId])
+}
+
+// Избранное
+model KnowledgeFavorite {
+  id          String   @id @default(uuid())
+  articleId   String
+  article     KnowledgeArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation("KnowledgeFavoriteUser", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  
+  @@unique([articleId, userId])
+  @@index([userId])
 }

@@ -3,6 +3,7 @@ import axios from 'axios';
 import FormData from 'form-data';
 import { prisma } from '../../server.js';
 import { decodeRussianFileName } from '../../utils/format.js';
+import { findUsersByResponsiblesBatch } from '../../utils/findUserByResponsible.js';
 
 const JOURNALS_API_URL = process.env.JOURNALS_API_URL
 
@@ -741,6 +742,39 @@ export const makeBranchJournalDecision = async (req: Request, res: Response) => 
       return res.status(400).json({ message: 'Неверный статус. Допустимые значения: approved, rejected, under_review, pending' });
     }
 
+    // Получаем данные журнала ДО изменения статуса, чтобы гарантированно иметь branchId и journal_type
+    interface JournalData {
+      branch_id?: string;
+      journal_type?: 'ОТ' | 'ПБ' | string;
+      journal_title?: string;
+    }
+    
+    let journalData: JournalData | null = null;
+    let branchId: string | undefined;
+    let journalType: string = '';
+    
+    try {
+      console.log('[SafetyJournal] Fetching journal data before status change');
+      const journalResponse = await axios.get<JournalData>(
+        `${JOURNALS_API_URL}/branch_journals/${branchJournalId}`,
+        {
+          headers: createAuthHeaders(token)
+        }
+      );
+      journalData = journalResponse.data;
+      branchId = journalData?.branch_id;
+      journalType = journalData?.journal_type || ''; // 'ОТ' или 'ПБ'
+      console.log('[SafetyJournal] Got journal data before status change:', { branchId, journalType, journalTitle: journalData?.journal_title });
+    } catch (journalError: any) {
+      // Если журнал не найден (404), логируем, но продолжаем выполнение
+      if (journalError.response?.status === 404) {
+        console.warn(`[SafetyJournal] Journal ${branchJournalId} not found in external API before status change`);
+      } else {
+        console.error(`[SafetyJournal] Error getting journal data before status change:`, journalError.message);
+      }
+      // Продолжаем выполнение, но без данных для чата
+    }
+
     // Отправляем запрос во внешний API для обновления статуса
     try {
       // Попробуем сначала с FormData (как в оригинальном коде)
@@ -756,7 +790,6 @@ export const makeBranchJournalDecision = async (req: Request, res: Response) => 
         formData.append('inspector', 'true');
       }
 
-
       const externalResponse = await axios.patch(
         `${JOURNALS_API_URL}/branch_journals/${branchJournalId}/decision`,
         formData,
@@ -767,6 +800,369 @@ export const makeBranchJournalDecision = async (req: Request, res: Response) => 
           }
         }
       );
+
+      // Отправляем сообщение в чат при любом изменении статуса
+      try {
+        // Используем данные, полученные ДО изменения статуса
+        // Если branchId не был получен ранее, пытаемся получить из ответа (на случай, если там есть)
+        if (!branchId && externalResponse?.data) {
+          const responseData = externalResponse.data as JournalData;
+          branchId = responseData?.branch_id || branchId;
+          journalType = responseData?.journal_type || journalType;
+          journalData = responseData;
+          console.log('[SafetyJournal] Got journal data from response after status change:', { 
+            branchId, 
+            journalType,
+            responseKeys: Object.keys(responseData || {}),
+            fullResponse: JSON.stringify(responseData).substring(0, 200)
+          });
+        }
+        
+        // Если все еще нет branchId, пытаемся найти журнал в списке филиалов
+        if (!branchId) {
+          try {
+            console.log('[SafetyJournal] Trying to find journal in branches list');
+            const branchesResponse = await axios.get(
+              `${JOURNALS_API_URL}/me/branches_with_journals`,
+              { headers: createAuthHeaders(token) }
+            );
+            
+            if (branchesResponse.data?.branches && Array.isArray(branchesResponse.data.branches)) {
+              for (const branch of branchesResponse.data.branches) {
+                if (branch.journals && Array.isArray(branch.journals)) {
+                  const journal = branch.journals.find((j: any) => j.id === branchJournalId || j.branch_journal_id === branchJournalId);
+                  if (journal) {
+                    branchId = branch.branch_id;
+                    journalType = journal.journal_type || '';
+                    journalData = journal;
+                    console.log('[SafetyJournal] Found journal in branches list:', { branchId, journalType });
+                    break;
+                  }
+                }
+              }
+            }
+          } catch (branchesError: any) {
+            console.error('[SafetyJournal] Error fetching branches list:', branchesError.message);
+          }
+        }
+
+        if (branchId) {
+          // Находим проверяющего (пользователя с FULL доступом или SUPERVISOR)
+          const safetyTool = await prisma.tool.findFirst({
+            where: { link: 'jurists/safety' }
+          });
+
+          let checkerId = userId; // По умолчанию используем текущего пользователя
+
+          // Если текущий пользователь не проверяющий, находим проверяющего
+          const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { role: true }
+          });
+
+          if (user?.role !== 'SUPERVISOR' && safetyTool) {
+            const userAccess = await prisma.userToolAccess.findFirst({
+              where: {
+                userId: userId,
+                toolId: safetyTool.id,
+                accessLevel: 'FULL'
+              }
+            });
+
+            if (!userAccess) {
+              // Ищем первого проверяющего
+              const supervisor = await prisma.user.findFirst({
+                where: { role: 'SUPERVISOR' },
+                select: { id: true }
+              });
+              if (supervisor) {
+                checkerId = supervisor.id;
+              } else if (safetyTool) {
+                const fullAccessUser = await prisma.userToolAccess.findFirst({
+                  where: {
+                    toolId: safetyTool.id,
+                    accessLevel: 'FULL'
+                  },
+                  select: { userId: true }
+                });
+                if (fullAccessUser) {
+                  checkerId = fullAccessUser.userId;
+                }
+              }
+            }
+          }
+
+          // Получаем или создаем чат
+          let chat = await (prisma as any).safetyJournalChat.findUnique({
+            where: {
+              branchId_checkerId: {
+                branchId,
+                checkerId
+              }
+            }
+          });
+
+          if (!chat) {
+            chat = await (prisma as any).safetyJournalChat.create({
+              data: {
+                branchId,
+                checkerId
+              }
+            });
+          }
+
+          // Формируем текст системного сообщения
+          const journalTitle = journalData?.journal_title || 'Журнал';
+          let messageText = '';
+          
+          if (status === 'approved') {
+            messageText = `Журнал "${journalTitle}" (${journalType}) одобрен.`;
+            if (comment) {
+              messageText += `\n\nКомментарий: ${comment}`;
+            }
+          } else if (status === 'rejected') {
+            messageText = `Журнал "${journalTitle}" (${journalType}) отклонен.`;
+            if (comment) {
+              messageText += `\n\nПричина: ${comment}`;
+            }
+          } else if (status === 'under_review') {
+            messageText = `Журнал "${journalTitle}" (${journalType}) отправлен на проверку.`;
+          } else if (status === 'pending') {
+            messageText = `Журнал "${journalTitle}" (${journalType}) ожидает загрузки файлов.`;
+          }
+
+          // Создаем сообщение от имени проверяющего
+          const systemMessage = await (prisma as any).safetyJournalChatMessage.create({
+            data: {
+              chatId: chat.id,
+              senderId: userId, // Отправляем от имени проверяющего, который меняет статус
+              message: messageText
+            }
+          });
+
+          console.log('[SafetyJournal] Created chat message:', {
+            messageId: systemMessage.id,
+            chatId: chat.id,
+            senderId: userId,
+            checkerId: checkerId,
+            messageText: messageText.substring(0, 100),
+            fullMessageText: messageText
+          });
+
+          // Проверяем, что сообщение действительно создано в БД
+          const verifyMessage = await (prisma as any).safetyJournalChatMessage.findUnique({
+            where: { id: systemMessage.id },
+            include: {
+              sender: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true
+                }
+              }
+            }
+          });
+          
+          console.log('[SafetyJournal] Verified message in DB:', {
+            found: !!verifyMessage,
+            messageId: verifyMessage?.id,
+            messageText: verifyMessage?.message?.substring(0, 50),
+            senderName: verifyMessage?.sender?.name
+          });
+
+          // Обновляем updatedAt чата
+          await (prisma as any).safetyJournalChat.update({
+            where: { id: chat.id },
+            data: { updatedAt: new Date() }
+          });
+
+          // Отправляем уведомление через Socket.IO
+          const { SocketIOService } = await import('../../socketio.js');
+          const socketService = SocketIOService.getInstance();
+          
+          // Отправляем сообщение проверяющему (всегда, даже если он отправитель, чтобы сообщение появилось в чате)
+          if (checkerId) {
+            try {
+              // Используем sendChatMessage вместо sendToUser, чтобы не создавать уведомления
+              socketService.sendChatMessage(checkerId, {
+                type: 'SAFETY_JOURNAL_MESSAGE',
+                chatId: chat.id,
+                branchId: branchId,
+                message: {
+                  id: systemMessage.id,
+                  message: messageText,
+                  senderId: userId,
+                  createdAt: systemMessage.createdAt.toISOString()
+                }
+              });
+              console.log('[SafetyJournal] Sent message to checker:', { checkerId, userId, chatId: chat.id, branchId });
+            } catch (checkerError) {
+              console.error('[SafetyJournal] Error sending message to checker:', checkerError);
+            }
+          }
+          
+          // Получаем ответственных по филиалу и отправляем им сообщения в чат (все участники чата видят все сообщения)
+          try {
+            const responsiblesResponse = await axios.get(
+              `${JOURNALS_API_URL}/branch_responsibles/?branchId=${branchId}`,
+              { headers: createAuthHeaders(token) }
+            );
+
+            // Структура ответа: массив объектов [{ branch_id, branch_name, responsibles: [...] }]
+            if (responsiblesResponse.data && Array.isArray(responsiblesResponse.data)) {
+              for (const branchData of responsiblesResponse.data) {
+                if (branchData.branch_id === branchId && branchData.responsibles && Array.isArray(branchData.responsibles)) {
+                  const responsibles = branchData.responsibles;
+                  
+                  if (process.env.NODE_ENV === 'development') {
+                    console.log('[SafetyJournal] Processing responsibles for chat message:', { 
+                      totalResponsibles: responsibles.length,
+                      userId,
+                      checkerId,
+                      branchId
+                    });
+                  }
+                  
+                  // Оптимизация: используем батчинг для поиска всех пользователей сразу
+                  const userCache = new Map();
+                  const usersMap = await findUsersByResponsiblesBatch(
+                    prisma,
+                    responsibles,
+                    {
+                      select: { id: true },
+                      cache: userCache
+                    }
+                  );
+                  
+                  let sentCount = 0;
+                  
+                  // Отправляем сообщения ВСЕМ ответственным (без фильтрации по типу ответственности)
+                  for (const resp of responsibles) {
+                    const key = resp.employee_id || resp.employee_email || resp.employee_name || '';
+                    const responsibleUser = usersMap.get(key);
+
+                    if (process.env.NODE_ENV === 'development') {
+                      console.log('[SafetyJournal] Processing responsible:', {
+                        employee_id: resp.employee_id,
+                        employee_name: resp.employee_name,
+                        employee_email: resp.employee_email,
+                        responsibility_type: resp.responsibility_type,
+                        foundUser: !!responsibleUser,
+                        userId: responsibleUser?.id,
+                        isSender: responsibleUser?.id === userId,
+                        isChecker: responsibleUser?.id === checkerId
+                      });
+                    }
+
+                    // Отправляем всем ответственным (кроме отправителя и проверяющего, если он уже получил)
+                    if (responsibleUser && responsibleUser.id !== userId && responsibleUser.id !== checkerId) {
+                      socketService.sendToUser(responsibleUser.id, {
+                        type: 'SAFETY_JOURNAL_MESSAGE',
+                        chatId: chat.id,
+                        branchId: branchId,
+                        message: {
+                          id: systemMessage.id,
+                          message: messageText,
+                          senderId: userId,
+                          createdAt: systemMessage.createdAt.toISOString()
+                        }
+                      });
+                      sentCount++;
+                      
+                      if (process.env.NODE_ENV === 'development') {
+                        console.log('[SafetyJournal] Sent message to responsible:', responsibleUser.id);
+                      }
+                    } else if (!responsibleUser && process.env.NODE_ENV === 'development') {
+                      console.log('[SafetyJournal] Responsible user not found in DB:', {
+                        employee_id: resp.employee_id,
+                        employee_name: resp.employee_name,
+                        employee_email: resp.employee_email
+                      });
+                    }
+                  }
+                  
+                  if (process.env.NODE_ENV === 'development') {
+                    console.log('[SafetyJournal] Sent messages to all responsibles:', { sentCount, branchId, totalResponsibles: responsibles.length });
+                  }
+                  
+                  // Отправляем push-уведомления только тем, кто отвечает за соответствующий тип журнала
+                  const { NotificationController } = await import('../app/notification.js');
+                  let notificationCount = 0;
+                  for (const resp of responsibles) {
+                    // Фильтруем по типу ответственности только для уведомлений
+                    if (resp.employee_id && resp.responsibility_type === journalType) {
+                      const responsibleUser = await prisma.user.findUnique({
+                        where: { id: resp.employee_id },
+                        select: { id: true }
+                      });
+
+                      if (responsibleUser && responsibleUser.id !== userId && responsibleUser.id !== checkerId) {
+                        // Получаем ФИО отправителя
+                        const sender = await prisma.user.findUnique({
+                          where: { id: userId },
+                          select: { name: true }
+                        });
+                        const senderName = sender?.name || 'Пользователь';
+                        
+                        // Получаем название филиала
+                        let branchName = 'филиал';
+                        try {
+                          const localBranch = await prisma.branch.findUnique({
+                            where: { uuid: branchId },
+                            select: { name: true }
+                          });
+                          if (localBranch?.name) {
+                            branchName = localBranch.name;
+                          }
+                        } catch (error) {
+                          // Игнорируем ошибку
+                        }
+                        
+                        // Обновляем branchName из API, если он есть
+                        if (branchData.branch_name) {
+                          branchName = branchData.branch_name;
+                        }
+                        
+                        const notificationBranchName = branchName && branchName !== 'филиала' ? branchName : 'филиал';
+                        
+                        // Проверяем, находится ли пользователь в любом активном чате
+                        // Если пользователь в модалке чата (любого), не отправляем уведомление
+                        const isInAnyActiveChat = socketService.isUserInAnyActiveChat(responsibleUser.id);
+                        
+                        // Отправляем уведомление только если пользователь не в активном чате (любом)
+                        if (!isInAnyActiveChat) {
+                          await NotificationController.create({
+                            type: 'INFO',
+                            channels: ['IN_APP', 'TELEGRAM'],
+                            title: senderName,
+                            message: messageText.substring(0, 100),
+                            senderId: userId,
+                            receiverId: responsibleUser.id,
+                            priority: 'MEDIUM',
+                            action: {
+                              type: 'NAVIGATE',
+                              url: `/jurists/safety?branchId=${branchId}`,
+                              branchName: notificationBranchName,
+                            },
+                          });
+                          notificationCount++;
+                        }
+                      }
+                    }
+                  }
+                  console.log('[SafetyJournal] Sent notifications to filtered responsibles:', { notificationCount, journalType, branchId });
+                  break; // Нашли нужный филиал, выходим из цикла
+                }
+              }
+            }
+          } catch (notifyError) {
+            console.error('[SafetyJournal] Error sending notifications:', notifyError);
+          }
+        }
+      } catch (chatError) {
+        console.error('[SafetyJournal] Error sending message to chat:', chatError);
+        // Не прерываем выполнение, если не удалось отправить в чат
+      }
 
       res.json({ 
         message: `Журнал ${status === 'approved' ? 'одобрен' : status === 'rejected' ? 'отклонен' : 'возвращен на рассмотрение'}`,
@@ -937,6 +1333,223 @@ export const deleteResponsible = async (req: Request, res: Response) => {
     if (error.response) {
       res.status(error.response.status).json(error.response.data);
     } 
+  }
+};
+
+// Оповещение филиалов с не заполненными журналами
+export const notifyBranchesWithUnfilledJournals = async (req: Request, res: Response) => {
+  try {
+    const { userId } = (req as any).token;
+    const token = getAuthToken(req);
+    
+    if (!token) {
+      return res.status(401).json({ message: 'Токен авторизации не найден' });
+    }
+
+    // Получаем филиалы с журналами
+    const branchesResponse = await axios.get(`${JOURNALS_API_URL}/me/branches_with_journals`, {
+      headers: createAuthHeaders(token)
+    });
+
+    const branches = branchesResponse.data.branches || [];
+    
+    // Находим филиалы с не заполненными журналами (status === 'pending' и filled_at === null)
+    const branchesWithUnfilledJournals = branches.filter((branch: any) => {
+      return branch.journals && branch.journals.some((journal: any) => 
+        journal.status === 'pending' && !journal.filled_at
+      );
+    });
+
+    if (branchesWithUnfilledJournals.length === 0) {
+      return res.json({ 
+        message: 'Нет филиалов с не заполненными журналами',
+        notifiedBranches: []
+      });
+    }
+
+    // Получаем ответственных по каждому филиалу и отправляем уведомления
+    const notifiedBranches = [];
+    const { NotificationController } = await import('../app/notification.js');
+    const { SocketIOService } = await import('../../socketio.js');
+    const socketService = SocketIOService.getInstance();
+
+    for (const branch of branchesWithUnfilledJournals) {
+      try {
+        // Получаем ответственных по филиалу
+        const responsiblesResponse = await axios.get(
+          `${JOURNALS_API_URL}/branch_responsibles/?branchId=${branch.branch_id}`,
+          { headers: createAuthHeaders(token) }
+        );
+
+        // Структура ответа: массив объектов [{ branch_id, branch_name, responsibles: [...] }]
+        let responsibles: any[] = [];
+        if (responsiblesResponse.data && Array.isArray(responsiblesResponse.data)) {
+          for (const branchData of responsiblesResponse.data) {
+            if (branchData.branch_id === branch.branch_id && branchData.responsibles && Array.isArray(branchData.responsibles)) {
+              responsibles = branchData.responsibles;
+              break;
+            }
+          }
+        }
+        
+        // Получаем список не заполненных журналов
+        const unfilledJournals = branch.journals.filter((journal: any) => 
+          journal.status === 'pending' && !journal.filled_at
+        );
+
+        const journalTitles = unfilledJournals.map((j: any) => `${j.journal_title} (${j.journal_type})`).join(', ');
+
+        // Отправляем уведомления каждому ответственному
+        for (const resp of responsibles) {
+          if (resp.employee_id) {
+            // employee_id из внешнего API должен совпадать с user.id в локальной БД
+            const responsibleUser = await prisma.user.findUnique({
+              where: { id: resp.employee_id },
+              select: { id: true, name: true }
+            });
+
+            if (responsibleUser) {
+              // Получаем ФИО отправителя
+              const sender = await prisma.user.findUnique({
+                where: { id: userId },
+                select: { name: true }
+              });
+              const senderName = sender?.name || 'Пользователь';
+              
+              const notificationBranchName = branch.branch_name && branch.branch_name !== 'филиала' ? branch.branch_name : 'филиал';
+              
+              // Проверяем, находится ли пользователь в любом активном чате
+              // Если пользователь в модалке чата (любого), не отправляем уведомление
+              const isInAnyActiveChat = socketService.isUserInAnyActiveChat(responsibleUser.id);
+              
+              // Отправляем уведомление только если пользователь не в активном чате (любом)
+              if (!isInAnyActiveChat) {
+                // Создаем уведомление
+                await NotificationController.create({
+                  type: 'WARNING',
+                  channels: ['IN_APP'],
+                  title: senderName,
+                  message: `Филиал "${branch.branch_name}" имеет не заполненные журналы: ${journalTitles}`,
+                  senderId: userId,
+                  receiverId: responsibleUser.id,
+                  priority: 'MEDIUM',
+                  action: {
+                    type: 'NAVIGATE',
+                    url: `/jurists/safety?branchId=${branch.branch_id}`,
+                    branchName: notificationBranchName,
+                  },
+                });
+              }
+
+              // Отправляем через Socket.IO
+              socketService.sendToUser(responsibleUser.id, {
+                type: 'WARNING',
+                title: 'Требуется заполнение журналов',
+                message: `Филиал "${branch.branch_name}" имеет не заполненные журналы: ${journalTitles}`,
+                createdAt: new Date().toISOString(),
+                action: {
+                  type: 'NAVIGATE',
+                  url: `/jurists/safety?branchId=${branch.branch_id}`,
+                },
+              });
+            }
+          }
+        }
+
+        // Сохраняем информацию о последнем оповещении
+        // Используем простой JSON в UserSettings или создаем отдельную таблицу
+        // Для простоты используем JSON в UserSettings с ключом `safety_journal_notifications`
+        const notificationData = {
+          branchId: branch.branch_id,
+          branchName: branch.branch_name,
+          notifiedAt: new Date().toISOString(),
+          notifiedBy: userId,
+          unfilledJournals: unfilledJournals.map((j: any) => ({
+            id: j.id,
+            title: j.journal_title,
+            type: j.journal_type
+          }))
+        };
+
+        // Сохраняем в UserSettings (или можно создать отдельную таблицу)
+        await prisma.userSettings.upsert({
+          where: {
+            userId_parameter: {
+              userId: userId,
+              parameter: `safety_journal_notification_${branch.branch_id}`
+            }
+          },
+          update: {
+            value: JSON.stringify(notificationData)
+          },
+          create: {
+            userId: userId,
+            parameter: `safety_journal_notification_${branch.branch_id}`,
+            value: JSON.stringify(notificationData),
+            type: 'STRING'
+          }
+        });
+
+        notifiedBranches.push({
+          branchId: branch.branch_id,
+          branchName: branch.branch_name,
+          notifiedAt: notificationData.notifiedAt,
+          unfilledJournalsCount: unfilledJournals.length
+        });
+      } catch (branchError) {
+        console.error(`[SafetyJournal] Error notifying branch ${branch.branch_id}:`, branchError);
+      }
+    }
+
+    res.json({
+      message: `Оповещения отправлены для ${notifiedBranches.length} филиалов`,
+      notifiedBranches
+    });
+  } catch (error: any) {
+    console.error('[SafetyJournal] Error notifying branches:', error);
+    res.status(500).json({ message: 'Ошибка отправки оповещений' });
+  }
+};
+
+// Получить информацию о последних оповещениях
+export const getLastNotifications = async (req: Request, res: Response) => {
+  try {
+    const { userId } = (req as any).token;
+    
+    // Получаем все записи о последних оповещениях для текущего пользователя
+    const notifications = await prisma.userSettings.findMany({
+      where: {
+        userId: userId,
+        parameter: {
+          startsWith: 'safety_journal_notification_'
+        }
+      },
+      select: {
+        parameter: true,
+        value: true
+      }
+    });
+
+    const notificationsData = notifications.map(n => {
+      const branchId = n.parameter.replace('safety_journal_notification_', '');
+      try {
+        const data = JSON.parse(n.value);
+        return {
+          branchId,
+          ...data
+        };
+      } catch {
+        return {
+          branchId,
+          notifiedAt: new Date().toISOString()
+        };
+      }
+    });
+
+    res.json(notificationsData);
+  } catch (error: any) {
+    console.error('[SafetyJournal] Error getting last notifications:', error);
+    res.status(500).json({ message: 'Ошибка получения информации об оповещениях' });
   }
 };
 

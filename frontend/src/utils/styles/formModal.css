@@ -570,15 +570,15 @@
 
 /* Стили для футера модального окна */
 .modal-footer {
-  border-top: 1px solid #334155 !important;
-  background: linear-gradient(135deg, #1e293b, #334155) !important; /* Градиент для футера */
+  border-top: 1px solid var(--theme-border-primary) !important;
+  background: var(--theme-bg-elevated) !important;
   padding: var(--space-lg) var(--space-md) !important;
   display: flex !important;
   justify-content: flex-end !important;
   gap: var(--space-md) !important;
   flex-shrink: 0 !important;
   border-radius: 0 0 var(--radius-lg) var(--radius-lg) !important;
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.3) !important;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1) !important;
 }
 
 /* Стили для кнопок в футере */
@@ -598,8 +598,17 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
 }
 
+/* Светлая тема для футера */
+[data-mantine-color-scheme="light"] .modal-footer,
+[data-theme="light"] .modal-footer {
+  border-top-color: var(--theme-border-primary) !important;
+  background: var(--theme-bg-elevated) !important;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.05) !important;
+}
+
 /* Темная тема для футера */
-[data-mantine-color-scheme="dark"] .modal-footer {
+[data-mantine-color-scheme="dark"] .modal-footer,
+[data-theme="dark"] .modal-footer {
   border-top-color: #334155 !important;
   background: linear-gradient(135deg, #1e293b, #334155) !important; /* Градиент для футера */
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.3) !important;

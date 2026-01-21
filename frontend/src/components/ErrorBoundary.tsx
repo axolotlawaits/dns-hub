@@ -69,7 +69,16 @@ export class ErrorBoundary extends Component<Props, State> {
               color="red"
               variant="light"
             >
-              <Text size="sm" mb="md" c="var(--theme-text-primary)">
+              <Text 
+                size="sm" 
+                mb="md" 
+                c="var(--theme-text-primary)"
+                style={{
+                  maxWidth: '100%',
+                  wordBreak: 'break-word',
+                  overflowWrap: 'break-word'
+                }}
+              >
                 Что-то пошло не так. Попробуйте обновить страницу или обратитесь к администратору.
               </Text>
               
@@ -90,7 +99,11 @@ export class ErrorBoundary extends Component<Props, State> {
                     border: '1px solid var(--theme-border)',
                     borderRadius: '4px',
                     fontSize: '12px',
-                    overflow: 'auto'
+                    overflow: 'auto',
+                    maxWidth: '100%',
+                    wordBreak: 'break-word',
+                    whiteSpace: 'pre-wrap',
+                    overflowWrap: 'break-word'
                   }}>
                     {this.state.error.message}
                     {this.state.error.stack}

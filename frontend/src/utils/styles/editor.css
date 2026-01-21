@@ -1,11 +1,12 @@
 /* Стили редактора Tiptap */
 .tiptap-editor {
+    position: relative;
     border: 1px solid var(--bg-alpha);
     border-radius: 8px;
     background: var(--bg);
     margin-bottom: 20px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-    overflow: hidden;
+    overflow: visible; /* чтобы sticky работал корректно */
     display: flex;
     flex-direction: column;
 }
@@ -19,6 +20,9 @@
     background: var(--layer);
     border-top-left-radius: 8px;
     border-top-right-radius: 8px;
+    position: sticky;
+    top: 0;
+    z-index: 15; /* поверх контента */
 }
 
 .tiptap-editor .menu-bar button {
@@ -82,6 +86,16 @@
     max-width: 100%;
     height: auto;
     border-radius: 4px;
+    display: block;
+    margin: 1em 0;
+}
+
+.tiptap-editor .editor-content .ProseMirror img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    display: block;
+    margin: 1em 0;
 }
 
 .tiptap-editor .editor-content a {
@@ -92,4 +106,116 @@
 
 .tiptap-editor .editor-content a:hover {
     text-decoration: underline;
+}
+
+/* Стили для блоков кода с подсветкой синтаксиса */
+.tiptap-editor .editor-content pre {
+    background: var(--bg-alpha);
+    border-radius: 4px;
+    padding: 12px;
+    margin: 1em 0;
+    overflow-x: auto;
+    border: 1px solid var(--bg-alpha);
+}
+
+.tiptap-editor .editor-content pre code {
+    background: transparent;
+    padding: 0;
+    font-size: 14px;
+    font-family: 'Courier New', Courier, monospace;
+    color: var(--font);
+}
+
+.tiptap-editor .editor-content code {
+    background: var(--bg-alpha);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.9em;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+/* Стили для кнопки загрузки файла */
+.tiptap-editor .menu-bar .file-upload-button {
+    background: var(--bg);
+    border: 1px solid var(--bg-alpha);
+    border-radius: 6px;
+    padding: 6px 12px;
+    color: var(--font);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background 0.2s, color 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tiptap-editor .menu-bar .file-upload-button:hover {
+    background: var(--select);
+    color: var(--font);
+}
+
+/* Панель изменения размеров изображения */
+.image-resize-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    background: var(--layer);
+    border-top: 1px solid var(--bg-alpha);
+    border-bottom: 1px solid var(--bg-alpha);
+    position: sticky;
+    top: 52px; /* сразу под меню-баром */
+    z-index: 14;
+}
+
+.image-resize-bar input[type="range"] {
+    flex: 1;
+}
+
+.image-resize-bar button {
+    background: var(--bg);
+    border: 1px solid var(--bg-alpha);
+    border-radius: 6px;
+    padding: 4px 8px;
+    cursor: pointer;
+}
+
+.image-resize-bar button:hover {
+    background: var(--select);
+    color: var(--font);
+}
+
+/* Улучшенные стили для кнопок с иконками */
+.tiptap-editor .menu-bar button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+/* Стили для подсветки синтаксиса (lowlight/highlight.js) */
+.tiptap-editor .editor-content pre code.hljs {
+    display: block;
+    overflow-x: auto;
+    padding: 0;
+}
+
+.tiptap-editor .editor-content code.hljs {
+    padding: 0;
+}
+
+.tiptap-editor .editor-content .hljs {
+    background: var(--bg-alpha);
+    color: var(--font);
+}
+
+/* Темная тема для блоков кода */
+[data-mantine-color-scheme="dark"] .tiptap-editor .editor-content pre {
+    background: rgba(0, 0, 0, 0.3);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-mantine-color-scheme="dark"] .tiptap-editor .editor-content code {
+    background: rgba(0, 0, 0, 0.3);
 }

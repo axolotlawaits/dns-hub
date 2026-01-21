@@ -20,7 +20,6 @@ import { useUserContext } from '../hooks/useUserContext';
 import { useNavigate } from 'react-router';
 import { API } from '../config/constants';
 import './styles/Login.css';
-import { useWeather, Weather } from './Weather';
 import { useThemeContext } from '../hooks/useThemeContext';
 import { 
   IconBrightnessDown, 
@@ -329,7 +328,7 @@ const fetchBackgroundImage = async (
   elevation?: number,
   isWeekend?: boolean
 ) => {
-  // Используем реальную температуру или 0°C как fallback для зимы
+  // Используем упрощенный источник данных без внешних API
   const actualTemperature = temperature !== undefined ? temperature : 0;
   
   const background = getContextualBackground(
@@ -474,16 +473,15 @@ function Login() {
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [formState, setFormState] = useState<'initial' | 'knownUser' | 'newUser'>('initial');
   
-  const { 
-    weatherCondition, 
-    temperature, 
-    humidity,
-    windSpeed,
-    pressure,
-    visibility,
-    uvIndex,
-    elevation
-  } = useWeather();
+  // Статические метеоданные — отключаем запросы геолокации/погоды
+  const weatherCondition = 'clear';
+  const temperature = 0;
+  const humidity = undefined;
+  const windSpeed = undefined;
+  const pressure = undefined;
+  const visibility = undefined;
+  const uvIndex = undefined;
+  const elevation = undefined;
   const [currentSeason, currentTimeOfDay] = useMemo(() => [getSeason(), getTimeOfDay()], []);
   
   // Определяем день недели
@@ -728,7 +726,6 @@ function Login() {
                 <Text size="lg" c="var(--theme-text-secondary)" ta="center" mt="sm">
                   Войдите в систему для продолжения
                 </Text>
-                <Weather />
               </Box>
               
               {ldapError && (

@@ -44,6 +44,7 @@ import usersRouter from './routes/admin/users.js'
 import analyticsRouter from './routes/admin/analytics.js'
 import auditRouter from './routes/admin/audit.js'
 import pollRouter from './routes/app/poll.js'
+import docsRouter from './routes/docs/docs.js'
 
 import fs from 'fs'
 import cookieParser from 'cookie-parser'
@@ -87,7 +88,7 @@ export const refreshPrivateKey = fs.readFileSync(path.join(__dirname, 'keys/refr
 export const refreshPublicKey = fs.readFileSync(path.join(__dirname, 'keys/refresh_public.pem'), 'utf8');
 
 
-const allowedOrigins = process.env.NODE_ENV === 'production'  ? ['https://dns-zs.partner.ru', 'http://10.11.145.196']  : ['http://localhost:5173', 'http://localhost:5174', 'http://10.11.145.196:5173', 'http://10.11.145.196:5174', 'http://10.11.145.85:5173'];
+const allowedOrigins = process.env.NODE_ENV === 'production'  ? ['https://dns-zs.partner.ru', 'http://10.0.150.57']  : ['http://localhost:5173', 'http://localhost:5174', 'http://10.0.150.57:5173', 'http://10.0.150.57:5174', 'http://10.0.150.40:5173'];
 export const API = process.env.NODE_ENV === 'production' ? `https://dns-zs.partner.ru/hub-api` : 'http://localhost:2000/hub-api';
 export const APIWebSocket = process.env.NODE_ENV === 'production' ? `https://dns-zs.partner.ru/ws` : 'http://localhost:2000/ws';
 
@@ -213,8 +214,8 @@ app.use('/hub-api/retail/merch', merchRouter) // Дублируем маршру
 app.use('/hub-api/retail/print-service', printServiceRouter);
 app.use('/hub-api/retail/app-store', appStoreRouter);
 app.use('/hub-api/retail/shop', shopRouter);
-app.use('/hub-api/comments', commentRouter);
 app.use('/hub-api/trassir', trassirRouter);
+app.use('/hub-api/comments', commentRouter);
 
 // Остальные роуты
 app.use('/hub-api/radio', adminRouter)
@@ -222,6 +223,7 @@ app.use('/hub-api/logs', logsRouter)
 app.use('/hub-api/search', searchRouter)
 app.use('/hub-api/navigation', navigationRouter);
 app.use('/hub-api/type', typeRouter);
+app.use('/hub-api/docs', docsRouter);
 
 // Ленивая загрузка scanner роутера
 let scannerRouterLoaded = false;
@@ -253,6 +255,8 @@ app.use('/hub-api/scanner', async (req, res, next) => {
 // Ленивая загрузка safety journal роутера
 let safetyJournalRouterLoaded = false;
 let safetyJournalRouter: any = null;
+let safetyJournalChatRouterLoaded = false;
+let safetyJournalChatRouter: any = null;
 
 app.use('/hub-api/jurists/safety', async (req, res, next) => {
   if (!safetyJournalRouterLoaded) {
@@ -273,6 +277,28 @@ app.use('/hub-api/jurists/safety', async (req, res, next) => {
   
   next();
 });
+
+// Ленивая загрузка safety journal chat роутера
+app.use('/hub-api/jurists/safety/chat', async (req, res, next) => {
+  if (!safetyJournalChatRouterLoaded) {
+    try {
+      const { default: router } = await import('./routes/jurists/safetyJournalChat.js');
+      safetyJournalChatRouter = router;
+      safetyJournalChatRouterLoaded = true;
+      console.log('✅ [Server] Safety journal chat router loaded lazily');
+    } catch (error) {
+      console.error('❌ [Server] Failed to load safety journal chat router:', error);
+      return res.status(500).json({ error: 'Safety journal chat router not available' });
+    }
+  }
+  
+  if (safetyJournalChatRouter) {
+    return safetyJournalChatRouter(req, res, next);
+  }
+  
+  next();
+});
+
 /* loader (mb fix later) */
 app.use('/hub-api/loaders/route', routeRouter)
 app.use('/hub-api/loaders/routeDay', routeDayRouter)

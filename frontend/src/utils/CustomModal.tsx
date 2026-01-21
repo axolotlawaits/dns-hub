@@ -66,6 +66,11 @@ const CustomModalComponent: React.FC<CustomModalProps> = ({
       padding: '24px',
       background: 'var(--theme-bg-primary)',
       borderRadius: '0 0 16px 16px',
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column' as const,
+      height: 'calc(90vh - 120px)',
+      maxHeight: 'calc(90vh - 120px)',
       ...styles.body
     },
     header: {
@@ -154,10 +159,10 @@ export const LargeModal: React.FC<CustomModalProps> = (props) => (
   <CustomModal
     {...props}
     size="xl"
-    width="90vw"
-    maxWidth="1200px"
-    height="85vh"
-    maxHeight="85vh"
+    width="95vw"
+    maxWidth="1600px"
+    height="90vh"
+    maxHeight="90vh"
   />
 );
 

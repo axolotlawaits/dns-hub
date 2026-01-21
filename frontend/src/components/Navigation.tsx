@@ -27,47 +27,7 @@ import { useUserContext } from '../hooks/useUserContext';
 import './styles/Navigation.css';
 import { DynamicFormModal, type FormField } from '../utils/formModal';
 import { notificationSystem } from '../utils/Push';
-
-// Утилита для запросов с автоматическим обновлением токена
-const fetchWithTokenRefresh = async (url: string, options: RequestInit = {}): Promise<Response> => {
-  const token = localStorage.getItem('token');
-  const headers = new Headers(options.headers);
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
-  
-  let response = await fetch(url, {
-    ...options,
-    headers,
-  });
-
-  // Если получили 401, пробуем обновить токен
-  if (response.status === 401) {
-    try {
-      const refreshResponse = await fetch(`${API}/refresh-token`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-
-      if (refreshResponse.ok) {
-        const newToken = await refreshResponse.json();
-        localStorage.setItem('token', newToken);
-        
-        // Повторяем запрос с новым токеном
-        headers.set('Authorization', `Bearer ${newToken}`);
-        response = await fetch(url, {
-          ...options,
-          headers,
-        });
-      }
-      // Если refresh не удался, просто возвращаем исходный ответ (401)
-    } catch (refreshError) {
-      // Игнорируем ошибку refresh, возвращаем исходный ответ
-    }
-  }
-
-  return response;
-};
+import { fetchWithAuth } from '../utils/fetchWithAuth';
 
 interface Tool {
   id: string;
@@ -134,7 +94,7 @@ const Navigation: React.FC<NavigationProps> = ({ navOpened, toggleNav }) => {
           return;
         }
 
-        const response = await fetchWithTokenRefresh(`${API}/merch-bot/feedback/tools`, {
+        const response = await fetchWithAuth(`${API}/merch-bot/feedback/tools`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -201,18 +161,46 @@ const Navigation: React.FC<NavigationProps> = ({ navOpened, toggleNav }) => {
   }, [location.pathname, tools]);
 
   const getIconComponent = (iconName: string) => {
+    if (!iconName) {
+      return <IconHome size={24} stroke={1.5} />;
+    }
+    
+    // Пытаемся найти иконку в TablerIcons
     const IconComponent = TablerIcons[iconName as keyof typeof TablerIcons] as React.ComponentType<{
       size?: number;
       className?: string;
       stroke?: number;
     }>;
     
-    return IconComponent ? <IconComponent size={24} stroke={1.5} /> : <IconHome size={24} stroke={1.5} />;
+    if (IconComponent) {
+      return <IconComponent size={24} stroke={1.5} />;
+    }
+    
+    // Если иконка не найдена, возвращаем дефолтную
+    console.warn(`Иконка "${iconName}" не найдена в @tabler/icons-react`);
+    return <IconHome size={24} stroke={1.5} />;
   };
 
   const handleClick = (link: string, id: string, tool: Tool) => {
-    setActiveTab(tool.name);
-    navigate(link, { state: { id } });
+    // Проверяем, есть ли дочерние элементы у этого инструмента
+    const hasChildren = tools.some(t => t.parent_id === tool.id);
+    
+    // Если это родительский инструмент БЕЗ дочерних элементов - открываем его
+    if (tool.parent_id === null && !hasChildren) {
+      setActiveTab(tool.name);
+      navigate(link, { state: { id } });
+    }
+    // Если есть дочерние элементы - можно показать их список или открыть родителя
+    // Пока оставляем текущее поведение - открываем родительский инструмент
+    else if (hasChildren) {
+      setActiveTab(tool.name);
+      navigate(link, { state: { id } });
+    }
+    // Обычный инструмент (не родительский) - открываем как обычно
+    else {
+      setActiveTab(tool.name);
+      navigate(link, { state: { id } });
+    }
   };
 
   const handleSubmitFeedback = async (values: Record<string, any>) => {
@@ -375,11 +363,23 @@ const Navigation: React.FC<NavigationProps> = ({ navOpened, toggleNav }) => {
             {IconComponent}
           </div>
           <div className="nav-option-text">
-            <Text size="lg" fw={isActive ? 600 : 500} className="nav-option-name">
+            <Text
+              size="lg"
+              fw={isActive ? 600 : 500}
+              className="nav-option-name"
+              lineClamp={1}
+              title={tool.name}
+            >
               {tool.name}
             </Text>
-            {tool.description && (
-              <Text size="md" c="var(--theme-text-tertiary)" className="nav-option-description">
+            {tool.description && tool.parent_id !== null && (
+              <Text
+                size="md"
+                c="var(--theme-text-tertiary)"
+                className="nav-option-description"
+                lineClamp={2}
+                title={tool.description}
+              >
                 {tool.description}
               </Text>
             )}

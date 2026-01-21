@@ -80,5 +80,11 @@ export const useSocketIO = () => {
     };
   }, [user?.id]);
 
-  return { isConnected, lastNotification, systemMetrics };
+  return { 
+    isConnected, 
+    lastNotification, 
+    systemMetrics,
+    socket: socketRef.current,
+    socketRef // Возвращаем также ref для доступа к актуальному socket
+  };
 };

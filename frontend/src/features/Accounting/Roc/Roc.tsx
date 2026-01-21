@@ -9,6 +9,7 @@ import { DynamicFormModal, type FormConfig } from '../../../utils/formModal';
 import { FilePreviewModal } from '../../../utils/FilePreviewModal';
 import { useUserContext } from '../../../hooks/useUserContext';
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
+import { useThemeContext } from '../../../hooks/useThemeContext';
 import { TableComponent } from '../../../utils/table';
 import { IconPlus, IconPencil, IconTrash, IconDownload, IconRefresh, IconFile } from '@tabler/icons-react';
 import { DndProviderWrapper } from '../../../utils/dnd';
@@ -122,15 +123,16 @@ const docStatusMap = [
 export default function RocList() {
   const { user } = useUserContext();
   const { setHeader, clearHeader } = usePageHeader();
+  const { isDark } = useThemeContext();
   const [data, setData] = useState<RocData[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<RocData | null>(null);
   const [formValues, setFormValues] = useState(DEFAULT_FORM);
 
-  const [filterNameData, setFilterNameData] = useState<TypeOption[]>([])
-  const [filterInnData, setFilterInnData] = useState<TypeOption[]>([])
-  const [types, setTypes] = useState<TypeOption[]>([]);
-  const [statuses, setStatuses] = useState<TypeOption[]>([]);
+  const [filterNameData, setFilterNameData] = useState<string[]>([])
+  const [filterInnData, setFilterInnData] = useState<string[]>([])
+  const [types, setTypes] = useState<string[]>([]);
+  const [statuses, setStatuses] = useState<string[]>([]);
 
   const [filters, setFilters] = useState({ column: [] as any[], sorting: [{ id: 'createdAt', desc: true }] });
   const [activeTab, setActiveTab] = useState<'list' | 'byDoc'>('list');
@@ -190,6 +192,20 @@ export default function RocList() {
     return text ? (JSON.parse(text) as T) : null;
   }, []);
 
+  // Функция для безопасного извлечения строки из значения (может быть объектом с {value, type})
+  const extractString = (val: any): string => {
+    if (typeof val === 'string') return val;
+    if (val && typeof val === 'object') {
+      // Если это объект с value или type, извлекаем строку
+      if ('value' in val && typeof val.value === 'string') return val.value;
+      if ('type' in val && typeof val.type === 'string') return val.type;
+      if ('name' in val && typeof val.name === 'string') return val.name;
+      // Пытаемся преобразовать в строку
+      return String(val);
+    }
+    return String(val || '');
+  };
+
   const loadRefs = useCallback(async () => {
     const [t, s, n_i] = await Promise.all([
       fetchJson<TypeOption[]>(`${API}/accounting/roc/dict/types`),
@@ -199,10 +215,10 @@ export default function RocList() {
     if (t && s && n_i) {
       const { uniqueNames, uniqueInns } = n_i
       
-      setFilterNameData(uniqueNames.map((n: any) => n.name ))
-      setFilterInnData(uniqueInns.map((i: any) => i.inn ))
-      setTypes(t.map((o: any) => o.name));
-      setStatuses(s.map((o: any) => o.name));
+      setFilterNameData(uniqueNames.map((n: any) => extractString(n.name)))
+      setFilterInnData(uniqueInns.map((i: any) => extractString(i.inn)))
+      setTypes(t.map((o: any) => extractString(o.name)));
+      setStatuses(s.map((o: any) => extractString(o.name)));
     }
   }, [fetchJson]);
 
@@ -225,13 +241,24 @@ export default function RocList() {
     loadList();
   }, [loadRefs, loadList]);
 
+  const filterFolderData = useMemo(() => {
+    const uniqueFolders = new Set<string>();
+    (data || []).forEach((row) => {
+      if (row.folderNo) {
+        uniqueFolders.add(extractString(row.folderNo));
+      }
+    });
+    return Array.from(uniqueFolders).sort();
+  }, [data]);
+
   const filtersConfig = useMemo(() => ([
-    { columnId: 'name', label: 'Контрагент', type: 'select' as const, options: filterNameData },
-    { columnId: 'doc_inn', label: 'ИНН', type: 'select' as const, options: filterInnData },
-    { columnId: 'typeContract_name', label: 'Тип договора', type: 'select' as const, options: types },
-    { columnId: 'statusContract_name', label: 'Статус', type: 'select' as const, options: statuses },
     { columnId: 'dateContract', label: 'Дата договора', type: 'date' as const },
-  ]), [filterInnData, filterNameData, types, statuses]);
+    { columnId: 'name', label: 'Контрагент', type: 'select' as const, options: filterNameData.map(v => ({ value: v, label: v })) },
+    { columnId: 'doc_inn', label: 'ИНН', type: 'select' as const, options: filterInnData.map(v => ({ value: v, label: v })) },
+    { columnId: 'typeContract_name', label: 'Тип договора', type: 'select' as const, options: types.map(v => ({ value: v, label: v })) },
+    { columnId: 'statusContract_name', label: 'Статус', type: 'select' as const, options: statuses.map(v => ({ value: v, label: v })) },
+    { columnId: 'folderNo', label: 'Папка', type: 'select' as const, options: filterFolderData.map(v => ({ value: v, label: v })) },
+  ]), [filterInnData, filterNameData, types, statuses, filterFolderData]);
 
   const [formConfig, setFormConfig] = useState<FormConfig>({ initialValues: DEFAULT_FORM, fields: [] });
   // const [attachments, setAttachments] = useState<File[]>([]);
@@ -388,7 +415,7 @@ export default function RocList() {
           name: 'typeContractId', 
           label: 'Тип договора', 
           type: 'select', 
-          options: types, 
+          options: types.map(v => ({ value: v, label: v })), 
           placeholder: 'Выберите тип',
           groupWith: ['statusContractId', 'shelfLife'],
           groupSize: 3,
@@ -398,7 +425,7 @@ export default function RocList() {
           name: 'statusContractId', 
           label: 'Статус', 
           type: 'select', 
-          options: statuses, 
+          options: statuses.map(v => ({ value: v, label: v })), 
           placeholder: 'Выберите статус',
           groupWith: ['typeContractId', 'shelfLife'],
           groupSize: 3,
@@ -490,7 +517,80 @@ export default function RocList() {
     input.click();
   }, [API, loadList, selectedView, fetchJson]);
 
+  // Функция для фильтрации данных
+  const applyFilters = useCallback((rows: RocData[]) => {
+    return rows.filter((row) => {
+      // Применяем все активные фильтры
+      for (const filter of filters.column) {
+        const filterValue = filter.value;
+        
+        // Фильтр по имени контрагента
+        if (filter.id === 'name' && Array.isArray(filterValue) && filterValue.length > 0) {
+          const rowName = extractString(row.name);
+          if (!filterValue.some((val: string) => extractString(val) === rowName)) {
+            return false;
+          }
+        }
+        
+        // Фильтр по ИНН
+        if (filter.id === 'doc_inn' && Array.isArray(filterValue) && filterValue.length > 0) {
+          const rowInn = extractString(row.doc?.inn || '');
+          if (!filterValue.some((val: string) => extractString(val) === rowInn)) {
+            return false;
+          }
+        }
+        
+        // Фильтр по типу договора
+        if (filter.id === 'typeContract_name' && Array.isArray(filterValue) && filterValue.length > 0) {
+          const rowType = extractString(row.typeContract?.name || '');
+          if (!filterValue.some((val: string) => extractString(val) === rowType)) {
+            return false;
+          }
+        }
+        
+        // Фильтр по статусу
+        if (filter.id === 'statusContract_name' && Array.isArray(filterValue) && filterValue.length > 0) {
+          const rowStatus = extractString(row.statusContract?.name || '');
+          if (!filterValue.some((val: string) => extractString(val) === rowStatus)) {
+            return false;
+          }
+        }
+        
+        // Фильтр по папке
+        if (filter.id === 'folderNo' && Array.isArray(filterValue) && filterValue.length > 0) {
+          const rowFolder = extractString(row.folderNo || '');
+          if (!filterValue.some((val: string) => extractString(val) === rowFolder)) {
+            return false;
+          }
+        }
+        
+        // Фильтр по дате договора
+        if (filter.id === 'dateContract' && filterValue && typeof filterValue === 'object') {
+          const dateFilter = filterValue as { start?: string; end?: string };
+          if (dateFilter.start || dateFilter.end) {
+            if (!row.dateContract) return false;
+            const rowDate = dayjs(row.dateContract);
+            const start = dateFilter.start ? dayjs(dateFilter.start).startOf('day') : null;
+            const end = dateFilter.end ? dayjs(dateFilter.end).endOf('day') : null;
+            
+            if (start && end) {
+              if (!rowDate.isBetween(start, end, null, '[]')) return false;
+            } else if (start) {
+              if (rowDate.isBefore(start)) return false;
+            } else if (end) {
+              if (rowDate.isAfter(end)) return false;
+            }
+          }
+        }
+      }
+      return true;
+    });
+  }, [filters.column]);
+
   const groupedByDoc = useMemo(() => {
+    // Применяем фильтры к данным перед группировкой
+    const filteredData = applyFilters(data || []);
+    
     const groups: Array<{
       key: string;
       title: string;
@@ -498,7 +598,7 @@ export default function RocList() {
       items: RocData[];
     }> = [];
     const byKey: Record<string, number> = {};
-    (data || []).forEach((row) => {
+    filteredData.forEach((row) => {
       const doc = row.doc;
       const key = doc?.id || `${doc?.inn || 'no-inn'}|${doc?.kpp || ''}|${doc?.name || row.name || 'unknown'}`;
       const title = doc?.fullName || doc?.name || row.name || 'Без названия';
@@ -513,7 +613,7 @@ export default function RocList() {
     // Сортируем группы по названию
     groups.sort((a, b) => a.title.localeCompare(b.title));
     return groups;
-  }, [data]);
+  }, [data, applyFilters]);
 
   const openEdit = (row: RocData) => {
     setSelected(row);
@@ -667,7 +767,7 @@ export default function RocList() {
                       header: 'Контрагент', 
                       accessorKey: 'name', 
                       cell: info => (
-                        <Tooltip w={300} label={info.row.original.name} multiline>
+                        <Tooltip w={300} label={extractString(info.row.original.name)} multiline>
                           <Text
                             truncate="end" 
                             style={{ 
@@ -676,7 +776,7 @@ export default function RocList() {
                               fontSize: '14px'
                             }}
                           >
-                            {info.row.original.name}
+                            {extractString(info.row.original.name)}
                           </Text>
                         </Tooltip>
                       ) 
@@ -697,7 +797,7 @@ export default function RocList() {
                             fontFamily: 'monospace'
                           }}
                         >
-                          {info.row.original.contractNumber || '-'}
+                          {extractString(info.row.original.contractNumber) || '-'}
                         </Text>
                       ) 
                     },
@@ -742,15 +842,16 @@ export default function RocList() {
                         <Badge
                           variant="light"
                           style={{
-                            background: 'var(--color-primary-100)',
-                            color: 'var(--color-primary-700)',
+                            background: isDark ? 'rgba(59, 130, 246, 0.15)' : 'var(--color-primary-100)',
+                            color: isDark ? '#93c5fd' : 'var(--color-primary-700)',
                             fontWeight: '500',
                             fontSize: '13px',
                             padding: '6px 12px',
-                            borderRadius: '8px'
+                            borderRadius: '8px',
+                            border: isDark ? '1px solid rgba(59, 130, 246, 0.3)' : 'none'
                           }}
                         >
-                          {info.row.original.typeContract?.name || '-'}
+                          {extractString(info.row.original.typeContract?.name) || '-'}
                         </Badge>
                       ) 
                     },
@@ -761,15 +862,16 @@ export default function RocList() {
                         <Badge
                           variant="light"
                           style={{
-                            background: 'var(--color-green-100)',
-                            color: 'var(--color-green-700)',
+                            background: isDark ? 'rgba(34, 197, 94, 0.15)' : 'var(--color-green-100)',
+                            color: isDark ? '#86efac' : 'var(--color-green-700)',
                             fontWeight: '500',
                             fontSize: '13px',
                             padding: '6px 12px',
-                            borderRadius: '8px'
+                            borderRadius: '8px',
+                            border: isDark ? '1px solid rgba(34, 197, 94, 0.3)' : 'none'
                           }}
                         >
-                          {info.row.original.statusContract?.name || '-'}
+                          {extractString(info.row.original.statusContract?.name) || '-'}
                         </Badge>
                       ) 
                     },
@@ -784,7 +886,7 @@ export default function RocList() {
                             fontWeight: '500'
                           }}
                         >
-                          {info.row.original.folderNo || '-'}
+                          {extractString(info.row.original.folderNo) || '-'}
                         </Text>
                       ) 
                     },
@@ -840,16 +942,34 @@ export default function RocList() {
         </Tabs.Panel>
 
         <Tabs.Panel value="byDoc" pt="md">
-          <Box
-            style={{
-              background: 'var(--theme-bg-elevated)',
-              borderRadius: '16px',
-              border: '1px solid var(--theme-border-primary)',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
-              overflow: 'hidden'
-            }}
-          >
-            <Accordion 
+          <Grid gutter={0}>
+            <Grid.Col span={12}>
+              <FilterGroup
+                filters={filtersConfig}
+                columnFilters={filters.column}
+                onColumnFiltersChange={(columnId, value) =>
+                  setFilters(prev => ({
+                    ...prev,
+                    column: [
+                      ...prev.column.filter(f => f.id !== columnId),
+                      ...(value ? [{ id: columnId, value }] : []),
+                    ],
+                  }))
+                }
+                onClearAll={clearAllFilters}
+              />
+            </Grid.Col>
+            <Grid.Col span={12}>
+              <Box
+                style={{
+                  background: 'var(--theme-bg-elevated)',
+                  borderRadius: '16px',
+                  border: '1px solid var(--theme-border-primary)',
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
+                  overflow: 'hidden'
+                }}
+              >
+                <Accordion 
               multiple
               styles={{
                 root: {
@@ -920,12 +1040,13 @@ export default function RocList() {
                       <Badge
                         variant="light"
                         style={{
-                          background: 'var(--color-primary-100)',
-                          color: 'var(--color-primary-700)',
+                          background: isDark ? 'rgba(59, 130, 246, 0.15)' : 'var(--color-primary-100)',
+                          color: isDark ? '#93c5fd' : 'var(--color-primary-700)',
                           fontWeight: '600',
                           fontSize: '13px',
                           padding: '8px 16px',
-                          borderRadius: '20px'
+                          borderRadius: '20px',
+                          border: isDark ? '1px solid rgba(59, 130, 246, 0.3)' : 'none'
                         }}
                       >
                         Договоров: {g.items.length}
@@ -977,7 +1098,7 @@ export default function RocList() {
                                     marginBottom: '4px'
                                   }}
                                 >
-                                  {row.name}
+                                  {extractString(row.name)}
                                 </Text>
                                 <Group gap={16} wrap="wrap">
                                   <Text 
@@ -987,7 +1108,7 @@ export default function RocList() {
                                       fontFamily: 'monospace'
                                     }}
                                   >
-                                    № {row.contractNumber || '-'}
+                                    № {extractString(row.contractNumber) || '-'}
                                   </Text>
                                   <Text 
                                     size="sm" 
@@ -1049,7 +1170,9 @@ export default function RocList() {
                 </Accordion.Item>
               ))}
             </Accordion>
-          </Box>
+              </Box>
+            </Grid.Col>
+          </Grid>
         </Tabs.Panel>
       </Tabs>
 
@@ -1152,29 +1275,56 @@ export default function RocList() {
             {/* Основная информация */}
             <Paper p="md" radius="md" style={{ background: 'var(--theme-bg-primary)', border: '1px solid var(--theme-border-secondary)' }}>
               <Text fw={700} size="lg" mb={8} style={{ color: 'var(--theme-text-primary)' }}>
-                {idToParty[activePartyId].name}
+                {extractString(idToParty[activePartyId].name)}
               </Text>
-              {idToParty[activePartyId].fullName && idToParty[activePartyId].fullName !== idToParty[activePartyId].name && (
+              {idToParty[activePartyId].fullName && extractString(idToParty[activePartyId].fullName) !== extractString(idToParty[activePartyId].name) && (
                 <Text size="sm" c="dimmed" mb={8} style={{ fontStyle: 'italic' }}>
-                  {idToParty[activePartyId].fullName}
+                  {extractString(idToParty[activePartyId].fullName)}
                 </Text>
               )}
               <Text size="sm" c="dimmed" mb={12}>
-                {idToParty[activePartyId].address}
+                {extractString(idToParty[activePartyId].address)}
               </Text>
               
               <Group gap="md" wrap="wrap">
-                <Badge variant="light" color="blue" size="sm">
-                  ИНН: {idToParty[activePartyId].inn}
+                <Badge 
+                  variant="light" 
+                  color="blue" 
+                  size="sm"
+                  style={isDark ? {
+                    background: 'rgba(59, 130, 246, 0.15)',
+                    color: '#93c5fd',
+                    border: '1px solid rgba(59, 130, 246, 0.3)'
+                  } : {}}
+                >
+                  ИНН: {extractString(idToParty[activePartyId].inn)}
                 </Badge>
                 {idToParty[activePartyId].kpp && (
-                  <Badge variant="light" color="green" size="sm">
-                    КПП: {idToParty[activePartyId].kpp}
+                  <Badge 
+                    variant="light" 
+                    color="green" 
+                    size="sm"
+                    style={isDark ? {
+                      background: 'rgba(34, 197, 94, 0.15)',
+                      color: '#86efac',
+                      border: '1px solid rgba(34, 197, 94, 0.3)'
+                    } : {}}
+                  >
+                    КПП: {extractString(idToParty[activePartyId].kpp)}
                   </Badge>
                 )}
                 {idToParty[activePartyId].ogrn && (
-                  <Badge variant="light" color="orange" size="sm">
-                    ОГРН: {idToParty[activePartyId].ogrn}
+                  <Badge 
+                    variant="light" 
+                    color="orange" 
+                    size="sm"
+                    style={isDark ? {
+                      background: 'rgba(249, 115, 22, 0.15)',
+                      color: '#fdba74',
+                      border: '1px solid rgba(249, 115, 22, 0.3)'
+                    } : {}}
+                  >
+                    ОГРН: {extractString(idToParty[activePartyId].ogrn)}
                   </Badge>
                 )}
               </Group>
@@ -1189,12 +1339,12 @@ export default function RocList() {
                 <Stack gap="xs">
                   {idToParty[activePartyId].phone && (
                     <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
-                      📞 {idToParty[activePartyId].phone}
+                      📞 {extractString(idToParty[activePartyId].phone)}
                     </Text>
                   )}
                   {idToParty[activePartyId].email && (
                     <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
-                      ✉️ {idToParty[activePartyId].email}
+                      ✉️ {extractString(idToParty[activePartyId].email)}
                     </Text>
                   )}
                 </Stack>
@@ -1211,7 +1361,7 @@ export default function RocList() {
                 <Text size="sm" c="red">
                   {dayjs(idToParty[activePartyId].liquidationDate).isValid() 
                     ? dayjs(idToParty[activePartyId].liquidationDate).format('DD.MM.YYYY') 
-                    : idToParty[activePartyId].liquidationDate}
+                    : extractString(idToParty[activePartyId].liquidationDate)}
                 </Text>
               </Paper>
             )}
@@ -1225,12 +1375,12 @@ export default function RocList() {
                 <Stack gap="xs">
                   {idToParty[activePartyId].successorName && (
                     <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
-                      {idToParty[activePartyId].successorName}
+                      {extractString(idToParty[activePartyId].successorName)}
                     </Text>
                   )}
                   {idToParty[activePartyId].successorINN && (
                     <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
-                      ИНН: {idToParty[activePartyId].successorINN}
+                      ИНН: {extractString(idToParty[activePartyId].successorINN)}
                     </Text>
                   )}
                 </Stack>
@@ -1245,12 +1395,12 @@ export default function RocList() {
               <Stack gap="xs">
                 {idToParty[activePartyId].typeTerm && (
                   <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
-                    <strong>Тип термина:</strong> {idToParty[activePartyId].typeTerm}
+                    <strong>Тип термина:</strong> {extractString(idToParty[activePartyId].typeTerm)}
                   </Text>
                 )}
                 {idToParty[activePartyId].contractNumber && (
                   <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
-                    <strong>Номер договора:</strong> {idToParty[activePartyId].contractNumber}
+                    <strong>Номер договора:</strong> {extractString(idToParty[activePartyId].contractNumber)}
                   </Text>
                 )}
                 {idToParty[activePartyId].dateContract && (
@@ -1265,7 +1415,7 @@ export default function RocList() {
                 )}
                 {idToParty[activePartyId].shelfLife && (
                   <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
-                    <strong>Срок хранения:</strong> {idToParty[activePartyId].shelfLife} лет
+                    <strong>Срок хранения:</strong> {extractString(idToParty[activePartyId].shelfLife)} лет
                   </Text>
                 )}
               </Stack>
@@ -1279,11 +1429,11 @@ export default function RocList() {
                 </Text>
                 <Stack gap="xs">
                   <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
-                    <strong>Система налогообложения:</strong> {idToParty[activePartyId].taxationSystem}
+                    <strong>Система налогообложения:</strong> {extractString(idToParty[activePartyId].taxationSystem)}
                   </Text>
                   {idToParty[activePartyId].siEgrul && (
                     <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
-                      <strong>ЕГРЮЛ:</strong> {idToParty[activePartyId].siEgrul}
+                      <strong>ЕГРЮЛ:</strong> {extractString(idToParty[activePartyId].siEgrul)}
                     </Text>
                   )}
                 </Stack>
@@ -1299,12 +1449,12 @@ export default function RocList() {
                 <Stack gap="xs">
                   {typeof idToParty[activePartyId].statusCode !== 'undefined' && (
                     <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
-                      <strong>Код статуса:</strong> {idToParty[activePartyId].statusCode}
+                      <strong>Код статуса:</strong> {extractString(idToParty[activePartyId].statusCode)}
                     </Text>
                   )}
                   {idToParty[activePartyId].deStatusCode && (
                     <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
-                      <strong>Статус:</strong> {idToParty[activePartyId].deStatusCode}
+                      <strong>Статус:</strong> {extractString(idToParty[activePartyId].deStatusCode)}
                     </Text>
                   )}
                 </Stack>
@@ -1334,12 +1484,12 @@ export default function RocList() {
                     <Stack gap="xs">
                       {dadataInfo.managerName && (
                         <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
-                          <strong>Руководитель:</strong> {dadataInfo.managerName}
+                          <strong>Руководитель:</strong> {extractString(dadataInfo.managerName)}
                         </Text>
                       )}
                       {dadataInfo.managerPost && (
                         <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
-                          <strong>Должность:</strong> {dadataInfo.managerPost}
+                          <strong>Должность:</strong> {extractString(dadataInfo.managerPost)}
                         </Text>
                       )}
                     </Stack>
@@ -1381,12 +1531,12 @@ export default function RocList() {
                     <Stack gap="xs">
                       {dadataInfo.phones?.map((phone, index) => (
                         <Text key={index} size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
-                          📞 {phone}
+                          📞 {extractString(phone)}
                         </Text>
                       ))}
                       {dadataInfo.emails?.map((email, index) => (
                         <Text key={index} size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
-                          ✉️ {email}
+                          ✉️ {extractString(email)}
                         </Text>
                       ))}
                     </Stack>
@@ -1402,7 +1552,7 @@ export default function RocList() {
                     <Stack gap="xs">
                       {dadataInfo.licenses?.map((license, index) => (
                         <Text key={index} size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
-                          • {license}
+                          • {extractString(license)}
                         </Text>
                       ))}
                     </Stack>
@@ -1440,7 +1590,7 @@ export default function RocList() {
                     <Stack gap="xs">
                       {dadataInfo.founders?.map((founder, index) => (
                         <Text key={index} size="sm" style={{ color: 'var(--theme-text-secondary)' }}>
-                          <strong>{founder.name}</strong> (ИНН: {founder.inn}, доля: {founder.share}%)
+                          <strong>{extractString(founder.name)}</strong> (ИНН: {extractString(founder.inn)}, доля: {extractString(founder.share)}%)
                         </Text>
                       ))}
                     </Stack>
@@ -1566,16 +1716,41 @@ export default function RocList() {
           );
         }}
         viewFieldsConfig={[
-          { label: 'Контрагент (Doc)', value: (it) => it?.doc?.fullName || it?.doc?.name || '-' },
-          { label: 'Номер договора', value: (it) => it?.contractNumber || '-' },
-          { label: 'Дата договора', value: (it) => it?.dateContract ? dayjs(it.dateContract).format('DD.MM.YYYY') : '-' },
-          { label: 'Действует до', value: (it) => it?.agreedTo ? dayjs(it.agreedTo).format('DD.MM.YYYY') : '-' },
-          { label: 'Тип договора', value: (it) => it?.typeContract?.name || '-' },
-          { label: 'Статус', value: (it) => it?.statusContract?.name || '-' },
-          { label: '№ папки', value: (it) => it?.folderNo || '-' },
-          { label: 'ИНН/КПП', value: (it) => it?.doc ? `${it.doc.inn}${it.doc.kpp ? ` / ${it.doc.kpp}` : ''}` : '-' },
-          { label: 'ОГРН', value: (it) => it?.doc?.ogrn || '-' },
-          { label: 'Адрес', value: (it) => it?.doc?.address || '-' },
+          { label: 'Контрагент (Doc)', value: (it) => extractString(it?.doc?.fullName) || extractString(it?.doc?.name) || '-' },
+          { 
+            label: 'Номер договора', 
+            value: (it) => extractString(it?.contractNumber) || '-',
+            groupWith: ['Дата договора', 'Действует до'],
+            groupSize: 3
+          },
+          { 
+            label: 'Дата договора', 
+            value: (it) => it?.dateContract ? dayjs(it.dateContract).format('DD.MM.YYYY') : '-',
+            groupWith: ['Номер договора', 'Действует до'],
+            groupSize: 3
+          },
+          { 
+            label: 'Действует до', 
+            value: (it) => it?.agreedTo ? dayjs(it.agreedTo).format('DD.MM.YYYY') : '-',
+            groupWith: ['Номер договора', 'Дата договора'],
+            groupSize: 3
+          },
+          { 
+            label: 'Тип договора', 
+            value: (it) => extractString(it?.typeContract?.name) || '-',
+            groupWith: ['Статус'],
+            groupSize: 2
+          },
+          { 
+            label: 'Статус', 
+            value: (it) => extractString(it?.statusContract?.name) || '-',
+            groupWith: ['Тип договора'],
+            groupSize: 2
+          },
+          { label: '№ папки', value: (it) => extractString(it?.folderNo) || '-' },
+          { label: 'ИНН/КПП', value: (it) => it?.doc ? `${extractString(it.doc.inn)}${it.doc.kpp ? ` / ${extractString(it.doc.kpp)}` : ''}` : '-' },
+          { label: 'ОГРН', value: (it) => extractString(it?.doc?.ogrn) || '-' },
+          { label: 'Адрес', value: (it) => extractString(it?.doc?.address) || '-' },
         ]}
       />
 

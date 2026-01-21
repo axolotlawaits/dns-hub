@@ -13,6 +13,7 @@ import {
   updateAd,
   deleteAd,
   createReserve,
+  confirmReserve,
 } from '../../controllers/retail/shop.js';
 import { prisma } from '../../server.js';
 import multer from 'multer';
@@ -93,7 +94,9 @@ const itemsUpload = multer({
 router.get('/categories', getCategories);
 router.get('/branches', getBranches);
 router.get('/shops', getAds);
+router.get('/', getAds); // Дублируем для упрощения пути
 router.get('/shops/:id', getAdById);
+router.get('/:id', getAdById); // Дублируем для упрощения пути
 
 // Защищенные роуты
 router.use(authenticateToken);
@@ -106,13 +109,17 @@ router.delete('/categories/:id', deleteCategory);
 
 // Объявления
 router.post('/shops', createAd);
+router.post('/', createAd); // Дублируем для упрощения пути
 router.put('/shops/:id', updateAd);
+router.put('/:id', updateAd); // Дублируем для упрощения пути
 router.delete('/shops/:id', deleteAd);
+router.delete('/:id', deleteAd); // Дублируем для упрощения пути
 
 // Избранное удалено
 
 // Загрузка изображений
-router.post('/shops/:id/images', upload.array('images', 10), async (req: any, res: any) => {
+// Дублируем роут для упрощения пути
+router.post('/:id/images', upload.array('images', 10), async (req: any, res: any) => {
   try {
     const { id } = req.params;
     const token = req.token;
@@ -176,6 +183,63 @@ router.post('/shops/:id/images', upload.array('images', 10), async (req: any, re
 
 // Удалить изображение
 router.delete('/shops/:id/images/:imageId', async (req: any, res: any) => {
+  try {
+    const { id, imageId } = req.params;
+    const token = req.token;
+    if (!token?.userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const ad = await prisma.shop.findUnique({
+      where: { id },
+      select: { userId: true },
+    });
+
+    if (!ad) {
+      return res.status(404).json({ error: 'Ad not found' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: token.userId },
+      select: { role: true },
+    });
+
+    if (ad.userId !== token.userId && user?.role !== 'ADMIN' && user?.role !== 'DEVELOPER') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const image = await (prisma as any).shopAttachment.findUnique({
+      where: { id: imageId },
+    });
+
+    if (!image || image.shopId !== id) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+
+    // Удаляем файл
+    const filePath = path.join(process.cwd(), 'backend', 'public', image.source);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    await (prisma as any).shopAttachment.delete({
+      where: { id: imageId },
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[Ads] Error deleting image:', error);
+    res.status(500).json({ error: 'Failed to delete image' });
+  }
+});
+
+// Резервирование
+router.post('/shops/:id/reserve', createReserve);
+router.post('/:id/reserve', createReserve); // Дублируем для упрощения пути
+router.post('/reserves/:reserveId/confirm', confirmReserve);
+
+// Дублируем роут для упрощения пути
+router.delete('/:id/images/:imageId', async (req: any, res: any) => {
   try {
     const { id, imageId } = req.params;
     const token = req.token;

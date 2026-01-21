@@ -20,24 +20,17 @@ const useAuthFetch = () => {
 
     if (response.status === 401) {
       // Пытаемся обновить токен через контекст
-      try {
-        const newToken = await refreshAccessToken()
+      const newToken = await refreshAccessToken()
+      
+      if (newToken) {
+        headers.set('Authorization', `Bearer ${newToken}`)
+        options.headers = headers
         
-        if (newToken) {
-          headers.set('Authorization', `Bearer ${newToken}`)
-          options.headers = headers
-          
-          // Повторяем запрос с новым токеном
-          response = await fetch(url, options)
-        } else {
-          // Если токен не обновился, делаем logout
-          logout()
-          navigate('/login')
-          return null
-        }
-      } catch (error) {
-        // Если refresh не удался, делаем logout
-        console.error('Failed to refresh token:', error)
+        // Повторяем запрос с новым токеном
+        response = await fetch(url, options)
+      } else {
+        // Если токен не обновился (refresh token истек или невалиден), делаем logout
+        console.warn('[useAuthFetch] Token refresh failed, logging out user')
         logout()
         navigate('/login')
         return null

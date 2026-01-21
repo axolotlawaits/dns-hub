@@ -98,11 +98,16 @@ const dispatchNotification = async (notification: NotificationWithRelations) => 
   if (shouldSendInApp) {
     try {
       const receiverId = notification.receiver?.id || notification.receiverId;
+      // Убеждаемся, что message - это строка
+      const messageText = typeof notification.message === 'string' 
+        ? notification.message 
+        : String(notification.message || '');
+      
       socketService.sendToUser(receiverId, {
         id: notification.id,
         type: notification.type,
         title: notification.title,
-        message: notification.message,
+        message: messageText,
         createdAt: notification.createdAt.toISOString(),
         read: notification.read,
         sender: notification.sender || undefined,
@@ -172,16 +177,41 @@ const createNotification = async (data: z.infer<typeof createNotificationSchema>
 };
 
 const markAsRead = async (params: z.infer<typeof markAsReadSchema>) => {
-  return prisma.notifications.update({
-    where: {
-      id: params.notificationId,
-      receiverId: params.userId
-    },
-    data: {
-      read: true,
-      updatedAt: new Date()
-    },
-  });
+  try {
+    // Сначала проверяем, существует ли уведомление
+    const notification = await prisma.notifications.findUnique({
+      where: {
+        id: params.notificationId,
+      },
+    });
+
+    if (!notification) {
+      throw new Error(`Notification with id ${params.notificationId} not found`);
+    }
+
+    // Проверяем, что уведомление принадлежит пользователю
+    if (notification.receiverId !== params.userId) {
+      throw new Error(`Notification ${params.notificationId} does not belong to user ${params.userId}`);
+    }
+
+    return prisma.notifications.update({
+      where: {
+        id: params.notificationId,
+        receiverId: params.userId
+      },
+      data: {
+        read: true,
+        updatedAt: new Date()
+      },
+    });
+  } catch (error: any) {
+    // Если уведомление не найдено, возвращаем null вместо ошибки
+    if (error.code === 'P2025' || error.message?.includes('not found')) {
+      console.warn(`[Notification] markAsRead - Notification ${params.notificationId} not found for user ${params.userId}`);
+      return null;
+    }
+    throw error;
+  }
 };
 
 const getNotifications = async (params: z.infer<typeof getNotificationsSchema>) => {

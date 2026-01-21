@@ -27,8 +27,10 @@ interface AuthImageProps {
   onMimeTypeDetected?: (mimeType: string) => void;
   onLoad?: (event: React.SyntheticEvent<HTMLImageElement>) => void;
   onError?: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
   fit?: 'contain' | 'cover' | 'fill' | 'none' | 'scale-down';
   className?: string;
+  style?: React.CSSProperties;
 }
 
 // Компонент для загрузки файлов с заголовками авторизации. Исправить зависимости
@@ -173,7 +175,7 @@ const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: 
 };
 
 // Компонент для загрузки изображений с заголовками авторизации
-const AuthImage = ({ src, alt, onMimeTypeDetected, onLoad, onError, ...props }: AuthImageProps) => {
+const AuthImage = ({ src, alt, onMimeTypeDetected, onLoad, onError, onContextMenu, style, ...props }: AuthImageProps) => {
   const handleLoad = useCallback((event: React.SyntheticEvent<HTMLImageElement>) => {
     if (onLoad) {
       onLoad(event);
@@ -196,6 +198,7 @@ const AuthImage = ({ src, alt, onMimeTypeDetected, onLoad, onError, ...props }: 
             alt={alt || ''} 
             onLoad={handleLoad}
             onError={onError}
+            onContextMenu={onContextMenu}
             style={{
               maxWidth: '100%',
               maxHeight: '100%',
@@ -203,7 +206,9 @@ const AuthImage = ({ src, alt, onMimeTypeDetected, onLoad, onError, ...props }: 
               height: 'auto',
               objectFit: 'contain',
               objectPosition: 'center',
-              display: 'block'
+              display: 'block',
+              userSelect: 'none',
+              ...style
             }}
             {...props} 
           />
@@ -758,6 +763,20 @@ export const FilePreviewModal = ({
       }
     },
     [baseScale, isPdf, containerSize, overlayHeights, displayedWidth, displayedHeight]
+  );
+
+  // Обработчик правой кнопки мыши для уменьшения изображения пропорционально
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      if (!isImage) return;
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Уменьшаем изображение на 25% или до минимума
+      const newZoom = Math.max(MIN_IMAGE_ZOOM, imageZoom - 25);
+      handleZoomChange(newZoom);
+    },
+    [isImage, imageZoom, handleZoomChange]
   );
 
 
@@ -1332,6 +1351,7 @@ export const FilePreviewModal = ({
                 onPointerUp={handlePointerUp}
                 onPointerLeave={handlePointerUp}
                 onPointerCancel={handlePointerUp}
+                onContextMenu={handleContextMenu}
               >
                 {fileUrl && fileUrl.trim() !== '' ? (
                   <AuthImage
@@ -1342,6 +1362,8 @@ export const FilePreviewModal = ({
                     onMimeTypeDetected={setFileMimeType}
                     onLoad={handleImageLoad}
                     onError={handleImageError}
+                    onContextMenu={handleContextMenu}
+                    style={{ userSelect: 'none' }}
                   />
                 ) : (
                   <Text c="dimmed">Изображение не найдено</Text>
@@ -1760,7 +1782,7 @@ export const FilePreviewModal = ({
       opened={opened}
       onClose={onClose}
       fullScreen
-      zIndex={1000}
+      zIndex={100001}
       className="file-preview-modal"
       withCloseButton={false}
     >

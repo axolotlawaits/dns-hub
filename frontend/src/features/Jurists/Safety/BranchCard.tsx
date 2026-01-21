@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { API } from '../../../config/constants';
 import { notificationSystem } from '../../../utils/Push';
 import { Button, Box, Group, ActionIcon, Text, Stack, Paper, Badge, Tooltip, Divider, Select, Popover, Modal } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconChevronDown, IconChevronUp, IconUsers, IconX, IconEyePlus } from '@tabler/icons-react';
+import { IconChevronDown, IconChevronUp, IconUsers, IconX, IconEyePlus, IconMessageDots, IconBell, IconFileText } from '@tabler/icons-react';
+import dayjs from 'dayjs';
 import { Branch, SafetyJournal } from './SafetyJournal';
 import useAuthFetch from '../../../hooks/useAuthFetch';
 import LocalJournalTable from './JournalTable';
+import { CustomModal } from '../../../utils/CustomModal';
 
 interface ResponsibleEmployeeAddType {
   responsibilityType: 'ОТ' | 'ПБ' | '',
@@ -21,6 +23,25 @@ type ResponsibleDataType = {
 
 type ResponsibleObjDataType = {
   responsibles: ResponsibleDataType[]
+}
+
+interface BranchCardProps {
+  branch: Branch;
+  onApproveJournal: (journal: SafetyJournal, status: 'approved', comment?: string) => void;
+  onRejectJournal: (journal: SafetyJournal, status: 'rejected', rejectMessage: string) => void;
+  onViewFile: (journal: SafetyJournal) => void;
+  onUploadFiles: (journal: SafetyJournal) => void;
+  onOpenChat: (branchId: string, branchName: string) => void;
+  forceUpdate?: number;
+  canManageStatuses: boolean;
+  expandedBranches: Set<string>;
+  setExpandedBranches: (branches: Set<string>) => void;
+  lastNotification?: {
+    notifiedAt: string;
+    notifiedBy?: string;
+    unfilledJournals?: Array<{ id: string; title: string; type: string }>;
+  };
+  viewMode?: 'list' | 'grid';
 }
 
 const STYLES = {
@@ -44,29 +65,22 @@ const STYLES = {
   }
 } as const;
 
-const BranchCard = function BranchCard({ 
+const BranchCardComponent = function BranchCardComponent({ 
   branch, 
   onApproveJournal, 
   onRejectJournal, 
   onViewFile,
   onUploadFiles,
+  onOpenChat,
   forceUpdate,
   canManageStatuses,
   expandedBranches,
-  setExpandedBranches
-}: { 
-  branch: Branch;
-  updateState: (newState: any) => void
-  onApproveJournal: (journal: SafetyJournal) => void;
-  onRejectJournal: (journal: SafetyJournal, status: 'rejected', rejectMessage: string) => void;
-  onViewFile: (journal: SafetyJournal) => void;
-  onUploadFiles: (journal: SafetyJournal) => void;
-  forceUpdate?: number;
-  canManageStatuses: boolean;
-  expandedBranches: Set<string>;
-  setExpandedBranches: (branches: Set<string>) => void;
-}) {
+  setExpandedBranches,
+  lastNotification,
+  viewMode: _viewMode = 'list' // Используется для мемоизации, но не в рендере
+}: BranchCardProps) {
   const [isExpanded, setIsExpanded] = useState(expandedBranches.has(branch.branch_id));
+  const [journalsModalOpened, { open: openJournalsModal, close: closeJournalsModal }] = useDisclosure(false);
   const [responsibleOpened, { open: responsibleOpen, close: responsibleClose }] = useDisclosure(false)
   const [deleteResId, setDeleteResId] = useState<string | null>(null)
   const [deleteResType, setDeleteResType] = useState<string | null>(null)
@@ -93,15 +107,6 @@ const BranchCard = function BranchCard({
     responsibleOpen()
   }
 
-  // const getResponsive = async () => {
-  //   const response = await authFetch(`${JOURNAL_API}/v1/branch_responsibles/?branchId=${branch.branch_id}`)
-  //   if (response && response.ok) {
-  //     const json = await response?.json()
-  //     const [responsible] = json
-  //     setResponsibleData(responsible)
-  //   }
-  // }
-
   const getResponsive = async () => {
     const response = await authFetch(`${API}/jurists/safety/branch/responsible?branchId=${branch.branch_id}`)
     if (response && response.ok) {
@@ -110,25 +115,6 @@ const BranchCard = function BranchCard({
       setResponsibleData(responsible)
     }
   }
-  
-  // const addResponsive = async () => {
-  //   const response = await authFetch(`${JOURNAL_API}/v1/branch_responsibles`, {
-  //     method: 'POST',
-  //     headers: {
-  //       'Content-Type': 'application/json',
-  //     },
-  //     body: JSON.stringify({
-  //       branchId: branch.branch_id,
-  //       employeeId: responsible?.employeeId,
-  //       responsibilityType: responsible?.responsibilityType
-  //     }),
-  //   })
-  //   if (response && response.ok) {
-  //     notificationSystem.addNotification('Успех', 'Ответственный добавлен', 'success')
-  //   } else {
-  //     notificationSystem.addNotification('Ошибка', 'Ошибка при добавлении ответственного', 'error')
-  //   }
-  // }
 
   const addResponsive = async () => {
     const response = await authFetch(`${API}/jurists/safety/branch/responsible`, {
@@ -149,25 +135,6 @@ const BranchCard = function BranchCard({
       notificationSystem.addNotification('Ошибка', 'Ошибка при добавлении ответственного', 'error')
     }
   }
-
-  // const deleteResponsive = async () => {
-  //   const response = await authFetch(`${JOURNAL_API}/v1/branch_responsibles`, {
-  //     method: 'DELETE',
-  //     headers: {
-  //       'Content-Type': 'application/json',
-  //     },
-  //     body: JSON.stringify({
-  //       branchId: branch.branch_id,
-  //       employeeId: deleteResId,
-  //       responsibilityType: deleteResType
-  //     }),
-  //   })
-  //   if (response && response.ok) {
-  //     notificationSystem.addNotification('Успех', 'Ответственный удален', 'success')
-  //   } else {
-  //     notificationSystem.addNotification('Ошибка', 'Ошибка при удалении ответственного', 'error')
-  //   }
-  // }
 
   const deleteResponsive = async () => {
     const response = await authFetch(`${API}/jurists/safety/branch/responsible`, {
@@ -212,37 +179,172 @@ const BranchCard = function BranchCard({
     setResponsible({employeeId: '', responsibilityType: ''})
   }
 
+  const isGridMode = _viewMode === 'grid';
+  
   return (
-    <Paper withBorder radius="md" p="lg" style={{ background: 'var(--theme-bg-primary)' }}>
-      <Stack gap="md">
+    <Paper 
+      withBorder 
+      radius="md" 
+      p={isGridMode ? "md" : "lg"} 
+      style={{ 
+        background: 'var(--theme-bg-primary)',
+        height: isGridMode ? '100%' : 'auto',
+        display: 'flex',
+        flexDirection: 'column'
+      }}
+    >
+      <Stack gap={isGridMode ? "sm" : "md"} style={{ flex: 1 }}>
         {/* Заголовок филиала */}
-        <Group justify="space-between" align="center" wrap='nowrap'>
-          <Group gap="md" wrap='nowrap'>
-                  <Box style={STYLES.branchIcon}>
+        <Group justify="space-between" align="flex-start" wrap={isGridMode ? 'wrap' : 'nowrap'}>
+          <Group gap={isGridMode ? "sm" : "md"} wrap={isGridMode ? 'wrap' : 'nowrap'} style={{ flex: 1 }}>
+            <Box style={{
+              ...STYLES.branchIcon,
+              width: isGridMode ? '40px' : '48px',
+              height: isGridMode ? '40px' : '48px',
+              fontSize: isGridMode ? '18px' : '20px'
+            }}>
               🏢
             </Box>
-            <Stack gap="xs">
-              <Text size="lg" fw={600} style={{ color: 'var(--theme-text-primary)' }}>
-                {branch.branch_name}
-              </Text>
-              <Group gap="xs" wrap='nowrap'>
-                <Badge size="sm" variant="outline" color="blue">
-                  {branch.rrs_name}
-                </Badge>
-                <Badge size="sm" variant="outline" color="gray">
-                  {branch.journals.length} журналов
-                </Badge>
+            <Stack gap="xs" style={{ flex: 1, minWidth: 0 }}>
+              <Group gap="xs" align="center" wrap="nowrap">
+                <Text 
+                  size={isGridMode ? "sm" : "sm"} 
+                  fw={600} 
+                  truncate="end" 
+                  component="div"
+                  style={{ flex: 1 }}
+                >
+                  {branch.branch_name}
+                </Text>
+                {lastNotification && (
+                  <Tooltip 
+                    label={`Последнее оповещение: ${dayjs(lastNotification.notifiedAt).format('DD.MM.YYYY HH:mm')}`}
+                    multiline
+                    w={300}
+                  >
+                    <ActionIcon size="xs" variant="light" color="orange">
+                      <IconBell size={12} />
+                    </ActionIcon>
+                  </Tooltip>
+                )}
+              </Group>
+              {isGridMode ? (
+                <Stack gap="xs">
+                  <Group gap="xs" wrap="wrap">
+                    <Badge size="sm" variant="light" color="blue">
+                      {branch.rrs_name}
+                    </Badge>
+                    <Badge size="sm" variant="light" color="gray">
+                      {branch.journals.length} журналов
+                    </Badge>
+                  </Group>
+                  <Text size="xs" style={{ color: 'var(--theme-text-secondary)' }} lineClamp={2}>
+                    {branch.branch_address}
+                  </Text>
+                </Stack>
+              ) : (
+                <Group gap="xs" wrap='nowrap'>
+                  <Badge size="sm" variant="outline" color="blue">
+                    {branch.rrs_name}
+                  </Badge>
+                  <Badge size="sm" variant="outline" color="gray">
+                    {branch.journals.length} журналов
+                  </Badge>
+                  <Tooltip label="Чат по филиалу">
+                    <ActionIcon
+                      size="sm"
+                      variant="outline"
+                      color="violet"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => onOpenChat(branch.branch_id, branch.branch_name)}
+                    >
+                      <IconMessageDots size={14} />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Popover width={300} position="bottom" withArrow shadow="md" opened={resPopoverOpened} onChange={setResPopoverOpened} zIndex={100}>
+                    <Popover.Target>
+                      <Tooltip label="Ответственные по ПБ и ОТ">
+                        <ActionIcon
+                          size="sm"
+                          variant="outline"
+                          color="blue"
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => {setResPopoverOpened((o) => !o), getResponsive()}}
+                        >
+                          <IconUsers size={14} />
+                        </ActionIcon>
+                      </Tooltip>
+                    </Popover.Target>
+                    <Popover.Dropdown>
+                      <Stack gap="sm">
+                        <Text size="sm" fw={600}>Ответственные</Text>
+                        {canManageStatuses &&
+                          <Button leftSection={<IconEyePlus size={18} />} variant="outline" onClick={handleResponsibleOpen} size='xs'>Назначить</Button>
+                        }
+                        <Divider />
+                        <Stack gap="xs">
+                          <Text size="xs" fw={500} c="blue">По пожарной безопасности:</Text>
+                          {responsibleData && responsibleData.responsibles?.length > 0 && 
+                          responsibleData.responsibles.filter(res => res.responsibility_type === 'ПБ').map(res => (
+                            <Group key={res.employee_id}>
+                              <Text size="xs" c="dimmed">{res.employee_name}</Text>
+                              <Tooltip label="Удалить ответственного">
+                                <ActionIcon variant="light" aria-label="Settings" size='sm' color='red' onClick={() => openDeleteModal(res.employee_id, 'ПБ')}>
+                                  <IconX stroke={1.5} />
+                                </ActionIcon>
+                              </Tooltip>
+                            </Group>                         
+                          ))}
+                        </Stack>
+                        <Stack gap="xs">
+                          <Text size="xs" fw={500} c="green">По охране труда:</Text>
+                          {responsibleData && responsibleData.responsibles?.length > 0 && 
+                            responsibleData.responsibles.filter(res => res.responsibility_type === 'ОТ').map(res => (
+                            <Group key={res.employee_id}>
+                              <Text size="xs" c="dimmed">{res.employee_name}</Text>
+                              <Tooltip label="Удалить ответственного">
+                                <ActionIcon variant="light" aria-label="Settings" size='sm' color='red' onClick={() => openDeleteModal(res.employee_id, 'ОТ')}>
+                                  <IconX stroke={1.5} />
+                                </ActionIcon>
+                              </Tooltip>
+                            </Group>
+                          ))}
+                        </Stack>
+                      </Stack>
+                    </Popover.Dropdown>
+                  </Popover>
+                  <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }} truncate="end">
+                    {branch.branch_address}
+                  </Text>
+                </Group>
+              )}
+            </Stack>
+          </Group>
+          <Group gap="xs" wrap="nowrap">
+            {isGridMode && (
+              <>
+                <Tooltip label="Чат по филиалу">
+                  <ActionIcon
+                    size="sm"
+                    variant="light"
+                    color="violet"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => onOpenChat(branch.branch_id, branch.branch_name)}
+                  >
+                    <IconMessageDots size={16} />
+                  </ActionIcon>
+                </Tooltip>
                 <Popover width={300} position="bottom" withArrow shadow="md" opened={resPopoverOpened} onChange={setResPopoverOpened} zIndex={100}>
                   <Popover.Target>
                     <Tooltip label="Ответственные по ПБ и ОТ">
                       <ActionIcon
                         size="sm"
-                        variant="outline"
+                        variant="light"
                         color="blue"
                         style={{ cursor: 'pointer' }}
                         onClick={() => {setResPopoverOpened((o) => !o), getResponsive()}}
                       >
-                        <IconUsers size={14} />
+                        <IconUsers size={16} />
                       </ActionIcon>
                     </Tooltip>
                   </Popover.Target>
@@ -284,34 +386,36 @@ const BranchCard = function BranchCard({
                     </Stack>
                   </Popover.Dropdown>
                 </Popover>
-                <Text size="sm" style={{ color: 'var(--theme-text-secondary)' }} truncate="end">
-                {branch.branch_address}
-              </Text>
-              </Group>
-            </Stack>
-          </Group>
-          <Stack>
+              </>
+            )}
             <Button
-              size="sm"
-              leftSection={isExpanded ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
+              size={isGridMode ? "xs" : "sm"}
+              leftSection={isExpanded ? <IconChevronUp size={isGridMode ? 14 : 16} /> : <IconChevronDown size={isGridMode ? 14 : 16} />}
               onClick={() => {
-                const newExpanded = !isExpanded;
-                setIsExpanded(newExpanded);
-                
-                // Обновляем глобальное состояние развернутых филиалов
-                const newExpandedBranches = new Set(expandedBranches);
-                if (newExpanded) {
-                  newExpandedBranches.add(branch.branch_id);
+                if (isGridMode) {
+                  // В режиме сетки открываем модальное окно
+                  openJournalsModal();
                 } else {
-                  newExpandedBranches.delete(branch.branch_id);
+                  // В режиме списка разворачиваем карточку
+                  const newExpanded = !isExpanded;
+                  setIsExpanded(newExpanded);
+                  
+                  // Обновляем глобальное состояние развернутых филиалов
+                  const newExpandedBranches = new Set(expandedBranches);
+                  if (newExpanded) {
+                    newExpandedBranches.add(branch.branch_id);
+                  } else {
+                    newExpandedBranches.delete(branch.branch_id);
+                  }
+                  setExpandedBranches(newExpandedBranches);
                 }
-                setExpandedBranches(newExpandedBranches);
               }}
-              variant="outline"
+              variant="light"
+              style={{ flexShrink: 0 }}
             >
-              {isExpanded ? 'Свернуть' : 'Развернуть'}
+              {isGridMode ? 'Журналы' : (isExpanded ? 'Свернуть' : 'Развернуть')}
             </Button>
-          </Stack>
+          </Group>
           <Modal opened={responsibleOpened} onClose={closeAddResonsibleModal} title="Назначение ответственного" centered>
             <Stack gap='lg'>
               <Stack>
@@ -347,9 +451,9 @@ const BranchCard = function BranchCard({
             </Group>
           </Modal>
         </Group>
-        {/* Список журналов */}
-        {isExpanded && (
-          <Box>
+        {/* Список журналов - только в режиме списка */}
+        {isExpanded && !isGridMode && (
+          <Box style={{ flex: 1, overflow: 'hidden' }}>
             <Divider mb="md" />
             {branch.journals.length === 0 ? (
               <Text size="sm" style={{ color: 'var(--theme-text-secondary)', textAlign: 'center', padding: '1rem' }}>
@@ -369,8 +473,68 @@ const BranchCard = function BranchCard({
           </Box>
         )}
       </Stack>
+
+      {/* Модальное окно с журналами для режима сетки */}
+      {isGridMode && (
+        <CustomModal
+          opened={journalsModalOpened}
+          onClose={closeJournalsModal}
+          title={`Журналы филиала: ${branch.branch_name}`}
+          icon={<IconFileText size={20} />}
+          size="xl"
+          maxWidth="90vw"
+          maxHeight="85vh"
+        >
+          <Box style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+            {branch.journals.length === 0 ? (
+              <Text size="sm" style={{ color: 'var(--theme-text-secondary)', textAlign: 'center', padding: '2rem' }}>
+                Нет журналов в этом филиале
+              </Text>
+            ) : (
+              <LocalJournalTable
+                key={`modal-${branch.branch_id}-${branch.journals.length}-${branch.journals.map(j => j.status).join(',')}-${forceUpdate}`}
+                journals={branch.journals}
+                onApproveJournal={onApproveJournal}
+                onRejectJournal={onRejectJournal}
+                onViewFile={onViewFile}
+                onUploadFiles={onUploadFiles}
+                canManageStatuses={canManageStatuses}
+              />
+            )}
+          </Box>
+        </CustomModal>
+      )}
     </Paper>
   );
 };
 
-export default BranchCard
+// Кастомная функция сравнения для оптимизации
+BranchCardComponent.displayName = 'BranchCard';
+
+// Мемоизация с кастомной функцией сравнения
+const BranchCard = memo(BranchCardComponent, (prevProps: BranchCardProps, nextProps: BranchCardProps) => {
+  // Оптимизированное сравнение - перерисовываем только если изменились ключевые данные
+  // Возвращаем true если пропсы равны (не перерисовывать), false если отличаются (перерисовывать)
+  const propsEqual = (
+    prevProps.branch.branch_id === nextProps.branch.branch_id &&
+    prevProps.branch.journals.length === nextProps.branch.journals.length &&
+    prevProps.branch.journals.every((j: SafetyJournal, i: number) => {
+      const nextJournal = nextProps.branch.journals[i];
+      return j.id === nextJournal?.id && j.status === nextJournal?.status;
+    }) &&
+    prevProps.forceUpdate === nextProps.forceUpdate &&
+    prevProps.canManageStatuses === nextProps.canManageStatuses &&
+    prevProps.expandedBranches.size === nextProps.expandedBranches.size &&
+    prevProps.expandedBranches.has(prevProps.branch.branch_id) === nextProps.expandedBranches.has(nextProps.branch.branch_id) &&
+    prevProps.viewMode === nextProps.viewMode
+  );
+  
+  // Если viewMode изменился, обязательно перерисовываем
+  if (prevProps.viewMode !== nextProps.viewMode) {
+    return false; // Перерисовывать
+  }
+  
+  return propsEqual;
+});
+
+export default BranchCard;

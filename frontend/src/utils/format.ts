@@ -46,7 +46,12 @@ export const formatName = (name: string | null | undefined): string => {
 };
 
   
-  export const truncateText = (text: string, maxLength: number): string => {
+  export const truncateText = (text: string | null | undefined, maxLength: number): string => {
+    // Проверяем, что text является строкой
+    if (!text || typeof text !== 'string') {
+      return '';
+    }
+    
     const plainText = text.replace(/<[^>]*>/g, '');
     if (plainText.length <= maxLength) return plainText;
   

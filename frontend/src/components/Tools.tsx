@@ -1,5 +1,5 @@
 // components/Tools.tsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import * as TablerIcons from "@tabler/icons-react";
 import { Card, SimpleGrid, Text, Group, ThemeIcon, Badge, Button, Stack, Modal } from '@mantine/core';
@@ -35,6 +35,7 @@ export default function Tools({ tools }: ToolsProps) {
   const [requestingAccess, setRequestingAccess] = useState<string | null>(null);
   const [requestModalOpened, setRequestModalOpened] = useState(false);
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
+  const [protectedToolLinks, setProtectedToolLinks] = useState<string[]>([]);
 
   const getStatusColor = (status?: string) => {
     switch (status) {
@@ -43,6 +44,28 @@ export default function Tools({ tools }: ToolsProps) {
       case 'maintenance': return 'yellow';
       default: return 'blue';
     }
+  };
+
+  // Загружаем список защищенных инструментов
+  useEffect(() => {
+    const loadProtectedTools = async () => {
+      try {
+        const response = await fetch(`${API}/access/protected-tools`);
+        if (response.ok) {
+          const links = await response.json();
+          setProtectedToolLinks(links);
+        }
+      } catch (error) {
+        console.error('Error loading protected tools:', error);
+      }
+    };
+    loadProtectedTools();
+  }, []);
+
+  // Проверяем, является ли инструмент защищенным
+  const isProtectedTool = (tool: Tool): boolean => {
+    return protectedToolLinks.includes(tool.link) || 
+           protectedToolLinks.some(link => tool.link.startsWith(link + '/'));
   };
 
   const hasAccess = (tool: Tool): boolean => {
@@ -109,7 +132,7 @@ export default function Tools({ tools }: ToolsProps) {
 
           const CardContent = (
             <>
-              {!toolHasAccess && (
+              {!toolHasAccess && isProtectedTool(tool) && (
                 <div style={{
                   position: 'absolute',
                   top: 8,
@@ -170,7 +193,7 @@ export default function Tools({ tools }: ToolsProps) {
                   </Group>
                 )}
 
-                {!toolHasAccess && (
+                {!toolHasAccess && isProtectedTool(tool) && (
                   <Button
                     fullWidth
                     mt="md"
@@ -200,15 +223,15 @@ export default function Tools({ tools }: ToolsProps) {
               className={classes.card}
               padding="lg"
               style={{
-                opacity: toolHasAccess ? 1 : 0.6,
-                cursor: toolHasAccess ? 'pointer' : 'not-allowed',
+                opacity: toolHasAccess || !isProtectedTool(tool) ? 1 : 0.6,
+                cursor: toolHasAccess || !isProtectedTool(tool) ? 'pointer' : 'not-allowed',
                 position: 'relative'
               }}
-              onClick={toolHasAccess ? () => navigate(`/${tool.link}`) : (e) => {
+              onClick={toolHasAccess ? () => navigate(`/${tool.link}`) : isProtectedTool(tool) ? (e) => {
                 e.preventDefault();
                 setSelectedTool(tool);
                 setRequestModalOpened(true);
-              }}
+              } : () => navigate(`/${tool.link}`)}
             >
               {CardContent}
             </Card>

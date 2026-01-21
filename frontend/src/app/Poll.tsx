@@ -226,7 +226,7 @@ export default function Poll() {
   // Обработчик создания опроса через DynamicFormModal
   const handleCreatePoll = async (values: Record<string, any>) => {
     const options = values.options || [];
-    const validOptions = options.filter((opt: string) => opt?.trim());
+    const validOptions = options.filter((opt: any) => typeof opt === 'string' && opt?.trim());
     
     if (!values.question?.trim() || validOptions.length < 2) {
       setError('Введите вопрос и минимум 2 варианта ответа');

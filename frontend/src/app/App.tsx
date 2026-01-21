@@ -62,6 +62,7 @@ import FeedbackModule from '../features/Feedback/Feedback';
 import BugReports from '../features/Retail/BugReports/BugReports';
 import LogViewer from '../components/LogViewer';
 import AdminPanel from './profile/AdminPanel';
+import Docs from '../features/Docs/Docs';
 import { useNotifications } from '../hooks/useNotifications';
 import { useEffect, useState } from 'react';
 import { API } from '../config/constants';
@@ -253,6 +254,7 @@ function App() {
                   <Route path='/retail/bug-reports' element={<BugReports />} />
                   <Route path='/logs' element={<LogViewer />} />
                   <Route path='/feedback' element={<FeedbackModule />} />
+                  <Route path='/docs/*' element={<Docs />} />
                   {user.role === 'DEVELOPER' && (
                     <>
                       <Route path='/admin/branches' element={<AdminPanel initialTab="branches" />} />

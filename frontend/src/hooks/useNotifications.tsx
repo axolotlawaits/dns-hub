@@ -155,7 +155,27 @@ export const useNotifications = (userId: string) => {
       playNotificationSound();
 
       // Используем универсальный push для показа уведомления
-      const { type, title, message } = data;
+      const { type, title } = data;
+      const message = data.message as string | object | unknown;
+      
+      // КРИТИЧНО: Гарантируем, что message - это строка
+      let messageText = '';
+      if (typeof message === 'string') {
+        messageText = message;
+      } else if (message && typeof message === 'object') {
+        // Если message - это объект, пытаемся извлечь строку
+        const msgObj = message as Record<string, unknown>;
+        if ('message' in msgObj && typeof msgObj.message === 'string') {
+          messageText = msgObj.message;
+        } else if ('text' in msgObj && typeof msgObj.text === 'string') {
+          messageText = msgObj.text;
+        } else {
+          console.error('[useNotifications] message is an object without string field:', message);
+          messageText = '[Invalid message format]';
+        }
+      } else {
+        messageText = String(message || '');
+      }
       
       // Преобразуем тип уведомления для универсального push
       let pushType: 'info' | 'error' | 'warning' | 'success' = 'info';
@@ -176,8 +196,8 @@ export const useNotifications = (userId: string) => {
 
       // Показываем уведомление через универсальный push
       notificationSystem.addNotification(
-        title,
-        message.length > 100 ? message.substring(0, 100) + '...' : message,
+        typeof title === 'string' ? title : String(title || ''),
+        messageText.length > 100 ? messageText.substring(0, 100) + '...' : messageText,
         pushType
       );
     };
@@ -188,11 +208,27 @@ export const useNotifications = (userId: string) => {
 
     if (lastMessage.event === 'browser_push') {
       // Для browser_push проверяем read статус, если он есть
+      // КРИТИЧНО: Гарантируем, что body - это строка
+      let bodyText = '';
+      if (typeof lastMessage.data.body === 'string') {
+        bodyText = lastMessage.data.body;
+      } else if (lastMessage.data.body && typeof lastMessage.data.body === 'object') {
+        // Если body - это объект, пытаемся извлечь строку
+        if ('message' in lastMessage.data.body && typeof lastMessage.data.body.message === 'string') {
+          bodyText = lastMessage.data.body.message;
+        } else {
+          console.error('[useNotifications] browser_push body is an object without string field:', lastMessage.data.body);
+          bodyText = '[Invalid message format]';
+        }
+      } else {
+        bodyText = String(lastMessage.data.body || '');
+      }
+      
       const notificationData: NotificationData = {
         id: lastMessage.data.id,
         type: lastMessage.data.type,
-        title: lastMessage.data.title,
-        message: lastMessage.data.body,
+        title: typeof lastMessage.data.title === 'string' ? lastMessage.data.title : String(lastMessage.data.title || ''),
+        message: bodyText,
         read: lastMessage.data.read,
         action: lastMessage.data.data,
       };

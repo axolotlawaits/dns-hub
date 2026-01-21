@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode, useMemo } from 'react';
+import { API } from '../config/constants';
 
 // Типы для цветов темы
 export interface ThemeColors {
@@ -211,16 +212,65 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     },
   }), [colors]);
 
-  const toggleTheme = () => {
+  const toggleTheme = async () => {
     const newTheme = !isDark;
     setIsDark(newTheme);
-    localStorage.setItem('theme', newTheme ? 'dark' : 'light');
+    const themeValue = newTheme ? 'dark' : 'light';
+    localStorage.setItem('theme', themeValue);
+    
+    // Сохраняем тему в базу данных для использования в email
+    try {
+      const userId = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user') || '{}')?.id : null;
+      const token = localStorage.getItem('token');
+      if (userId && token) {
+        await fetch(`${API}/user/settings`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            userId: userId,
+            parameter: 'theme',
+            value: themeValue,
+          }),
+        }).catch(() => {
+          // Игнорируем ошибки сохранения в БД, тема все равно сохранена в localStorage
+        });
+      }
+    } catch (error) {
+      // Игнорируем ошибки
+    }
   };
 
-  const setTheme = (newTheme: 'light' | 'dark') => {
+  const setTheme = async (newTheme: 'light' | 'dark') => {
     const isDarkTheme = newTheme === 'dark';
     setIsDark(isDarkTheme);
     localStorage.setItem('theme', newTheme);
+    
+    // Сохраняем тему в базу данных для использования в email
+    try {
+      const userId = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user') || '{}')?.id : null;
+      const token = localStorage.getItem('token');
+      if (userId && token) {
+        await fetch(`${API}/user/settings`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            userId: userId,
+            parameter: 'theme',
+            value: newTheme,
+          }),
+        }).catch(() => {
+          // Игнорируем ошибки сохранения в БД, тема все равно сохранена в localStorage
+        });
+      }
+    } catch (error) {
+      // Игнорируем ошибки
+    }
   };
 
   useEffect(() => {

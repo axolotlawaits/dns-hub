@@ -66,16 +66,43 @@ function FeedbackModule() {
 
   const loadTools = async () => {
     try {
-      const token = localStorage.getItem('token');
+      let token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${API}/merch-bot/feedback/tools`, {
+      let response = await fetch(`${API}/merch-bot/feedback/tools`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         }
       });
+
+      // Если получили 401, пробуем обновить токен
+      if (response.status === 401) {
+        try {
+          const refreshResponse = await fetch(`${API}/refresh-token`, {
+            method: 'POST',
+            credentials: 'include',
+          });
+
+          if (refreshResponse.ok) {
+            const newToken = await refreshResponse.json();
+            localStorage.setItem('token', newToken);
+            token = newToken;
+            
+            // Повторяем запрос с новым токеном
+            response = await fetch(`${API}/merch-bot/feedback/tools`, {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              }
+            });
+          }
+        } catch (refreshError) {
+          console.error('Token refresh failed:', refreshError);
+        }
+      }
 
       if (!response.ok) return;
 

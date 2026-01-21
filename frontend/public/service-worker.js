@@ -18,8 +18,29 @@ self.addEventListener('install', (event) => {
 // Обработка запросов для офлайн-режима
 self.addEventListener('fetch', (event) => {
   const url = event.request.url;
+  const requestUrl = new URL(url);
   const isMedia = url.includes('/public/retail/radio/music/') || url.includes('/radio/stream/');
   const isRangeRequest = event.request.headers && event.request.headers.get('range');
+
+  // Проверяем, является ли запрос внешним (к другому домену)
+  // Используем проверку по домену, так как self.location может быть недоступен
+  const hostname = requestUrl.hostname;
+  
+  // Список известных внешних доменов, которые не должны обрабатываться Service Worker
+  const externalDomains = ['api.weatherapi.com', 'weatherapi.com'];
+  const isKnownExternal = externalDomains.some(domain => hostname.includes(domain));
+  
+  // Проверяем, является ли запрос внутренним (к нашему серверу)
+  const isInternalRequest = hostname.includes('localhost') || 
+                            hostname.includes('10.0.150.57') || 
+                            hostname.includes('dns-zs.partner.ru') ||
+                            hostname.includes('127.0.0.1');
+  
+  // Для внешних API - не перехватываем запросы вообще, пропускаем их напрямую
+  if (isKnownExternal || !isInternalRequest) {
+    // Не обрабатываем внешние запросы через Service Worker
+    return;
+  }
 
   // Для музыкальных файлов - не кэшируем частичные ответы (206) и RANGE-запросы
   if (isMedia) {
@@ -42,18 +63,8 @@ self.addEventListener('fetch', (event) => {
     );
     return;
   }
-
-  // Для остальных запросов - используем стратегию Network First
-  // Исключаем внешние API из кэширования
-  const isExternalApi = event.request.url.includes('api.weatherapi.com') || 
-                        event.request.url.includes('weatherapi.com');
   
-  if (isExternalApi) {
-    // Для внешних API просто пропускаем через fetch без кэширования
-    event.respondWith(fetch(event.request));
-    return;
-  }
-  
+  // Для остальных внутренних запросов - используем стратегию Network First
   event.respondWith(
     fetch(event.request).catch(() => {
       return caches.match(event.request).then((cached) => {

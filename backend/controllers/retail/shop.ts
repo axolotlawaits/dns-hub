@@ -529,8 +529,29 @@ export const getAds = async (req: Request, res: Response) => {
       prisma.shop.count({ where }),
     ]);
 
+    // Подтягиваем суммы резервов (PENDING/APPROVED), чтобы показать доступное количество
+    const shopIds = ads.map(ad => ad.id);
+    const reserves = shopIds.length
+      ? await prisma.shopReserve.groupBy({
+          by: ['shopId'],
+          where: {
+            shopId: { in: shopIds },
+            status: { in: ['PENDING', 'APPROVED'] },
+          },
+          _sum: { quantity: true },
+        })
+      : [];
+
+    const reserveMap = new Map(reserves.map(r => [r.shopId, r._sum.quantity || 0]));
+
+    const enrichedAds = ads.map((ad: any) => {
+      const reservedQuantity = reserveMap.get(ad.id) || 0;
+      const availableQuantity = Math.max(ad.quantity - reservedQuantity, 0);
+      return { ...ad, reservedQuantity, availableQuantity };
+    });
+
     res.json({
-      shops: ads,
+      shops: enrichedAds,
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -581,6 +602,18 @@ export const getAdById = async (req: Request, res: Response) => {
         attachments: {
           orderBy: { sortOrder: 'asc' },
         },
+        reserves: {
+          include: {
+            requester: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
       },
     });
 
@@ -594,11 +627,96 @@ export const getAdById = async (req: Request, res: Response) => {
       data: { views: { increment: 1 } },
     });
 
-    // Проверяем, добавлено ли в избранное
-    res.json(shop);
+    // Суммируем активные резервы (PENDING/APPROVED)
+    const reserves = await prisma.shopReserve.groupBy({
+      by: ['shopId'],
+      where: { shopId: id, status: { in: ['PENDING', 'APPROVED'] } },
+      _sum: { quantity: true },
+    });
+
+    const reservedQuantity = reserves[0]?._sum.quantity || 0;
+    const availableQuantity = Math.max(shop.quantity - reservedQuantity, 0);
+
+    res.json({ ...shop, reservedQuantity, availableQuantity });
   } catch (error) {
     console.error('[Ads] Error getting ad:', error);
     res.status(500).json({ error: 'Failed to get ad' });
+  }
+};
+
+// Подтвердить резерв и добавить номер документа отгрузки (для автора объявления)
+export const confirmReserve = async (req: Request, res: Response) => {
+  try {
+    const { reserveId } = req.params;
+    const { shipmentDocNumber } = req.body;
+    const userId = (req as any).token?.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    if (!shipmentDocNumber || !shipmentDocNumber.trim()) {
+      return res.status(400).json({ error: 'Номер документа обязателен' });
+    }
+
+    const reserve = await prisma.shopReserve.findUnique({
+      where: { id: reserveId },
+      include: {
+        shop: {
+          select: { id: true, title: true, userId: true },
+        },
+        requester: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    if (!reserve) {
+      return res.status(404).json({ error: 'Резерв не найден' });
+    }
+
+    // Только автор объявления
+    if (reserve.shop.userId !== userId) {
+      return res.status(403).json({ error: 'Доступ запрещен' });
+    }
+
+    if (reserve.status !== 'PENDING') {
+      return res.status(400).json({ error: 'Резерв уже обработан' });
+    }
+
+    const updated = await prisma.shopReserve.update({
+      where: { id: reserveId },
+      data: {
+        status: 'APPROVED',
+        shipmentDocNumber: shipmentDocNumber.trim(),
+        approvedAt: new Date(),
+      },
+    });
+
+    // Отправляем уведомление запросившему
+    try {
+      const { NotificationController } = await import('../app/notification.js');
+      await NotificationController.create({
+        type: 'SUCCESS',
+        channels: ['IN_APP', 'TELEGRAM', 'EMAIL'],
+        title: 'Резерв подтвержден',
+        message: `Ваш резерв по объявлению "${reserve.shop.title}" подтвержден. Документ: ${shipmentDocNumber.trim()}`,
+        senderId: userId,
+        receiverId: reserve.requester.id,
+        priority: 'MEDIUM',
+        action: {
+          type: 'NAVIGATE',
+          url: `/retail/shop?reserveId=${reserveId}`,
+        },
+      });
+    } catch (notifError) {
+      console.error('[Shop] Error sending notification:', notifError);
+    }
+
+    res.json(updated);
+  } catch (error) {
+    console.error('[Shop] Error confirming reserve:', error);
+    res.status(500).json({ error: 'Failed to confirm reserve' });
   }
 };
 

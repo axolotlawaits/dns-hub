@@ -245,37 +245,6 @@ div[style*="padding: var(--mantine-spacing-xl)"] {
   padding-bottom: calc(var(--mantine-spacing-xl) + 80px) !important;
 }
 
-/* Адаптивные отступы для мобильных устройств */
-@media (max-width: 768px) {
-  
-  [data-mantine-component="Box"][style*="padding: var(--mantine-spacing-xl)"],
-  .mantine-Box-root[style*="padding: var(--mantine-spacing-xl)"],
-  main > div[style*="padding: var(--mantine-spacing-xl)"],
-  div[style*="padding: var(--mantine-spacing-xl)"] {
-    padding-bottom: calc(var(--mantine-spacing-xl) + 100px) !important;
-  }
-  
-  #footer-wrapper {
-    height: 90px;
-    padding: 0px 10px 15px 10px;
-  }
-}
-
-@media (max-width: 480px) {
-  
-  [data-mantine-component="Box"][style*="padding: var(--mantine-spacing-xl)"],
-  .mantine-Box-root[style*="padding: var(--mantine-spacing-xl)"],
-  main > div[style*="padding: var(--mantine-spacing-xl)"],
-  div[style*="padding: var(--mantine-spacing-xl)"] {
-    padding-bottom: calc(var(--mantine-spacing-xl) + 120px) !important;
-  }
-  
-  #footer-wrapper {
-    height: 100px;
-    padding: 0px 5px 20px 5px;
-  }
-}
-
 #footer-wrapper.scrolled #footer {
   box-shadow: 
     0 12px 40px rgba(0, 0, 0, 0.15),

@@ -342,9 +342,12 @@ router.delete('/cards/:id/images', authenticateToken, async (req: any, res: any,
 
     console.log(`🔍 [DELETE /cards/:id/images] Ищем attachment для карточки ${id}, fileName: ${fileName}`);
 
-    // Получаем все attachments карточки для поиска
+    // Получаем все attachments карточки для поиска (изображения и PDF)
     const allAttachments = await prisma.merchAttachment.findMany({
-      where: { recordId: id, type: 'image' }
+      where: { 
+        recordId: id,
+        type: { in: ['image', 'pdf'] }
+      }
     });
     
     console.log(`📋 [DELETE /cards/:id/images] Все attachments карточки ${id}:`, allAttachments.map(a => ({ id: a.id, source: a.source })));
@@ -361,10 +364,10 @@ router.delete('/cards/:id/images', authenticateToken, async (req: any, res: any,
     if (!attachment) {
       console.log(`❌ [DELETE /cards/:id/images] Attachment не найден для fileName: ${fileName}`);
       return res.status(404).json({ 
-        error: 'Изображение не найдено',
+        error: 'Файл не найден',
         debug: {
           searchedFileName: fileName,
-          availableAttachments: allAttachments.map(a => a.source)
+          availableAttachments: allAttachments.map(a => ({ source: a.source, type: a.type }))
         }
       });
     }
@@ -392,7 +395,7 @@ router.delete('/cards/:id/images', authenticateToken, async (req: any, res: any,
       where: { id },
       include: {
         attachments: {
-          where: { type: 'image' },
+          where: { type: { in: ['image', 'pdf'] } },
           orderBy: { sortOrder: 'asc' },
           select: {
             id: true,
@@ -414,6 +417,7 @@ router.delete('/cards/:id/images', authenticateToken, async (req: any, res: any,
       name: updatedCard.name,
       description: updatedCard.description,
       imageUrls: imageUrls,
+      attachments: updatedCard.attachments,
       isActive: updatedCard.isActive,
       categoryId: updatedCard.parentId || '',
       category: {

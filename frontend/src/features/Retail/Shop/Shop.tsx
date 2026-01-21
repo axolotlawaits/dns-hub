@@ -11,7 +11,6 @@ import {
   Badge,
   Image,
   TextInput,
-  Textarea,
   Select,
   Tabs,
   Modal,
@@ -23,7 +22,6 @@ import {
   Divider,
   Title,
   Grid,
-  ScrollArea,
   Checkbox,
   NumberInput,
 } from '@mantine/core';
@@ -40,7 +38,8 @@ import {
 } from '@tabler/icons-react';
 import { Carousel } from '@mantine/carousel';
 import { CustomModal } from '../../../utils/CustomModal';
-import { DynamicFormModal } from '../../../utils/formModal';
+import { DynamicFormModal, FormField } from '../../../utils/formModal';
+import Comment from '../../../utils/Comment';
 import { useUserContext } from '../../../hooks/useUserContext';
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { notificationSystem } from '../../../utils/Push';
@@ -98,6 +97,20 @@ interface Shop {
   createdAt: string;
   publishedAt?: string;
   attachments: ShopImage[]; // Переименовано из images
+  reservedQuantity?: number;
+  availableQuantity?: number;
+  reserves?: Array<{
+    id: string;
+    quantity: number;
+    status: string;
+    shipmentDocNumber?: string | null;
+    createdAt: string;
+    requester: {
+      id: string;
+      name: string;
+      email?: string;
+    };
+  }>;
 }
 
 function Shop() {
@@ -114,11 +127,10 @@ function Shop() {
   const [createModalOpened, setCreateModalOpened] = useState(false);
   const [editModalOpened, setEditModalOpened] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [comments, setComments] = useState<any[]>([]);
-  const [commentText, setCommentText] = useState('');
   const [fileAttachments, setFileAttachments] = useState<Record<string, File[]>>({});
   const [reserveModalOpened, setReserveModalOpened] = useState(false);
   const [reserveQuantity, setReserveQuantity] = useState(1);
+  const [shipmentNumbers, setShipmentNumbers] = useState<Record<string, string>>({});
   
   // Фильтры
   const [search, setSearch] = useState('');
@@ -133,24 +145,54 @@ function Shop() {
   const fetchCategories = async () => {
     try {
       const response = await authFetch(`${API}/retail/shop/categories`);
-      if (response?.ok) {
+      
+      // Если response === null, значит произошел logout из-за истекшего refresh token
+      if (response === null) {
+        console.warn('[Shop] Failed to fetch categories: user logged out');
+        return;
+      }
+      
+      if (response.ok) {
         const data = await response.json();
-        setCategories(data);
+        setCategories(data || []);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[Shop] Categories loaded:', data?.length || 0);
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('[Shop] Error fetching categories:', response.status, errorData);
+        setCategories([]);
       }
     } catch (error) {
-      console.error('Error fetching categories:', error);
+      console.error('[Shop] Error fetching categories:', error);
+      setCategories([]);
     }
   };
 
   const fetchBranches = async () => {
     try {
       const response = await authFetch(`${API}/retail/shop/branches`);
-      if (response?.ok) {
+      
+      // Если response === null, значит произошел logout из-за истекшего refresh token
+      if (response === null) {
+        console.warn('[Shop] Failed to fetch branches: user logged out');
+        return;
+      }
+      
+      if (response.ok) {
         const data = await response.json();
-        setBranches(data);
+        setBranches(data || []);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[Shop] Branches loaded:', data?.length || 0);
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('[Shop] Error fetching branches:', response.status, errorData);
+        setBranches([]);
       }
     } catch (error) {
-      console.error('Error fetching branches:', error);
+      console.error('[Shop] Error fetching branches:', error);
+      setBranches([]);
     }
   };
 
@@ -165,7 +207,7 @@ function Shop() {
       params.append('page', String(page));
       params.append('limit', '20');
 
-      const response = await authFetch(`${API}/retail/shop/shops?${params}`);
+      const response = await authFetch(`${API}/retail/shop?${params}`);
       if (response?.ok) {
         const data = await response.json();
         setShops(data.shops || []);
@@ -194,6 +236,15 @@ function Shop() {
     fetchBranches();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Перезагружаем категории и филиалы при открытии модалки создания/редактирования
+  useEffect(() => {
+    if (createModalOpened || editModalOpened) {
+      // Всегда перезагружаем данные при открытии модалки, чтобы убедиться, что они актуальны
+      fetchCategories();
+      fetchBranches();
+    }
+  }, [createModalOpened, editModalOpened]);
+
   useEffect(() => {
     if (activeTab === 'all' || activeTab === 'my') {
       fetchShops();
@@ -221,56 +272,60 @@ function Shop() {
 
   const handleViewShop = async (shop: Shop) => {
     try {
-      const response = await authFetch(`${API}/retail/shop/shops/${shop.id}`);
+      const response = await authFetch(`${API}/retail/shop/${shop.id}`);
       if (response?.ok) {
         const data = await response.json();
         setSelectedShop(data);
         setCurrentImageIndex(0);
         setModalOpened(true);
-        fetchComments(data.id);
       }
     } catch (error) {
       console.error('Error fetching shop:', error);
     }
   };
 
-  const fetchComments = async (shopId: string) => {
-    try {
-      const response = await authFetch(`${API}/comments?entityType=SHOP&entityId=${shopId}`);
-      if (response?.ok) {
-        const data = await response.json();
-        setComments(data.comments || []);
-      }
-    } catch (error) {
-      console.error('Error fetching comments:', error);
+  // Функции для работы с комментариями через универсальный компонент
+  const fetchShopComments = async (shopId: string, page: number = 1, limit: number = 20) => {
+    const response = await authFetch(`${API}/comments?entityType=SHOP&entityId=${shopId}&page=${page}&limit=${limit}`);
+    if (response?.ok) {
+      const data = await response.json();
+      // Нормализуем комментарии: конвертируем message в content
+      const normalizedComments = (data.comments || data.pagination?.comments || []).map((comment: any) => ({
+        ...comment,
+        content: comment.content || comment.message || comment.text || '',
+      }));
+      return {
+        comments: normalizedComments,
+        total: data.pagination?.total || data.total || normalizedComments.length,
+        page: data.pagination?.page || page,
+        totalPages: data.pagination?.totalPages || Math.ceil((data.pagination?.total || normalizedComments.length) / limit),
+      };
     }
+    return { comments: [], total: 0, page: 1, totalPages: 0 };
   };
 
-  const handleSendComment = async () => {
-    if (!selectedShop || !commentText.trim()) return;
+  const createShopComment = async (shopId: string, content: string, parentId?: string | null) => {
+    const response = await authFetch(`${API}/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        entityType: 'SHOP',
+        entityId: shopId,
+        message: content.trim(),
+        parentId: parentId || null,
+      }),
+    });
     
-    try {
-      const response = await authFetch(`${API}/comments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          entityType: 'SHOP',
-          entityId: selectedShop.id,
-          message: commentText.trim(),
-        }),
-      });
-      
-      if (response?.ok) {
-        setCommentText('');
-        fetchComments(selectedShop.id);
-        notificationSystem.addNotification('Успешно', 'Комментарий отправлен', 'success');
-      } else {
-        notificationSystem.addNotification('Ошибка', 'Не удалось отправить комментарий', 'error');
-      }
-    } catch (error) {
-      console.error('Error sending comment:', error);
-      notificationSystem.addNotification('Ошибка', 'Не удалось отправить комментарий', 'error');
+    if (response === null || !response.ok) {
+      throw new Error('Не удалось создать комментарий');
     }
+    
+    const comment = await response.json();
+    // Нормализуем комментарий: конвертируем message в content
+    return {
+      ...comment,
+      content: comment.content || comment.message || comment.text || '',
+    };
   };
 
 
@@ -294,6 +349,78 @@ function Shop() {
       label: `${b.name} (${b.code}) - ${b.city}`,
     }));
   }, [branches]);
+
+  // Мемоизируем поля формы, чтобы они обновлялись при загрузке категорий и филиалов
+  const formFields = useMemo((): FormField[] => [
+    {
+      name: 'title',
+      label: 'Заголовок',
+      type: 'text',
+      required: true,
+      placeholder: 'Название объявления',
+    },
+    {
+      name: 'description',
+      label: 'Описание',
+      type: 'textarea',
+      placeholder: 'Описание объявления (необязательно)',
+    },
+    {
+      name: 'categoryId',
+      label: 'Категория',
+      type: 'select',
+      required: true,
+      options: categoryOptions.length > 0 ? categoryOptions : [{ value: '', label: 'Загрузка...' }],
+      disabled: categoryOptions.length === 0,
+      groupWith: ['branchId'],
+      groupSize: 2,
+    },
+    {
+      name: 'branchId',
+      label: 'Филиал',
+      type: 'select',
+      required: true,
+      options: branchOptions.length > 0 ? branchOptions : [{ value: '', label: 'Загрузка...' }],
+      disabled: branchOptions.length === 0,
+      searchable: true,
+      groupWith: ['categoryId'],
+      groupSize: 2,
+    },
+    {
+      name: 'quantity',
+      label: 'Количество',
+      type: 'number',
+      required: true,
+      min: 1,
+      placeholder: '1',
+    },
+    {
+      name: 'article',
+      label: 'Артикул',
+      type: 'text',
+      placeholder: 'Артикул товара (необязательно)',
+    },
+    {
+      name: 'condition',
+      label: 'Состояние',
+      type: 'select',
+      options: [
+        { value: 'NEW', label: 'Новое' },
+        { value: 'EXCELLENT', label: 'Отличное' },
+        { value: 'GOOD', label: 'Хорошее' },
+        { value: 'SATISFACTORY', label: 'Удовлетворительное' },
+        { value: 'POOR', label: 'Плохое' },
+      ],
+    },
+    {
+      name: 'photos',
+      label: 'Фотографии товара',
+      type: 'file',
+      accept: 'image/*',
+      withDnd: true,
+      multiple: true,
+    },
+  ], [categoryOptions, branchOptions]);
   
   // Находим филиал пользователя по умолчанию
   const userBranchId = useMemo(() => {
@@ -326,6 +453,20 @@ function Shop() {
     
     return result;
   }, [activeTab, shops, myShops, onlyWithPhotos]);
+
+  const availableForReserve = useMemo(() => {
+    if (!selectedShop) return 0;
+    const reserved = selectedShop.reservedQuantity || 0;
+    const available = selectedShop.availableQuantity ?? Math.max(selectedShop.quantity - reserved, 0);
+    return available;
+  }, [selectedShop]);
+
+  const userHasActiveReserve = useMemo(() => {
+    if (!selectedShop || !user || !selectedShop.reserves) return false;
+    return selectedShop.reserves.some(
+      (r) => r.requester.id === user.id && ['PENDING', 'APPROVED'].includes(r.status)
+    );
+  }, [selectedShop, user]);
 
   return (
     <Container size="xl" py="md">
@@ -405,10 +546,15 @@ function Shop() {
                     padding="lg"
                     radius="md"
                     withBorder
-                    style={{ cursor: 'pointer' }}
+                    style={{ 
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      height: '100%'
+                    }}
                     onClick={() => handleViewShop(shop)}
                   >
-                    <Card.Section>
+                    <Card.Section style={{ position: 'relative', overflow: 'hidden' }}>
                       {shop.attachments && shop.attachments.length > 0 ? (
                         <Image
                           src={`${API}/public/${shop.attachments[0].source}`}
@@ -433,21 +579,30 @@ function Shop() {
                         <Badge
                           color="yellow"
                           variant="filled"
-                          style={{ position: 'absolute', top: 8, right: 8 }}
+                          style={{ position: 'absolute', top: 8, right: 8, zIndex: 1 }}
                         >
                           Продвигается
                         </Badge>
                       )}
+                      {shop.reservedQuantity !== undefined && shop.reservedQuantity > 0 && (
+                        <Badge
+                          color="blue"
+                          variant="filled"
+                          style={{ position: 'absolute', top: 8, left: 8, zIndex: 1 }}
+                        >
+                          В броне: {shop.reservedQuantity}
+                        </Badge>
+                      )}
                     </Card.Section>
 
-                    <Stack gap="xs" mt="md">
+                    <Stack gap="xs" mt="md" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                       <Text fw={500} lineClamp={2} size="sm">
                         {shop.title}
                       </Text>
                       <Text size="xs" c="dimmed" lineClamp={1}>
                         {shop.branch.name} • {shop.branch.city}
                       </Text>
-                      <Group justify="space-between" mt="xs">
+                      <Group justify="space-between" mt="auto">
                           <Text size="xs" c="dimmed">
                             {shop.category.name}
                           </Text>
@@ -486,7 +641,6 @@ function Shop() {
         onClose={() => {
           setModalOpened(false);
           setCurrentImageIndex(0);
-          setCommentText('');
         }}
         title={selectedShop?.title || ''}
         size="xl"
@@ -610,7 +764,18 @@ function Shop() {
                            selectedShop.condition === 'SATISFACTORY' ? 'Удовлетворительное' : 'Плохое'}
                         </Text>
                         <Text size="sm">
-                          <strong>Количество:</strong> {selectedShop.quantity} шт.
+                          <strong>Всего:</strong> {selectedShop.quantity} шт.
+                        </Text>
+                        {selectedShop.reservedQuantity !== undefined && selectedShop.reservedQuantity > 0 && (
+                          <Text size="sm" c="orange">
+                            <strong>В броне:</strong> {selectedShop.reservedQuantity} шт.
+                          </Text>
+                        )}
+                        <Text size="sm" c="green">
+                          <strong>Доступно:</strong>{' '}
+                          {selectedShop.availableQuantity !== undefined
+                            ? selectedShop.availableQuantity
+                            : Math.max(selectedShop.quantity - (selectedShop.reservedQuantity || 0), 0)} шт.
                         </Text>
                         {selectedShop.article && (
                           <Text size="sm">
@@ -644,69 +809,16 @@ function Shop() {
                     <Divider />
 
                     {/* Комментарии */}
-                    <Stack gap="md">
-                      <Title order={4}>Комментарии ({comments.length})</Title>
-                      
-                      {/* Список комментариев */}
-                      <ScrollArea h={300}>
-                        <Stack gap="md">
-                          {comments.map((comment) => {
-                            const senderImage = comment.sender?.image 
-                              ? `data:image/jpeg;base64,${comment.sender.image}` 
-                              : undefined;
-                            return (
-                              <Paper key={comment.id} p="md" withBorder>
-                                <Group gap="md" align="flex-start">
-                                  <Avatar 
-                                    src={senderImage} 
-                                    radius="xl"
-                                  >
-                                    {comment.sender?.name?.[0] || '?'}
-                                  </Avatar>
-                                  <Stack gap="xs" style={{ flex: 1 }}>
-                        <Group justify="space-between">
-                                      <Text fw={500}>{comment.sender?.name || 'Неизвестный'}</Text>
-                                      <Text size="xs" c="dimmed">
-                                        {new Date(comment.createdAt).toLocaleString('ru-RU')}
-                                      </Text>
-                        </Group>
-                                    <Text size="sm">{comment.text || comment.message}</Text>
-                                  </Stack>
-                                </Group>
-                              </Paper>
-                            );
-                          })}
-                          {comments.length === 0 && (
-                            <Text c="dimmed" ta="center" py="xl">
-                              Пока нет комментариев
-                          </Text>
-                        )}
-                        </Stack>
-                      </ScrollArea>
+                    {selectedShop && (
+                      <Comment
+                        entityId={selectedShop.id}
+                        entityType="SHOP"
+                        fetchComments={fetchShopComments}
+                        createComment={createShopComment}
+                        height={300}
+                      />
+                    )}
 
-                      {/* Поле для комментария */}
-                      {user && (
-                        <Group gap="xs" align="flex-end">
-                          <Textarea
-                            placeholder="Здравствуйте!"
-                            value={commentText}
-                            onChange={(e) => setCommentText(e.target.value)}
-                            style={{ flex: 1 }}
-                            minRows={2}
-                            maxRows={4}
-                          />
-                          <ActionIcon
-                            size="lg"
-                            color="blue"
-                            variant="filled"
-                            onClick={handleSendComment}
-                            disabled={!commentText.trim()}
-                          >
-                            <IconMessage size={20} />
-                          </ActionIcon>
-                        </Group>
-                      )}
-                    </Stack>
                   </Stack>
                 </Stack>
               </Grid.Col>
@@ -764,6 +876,136 @@ function Shop() {
               </Text>
                     </Stack>
 
+                    <Divider />
+
+                    {/* Резервирования */}
+                    {user && selectedShop.reserves && selectedShop.reserves.length > 0 && (
+                      <Stack gap="sm">
+                        <Text size="sm" fw={500}>Резервирования:</Text>
+                        <Stack gap="sm">
+                          {selectedShop.reserves
+                            .filter(r => {
+                              // Показываем резервы автору или пользователю, который забронировал
+                              return selectedShop.user.id === user.id || r.requester.id === user.id;
+                            })
+                            .map((r) => {
+                              const isPending = r.status === 'PENDING';
+                              const isApproved = r.status === 'APPROVED';
+                              const isMyReserve = r.requester.id === user.id;
+                              const isOwner = selectedShop.user.id === user.id;
+                              
+                              const getStatusText = (status: string) => {
+                                switch (status) {
+                                  case 'PENDING': return 'Ожидает подтверждения';
+                                  case 'APPROVED': return 'Подтверждено';
+                                  case 'REJECTED': return 'Отклонено';
+                                  case 'COMPLETED': return 'Завершено';
+                                  default: return status;
+                                }
+                              };
+
+                              return (
+                                <Paper key={r.id} withBorder p="sm">
+                                  <Stack gap="xs">
+                                    {isMyReserve ? (
+                                      <>
+                                        <Text size="sm" fw={500}>Ваш резерв</Text>
+                                        <Text size="xs" c="dimmed">Количество: {r.quantity} шт.</Text>
+                                        <Badge 
+                                          size="sm" 
+                                          color={
+                                            isPending ? 'yellow' : 
+                                            isApproved ? 'green' : 
+                                            'gray'
+                                          }
+                                        >
+                                          {getStatusText(r.status)}
+                                        </Badge>
+                                        {r.shipmentDocNumber && (
+                                          <Text size="xs" c="dimmed">
+                                            Документ отгрузки: {r.shipmentDocNumber}
+                                          </Text>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Text size="sm" fw={500}>{r.requester.name}</Text>
+                                        <Text size="xs" c="dimmed">Количество: {r.quantity} шт.</Text>
+                                        <Badge 
+                                          size="sm" 
+                                          color={
+                                            isPending ? 'yellow' : 
+                                            isApproved ? 'green' : 
+                                            'gray'
+                                          }
+                                        >
+                                          {getStatusText(r.status)}
+                                        </Badge>
+                                        {r.shipmentDocNumber && (
+                                          <Text size="xs" c="dimmed">
+                                            Документ: {r.shipmentDocNumber}
+                                          </Text>
+                                        )}
+                                        {isPending && isOwner && (
+                                          <Stack gap="xs" mt="xs">
+                                            <TextInput
+                                              size="xs"
+                                              placeholder="Номер документа"
+                                              value={shipmentNumbers[r.id] || ''}
+                                              onChange={(e) => setShipmentNumbers(prev => ({ ...prev, [r.id]: e.target.value }))}
+                                            />
+                                            <Button
+                                              size="xs"
+                                              fullWidth
+                                              onClick={async () => {
+                                                if (!shipmentNumbers[r.id]?.trim()) {
+                                                  notificationSystem.addNotification('Ошибка', 'Укажите номер документа', 'error');
+                                                  return;
+                                                }
+                                                try {
+                                                  const resp = await authFetch(`${API}/retail/shop/reserves/${r.id}/confirm`, {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({ shipmentDocNumber: shipmentNumbers[r.id].trim() }),
+                                                  });
+                                                  if (resp?.ok) {
+                                                    notificationSystem.addNotification('Успешно', 'Резерв подтвержден', 'success');
+                                                    // Обновляем карточку
+                                                    const reload = await authFetch(`${API}/retail/shop/${selectedShop.id}`);
+                                                    if (reload?.ok) {
+                                                      const data = await reload.json();
+                                                      setSelectedShop(data);
+                                                      setShipmentNumbers(prev => {
+                                                        const newState = { ...prev };
+                                                        delete newState[r.id];
+                                                        return newState;
+                                                      });
+                                                    }
+                                                  } else {
+                                                    const err = await resp?.json();
+                                                    notificationSystem.addNotification('Ошибка', err?.error || 'Не удалось подтвердить', 'error');
+                                                  }
+                                                } catch (error) {
+                                                  notificationSystem.addNotification('Ошибка', 'Не удалось подтвердить', 'error');
+                                                }
+                                              }}
+                                            >
+                                              Подтвердить
+                                            </Button>
+                                          </Stack>
+                                        )}
+                                      </>
+                                    )}
+                                  </Stack>
+                                </Paper>
+                              );
+                            })}
+                        </Stack>
+                      </Stack>
+                    )}
+
+                    <Divider />
+
                     {/* Кнопки действий */}
             {user && selectedShop.userId === user.id ? (
                   <Stack gap="xs">
@@ -785,7 +1027,7 @@ function Shop() {
                           onClick={async () => {
                             if (confirm('Вы уверены, что хотите удалить это объявление?')) {
                               try {
-                                const response = await authFetch(`${API}/retail/shop/shops/${selectedShop.id}`, {
+                                const response = await authFetch(`${API}/retail/shop/${selectedShop.id}`, {
                                   method: 'DELETE',
                                 });
                                 if (response?.ok) {
@@ -805,18 +1047,38 @@ function Shop() {
                           Удалить
                 </Button>
           </Stack>
-                    ) : user && selectedShop.status === 'ACTIVE' ? (
+            ) : user && selectedShop.status === 'ACTIVE' ? (
                       <Stack gap="xs">
-                        <Button
-                          fullWidth
-                          color="blue"
-                          onClick={() => {
-                            setReserveQuantity(1);
-                            setReserveModalOpened(true);
-                          }}
-                        >
-                          Забронировать
-                        </Button>
+                        {userHasActiveReserve ? (
+                          <Button
+                            fullWidth
+                            variant="light"
+                            color="gray"
+                            disabled
+                          >
+                            Забронировано
+                          </Button>
+                        ) : availableForReserve > 0 ? (
+                          <Button
+                            fullWidth
+                            color="blue"
+                            onClick={() => {
+                              setReserveQuantity(1);
+                              setReserveModalOpened(true);
+                            }}
+                          >
+                            Забронировать
+                          </Button>
+                        ) : (
+                          <Button
+                            fullWidth
+                            variant="light"
+                            color="gray"
+                            disabled
+                          >
+                            Забронировано
+                          </Button>
+                        )}
                         <Button
                           fullWidth
                           variant="light"
@@ -849,6 +1111,10 @@ function Shop() {
                       >
                         Написать продавцу
                       </Button>
+                    ) : availableForReserve <= 0 && selectedShop.status === 'ACTIVE' ? (
+                      <Text size="sm" c="dimmed">
+                        Все доступные единицы уже в броне
+                      </Text>
                     ) : null}
           </Stack>
                 </Paper>
@@ -880,72 +1146,11 @@ function Shop() {
           article: selectedShop?.article || '',
           condition: selectedShop?.condition || 'GOOD',
         }}
-        fields={[
-          {
-            name: 'title',
-            label: 'Заголовок',
-            type: 'text',
-            required: true,
-            placeholder: 'Название объявления',
-          },
-          {
-            name: 'description',
-            label: 'Описание',
-            type: 'textarea',
-            placeholder: 'Описание объявления (необязательно)',
-          },
-          {
-            name: 'categoryId',
-            label: 'Категория',
-            type: 'select',
-            required: true,
-            data: categoryOptions,
-            groupWith: ['branchId'],
-            groupSize: 2,
-          },
-          {
-            name: 'branchId',
-            label: 'Филиал',
-            type: 'select',
-            required: true,
-            data: branchOptions,
-            searchable: true,
-            groupWith: ['categoryId'],
-            groupSize: 2,
-          },
-          {
-            name: 'quantity',
-            label: 'Количество',
-            type: 'number',
-            required: true,
-            min: 1,
-            placeholder: '1',
-          },
-          {
-            name: 'article',
-            label: 'Артикул',
-            type: 'text',
-            placeholder: 'Артикул товара (необязательно)',
-          },
-          {
-            name: 'condition',
-            label: 'Состояние',
-            type: 'select',
-            data: [
-              { value: 'NEW', label: 'Новое' },
-              { value: 'EXCELLENT', label: 'Отличное' },
-              { value: 'GOOD', label: 'Хорошее' },
-              { value: 'SATISFACTORY', label: 'Удовлетворительное' },
-              { value: 'POOR', label: 'Плохое' },
-            ],
-          },
-        ]}
+        fields={formFields}
         fileAttachments={fileAttachments}
         onFileAttachmentsChange={(fileId, files) => {
           setFileAttachments(prev => ({ ...prev, [fileId]: files }));
         }}
-        attachmentLabel="Фотографии товара"
-        attachmentAccept="image/*"
         existingDocuments={editModalOpened && selectedShop?.attachments ? {
           photos: selectedShop.attachments.map(att => ({
             id: att.id,
@@ -956,7 +1161,7 @@ function Shop() {
         onDeleteExistingDocument={async (_fileId, documentId) => {
           if (selectedShop) {
             try {
-              const response = await authFetch(`${API}/retail/shop/shops/${selectedShop.id}/attachments/${documentId}`, {
+              const response = await authFetch(`${API}/retail/shop/${selectedShop.id}/images/${documentId}`, {
                 method: 'DELETE',
               });
               if (response?.ok) {
@@ -975,7 +1180,7 @@ function Shop() {
         onSubmit={async (values) => {
           try {
             const isEdit = !!selectedShop;
-            const url = isEdit ? `${API}/retail/shop/shops/${selectedShop.id}` : `${API}/retail/shop/shops`;
+            const url = isEdit ? `${API}/retail/shop/${selectedShop.id}` : `${API}/retail/shop`;
             const method = isEdit ? 'PUT' : 'POST';
             
             const response = await authFetch(url, {
@@ -996,23 +1201,82 @@ function Shop() {
               const shopData = await response.json();
               const shopId = shopData.id || selectedShop?.id;
               
+              if (process.env.NODE_ENV === 'development') {
+                console.log('[Shop] Shop saved, ID:', shopId);
+              }
+              
               // Загружаем фото объявления, если они есть
-              const photos = fileAttachments['photos'] || [];
-              if (photos.length > 0 && shopId) {
+              // Получаем фотографии из values.photos (поле типа file) - это массив FileAttachment[]
+              const photosFromForm: File[] = [];
+              if (values.photos && Array.isArray(values.photos)) {
+                if (process.env.NODE_ENV === 'development') {
+                  console.log('[Shop] values.photos:', values.photos);
+                }
+                values.photos.forEach((attachment: any) => {
+                  // FileAttachment имеет структуру: { id, userAdd, source: File | string, meta? }
+                  if (attachment && attachment.source instanceof File) {
+                    photosFromForm.push(attachment.source);
+                  }
+                });
+              }
+              
+              // Ищем все файлы из fileAttachments, которые являются File объектами
+              const photosFromAttachments: File[] = [];
+              Object.values(fileAttachments).forEach(files => {
+                files.forEach(file => {
+                  if (file instanceof File) {
+                    photosFromAttachments.push(file);
+                  }
+                });
+              });
+              
+              if (process.env.NODE_ENV === 'development') {
+                console.log('[Shop] Photos from form:', photosFromForm.length);
+                console.log('[Shop] Photos from attachments:', photosFromAttachments.length);
+              }
+              
+              // Объединяем фотографии из формы и из fileAttachments
+              const allPhotos = [...photosFromForm, ...photosFromAttachments];
+              
+              if (allPhotos.length > 0 && shopId) {
+                if (process.env.NODE_ENV === 'development') {
+                  console.log('[Shop] Uploading photos:', {
+                    shopId,
+                    photosCount: allPhotos.length,
+                    url: `${API}/retail/shop/${shopId}/images`
+                  });
+                }
+                
                 try {
                   const formDataPhotos = new FormData();
-                  photos.forEach((photo) => {
-                    formDataPhotos.append('attachments', photo);
+                  allPhotos.forEach((photo, index) => {
+                    formDataPhotos.append('images', photo);
+                    if (process.env.NODE_ENV === 'development') {
+                      console.log(`[Shop] Added photo ${index + 1}:`, photo.name, photo.size, photo.type);
+                    }
                   });
                   
-                  const photoResponse = await authFetch(`${API}/retail/shop/shops/${shopId}/attachments`, {
+                  const photoResponse = await authFetch(`${API}/retail/shop/${shopId}/images`, {
                     method: 'POST',
                     body: formDataPhotos,
                   });
                   
                   if (!photoResponse?.ok) {
-                    console.error('Failed to upload photos');
+                    const errorText = await photoResponse?.text().catch(() => 'Unknown error');
+                    console.error('[Shop] Failed to upload photos:', {
+                      status: photoResponse?.status,
+                      statusText: photoResponse?.statusText,
+                      error: errorText,
+                      url: `${API}/retail/shop/${shopId}/images`,
+                      shopId,
+                      photosCount: allPhotos.length
+                    });
                     notificationSystem.addNotification('Предупреждение', 'Объявление сохранено, но не удалось загрузить фото', 'warning');
+                  } else {
+                    const result = await photoResponse.json().catch(() => null);
+                    if (process.env.NODE_ENV === 'development') {
+                      console.log('[Shop] Photos uploaded successfully:', result);
+                    }
                   }
                 } catch (photoError) {
                   console.error('Error uploading photos:', photoError);
@@ -1054,15 +1318,26 @@ function Shop() {
             Товар: {selectedShop?.title}
           </Text>
           <Text size="sm" c="dimmed">
-            Доступно: {selectedShop?.quantity} шт.
+            Доступно: {availableForReserve} шт.
           </Text>
+          {selectedShop?.reservedQuantity !== undefined && selectedShop.reservedQuantity > 0 && (
+            <Text size="sm" c="orange">
+              В броне: {selectedShop.reservedQuantity} шт.
+            </Text>
+          )}
+          {selectedShop?.quantity !== undefined && (
+            <Text size="sm" c="dimmed">
+              Всего: {selectedShop.quantity} шт.
+            </Text>
+          )}
           
           <NumberInput
             label="Количество"
             value={reserveQuantity}
             onChange={(val: string | number) => setReserveQuantity(Number(val) || 1)}
             min={1}
-            max={selectedShop?.quantity || 1}
+            max={Math.max(availableForReserve, 1)}
+            disabled={availableForReserve <= 0}
             required
           />
 
@@ -1079,9 +1354,13 @@ function Shop() {
             <Button
               onClick={async () => {
                 if (!selectedShop || !user) return;
+                if (availableForReserve < 1) {
+                  notificationSystem.addNotification('Недоступно', 'Все доступные единицы уже в броне', 'warning');
+                  return;
+                }
                 
                 try {
-                  const response = await authFetch(`${API}/retail/shop/shops/${selectedShop.id}/reserve`, {
+                  const response = await authFetch(`${API}/retail/shop/${selectedShop.id}/reserve`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({

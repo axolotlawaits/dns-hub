@@ -337,6 +337,20 @@ export const deleteMusicFolder = async (req: Request, res: Response): Promise<an
   }
 };
 
+export const deleteMusicFile = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { folderName, fileName } = req.params;
+    if (!folderName || !fileName) return res.status(400).json({ error: 'Название папки и файла обязательно' });
+    const filePath = `./public/retail/radio/music/${folderName}/${fileName}`;
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Файл не найден' });
+    fs.unlinkSync(filePath);
+    return res.status(200).json({ success: true, message: 'Файл музыки удален успешно', fileName });
+  } catch (error) {
+    console.error('[Radio] Error deleting music file:', error);
+    return res.status(500).json({ error: 'Ошибка при удалении файла музыки' });
+  }
+};
+
 // ===== Admin-related (moved) =====
 export const getDevicesByBranches = async (req: Request, res: Response) => {
   try {

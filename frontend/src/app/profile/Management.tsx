@@ -1,15 +1,17 @@
 import { useEffect, useState, useMemo, useCallback } from "react"
 import { API } from "../../config/constants"
-import { ActionIcon, Select, MultiSelect, TextInput, Tooltip, Box, Title, Text, Group, Card, Badge, LoadingOverlay, Progress, Button, Stack } from "@mantine/core"
+import { ActionIcon, Select, MultiSelect, TextInput, Tooltip, Box, Title, Text, Group, Card, Badge, LoadingOverlay, Progress, Button, Stack, SegmentedControl } from "@mantine/core"
 import { useDisclosure } from "@mantine/hooks"
 import { Tool } from "../../components/Tools"
-import { IconExternalLink, IconLockAccess, IconSearch, IconUsers, IconUser, IconBriefcase, IconShield, IconCheck, IconX, IconClock } from "@tabler/icons-react"
+import { IconExternalLink, IconLockAccess, IconSearch, IconUsers, IconUser, IconBriefcase, IconShield, IconClock, IconBell } from "@tabler/icons-react"
 import { useNavigate } from "react-router"
 import { User, UserRole } from "../../contexts/UserContext"
 import { useUserContext } from "../../hooks/useUserContext"
 import { useAccessContext } from "../../hooks/useAccessContext"
 import { DynamicFormModal } from "../../utils/formModal"
-import { notificationSystem } from "../../utils/Push"
+import { CustomModal } from "../../utils/CustomModal"
+import { apiRequest, showSuccessNotification, showWarningNotification } from "../../utils/apiHelpers"
+import { AccessRequestCard } from "../../components/AccessRequestCard"
 
 export type AccessLevel = 'READONLY' | 'CONTRIBUTOR' | 'FULL'
 
@@ -68,6 +70,8 @@ function Management() {
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<string | null>(null)
   const [accessRequests, setAccessRequests] = useState<any[]>([])
   const [protectedToolLinks, setProtectedToolLinks] = useState<string[]>([])
+  const [accessFilter, setAccessFilter] = useState<'all' | 'with' | 'without'>('all')
+  const [sortBy, setSortBy] = useState<'name' | 'access'>('name')
   const navigate = useNavigate()
   
   // Загружаем список защищенных инструментов
@@ -132,26 +136,13 @@ function Management() {
     return toolAccess?.accessLevel === 'FULL'
   }, [user, access, checkIsProtectedTool, protectedToolLinks])
   
-  // Загрузка запросов на доступ
+  // Загрузка запросов на доступ (упрощенная версия с использованием утилит)
   const loadAccessRequests = useCallback(async () => {
     if (!user) return
     
-    try {
-      const token = localStorage.getItem('token')
-      const response = await fetch(`${API}/access/requests/all`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
-      
-      if (response.ok) {
-        const data = await response.json()
-        setAccessRequests(data)
-      } else {
-        console.error('Failed to load access requests')
-      }
-    } catch (error) {
-      console.error('Error loading access requests:', error)
+    const result = await apiRequest('/access/requests/all', {}, false)
+    if (result.success && result.data) {
+      setAccessRequests(result.data)
     }
   }, [user])
   
@@ -159,83 +150,36 @@ function Management() {
     loadAccessRequests()
   }, [loadAccessRequests])
   
-  // Одобрение запроса на доступ
+  // Одобрение запроса на доступ (упрощенная версия с использованием утилит)
   const handleApproveRequest = useCallback(async (requestId: string, accessLevel: AccessLevel = 'READONLY') => {
-    try {
-      const token = localStorage.getItem('token')
-      const response = await fetch(`${API}/access/requests/${requestId}/approve`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ accessLevel })
-      })
-      
-      if (response.ok) {
-        notificationSystem.addNotification(
-          'Успех',
-          'Доступ успешно предоставлен',
-          'success'
-        )
-        loadAccessRequests()
-      } else {
-        const error = await response.json()
-        notificationSystem.addNotification(
-          'Ошибка',
-          error.error || 'Не удалось предоставить доступ',
-          'error'
-        )
-      }
-    } catch (error) {
-      notificationSystem.addNotification(
-        'Ошибка',
-        'Ошибка при предоставлении доступа',
-        'error'
-      )
+    const result = await apiRequest(`/access/requests/${requestId}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ accessLevel })
+    })
+    
+    if (result.success) {
+      showSuccessNotification('Доступ успешно предоставлен')
+      loadAccessRequests()
     }
   }, [loadAccessRequests])
   
-  // Отклонение запроса на доступ
+  // Отклонение запроса на доступ (упрощенная версия с использованием утилит)
   const handleRejectRequest = useCallback(async (requestId: string, reason?: string) => {
-    try {
-      const token = localStorage.getItem('token')
-      const response = await fetch(`${API}/access/requests/${requestId}/reject`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ reason })
-      })
-      
-      if (response.ok) {
-        notificationSystem.addNotification(
-          'Успех',
-          'Запрос отклонен',
-          'success'
-        )
-        loadAccessRequests()
-      } else {
-        const error = await response.json()
-        notificationSystem.addNotification(
-          'Ошибка',
-          error.error || 'Не удалось отклонить запрос',
-          'error'
-        )
-      }
-    } catch (error) {
-      notificationSystem.addNotification(
-        'Ошибка',
-        'Ошибка при отклонении запроса',
-        'error'
-      )
+    const result = await apiRequest(`/access/requests/${requestId}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason })
+    })
+    
+    if (result.success) {
+      showSuccessNotification('Запрос отклонен')
+      loadAccessRequests()
     }
   }, [loadAccessRequests])
   
   const modals = {
     changeAccess: useDisclosure(false),
     approveRequest: useDisclosure(false),
+    accessRequests: useDisclosure(false),
   }
   
   const [selectedRequest, setSelectedRequest] = useState<any | null>(null)
@@ -269,14 +213,9 @@ function Management() {
 
   // Загружаем группы для фильтрации должностей отдельно
   const getGroups = useCallback(async () => {
-    try {
-      const response = await fetch(`${API}/search/group/all`)
-      const json = await response.json()
-      if (response.ok) {
-        setGroups(json)
-      }
-    } catch (error) {
-      console.error('Error fetching groups:', error)
+    const result = await apiRequest('/search/group/all', {}, false)
+    if (result.success && result.data) {
+      setGroups(result.data)
     }
   }, [])
 
@@ -294,14 +233,9 @@ function Management() {
   }, [entityType, getGroups])
 
   const getTools = useCallback(async (search?: string) => {
-    try {
-      const response = await fetch(`${API}/search/tool?text=${search || ''}`)
-      const json = await response.json()
-      if (response.ok) {
-        setTools(json)
-      }
-    } catch (error) {
-      console.error('Error fetching tools:', error)
+    const result = await apiRequest(`/search/tool?text=${search || ''}`, {}, false)
+    if (result.success && result.data) {
+      setTools(result.data)
     }
   }, [])
 
@@ -316,30 +250,20 @@ function Management() {
       return
     }
 
-    try {
-      const accessPromises = selectedEntities.map(async (entityId) => {
-        try {
-          const response = await fetch(`${API}/access/${entityType}/${entityId}`)
-          const json = await response.json()
-          if (response.ok) {
-            return { entityId, access: json }
-          }
-          return { entityId, access: [] }
-        } catch (error) {
-          console.error(`Error fetching access for ${entityId}:`, error)
-          return { entityId, access: [] }
-        }
-      })
+    const accessPromises = selectedEntities.map(async (entityId) => {
+      const result = await apiRequest(`/access/${entityType}/${entityId}`, {}, false)
+      return { 
+        entityId, 
+        access: result.success && result.data ? result.data : [] 
+      }
+    })
 
-      const results = await Promise.all(accessPromises)
-      const newAccessMap = new Map<string, EntityToolAccess[]>()
-      results.forEach(({ entityId, access }) => {
-        newAccessMap.set(entityId, access)
-      })
-      setEntitiesAccess(newAccessMap)
-    } catch (error) {
-      console.error('Error fetching accessed tools:', error)
-    }
+    const results = await Promise.all(accessPromises)
+    const newAccessMap = new Map<string, EntityToolAccess[]>()
+    results.forEach(({ entityId, access }) => {
+      newAccessMap.set(entityId, access)
+    })
+    setEntitiesAccess(newAccessMap)
   }, [entityType, selectedEntities])
 
   useEffect(() => {
@@ -396,16 +320,13 @@ function Management() {
       // Показываем уведомление о результате операции
       if (errorCount > 0) {
         console.warn(`Updated ${successCount} of ${total} entities. ${errorCount} errors.`)
-        notificationSystem.addNotification(
-          'Частичный успех',
+        showWarningNotification(
           `Обновлено ${successCount} из ${total} сущностей. Ошибок: ${errorCount}`,
-          'warning'
+          'Частичный успех'
         )
       } else if (successCount > 0) {
-        notificationSystem.addNotification(
-          'Успех',
-          `Доступ успешно обновлен для ${successCount} ${successCount === 1 ? 'сущности' : 'сущностей'}`,
-          'success'
+        showSuccessNotification(
+          `Доступ успешно обновлен для ${successCount} ${successCount === 1 ? 'сущности' : 'сущностей'}`
         )
       }
     } catch (error) {
@@ -461,16 +382,13 @@ function Management() {
       // Показываем уведомление о результате операции
       if (errorCount > 0) {
         console.warn(`Deleted access from ${successCount} of ${total} entities. ${errorCount} errors.`)
-        notificationSystem.addNotification(
-          'Частичный успех',
+        showWarningNotification(
           `Доступ удален для ${successCount} из ${total} сущностей. Ошибок: ${errorCount}`,
-          'warning'
+          'Частичный успех'
         )
       } else if (successCount > 0) {
-        notificationSystem.addNotification(
-          'Успех',
-          `Доступ успешно удален для ${successCount} ${successCount === 1 ? 'сущности' : 'сущностей'}`,
-          'success'
+        showSuccessNotification(
+          `Доступ успешно удален для ${successCount} ${successCount === 1 ? 'сущности' : 'сущностей'}`
         )
       }
     } catch (error) {
@@ -482,70 +400,17 @@ function Management() {
 
   const updateUserRole = useCallback(async (role: string | null) => {
     if (role && entityType === 'user' && selectedEntities.length === 1) {
-      try {
-        const response = await fetch(`${API}/user/${selectedEntities[0]}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({role})
-        })
-        const json = await response.json()
+      const result = await apiRequest(`/user/${selectedEntities[0]}`, {
+        method: 'PATCH',
+        body: JSON.stringify({role})
+      })
 
-        if (response.ok) {
-          setUsers(prevUsers => prevUsers.map(user => user.id === json.id ? {...user, role: json.role} : user))
-          notificationSystem.addNotification(
-            'Успех',
-            'Роль пользователя успешно обновлена',
-            'success'
-          )
-        } else {
-          notificationSystem.addNotification(
-            'Ошибка',
-            json.error || 'Не удалось обновить роль пользователя',
-            'error'
-          )
-        }
-      } catch (error) {
-        console.error('Error updating user role:', error)
-        notificationSystem.addNotification(
-          'Ошибка',
-          'Ошибка при обновлении роли пользователя',
-          'error'
-        )
+      if (result.success && result.data) {
+        setUsers(prevUsers => prevUsers.map(user => user.id === result.data.id ? {...user, role: result.data.role} : user))
+        showSuccessNotification('Роль пользователя успешно обновлена')
       }
     }
   }, [entityType, selectedEntities])
-
-  // Мемоизированные данные - фильтруем инструменты по доступу пользователя
-  const filteredTools = useMemo(() => {
-    // DEVELOPER видит все инструменты
-    if (user?.role === 'DEVELOPER') {
-      let allTools = tools;
-      if (searchQuery) {
-        allTools = allTools.filter(tool => 
-          tool.name.toLowerCase().includes(searchQuery.toLowerCase())
-        )
-      }
-      return allTools;
-    }
-    
-    // Для остальных: сначала фильтруем только защищенные инструменты
-    // Если список еще не загружен, не показываем инструменты (кроме DEVELOPER)
-    let protectedTools = protectedToolLinks.length > 0 
-      ? tools.filter(tool => checkIsProtectedTool(tool))
-      : [];
-    
-    // Затем фильтруем по доступу пользователя для управления
-    let accessibleTools = protectedTools.filter(tool => canManageToolAccess(tool))
-    
-    // Затем применяем поисковый запрос
-    if (searchQuery) {
-      accessibleTools = accessibleTools.filter(tool => 
-        tool.name.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    }
-    
-    return accessibleTools
-  }, [tools, searchQuery, canManageToolAccess, checkIsProtectedTool, protectedToolLinks, user])
 
   // Получаем информацию о выбранных сущностях
   const selectedEntitiesInfo = useMemo(() => {
@@ -557,7 +422,7 @@ function Management() {
     }).filter(Boolean)
   }, [selectedEntities, entityType, groups, positions, users])
 
-  // Агрегируем доступы для всех выбранных сущностей
+  // Агрегируем доступы для всех выбранных сущностей (должно быть определено ДО filteredTools)
   const aggregatedAccess = useMemo(() => {
     const toolAccessMap = new Map<string, {
       toolId: string
@@ -586,6 +451,61 @@ function Management() {
 
     return toolAccessMap
   }, [selectedEntities, entitiesAccess])
+
+  // Мемоизированные данные - фильтруем инструменты по доступу пользователя
+  const filteredTools = useMemo(() => {
+    // DEVELOPER видит все инструменты
+    if (user?.role === 'DEVELOPER') {
+      let allTools = tools;
+      if (searchQuery) {
+        allTools = allTools.filter(tool => 
+          tool.name.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      }
+      return allTools;
+    }
+    
+    // Для остальных: сначала фильтруем только защищенные инструменты
+    // Если список еще не загружен, не показываем инструменты (кроме DEVELOPER)
+    let protectedTools = protectedToolLinks.length > 0 
+      ? tools.filter(tool => checkIsProtectedTool(tool))
+      : [];
+    
+    // Затем фильтруем по доступу пользователя для управления
+    let accessibleTools = protectedTools.filter(tool => canManageToolAccess(tool))
+    
+    // Применяем фильтр по доступу (только если выбраны сущности)
+    if (selectedEntities.length > 0) {
+      if (accessFilter === 'with') {
+        accessibleTools = accessibleTools.filter(tool => aggregatedAccess.has(tool.id))
+      } else if (accessFilter === 'without') {
+        accessibleTools = accessibleTools.filter(tool => !aggregatedAccess.has(tool.id))
+      }
+    }
+    
+    // Затем применяем поисковый запрос
+    if (searchQuery) {
+      accessibleTools = accessibleTools.filter(tool => 
+        tool.name.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    }
+    
+    // Сортировка
+    accessibleTools = [...accessibleTools].sort((a, b) => {
+      if (sortBy === 'name') {
+        return a.name.localeCompare(b.name, 'ru')
+      } else {
+        const aHasAccess = aggregatedAccess.has(a.id)
+        const bHasAccess = aggregatedAccess.has(b.id)
+        if (aHasAccess === bHasAccess) {
+          return a.name.localeCompare(b.name, 'ru')
+        }
+        return aHasAccess ? -1 : 1
+      }
+    })
+    
+    return accessibleTools
+  }, [tools, searchQuery, canManageToolAccess, checkIsProtectedTool, protectedToolLinks, user, accessFilter, sortBy, aggregatedAccess, selectedEntities.length])
 
   const entityOptions = useMemo(() => {
     if (entityType === 'group') return groups.map((g: any) => ({value: g.uuid, label: g.name}))
@@ -719,23 +639,53 @@ function Management() {
               </Text>
             </Box>
           </Group>
+          {accessRequests.length > 0 && (
+            <Button
+              variant="light"
+              color="blue"
+              leftSection={<IconBell size={18} />}
+              onClick={modals.accessRequests[1].open}
+              style={{ position: 'relative' }}
+            >
+              Запросы на доступ
+              <Badge
+                size="sm"
+                variant="filled"
+                color="red"
+                style={{
+                  position: 'absolute',
+                  top: -8,
+                  right: -8,
+                  minWidth: 20,
+                  height: 20,
+                  padding: '0 6px',
+                  fontSize: '11px',
+                  fontWeight: 700
+                }}
+              >
+                {accessRequests.length}
+              </Badge>
+            </Button>
+          )}
         </Group>
 
-        {/* Статистика */}
-        <Group gap="lg" mb="md">
+        {/* Статистика - улучшенная визуализация */}
+        <Group gap="md" mb="md" wrap="wrap">
           {statistics.selectedCount > 0 && (
-            <Box style={{
-              background: 'var(--theme-bg-primary)',
-              borderRadius: '12px',
-              padding: '16px',
-              border: '1px solid var(--theme-border-secondary)',
-              textAlign: 'center',
-              minWidth: '120px'
-            }}>
-              <Text size="xl" fw={700} c="var(--theme-text-primary)">
+            <Card
+              padding="md"
+              radius="md"
+              style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                border: 'none',
+                minWidth: '140px',
+                flex: '0 0 auto'
+              }}
+            >
+              <Text size="xl" fw={700} c="white" ta="center">
                 {statistics.selectedCount}
               </Text>
-              <Text size="sm" c="var(--theme-text-secondary)">
+              <Text size="sm" c="rgba(255,255,255,0.9)" ta="center" mt={4}>
                 {statistics.selectedCount === 1 
                   ? entityType === 'group' ? 'Группа выбрана' :
                     entityType === 'user' ? 'Сотрудник выбран' : 'Должность выбрана'
@@ -743,56 +693,128 @@ function Management() {
                     entityType === 'user' ? 'Сотрудников выбрано' : 'Должностей выбрано'
                 }
               </Text>
-            </Box>
+            </Card>
           )}
-          <Box style={{
-            background: 'var(--theme-bg-primary)',
-            borderRadius: '12px',
-            padding: '16px',
-            border: '1px solid var(--theme-border-secondary)',
-            textAlign: 'center',
-            minWidth: '120px'
-          }}>
-            <Text size="xl" fw={700} c="var(--theme-text-primary)">
+          <Card
+            padding="md"
+            radius="md"
+            style={{
+              background: 'var(--theme-bg-primary)',
+              border: '1px solid var(--theme-border-secondary)',
+              minWidth: '140px',
+              flex: '0 0 auto'
+            }}
+          >
+            <Text size="xl" fw={700} c="var(--theme-text-primary)" ta="center">
               {statistics.totalTools}
             </Text>
-            <Text size="sm" c="var(--theme-text-secondary)">
+            <Text size="sm" c="var(--theme-text-secondary)" ta="center" mt={4}>
               Всего инструментов
             </Text>
-          </Box>
+          </Card>
           {statistics.selectedCount > 0 && (
-            <Box style={{
-              background: 'var(--theme-bg-primary)',
-              borderRadius: '12px',
-              padding: '16px',
-              border: '1px solid var(--theme-border-secondary)',
-              textAlign: 'center',
-              minWidth: '120px'
-            }}>
-              <Text size="xl" fw={700} c="var(--theme-text-primary)">
-                {statistics.accessedTools}
-              </Text>
-              <Text size="sm" c="var(--theme-text-secondary)">
-                С доступом
-              </Text>
-            </Box>
-          )}
-          {statistics.selectedCount > 0 && (
-            <Box style={{
-              background: 'var(--theme-bg-primary)',
-              borderRadius: '12px',
-              padding: '16px',
-              border: '1px solid var(--theme-border-secondary)',
-              textAlign: 'center',
-              minWidth: '120px'
-            }}>
-              <Text size="xl" fw={700} c="var(--theme-text-primary)">
-                {statistics.fullCount}
-              </Text>
-              <Text size="sm" c="var(--theme-text-secondary)">
-                Полный доступ
-              </Text>
-            </Box>
+            <>
+              <Card
+                padding="md"
+                radius="md"
+                style={{
+                  background: statistics.accessedTools > 0 
+                    ? 'linear-gradient(135deg, #48bb78 0%, #38a169 100%)'
+                    : 'var(--theme-bg-primary)',
+                  border: statistics.accessedTools > 0 
+                    ? 'none'
+                    : '1px solid var(--theme-border-secondary)',
+                  minWidth: '140px',
+                  flex: '0 0 auto'
+                }}
+              >
+                <Text 
+                  size="xl" 
+                  fw={700} 
+                  c={statistics.accessedTools > 0 ? 'white' : 'var(--theme-text-primary)'} 
+                  ta="center"
+                >
+                  {statistics.accessedTools}
+                </Text>
+                <Text 
+                  size="sm" 
+                  c={statistics.accessedTools > 0 ? 'rgba(255,255,255,0.9)' : 'var(--theme-text-secondary)'} 
+                  ta="center" 
+                  mt={4}
+                >
+                  С доступом
+                </Text>
+              </Card>
+              <Card
+                padding="md"
+                radius="md"
+                style={{
+                  background: statistics.fullCount > 0 
+                    ? 'linear-gradient(135deg, #4299e1 0%, #3182ce 100%)'
+                    : 'var(--theme-bg-primary)',
+                  border: statistics.fullCount > 0 
+                    ? 'none'
+                    : '1px solid var(--theme-border-secondary)',
+                  minWidth: '140px',
+                  flex: '0 0 auto'
+                }}
+              >
+                <Text 
+                  size="xl" 
+                  fw={700} 
+                  c={statistics.fullCount > 0 ? 'white' : 'var(--theme-text-primary)'} 
+                  ta="center"
+                >
+                  {statistics.fullCount}
+                </Text>
+                <Text 
+                  size="sm" 
+                  c={statistics.fullCount > 0 ? 'rgba(255,255,255,0.9)' : 'var(--theme-text-secondary)'} 
+                  ta="center" 
+                  mt={4}
+                >
+                  Полный доступ
+                </Text>
+              </Card>
+              {statistics.readonlyCount > 0 && (
+                <Card
+                  padding="md"
+                  radius="md"
+                  style={{
+                    background: 'var(--theme-bg-primary)',
+                    border: '1px solid var(--theme-border-secondary)',
+                    minWidth: '140px',
+                    flex: '0 0 auto'
+                  }}
+                >
+                  <Text size="xl" fw={700} c="var(--theme-text-primary)" ta="center">
+                    {statistics.readonlyCount}
+                  </Text>
+                  <Text size="sm" c="var(--theme-text-secondary)" ta="center" mt={4}>
+                    Только чтение
+                  </Text>
+                </Card>
+              )}
+              {statistics.contributorCount > 0 && (
+                <Card
+                  padding="md"
+                  radius="md"
+                  style={{
+                    background: 'var(--theme-bg-primary)',
+                    border: '1px solid var(--theme-border-secondary)',
+                    minWidth: '140px',
+                    flex: '0 0 auto'
+                  }}
+                >
+                  <Text size="xl" fw={700} c="var(--theme-text-primary)" ta="center">
+                    {statistics.contributorCount}
+                  </Text>
+                  <Text size="sm" c="var(--theme-text-secondary)" ta="center" mt={4}>
+                    Без удаления
+                  </Text>
+                </Card>
+              )}
+            </>
           )}
         </Group>
 
@@ -843,15 +865,17 @@ function Management() {
               </Box>
             )}
             <Box style={{ flex: 2 }}>
-              <Text size="sm" fw={500} c="var(--theme-text-primary)" mb="xs">
-                {entityType === 'group' ? 'Группа должностей' : 
-                 entityType === 'user' ? 'Сотрудник' : 'Должность'}
+              <Group gap="xs" align="center" mb="xs">
+                <Text size="sm" fw={500} c="var(--theme-text-primary)">
+                  {entityType === 'group' ? 'Группа должностей' : 
+                   entityType === 'user' ? 'Сотрудник' : 'Должность'}
+                </Text>
                 {selectedEntities.length > 0 && (
-                  <Badge size="sm" variant="light" color="blue" ml="xs">
+                  <Badge size="sm" variant="light" color="blue">
                     {selectedEntities.length}
                   </Badge>
                 )}
-              </Text>
+              </Group>
               <MultiSelect 
                 data={entityOptions.map((opt: any) => {
                   // Для должностей добавляем информацию о группе в label с tooltip через title
@@ -868,10 +892,8 @@ function Management() {
                 onChange={(values) => {
                   // Ограничиваем количество выбранных сущностей
                   if (values.length > MAX_SELECTED_ENTITIES) {
-                    notificationSystem.addNotification(
-                      'Предупреждение',
-                      `Можно выбрать максимум ${MAX_SELECTED_ENTITIES} сущностей для оптимальной производительности`,
-                      'warning'
+                    showWarningNotification(
+                      `Можно выбрать максимум ${MAX_SELECTED_ENTITIES} сущностей для оптимальной производительности`
                     )
                     setSelectedEntities(values.slice(0, MAX_SELECTED_ENTITIES))
                   } else {
@@ -907,96 +929,42 @@ function Management() {
         </Box>
       </Box>
 
-      {/* Запросы на доступ */}
-      {accessRequests.length > 0 && (
-        <Box style={{
-          background: 'var(--theme-bg-elevated)',
-          borderRadius: '16px',
-          padding: '24px',
-          border: '1px solid var(--theme-border-primary)',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-          marginBottom: '24px'
-        }}>
-          <Group justify="space-between" mb="md">
-            <Group gap="sm">
-              <IconClock size={24} color="var(--theme-color-primary)" />
-              <Title order={3} c="var(--theme-text-primary)">
-                Запросы на доступ
-              </Title>
-              <Badge size="lg" variant="light" color="blue">
-                {accessRequests.length}
-              </Badge>
-            </Group>
-          </Group>
-          
-          <Stack gap="md">
-            {accessRequests.map((request) => {
-              const metadata = request.metadata as any
-              const toolName = metadata?.toolName || 'Неизвестный инструмент'
-              const requesterName = request.user?.name || metadata?.requestedByName || 'Неизвестный пользователь'
-              const requesterEmail = request.user?.email || metadata?.requestedByEmail || request.email
-              
-              return (
-                <Card
-                  key={request.id}
-                  style={{
-                    border: '1px solid var(--theme-border-primary)',
-                    borderRadius: '12px',
-                    background: 'var(--theme-bg-primary)'
-                  }}
-                  padding="md"
-                >
-                  <Group justify="space-between" align="flex-start">
-                    <Box style={{ flex: 1 }}>
-                      <Group gap="xs" mb="xs">
-                        <Text fw={600} size="md" c="var(--theme-text-primary)">
-                          {requesterName}
-                        </Text>
-                        <Badge size="sm" variant="light" color="blue">
-                          {requesterEmail}
-                        </Badge>
-                      </Group>
-                      <Text size="sm" c="var(--theme-text-secondary)" mb="xs">
-                        Запрашивает доступ к инструменту: <strong>{toolName}</strong>
-                      </Text>
-                      <Text size="xs" c="var(--theme-text-secondary)">
-                        {new Date(request.createdAt).toLocaleString('ru-RU')}
-                      </Text>
-                    </Box>
-                    <Group gap="xs">
-                      <Tooltip label="Одобрить с уровнем доступа">
-                        <Button
-                          size="sm"
-                          variant="light"
-                          color="green"
-                          leftSection={<IconCheck size={16} />}
-                          onClick={() => {
-                            setSelectedRequest(request)
-                            modals.approveRequest[1].open()
-                          }}
-                        >
-                          Одобрить
-                        </Button>
-                      </Tooltip>
-                      <Tooltip label="Отклонить запрос">
-                        <Button
-                          size="sm"
-                          variant="light"
-                          color="red"
-                          leftSection={<IconX size={16} />}
-                          onClick={() => handleRejectRequest(request.id)}
-                        >
-                          Отклонить
-                        </Button>
-                      </Tooltip>
-                    </Group>
-                  </Group>
-                </Card>
-              )
-            })}
-          </Stack>
-        </Box>
-      )}
+      {/* Модалка запросов на доступ */}
+      <CustomModal
+        opened={modals.accessRequests[0]}
+        onClose={modals.accessRequests[1].close}
+        title="Запросы на доступ"
+        icon={<IconClock size={20} />}
+        size="xl"
+        maxHeight="90vh"
+      >
+        <Stack gap="md" style={{ maxHeight: 'calc(90vh - 100px)', overflowY: 'auto' }}>
+          {accessRequests.length === 0 ? (
+            <Box style={{ textAlign: 'center', padding: '48px 24px' }}>
+              <IconClock size={48} color="var(--theme-text-secondary)" style={{ margin: '0 auto 16px', display: 'block', opacity: 0.5 }} />
+              <Text c="var(--theme-text-secondary)" size="lg" fw={500}>
+                Нет запросов на доступ
+              </Text>
+              <Text c="var(--theme-text-secondary)" size="sm" mt="xs">
+                Все запросы обработаны
+              </Text>
+            </Box>
+          ) : (
+            accessRequests.map((request) => (
+              <AccessRequestCard
+                key={request.id}
+                request={request}
+                onApprove={() => {
+                  setSelectedRequest(request)
+                  modals.accessRequests[1].close()
+                  modals.approveRequest[1].open()
+                }}
+                onReject={() => handleRejectRequest(request.id)}
+              />
+            ))
+          )}
+        </Stack>
+      </CustomModal>
 
       {/* Поиск и инструменты */}
       <Box style={{
@@ -1027,15 +995,40 @@ function Management() {
             )}
           </Group>
           {bulkOperationProgress !== null && (
-            <Progress value={bulkOperationProgress} size="sm" radius="xl" />
+            <Progress value={bulkOperationProgress} size="sm" radius="xl" style={{ flex: 1 }} />
           )}
-          <TextInput
-            placeholder="Поиск инструментов..."
-            leftSection={<IconSearch size={16} />}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ width: 300 }}
-          />
+          <Group gap="sm">
+            {selectedEntities.length > 0 && (
+              <>
+                <SegmentedControl
+                  value={accessFilter}
+                  onChange={(value) => setAccessFilter(value as 'all' | 'with' | 'without')}
+                  data={[
+                    { label: 'Все', value: 'all' },
+                    { label: 'С доступом', value: 'with' },
+                    { label: 'Без доступа', value: 'without' },
+                  ]}
+                  size="sm"
+                />
+                <SegmentedControl
+                  value={sortBy}
+                  onChange={(value) => setSortBy(value as 'name' | 'access')}
+                  data={[
+                    { label: 'По имени', value: 'name' },
+                    { label: 'По доступу', value: 'access' },
+                  ]}
+                  size="sm"
+                />
+              </>
+            )}
+            <TextInput
+              placeholder="Поиск инструментов..."
+              leftSection={<IconSearch size={16} />}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ width: 300 }}
+            />
+          </Group>
         </Group>
 
         {/* Сетка инструментов */}

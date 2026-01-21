@@ -1,4 +1,4 @@
-import { createContext, useEffect, useState } from "react";
+import { createContext, useEffect, useState, useRef } from "react";
 import { API } from "../config/constants";
 
 export type User = {
@@ -60,26 +60,65 @@ export const UserContextProvider = ({ children }: Props) => {
     }
   });
 
-  const refreshAccessToken = async (): Promise<string | null> => {
-    const response = await fetch(`${API}/refresh-token`, {
-      method: 'POST',
-      credentials: 'include'
-    });
+  // Глобальная переменная для отслеживания процесса обновления токена в UserContext
+  const refreshTokenPromiseRef = useRef<Promise<string | null> | null>(null);
 
-    if (response.ok) {
-      const newToken = await response.json(); // Backend возвращает токен напрямую
-      setToken(newToken);
-      localStorage.setItem('token', newToken);
-      return newToken;
-    } else {
-      // Если refresh не удался, делаем logout и выбрасываем ошибку
-      setUser(null);
-      setToken(null);
-      localStorage.removeItem('user');
-      localStorage.removeItem('token');
-      localStorage.removeItem('domain');
-      throw new Error('Failed to refresh token');
+  const refreshAccessToken = async (): Promise<string | null> => {
+    // Если уже идет процесс обновления, ждем его завершения
+    if (refreshTokenPromiseRef.current) {
+      return refreshTokenPromiseRef.current;
     }
+
+    refreshTokenPromiseRef.current = (async () => {
+      try {
+        const response = await fetch(`${API}/refresh-token`, {
+          method: 'POST',
+          credentials: 'include'
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const newToken = data.token || data.accessToken || data; // Поддержка разных форматов ответа
+          if (newToken) {
+            setToken(newToken);
+            localStorage.setItem('token', newToken);
+            return newToken;
+          }
+        }
+        
+        // Если refresh не удался (401/403), делаем logout
+        // Не логируем ошибку, если это ожидаемое поведение (пользователь не залогинен)
+        if (response.status === 401) {
+          // Refresh token отсутствует или истек - это нормально для неавторизованных пользователей
+          // Не логируем, чтобы не засорять консоль
+        } else {
+          const errorData = await response.json().catch(() => ({ message: 'Failed to refresh token' }));
+          console.warn('[UserContext] Failed to refresh token:', response.status, errorData);
+        }
+        
+        setUser(null);
+        setToken(null);
+        localStorage.removeItem('user');
+        localStorage.removeItem('token');
+        localStorage.removeItem('domain');
+        
+        // Не выбрасываем ошибку, а возвращаем null для корректной обработки в useAuthFetch
+        return null;
+      } catch (error) {
+        // Обработка сетевых ошибок
+        console.error('[UserContext] Network error while refreshing token:', error);
+        setUser(null);
+        setToken(null);
+        localStorage.removeItem('user');
+        localStorage.removeItem('token');
+        localStorage.removeItem('domain');
+        return null;
+      } finally {
+        refreshTokenPromiseRef.current = null;
+      }
+    })();
+
+    return refreshTokenPromiseRef.current;
   };
 
   const refreshUserData = async () => {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
-import {Container,Title,Paper,Text,Button,Group,Stack,Modal,LoadingOverlay, Tabs, Box, Progress, Badge, TextInput, Select, SimpleGrid} from '@mantine/core';
+import {Container,Title,Paper,Text,Button,Group,Stack,Modal,LoadingOverlay, Tabs, Box, Progress, Badge, TextInput, Select, SimpleGrid, ActionIcon, Loader} from '@mantine/core';
 import { TimeInput } from '@mantine/dates';
 import {  IconUpload,  IconMusic,  IconClock,  IconDeviceMobile,  IconBuilding, IconEdit, IconCheck, IconRefresh, IconPower, IconBattery, IconWifi, IconCalendar, IconPlayerPlay, IconPlayerPause, IconWifiOff, IconX, IconRadio, IconDownload, IconAlertCircle, IconChevronDown, IconChevronRight, IconChevronsDown, IconChevronsUp, IconSearch, IconTrash, IconQrcode, IconLayoutDashboard, IconFilter, IconPlus } from '@tabler/icons-react';
 import { notificationSystem } from '../../../utils/Push';
@@ -163,6 +163,12 @@ const RadioAdmin: React.FC = () => {
     path: string;
   }>>([]);
   const [loadingMusicFiles, setLoadingMusicFiles] = useState(false);
+  const [pastMonthFolders, setPastMonthFolders] = useState<Array<{
+    name: string;
+    path: string;
+    created: Date;
+  }>>([]);
+  const [loadingPastFolders, setLoadingPastFolders] = useState(false);
 
   
   // Device Management Modal
@@ -484,22 +490,26 @@ const RadioAdmin: React.FC = () => {
     // Пока что используем общее количество файлов как индикатор
     const hasCurrentMonthMusic = stats?.totalMusicFiles && stats.totalMusicFiles > 0;
     
-    // Вычисляем дату через 5 дней
-    const fiveDaysFromNow = new Date(now.getTime() + (5 * 24 * 60 * 60 * 1000));
-    const nextMonth = fiveDaysFromNow.getMonth() + 1;
-    const nextYear = fiveDaysFromNow.getFullYear();
-    const nextMonthFolder = `${String(nextMonth).padStart(2, '0')}-${nextYear}`;
+    // Вычисляем следующий месяц правильно
+    const currentMonthIndex = now.getMonth(); // Текущий месяц (0-11, где 0=январь)
+    const nextMonthIndex = currentMonthIndex + 1; // Индекс следующего месяца (1-12)
+    const nextYear = nextMonthIndex >= 12 ? currentYear + 1 : currentYear; // Если декабрь или больше, то следующий год
+    const nextMonthNumber = nextMonthIndex >= 12 ? 1 : nextMonthIndex + 1; // Номер месяца (1-12)
+    const nextMonth = String(nextMonthNumber).padStart(2, '0');
+    const nextMonthFolder = `${nextMonth}-${nextYear}`;
     
-    // Проверяем, нужно ли предупреждение (через 5 дней будет новый месяц)
-    const shouldWarn = fiveDaysFromNow.getMonth() !== now.getMonth();
+    // Создаем объект Date для первого дня следующего месяца
+    const nextMonthDate = new Date(nextYear, nextMonthNumber - 1, 1);
     
     // Вычисляем точное количество дней до следующего месяца
-    const nextMonthStart = new Date(nextYear, nextMonth - 1, 1);
-    const daysUntilNextMonth = Math.ceil((nextMonthStart.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+    const daysUntilNextMonth = Math.ceil((nextMonthDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+    
+    // Проверяем, нужно ли предупреждение (осталось 5 дней или меньше до следующего месяца)
+    const shouldWarn = daysUntilNextMonth <= 5;
     
     return {
       hasCurrentMonthMusic,
-      shouldWarn: shouldWarn && daysUntilNextMonth <= 5,
+      shouldWarn,
       currentMonthFolder,
       nextMonthFolder,
       daysUntilNextMonth: shouldWarn ? daysUntilNextMonth : 0
@@ -547,12 +557,35 @@ const RadioAdmin: React.FC = () => {
     }
   }, [musicStatus, API_BASE]);
 
+  // Загрузка папок прошлых месяцев
+  const loadPastMonthFolders = useCallback(async () => {
+    if (!musicStatus) return;
+    
+    setLoadingPastFolders(true);
+    try {
+      const response = await axios.get(`${API_BASE}/folders`);
+      if (response.data.success && response.data.folders) {
+        // Фильтруем папки прошлых месяцев (не текущий и не следующий)
+        const pastFolders = response.data.folders.filter((folder: any) => {
+          return folder.name !== musicStatus.currentMonthFolder && 
+                 folder.name !== musicStatus.nextMonthFolder;
+        });
+        setPastMonthFolders(pastFolders);
+      }
+    } catch (error: any) {
+      console.error('Ошибка загрузки папок прошлых месяцев:', error);
+    } finally {
+      setLoadingPastFolders(false);
+    }
+  }, [musicStatus, API_BASE]);
+
   // Загружаем список песен при изменении месяца или открытии вкладки
   useEffect(() => {
     if (activeTab === 'music' && musicStatus) {
       loadMusicFiles();
+      loadPastMonthFolders();
     }
-  }, [activeTab, musicStatus, loadMusicFiles]);
+  }, [activeTab, musicStatus, loadMusicFiles, loadPastMonthFolders]);
 
 
 
@@ -1762,6 +1795,7 @@ const RadioAdmin: React.FC = () => {
                     </Text>
                   </Stack>
                 ) : (
+                  <>
                   <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
                     {/* Текущий месяц */}
                     <Paper 
@@ -1786,6 +1820,29 @@ const RadioAdmin: React.FC = () => {
                           <Badge variant="light" color="blue" size="lg">
                             {musicFilesCurrent.length}
                           </Badge>
+                          {musicFilesCurrent.length > 0 && (
+                            <Button
+                              variant="light"
+                              size="sm"
+                              color="red"
+                              leftSection={<IconTrash size={16} />}
+                              onClick={async () => {
+                                if (confirm(`Удалить все файлы из папки "${formatMonthFolder(musicStatus?.currentMonthFolder || '')}"?`)) {
+                                  try {
+                                    const response = await axios.delete(`${API_BASE}/folder/${musicStatus?.currentMonthFolder}`);
+                                    if (response.data.success) {
+                                      notificationSystem.addNotification('Успешно', 'Все файлы удалены', 'success');
+                                      loadMusicFiles();
+                                    }
+                                  } catch (error: any) {
+                                    notificationSystem.addNotification('Ошибка', error.response?.data?.error || 'Не удалось удалить файлы', 'error');
+                                  }
+                                }
+                              }}
+                            >
+                              Удалить все
+                            </Button>
+                          )}
                           <Button
                             variant="light"
                             size="sm"
@@ -1872,9 +1929,31 @@ const RadioAdmin: React.FC = () => {
                                       </Group>
                                     </div>
                                   </Group>
-                                  <Badge variant="light" color="blue" size="sm">
-                                    {file.name.split('.').pop()?.toUpperCase()}
-                                  </Badge>
+                                  <Group gap="xs">
+                                    <Badge variant="light" color="blue" size="sm">
+                                      {file.name.split('.').pop()?.toUpperCase()}
+                                    </Badge>
+                                    <ActionIcon
+                                      variant="light"
+                                      color="red"
+                                      size="sm"
+                                      onClick={async () => {
+                                        if (confirm(`Удалить файл "${decodeRussianFileName(file.name)}"?`)) {
+                                          try {
+                                            const response = await axios.delete(`${API_BASE}/folder/${musicStatus?.currentMonthFolder}/file/${encodeURIComponent(file.name)}`);
+                                            if (response.data.success) {
+                                              notificationSystem.addNotification('Успешно', 'Файл удален', 'success');
+                                              loadMusicFiles();
+                                            }
+                                          } catch (error: any) {
+                                            notificationSystem.addNotification('Ошибка', error.response?.data?.error || 'Не удалось удалить файл', 'error');
+                                          }
+                                        }
+                                      }}
+                                    >
+                                      <IconTrash size={16} />
+                                    </ActionIcon>
+                                  </Group>
                                 </Group>
                               </Paper>
                             );
@@ -1913,6 +1992,29 @@ const RadioAdmin: React.FC = () => {
                           <Badge variant="light" color={musicFilesNext.length > 0 ? 'green' : 'gray'} size="lg">
                             {musicFilesNext.length}
                           </Badge>
+                          {musicFilesNext.length > 0 && (
+                            <Button
+                              variant="light"
+                              size="sm"
+                              color="red"
+                              leftSection={<IconTrash size={16} />}
+                              onClick={async () => {
+                                if (confirm(`Удалить все файлы из папки "${formatMonthFolder(musicStatus?.nextMonthFolder || '')}"?`)) {
+                                  try {
+                                    const response = await axios.delete(`${API_BASE}/folder/${musicStatus?.nextMonthFolder}`);
+                                    if (response.data.success) {
+                                      notificationSystem.addNotification('Успешно', 'Все файлы удалены', 'success');
+                                      loadMusicFiles();
+                                    }
+                                  } catch (error: any) {
+                                    notificationSystem.addNotification('Ошибка', error.response?.data?.error || 'Не удалось удалить файлы', 'error');
+                                  }
+                                }
+                              }}
+                            >
+                              Удалить все
+                            </Button>
+                          )}
                           <Button
                             variant="light"
                             size="sm"
@@ -2001,9 +2103,31 @@ const RadioAdmin: React.FC = () => {
                                       </Group>
                                     </div>
                                   </Group>
-                                  <Badge variant="light" color="green" size="sm">
-                                    {file.name.split('.').pop()?.toUpperCase()}
-                                  </Badge>
+                                  <Group gap="xs">
+                                    <Badge variant="light" color="green" size="sm">
+                                      {file.name.split('.').pop()?.toUpperCase()}
+                                    </Badge>
+                                    <ActionIcon
+                                      variant="light"
+                                      color="red"
+                                      size="sm"
+                                      onClick={async () => {
+                                        if (confirm(`Удалить файл "${decodeRussianFileName(file.name)}"?`)) {
+                                          try {
+                                            const response = await axios.delete(`${API_BASE}/folder/${musicStatus?.nextMonthFolder}/file/${encodeURIComponent(file.name)}`);
+                                            if (response.data.success) {
+                                              notificationSystem.addNotification('Успешно', 'Файл удален', 'success');
+                                              loadMusicFiles();
+                                            }
+                                          } catch (error: any) {
+                                            notificationSystem.addNotification('Ошибка', error.response?.data?.error || 'Не удалось удалить файл', 'error');
+                                          }
+                                        }
+                                      }}
+                                    >
+                                      <IconTrash size={16} />
+                                    </ActionIcon>
+                                  </Group>
                                 </Group>
                               </Paper>
                             );
@@ -2022,6 +2146,90 @@ const RadioAdmin: React.FC = () => {
                       )}
                     </Paper>
                   </SimpleGrid>
+
+                  {/* Папки прошлых месяцев для удаления */}
+                  {pastMonthFolders && pastMonthFolders.length > 0 && (
+                    <Paper 
+                      p="md" 
+                      radius="lg" 
+                      shadow="sm"
+                      mt="md"
+                      style={{
+                        background: 'var(--theme-bg-elevated)',
+                        border: '1px solid var(--theme-border)'
+                      }}
+                    >
+                      <Group justify="space-between" mb="md">
+                        <div>
+                          <Title order={5} c="var(--theme-text-primary)">
+                            Прошлые месяцы
+                          </Title>
+                          <Text size="sm" c="var(--theme-text-secondary)" mt="xs">
+                            Удаление музыки за прошлые месяцы
+                          </Text>
+                        </div>
+                      </Group>
+
+                      {loadingPastFolders ? (
+                        <Stack align="center" py="xl">
+                          <Loader size="sm" />
+                          <Text size="sm" c="var(--theme-text-secondary)">
+                            Загрузка папок...
+                          </Text>
+                        </Stack>
+                      ) : (
+                        <Stack gap="sm">
+                          {pastMonthFolders.map((folder) => (
+                            <Paper
+                              key={folder.name}
+                              p="sm"
+                              radius="md"
+                              style={{
+                                background: 'var(--theme-bg-primary)',
+                                border: '1px solid var(--theme-border)'
+                              }}
+                            >
+                              <Group justify="space-between" align="center">
+                                <Group gap="md">
+                                  <IconMusic size={20} color="var(--theme-text-tertiary)" />
+                                  <div>
+                                    <Text fw={500} size="sm" c="var(--theme-text-primary)">
+                                      {formatMonthFolder(folder.name)}
+                                    </Text>
+                                    <Text size="xs" c="var(--theme-text-tertiary)">
+                                      Папка: {folder.name}
+                                    </Text>
+                                  </div>
+                                </Group>
+                                <Button
+                                  variant="light"
+                                  color="red"
+                                  size="sm"
+                                  leftSection={<IconTrash size={16} />}
+                                  onClick={async () => {
+                                    if (confirm(`Удалить всю папку "${formatMonthFolder(folder.name)}" (${folder.name})?`)) {
+                                      try {
+                                        const response = await axios.delete(`${API_BASE}/folder/${folder.name}`);
+                                        if (response.data.success) {
+                                          notificationSystem.addNotification('Успешно', 'Папка удалена', 'success');
+                                          loadPastMonthFolders();
+                                        }
+                                      } catch (error: any) {
+                                        notificationSystem.addNotification('Ошибка', error.response?.data?.error || 'Не удалось удалить папку', 'error');
+                                      }
+                                    }
+                                  }}
+                                >
+                                  Удалить папку
+                                </Button>
+                              </Group>
+                            </Paper>
+                          ))}
+                        </Stack>
+                      )}
+                    </Paper>
+                  )}
+                  </>
                 )}
               </Stack>
               </Tabs.Panel>

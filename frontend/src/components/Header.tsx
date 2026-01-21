@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {  ActionIcon,  AppShell,  Avatar,  Menu,  Divider,  Group,  Text,  Tooltip, Transition, Box, Button, Badge, ThemeIcon, ScrollArea, Loader, Stack } from '@mantine/core';
-import {  IconBrightnessDown,  IconLogin,  IconLogout,  IconMoon,  IconUser, IconSearch, IconBell, IconAlertCircle, IconInfoCircle, IconCheck, IconX, IconMail } from '@tabler/icons-react';
+import {  IconBrightnessDown,  IconLogin,  IconLogout,  IconMoon,  IconUser, IconSearch, IconBell, IconAlertCircle, IconInfoCircle, IconCheck, IconX } from '@tabler/icons-react';
 import { useNavigate } from 'react-router';
 import { useUserContext } from '../hooks/useUserContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -9,6 +9,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { useSocketIO } from '../hooks/useSocketIO';
 import { API } from '../config/constants';
 import dayjs from 'dayjs';
+import { truncateText } from '../utils/format';
 import Search from './Search';
 import logoMiniDark from '../assets/images/logo-dark-mini.svg';
 import logoFullDark from '../assets/images/logo-dark.svg';
@@ -66,7 +67,10 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
   const [showAllNotifications, setShowAllNotifications] = useState(false);
   const [menuOpened, setMenuOpened] = useState(false);
   const { lastNotification } = useSocketIO();
+  // useNotifications уже обрабатывает push-уведомления в App.tsx,
+  // здесь мы только добавляем уведомление в список
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const fetchingRef = useRef(false); // Защита от одновременных запросов
 
   // Декодируем токен для проверки impersonatedBy
   const decodeToken = (token: string | null): any => {
@@ -136,6 +140,13 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
   // Загрузка уведомлений
   const fetchNotifications = useCallback(async (showLoading = true) => {
     if (!user?.id) return;
+    
+    // Защита от одновременных запросов
+    if (fetchingRef.current) {
+      return;
+    }
+    
+    fetchingRef.current = true;
 
     try {
       if (showLoading) {
@@ -150,9 +161,21 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
         throw new Error('Ошибка загрузки уведомлений');
       }
       const data = await response.json();
-      setNotifications(data.data || []);
+      // При обновлении через polling, сохраняем статус прочитанности для уведомлений, которые уже были в списке
+      setNotifications(prev => {
+        const newNotifications = data.data || [];
+        // Создаем мапу существующих уведомлений для быстрого поиска
+        const existingMap = new Map(prev.map(n => [n.id, n.read]));
+        // Обновляем статус прочитанности для существующих уведомлений
+        return newNotifications.map((n: Notification) => ({
+          ...n,
+          read: existingMap.has(n.id) ? existingMap.get(n.id) || n.read : n.read
+        }));
+      });
     } catch (err) {
+      console.error('[Header] Error fetching notifications:', err);
     } finally {
+      fetchingRef.current = false;
       if (showLoading) {
         setNotificationsLoading(false);
       }
@@ -166,10 +189,11 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
     // Первая загрузка при монтировании
     fetchNotifications(false);
     
-    // Периодическое обновление каждые 10 секунд для синхронизации счетчика
+    // Периодическое обновление каждые 30 секунд для синхронизации счетчика
+    // Увеличено с 10 до 30 секунд, чтобы не перезаписывать новые уведомления из Socket.IO
     pollingIntervalRef.current = setInterval(() => {
       fetchNotifications(false);
-    }, 10000);
+    }, 30000);
     
     return () => {
       if (pollingIntervalRef.current) {
@@ -180,37 +204,110 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
   }, [user?.id, fetchNotifications]);
 
   // Загрузка уведомлений при открытии меню (с индикатором загрузки)
+  // Загружаем только при изменении состояния с закрытого на открытое
+  const prevMenuOpenedRef = useRef(false);
   useEffect(() => {
-    if (menuOpened) {
+    if (menuOpened && !prevMenuOpenedRef.current) {
       fetchNotifications(true);
     }
+    prevMenuOpenedRef.current = menuOpened;
   }, [menuOpened, fetchNotifications]);
 
   // Обновление уведомлений при получении нового через Socket.IO (независимо от состояния меню)
+  // useNotifications в App.tsx уже обрабатывает push-уведомления, здесь мы только добавляем в список
   useEffect(() => {
     if (lastNotification && user?.id) {
-      setNotifications(prev => {
-        const exists = prev.some(n => n.id === lastNotification.id);
-        if (exists) {
-          // Если уведомление уже есть, проверяем, изменилось ли что-то
-          const existing = prev.find(n => n.id === lastNotification.id);
-          if (existing && JSON.stringify(existing) === JSON.stringify({ ...lastNotification, read: existing.read })) {
-            return prev; // Ничего не изменилось, не обновляем
+      // Проверяем, не было ли это уведомление уже добавлено (по ID)
+      const notificationId = lastNotification.id;
+      if (notificationId && notifications.some(n => n.id === notificationId)) {
+        // Уведомление уже есть в списке, обновляем его
+        setNotifications(prev => prev.map(n => n.id === notificationId ? {
+          ...n,
+          read: lastNotification.read || n.read,
+        } : n));
+        return;
+      }
+      // Убеждаемся, что уведомление имеет все необходимые поля
+      // Преобразуем message в строку, если это не строка
+      let messageText = '';
+      if (typeof lastNotification.message === 'string') {
+        messageText = lastNotification.message;
+      } else if (lastNotification.message !== null && lastNotification.message !== undefined) {
+        // Если message - это объект, пытаемся извлечь строку из него
+        if (typeof lastNotification.message === 'object') {
+          // Пытаемся найти строковое поле в объекте
+          const msgObj = lastNotification.message as any;
+          if (msgObj.message && typeof msgObj.message === 'string') {
+            messageText = msgObj.message;
+          } else if (msgObj.text && typeof msgObj.text === 'string') {
+            messageText = msgObj.text;
+          } else if (msgObj.content && typeof msgObj.content === 'string') {
+            messageText = msgObj.content;
+          } else {
+            // Если не нашли строковое поле, преобразуем весь объект в JSON
+            try {
+              messageText = JSON.stringify(lastNotification.message);
+            } catch {
+              messageText = 'Сообщение';
+            }
           }
-          return prev.map(n => n.id === lastNotification.id ? {
-            ...lastNotification,
-            read: n.read
+        } else {
+          // Для других типов просто преобразуем в строку
+          messageText = String(lastNotification.message);
+        }
+      }
+      
+      const notification: Notification = {
+        id: lastNotification.id || '',
+        type: lastNotification.type || 'INFO',
+        channel: lastNotification.channel || ['IN_APP'],
+        title: lastNotification.title || '',
+        message: messageText,
+        read: lastNotification.read || false,
+        createdAt: lastNotification.createdAt || new Date().toISOString(),
+        sender: lastNotification.sender,
+        tool: lastNotification.tool,
+        action: lastNotification.action,
+      };
+      
+      // Логируем для отладки
+      if (!messageText || !messageText.trim()) {
+        console.warn('[Header] Received notification with empty message:', {
+          id: notification.id,
+          title: notification.title,
+          messageType: typeof lastNotification.message,
+          messageValue: lastNotification.message
+        });
+      }
+      
+      setNotifications(prev => {
+        // Проверяем, не было ли это уведомление уже добавлено (по ID)
+        const exists = prev.some(n => n.id === notification.id);
+        if (exists) {
+          // Если уведомление уже есть, обновляем его (но сохраняем статус прочитанности)
+          return prev.map(n => n.id === notification.id ? {
+            ...notification,
+            read: n.read // Сохраняем статус прочитанности
           } : n);
         } else {
-          // Добавляем новое уведомление в начало списка
-          return [lastNotification, ...prev];
+          // Добавляем новое уведомление в начало списка только если его еще нет
+          return [notification, ...prev];
         }
       });
+      
+      // Открываем меню уведомлений, если оно закрыто, чтобы пользователь увидел новое уведомление
+      if (!menuOpened) {
+        setMenuOpened(true);
+      }
     }
-  }, [lastNotification, user?.id]);
+  }, [lastNotification, user?.id, menuOpened]);
 
   // Отметить как прочитанное
-  const markAsRead = useCallback(async (notificationId: string) => {
+  const markAsRead = useCallback(async (notificationId: string | undefined) => {
+    if (!notificationId) {
+      console.warn('[Header] markAsRead called with undefined notificationId');
+      return;
+    }
     try {
       const response = await fetch(`${API}/notifications/read/${notificationId}`, {
         method: 'PATCH',
@@ -227,8 +324,36 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
         prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
       );
     } catch (err) {
+      console.error('[Header] Error marking notification as read:', err);
     }
   }, [user?.id]);
+
+  const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
+
+  // Отметить все как прочитанные
+  const markAllAsRead = useCallback(async () => {
+    if (!user?.id || unreadCount === 0) return;
+    
+    try {
+      const response = await fetch(`${API}/notifications/read-all`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ userId: user.id }),
+      });
+      if (!response.ok) {
+        throw new Error('Ошибка обновления уведомлений');
+      }
+      // Обновляем все уведомления как прочитанные
+      setNotifications(prev => 
+        prev.map(n => ({ ...n, read: true }))
+      );
+    } catch (err) {
+      console.error('Ошибка при отметке всех уведомлений как прочитанных:', err);
+    }
+  }, [user?.id, unreadCount]);
 
   const getNotificationIcon = (type: string) => {
     const IconComponent = NOTIFICATION_ICONS[type as keyof typeof NOTIFICATION_ICONS] || IconInfoCircle;
@@ -249,8 +374,6 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
     if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} ч назад`;
     return date.format('DD.MM.YYYY');
   }, []);
-
-  const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
   
   const filteredNotifications = useMemo(() => {
     return showAllNotifications ? notifications : notifications.filter(n => !n.read);
@@ -514,6 +637,19 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
                               {unreadCount} новых
                             </Badge>
                           )}
+                          {unreadCount > 0 && (
+                            <Button
+                              variant="subtle"
+                              size="xs"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                markAllAsRead();
+                              }}
+                              title="Отметить все как прочитанные"
+                            >
+                              Прочитать все
+                            </Button>
+                          )}
                           <Button
                             variant="subtle"
                             size="xs"
@@ -543,13 +679,13 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
                       ) : (
                         <ScrollArea.Autosize mah={400}>
                           <Stack gap="xs">
-                            {filteredNotifications.map((notification) => {
+                            {filteredNotifications.map((notification, index) => {
                               const color = getNotificationColor(notification.type);
                               const isUnread = !notification.read;
                               
                               return (
                                 <Box
-                                  key={notification.id}
+                                  key={notification.id || `notification-${index}`}
                                   p="sm"
                                   style={{
                                     borderRadius: '8px',
@@ -559,7 +695,21 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
                                     cursor: 'pointer'
                                   }}
                                   onClick={() => {
-                                    if (isUnread) {
+                                    // Обрабатываем клик по уведомлению
+                                    if (notification.action && typeof notification.action === 'object') {
+                                      const action = notification.action as any;
+                                      if (action.type === 'NAVIGATE' && action.url) {
+                                        // Переходим по URL из action (используем window.location для надежности)
+                                        window.location.href = action.url;
+                                        // Отмечаем как прочитанное при клике
+                                        if (isUnread && notification.id) {
+                                          markAsRead(notification.id);
+                                        }
+                                        return;
+                                      }
+                                    }
+                                    // Если нет action, просто отмечаем как прочитанное
+                                    if (isUnread && notification.id) {
                                       markAsRead(notification.id);
                                     }
                                   }}
@@ -572,9 +722,15 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
                                       <Text size="sm" fw={isUnread ? 600 : 500} c="var(--theme-text-primary)">
                                         {notification.title}
                                       </Text>
-                                      <Text size="xs" c="var(--theme-text-secondary)" lineClamp={2}>
-                                        {notification.message}
-                                      </Text>
+                                      {notification.message && typeof notification.message === 'string' && notification.message.trim() ? (
+                                        <Text size="xs" c="var(--theme-text-secondary)">
+                                          {truncateText(notification.message, 100)}
+                                        </Text>
+                                      ) : (
+                                        <Text size="xs" c="var(--theme-text-tertiary)" fs="italic">
+                                          Сообщение
+                                        </Text>
+                                      )}
                                       <Group gap="xs" justify="space-between">
                                         <Group gap="xs">
                                           {notification.sender && (
@@ -582,17 +738,14 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
                                               {notification.sender.name}
                                             </Badge>
                                           )}
+                                          {notification.action && typeof notification.action === 'object' && (notification.action as any).branchName && (
+                                            <Badge size="xs" variant="light" color="blue">
+                                              {(notification.action as any).branchName}
+                                            </Badge>
+                                          )}
                                           {notification.tool && (
                                             <Badge size="xs" variant="light" color="blue">
                                               {notification.tool.name}
-                                            </Badge>
-                                          )}
-                                          {/* Пометка Outlook для уведомлений из почты */}
-                                          {((notification.action as any)?.source === 'exchange' || 
-                                            (notification.action as any)?.source === 'outlook' ||
-                                            (notification.action as any)?.isEmailNotification) && (
-                                            <Badge size="xs" variant="light" color="orange">
-                                              Outlook
                                             </Badge>
                                           )}
                                         </Group>
@@ -608,7 +761,9 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
                                         color="blue"
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          markAsRead(notification.id);
+                                          if (notification.id) {
+                                            markAsRead(notification.id);
+                                          }
                                         }}
                                         title="Отметить как прочитанное"
                                       >

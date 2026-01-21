@@ -14,7 +14,9 @@ import {
   proxyFile,
   getResponsible,
   addResponsible,
-  deleteResponsible
+  deleteResponsible,
+  notifyBranchesWithUnfilledJournals,
+  getLastNotifications
 } from '../../controllers/jurists/safetyJournal.js';
 import { authenticateToken } from '../../middleware/auth.js';
 
@@ -72,5 +74,11 @@ router.get('/branch/responsible', getResponsible)
 router.post('/branch/responsible', addResponsible)
 
 router.delete('/branch/responsible', deleteResponsible)
+
+// Оповещение филиалов с не заполненными журналами
+router.post('/notify-unfilled', notifyBranchesWithUnfilledJournals as any);
+
+// Получить информацию о последних оповещениях
+router.get('/last-notifications', getLastNotifications as any);
 
 export default router;

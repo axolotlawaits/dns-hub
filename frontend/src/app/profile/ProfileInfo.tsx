@@ -237,11 +237,12 @@ const ProfileInfo = () => {
     if (!user?.id) return;
 
     try {
-      const response = await fetch(`${API}/user/settings`, {
+      let token = localStorage.getItem('token');
+      let response = await fetch(`${API}/user/settings`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           userId: user.id,
@@ -249,6 +250,38 @@ const ProfileInfo = () => {
           value: value
         }),
       });
+
+      // Если получили 401, пробуем обновить токен
+      if (response.status === 401) {
+        try {
+          const refreshResponse = await fetch(`${API}/refresh-token`, {
+            method: 'POST',
+            credentials: 'include',
+          });
+
+          if (refreshResponse.ok) {
+            const newToken = await refreshResponse.json();
+            localStorage.setItem('token', newToken);
+            token = newToken;
+            
+            // Повторяем запрос с новым токеном
+            response = await fetch(`${API}/user/settings`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                userId: user.id,
+                parameter: parameter,
+                value: value
+              }),
+            });
+          }
+        } catch (refreshError) {
+          console.error('Token refresh failed:', refreshError);
+        }
+      }
 
       if (!response.ok) {
         throw new Error('Ошибка сохранения настройки');
@@ -267,11 +300,38 @@ const ProfileInfo = () => {
     if (!user?.id) return null;
 
     try {
-      const response = await fetch(`${API}/user/settings/${user.id}/${parameter}`, {
+      let token = localStorage.getItem('token');
+      let response = await fetch(`${API}/user/settings/${user.id}/${parameter}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
+
+      // Если получили 401, пробуем обновить токен
+      if (response.status === 401) {
+        try {
+          const refreshResponse = await fetch(`${API}/refresh-token`, {
+            method: 'POST',
+            credentials: 'include',
+          });
+
+          if (refreshResponse.ok) {
+            const newToken = await refreshResponse.json();
+            localStorage.setItem('token', newToken);
+            token = newToken;
+            
+            // Повторяем запрос с новым токеном
+            response = await fetch(`${API}/user/settings/${user.id}/${parameter}`, {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            });
+          }
+        } catch (refreshError) {
+          console.error('Token refresh failed:', refreshError);
+        }
+      }
+
       if (!response.ok) {
         return null;
       }

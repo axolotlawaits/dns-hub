@@ -1,5 +1,6 @@
 import { Server } from 'socket.io';
 import { createServer } from 'http';
+import { prisma } from './server.js';
 
 type ConnectionInfo = {
   userId?: string;
@@ -7,6 +8,7 @@ type ConnectionInfo = {
   socketId: string;
   connectedAt: Date;
   lastActivity: Date;
+  activeChatId?: string; // ID активного чата для пользователя
 };
 
 export class SocketIOService {
@@ -101,6 +103,68 @@ export class SocketIOService {
         if (conn) {
           conn.lastActivity = new Date();
         }
+      });
+
+      // Обработчик для установки активного чата
+      socket.on('set_active_chat', (payload: { chatId?: string }) => {
+        const conn = this.connections.get(socket.id);
+        if (conn) {
+          conn.activeChatId = payload?.chatId || undefined;
+          conn.lastActivity = new Date();
+        }
+      });
+
+      // Обработчик для индикатора "печатает..."
+      socket.on('user_typing', (payload: { chatId?: string; branchId?: string; typing: boolean }) => {
+        const conn = this.connections.get(socket.id);
+        if (!conn || !conn.userId) return;
+        
+        // Отправляем событие всем участникам чата, кроме отправителя
+        const targetSockets = new Set<string>();
+        
+        // Находим всех пользователей в этом чате (через branchId или chatId)
+        // Для простоты отправляем всем пользователям, которые подключены
+        this.userToSockets.forEach((socketIds, userId) => {
+          if (userId !== conn.userId) {
+            socketIds.forEach(sid => targetSockets.add(sid));
+          }
+        });
+        
+        // Получаем имя пользователя для отправки в событии (асинхронно)
+        prisma.user.findUnique({
+          where: { id: conn.userId },
+          select: { id: true, name: true }
+        }).then(user => {
+          // Отправляем событие всем участникам
+          targetSockets.forEach(socketId => {
+            const targetSocket = this.io?.sockets.sockets.get(socketId);
+            if (targetSocket) {
+              targetSocket.emit('user_typing', {
+                userId: conn.userId,
+                userName: user?.name || 'Пользователь',
+                chatId: payload.chatId,
+                branchId: payload.branchId,
+                typing: payload.typing,
+              });
+            }
+          });
+        }).catch(() => {
+          // В случае ошибки отправляем без имени
+          targetSockets.forEach(socketId => {
+            const targetSocket = this.io?.sockets.sockets.get(socketId);
+            if (targetSocket) {
+              targetSocket.emit('user_typing', {
+                userId: conn.userId,
+                userName: 'Пользователь',
+                chatId: payload.chatId,
+                branchId: payload.branchId,
+                typing: payload.typing,
+              });
+            }
+          });
+        });
+        
+        if (conn) conn.lastActivity = new Date();
       });
 
       socket.onAny((eventName, ...args) => {
@@ -258,9 +322,21 @@ export class SocketIOService {
   }
 
   // Backward-compatible notifications API
-  private getUserConnections(userId: string): ConnectionInfo[] {
+  public getUserConnections(userId: string): ConnectionInfo[] {
     const sockets = Array.from(this.userToSockets.get(userId) || []);
     return sockets.map((sid) => this.connections.get(sid)).filter(Boolean) as ConnectionInfo[];
+  }
+
+  // Проверяет, находится ли пользователь в активном чате
+  public isUserInActiveChat(userId: string, chatId: string): boolean {
+    const conns = this.getUserConnections(userId);
+    return conns.some(conn => conn.activeChatId === chatId);
+  }
+
+  // Проверяет, находится ли пользователь в любом активном чате
+  public isUserInAnyActiveChat(userId: string): boolean {
+    const conns = this.getUserConnections(userId);
+    return conns.some(conn => conn.activeChatId !== undefined && conn.activeChatId !== null);
   }
 
   public sendToUser(userId: string, message: any): boolean {
@@ -280,6 +356,31 @@ export class SocketIOService {
         conn.lastActivity = new Date();
       } catch (err) {
         console.error(`[Socket.IO] ❌ Error sending to user ${userId} socket ${conn.socketId}:`, err);
+        success = false;
+      }
+    });
+    return success;
+  }
+
+  // Отправка сообщения чата без создания уведомления
+  public sendChatMessage(userId: string, message: any): boolean {
+    const conns = this.getUserConnections(userId);
+    
+    if (conns.length === 0) {
+      return false;
+    }
+    
+    let success = true;
+    conns.forEach(conn => {
+      try {
+        // Отправляем событие 'new_message' вместо 'notification', чтобы не создавать уведомление
+        this.io?.to(conn.socketId).emit('new_message', {
+          ...message,
+          sentAt: new Date().toISOString()
+        });
+        conn.lastActivity = new Date();
+      } catch (err) {
+        console.error(`[Socket.IO] ❌ Error sending chat message to user ${userId} socket ${conn.socketId}:`, err);
         success = false;
       }
     });

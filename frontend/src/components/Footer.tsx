@@ -4,47 +4,7 @@ import { useState, useEffect } from "react";
 import "./styles/Footer.css";
 import { useUserContext } from "../hooks/useUserContext";
 import { API } from "../config/constants";
-
-// Утилита для запросов с автоматическим обновлением токена
-const fetchWithTokenRefresh = async (url: string, options: RequestInit = {}): Promise<Response> => {
-  const token = localStorage.getItem('token');
-  const headers = new Headers(options.headers);
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
-  
-  let response = await fetch(url, {
-    ...options,
-    headers,
-  });
-
-  // Если получили 401, пробуем обновить токен
-  if (response.status === 401) {
-    try {
-      const refreshResponse = await fetch(`${API}/refresh-token`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-
-      if (refreshResponse.ok) {
-        const newToken = await refreshResponse.json();
-        localStorage.setItem('token', newToken);
-        
-        // Повторяем запрос с новым токеном
-        headers.set('Authorization', `Bearer ${newToken}`);
-        response = await fetch(url, {
-          ...options,
-          headers,
-        });
-      }
-      // Если refresh не удался, просто возвращаем исходный ответ (401)
-    } catch (refreshError) {
-      // Игнорируем ошибку refresh, возвращаем исходный ответ
-    }
-  }
-
-  return response;
-};
+import { fetchWithAuth } from "../utils/fetchWithAuth";
 
 const navLinks = [
   {
@@ -98,7 +58,7 @@ const navLinks = [
 ];
 
 function Footer() {
-  const { user } = useUserContext();
+  const { user, token } = useUserContext();
   
   // Состояния для футера
   const [isScrolled, setIsScrolled] = useState(false);
@@ -110,34 +70,47 @@ function Footer() {
   // Загрузка настройки автоскрытия футера
   useEffect(() => {
     const loadFooterSetting = async () => {
-      if (!user?.id) {
-        // Если пользователь не загружен, используем значение по умолчанию
+      // Проверяем наличие пользователя и токена перед запросом
+      if (!user?.id || !token) {
+        // Если пользователь не загружен или токена нет, используем значение по умолчанию
         setAutoHideEnabled(false);
         return;
       }
       
       try {
-        const response = await fetchWithTokenRefresh(`${API}/user/settings/${user.id}/auto_hide_footer`);
+        const response = await fetchWithAuth(`${API}/user/settings/${user.id}/auto_hide_footer`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        // Если получили 401 даже после попытки обновления, используем значение по умолчанию
+        if (!response || response.status === 401) {
+          setAutoHideEnabled(false);
+          return;
+        }
+
         if (response.ok) {
           const data = await response.json();
           setAutoHideEnabled(data.value === 'true');
         } else if (response.status === 404) {
           // Если настройка не найдена, используем значение по умолчанию (отключено)
           setAutoHideEnabled(false);
-        } else if (response.status === 401) {
-          // Если все еще 401 после попытки обновления, используем значение по умолчанию
+        } else {
+          // Для любых других ошибок используем значение по умолчанию
           setAutoHideEnabled(false);
         }
       } catch (error) {
-        console.error('Error loading footer setting:', error);
+        // Игнорируем ошибки, используем значение по умолчанию
         setAutoHideEnabled(false);
       }
     };
 
-    if (user?.id) {
+    if (user?.id && token) {
       loadFooterSetting();
     }
-  }, [user?.id]);
+  }, [user?.id, token]);
 
   // Слушатель изменения настройки автоскрытия футера
   useEffect(() => {

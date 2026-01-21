@@ -1,0 +1,15 @@
+.docs-container {
+  display: flex;
+  gap: 20px;
+}
+
+.docs-sidebar {
+  width: 250px;
+  flex-shrink: 0;
+}
+
+.docs-content {
+  flex: 1;
+}
+
+

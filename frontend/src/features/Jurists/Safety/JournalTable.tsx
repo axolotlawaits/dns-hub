@@ -20,7 +20,7 @@ const LocalJournalTable = function LocalJournalTable({
   canManageStatuses
 }: {
   journals: SafetyJournal[];
-  onApproveJournal: (journal: SafetyJournal) => void;
+  onApproveJournal: (journal: SafetyJournal, status: 'approved', comment?: string) => void;
   onRejectJournal: (journal: SafetyJournal, status: 'rejected', rejectMessage: string) => void;
   onViewFile: (journal: SafetyJournal) => void;
   onUploadFiles: (journal: SafetyJournal) => void;
@@ -29,6 +29,8 @@ const LocalJournalTable = function LocalJournalTable({
 
   const [rejectModalOpen, setRejectModalOpen] = useState<string | null>(null)
   const [rejectMessage, setRejectMessage] = useState('')
+  const [approveModalOpen, setApproveModalOpen] = useState<string | null>(null)
+  const [approveMessage, setApproveMessage] = useState('')
   
   return (
     <Card shadow="sm" radius="lg" padding="md" className="table-container">
@@ -84,17 +86,6 @@ const LocalJournalTable = function LocalJournalTable({
                         <>
                           {IconComponent && <IconComponent size={16} color={`var(--mantine-color-${statusInfo?.color}-6)`} />}
                           <Text size="sm">{statusInfo?.label}</Text>
-                          {journal.status !== 'approved' && journal.comment &&
-                            <Tooltip label={journal.comment} multiline w={250}>
-                              <ActionIcon 
-                                size="sm" 
-                                color="orange" 
-                                variant='light'
-                              >
-                                <IconMessageDots size={14} />
-                              </ActionIcon>
-                            </Tooltip>
-                          }
                         </>
                       );
                     })()}
@@ -165,7 +156,7 @@ const LocalJournalTable = function LocalJournalTable({
                                 variant={journal.status === 'approved' ? 'filled' : 'light'} 
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  onApproveJournal(journal);
+                                  setApproveModalOpen(journal.id);
                                 }}
                               >
                                 <IconCheck size={14} />
@@ -184,7 +175,20 @@ const LocalJournalTable = function LocalJournalTable({
                                 <IconX size={14} />
                               </ActionIcon>
                             </Tooltip>
-                            <Modal opened={journal.id === rejectModalOpen} onClose={() => setRejectModalOpen(null)} title='Укажите причину' centered zIndex={99999}>
+                            <Modal opened={journal.id === approveModalOpen} onClose={() => {setApproveModalOpen(null); setApproveMessage('')}} title='Одобрить журнал' centered zIndex={99999}>
+                              <Stack>
+                                <Textarea
+                                  placeholder="Комментарий (необязательно)..."
+                                  value={approveMessage}
+                                  onChange={(e) => setApproveMessage(e.currentTarget.value)}
+                                />
+                                <Group grow>
+                                  <Button onClick={() => {setApproveModalOpen(null); setApproveMessage('')}} variant='light'>Отмена</Button>
+                                  <Button onClick={() => {onApproveJournal(journal, 'approved', approveMessage || undefined); setApproveModalOpen(null); setApproveMessage('')}} color="green">Подтвердить</Button>
+                                </Group>
+                              </Stack>
+                            </Modal>
+                            <Modal opened={journal.id === rejectModalOpen} onClose={() => {setRejectModalOpen(null); setRejectMessage('')}} title='Укажите причину' centered zIndex={99999}>
                               <Stack>
                                 <Textarea
                                   placeholder="Комментарий..."
@@ -192,10 +196,9 @@ const LocalJournalTable = function LocalJournalTable({
                                   onChange={(e) => setRejectMessage(e.currentTarget.value)}
                                 />
                                 <Group grow>
-                                  <Button onClick={() => setRejectModalOpen(null)} variant='light'>Отмена</Button>
-                                  <Button onClick={() => {onRejectJournal(journal, 'rejected', rejectMessage), setRejectModalOpen(null)}}>Подтвердить</Button>
+                                  <Button onClick={() => {setRejectModalOpen(null); setRejectMessage('')}} variant='light'>Отмена</Button>
+                                  <Button onClick={() => {onRejectJournal(journal, 'rejected', rejectMessage); setRejectModalOpen(null); setRejectMessage('')}}>Подтвердить</Button>
                                 </Group>
-                                
                               </Stack>
                             </Modal>
                           </>

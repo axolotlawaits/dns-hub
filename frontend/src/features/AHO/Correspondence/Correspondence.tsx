@@ -193,13 +193,42 @@ export default function CorrespondenceList() {
 
   const fetchData = useCallback(async (url: string, options?: RequestInit) => {
     try {
-      const response = await fetch(url, {
+      let token = localStorage.getItem('token');
+      let response = await fetch(url, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${token}`,
           ...(options?.method !== 'DELETE' && { 'Content-Type': 'application/json' })
         },
         ...options,
       });
+
+      // Если получили 401, пробуем обновить токен
+      if (response.status === 401) {
+        try {
+          const refreshResponse = await fetch(`${API}/refresh-token`, {
+            method: 'POST',
+            credentials: 'include',
+          });
+
+          if (refreshResponse.ok) {
+            const newToken = await refreshResponse.json();
+            localStorage.setItem('token', newToken);
+            token = newToken;
+            
+            // Повторяем запрос с новым токеном
+            response = await fetch(url, {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                ...(options?.method !== 'DELETE' && { 'Content-Type': 'application/json' })
+              },
+              ...options,
+            });
+          }
+        } catch (refreshError) {
+          console.error('Token refresh failed:', refreshError);
+        }
+      }
+
       if (!response.ok) {
         const errorText = await response.text();
         showNotification('error', `Ошибка запроса: ${errorText}`);
@@ -1606,7 +1635,7 @@ export default function CorrespondenceList() {
 
                 const events = state.trackingData?.events || [];
                 const sortedEvents = [...events].sort((a, b) => 
-                  new Date(b.date).getTime() - new Date(a.date).getTime()
+                  new Date(a.date).getTime() - new Date(b.date).getTime()
                 );
 
                 return (

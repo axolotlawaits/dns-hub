@@ -1,12 +1,14 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useDebouncedValue } from '@mantine/hooks';
+import { useSearchParams } from 'react-router-dom';
 import { API } from '../../../config/constants';
 import { useUserContext } from '../../../hooks/useUserContext';
 import { useAccessContext } from '../../../hooks/useAccessContext';
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { notificationSystem } from '../../../utils/Push';
-import { Button, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Paper, Tabs, Alert, Select, Pagination, Accordion, Modal } from '@mantine/core';
+import { Button, Box, LoadingOverlay, Group, ActionIcon, Text, Stack, Paper, Tabs, Alert, Select, Pagination, Modal, Tooltip, SegmentedControl, Grid } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconClock, IconFileText, IconFilter, IconShield, IconFlame, IconCircleCheck, IconCircleX, IconAlertCircle, IconRefresh, IconQrcode } from '@tabler/icons-react';
+import { IconClock, IconFileText, IconFilter, IconShield, IconFlame, IconCircleCheck, IconCircleX, IconAlertCircle, IconRefresh, IconQrcode, IconBell, IconList, IconApps } from '@tabler/icons-react';
 import { FilePreviewModal } from '../../../utils/FilePreviewModal';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { DndProviderWrapper } from '../../../utils/dnd';
@@ -16,6 +18,8 @@ import tgBotQRImage from '../../../assets/images/tg_bot_journals.webp'
 import tgBotQRImageDark from '../../../assets/images/tg_bot_journals_black.webp'
 import { useThemeContext } from '../../../hooks/useThemeContext';
 import BranchCard from './BranchCard';
+import SafetyJournalChat from './SafetyJournalChat';
+import DraggableChatModal from './DraggableChatModal';
 
 // Интерфейсы для работы с API
 interface UserInfo {
@@ -136,6 +140,11 @@ export default function SafetyJournal() {
   }, [updateState]);
   
   
+  // Параметры URL для навигации из уведомлений
+  const [searchParams, setSearchParams] = useSearchParams();
+  const targetBranchId = searchParams.get('branchId');
+  const targetMessageId = searchParams.get('messageId') || undefined;
+
   // Модальные окна
   const [filePreviewOpened, { close: closeFilePreview }] = useDisclosure(false);
   const [fileUploadOpened, { open: openFileUpload, close: closeFileUpload }] = useDisclosure(false);
@@ -144,13 +153,61 @@ export default function SafetyJournal() {
   const [journalFiles, setJournalFiles] = useState<any[]>([]);
   const [fileViewOpened, { open: openFileView, close: closeFileView }] = useDisclosure(false);
   const [deleteJournalOpened, { close: closeDeleteJournal }] = useDisclosure(false);
-  const [qrOpened, { open: qrOpen, close: qrClose }] = useDisclosure(false)
+  const [qrOpened, { open: qrOpen, close: qrClose }] = useDisclosure(false);
+  const [chatOpened, { open: openChat, close: closeChat }] = useDisclosure(false);
+  const [chatPreviewOpened, setChatPreviewOpened] = useState(false);
+  const [chatPreviewFiles, setChatPreviewFiles] = useState<Array<{ id: string; source: File | string; name?: string; mimeType?: string }>>([]);
+  const [chatPreviewIndex, setChatPreviewIndex] = useState(0);
   
   // Фильтры для филиалов
   const [branchFilters, setBranchFilters] = useState({
     rrs: '',
-    branch: ''
+    branch: '',
+    journalType: '' as '' | 'ОТ' | 'ПБ',
+    status: '' as '' | 'approved' | 'pending' | 'rejected' | 'under_review'
   });
+  
+  // Debounce для фильтров (300ms задержка) - оптимизация производительности
+  const [debouncedFilters] = useDebouncedValue(branchFilters, 300);
+
+  // Обработка URL параметров для открытия чата из уведомления
+  useEffect(() => {
+    if (targetBranchId && !chatOpened && branches.length > 0) {
+      const branch = branches.find(b => b.branch_id === targetBranchId);
+      if (branch) {
+        const firstJournal = branch.journals?.[0];
+        if (firstJournal) {
+          setSelectedJournal({
+            ...firstJournal,
+            branch_id: targetBranchId,
+            branch_name: branch.branch_name
+          });
+        } else {
+          setSelectedJournal({
+            id: '',
+            journal_id: '',
+            journal_title: '',
+            journal_type: 'ОТ',
+            branch_id: targetBranchId,
+            branch_name: branch.branch_name,
+            status: 'pending',
+            filled_at: null,
+            approved_at: null,
+            period_start: '',
+            period_end: ''
+          } as SafetyJournal);
+        }
+        openChat();
+        // Очищаем параметры URL после открытия чата (кроме messageId, он нужен для прокрутки)
+        // Используем setTimeout, чтобы дать время чату открыться
+        setTimeout(() => {
+          if (!targetMessageId) {
+            setSearchParams({});
+          }
+        }, 100);
+      }
+    }
+  }, [targetBranchId, targetMessageId, branches, chatOpened, openChat, setSearchParams]);
   
   // Пагинация для филиалов
   const [branchPagination, setBranchPagination] = useState(() => {
@@ -161,9 +218,6 @@ export default function SafetyJournal() {
     };
   });
 
-  // Состояние для показа фильтров в аккордеоне
-  const [showFilters, setShowFilters] = useState(false);
-  
   // Состояние для отслеживания развернутых филиалов
   const [expandedBranches, setExpandedBranches] = useState<Set<string>>(new Set());
   
@@ -172,6 +226,85 @@ export default function SafetyJournal() {
   
   // Ref для отслеживания контейнера с филиалами
   const branchesContainerRef = useRef<HTMLDivElement>(null);
+
+  // Состояние для последних оповещений
+  const [lastNotifications, setLastNotifications] = useState<Record<string, any>>({});
+  const [notifying, setNotifying] = useState(false);
+
+  // Состояние для режима отображения (список/карточки)
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => {
+    try {
+      return (localStorage.getItem('safety-journal-view-mode') as 'list' | 'grid') || 'list';
+    } catch {
+      return 'list';
+    }
+  });
+  
+  // Флаг для отслеживания, была ли загрузка viewMode из API
+  const viewModeLoadedRef = useRef(false);
+
+  // Загружаем предпочтение пользователя из UserSettings (только один раз при монтировании)
+  useEffect(() => {
+    const loadViewMode = async () => {
+      if (!user?.id || viewModeLoadedRef.current) return;
+      
+      try {
+        const response = await fetch(`${API}/user/settings/${user.id}/safety_journal_view_mode`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (response && response.ok) {
+          const data = await response.json();
+          const savedMode = data?.value;
+          if (savedMode === 'list' || savedMode === 'grid') {
+            setViewMode(savedMode);
+            viewModeLoadedRef.current = true;
+          }
+        }
+      } catch (error) {
+        console.error('Ошибка при загрузке настройки отображения:', error);
+        // В случае ошибки используем базовый вариант - список
+        setViewMode('list');
+        viewModeLoadedRef.current = true;
+      }
+    };
+
+    loadViewMode();
+  }, [user?.id, token]);
+
+  // Сохраняем предпочтение пользователя в UserSettings
+  useEffect(() => {
+    const saveViewMode = async () => {
+      if (!user?.id || !token) return;
+      
+      try {
+        const response = await fetch(`${API}/user/settings`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            userId: user.id,
+            parameter: 'safety_journal_view_mode',
+            value: viewMode,
+          }),
+        });
+        
+        if (!response || !response.ok) {
+          console.error('Ошибка при сохранении настройки отображения');
+        }
+      } catch (error) {
+        console.error('Ошибка при сохранении настройки отображения:', error);
+      }
+    };
+
+    // Сохраняем только если пользователь загружен и это не первая инициализация
+    if (user?.id && token) {
+      saveViewMode();
+    }
+  }, [viewMode, user?.id, token]);
 
 
   // Получение заголовков для API запросов
@@ -290,7 +423,7 @@ export default function SafetyJournal() {
     }
   }, [fetchWithAuth, setState]);
 
-  // Загрузка данных
+  // Объединенная загрузка данных (филиалы + уведомления)
   const loadBranchesWithJournals = useCallback(async () => {
     try {
       updateState({ loading: true, error: null });
@@ -300,7 +433,6 @@ export default function SafetyJournal() {
         updateState({ error: 'Пользователь не авторизован', loading: false });
         return;
       }
-      
       
       // Используем пользователя из контекста
       const userInfo = {
@@ -317,13 +449,17 @@ export default function SafetyJournal() {
         isManager: false
       };
       
-      // Получаем филиалы с журналами для текущего пользователя
-      const response = await fetchWithAuth(`${API}/jurists/safety/me/branches_with_journals`, {
+      // Параллельная загрузка филиалов и уведомлений
+      const [branchesResponse, notificationsResponse] = await Promise.all([
+        fetchWithAuth(`${API}/jurists/safety/me/branches_with_journals`, {
         method: 'GET',
-      });
+        }),
+        fetchWithAuth(`${API}/jurists/safety/last-notifications`)
+      ]);
 
-      if (response.ok) {
-        const data = await response.json();
+      // Обработка ответа филиалов
+      if (branchesResponse.ok) {
+        const data = await branchesResponse.json();
         
         // Если API недоступен, показываем сообщение об ошибке
         if (data.apiUnavailable) {
@@ -351,22 +487,32 @@ export default function SafetyJournal() {
       } else {
         let errorMessage = 'Ошибка загрузки филиалов с журналами';
         try {
-          const errorData = await response.json();
+          const errorData = await branchesResponse.json();
           errorMessage = errorData.message || errorMessage;
         } catch (jsonError) {
           // Если не удалось распарсить JSON, используем статус ответа
-          if (response.status === 401) {
+          if (branchesResponse.status === 401) {
             errorMessage = 'Сессия истекла или домен изменился. Пожалуйста, войдите в систему заново.';
             // Автоматически выходим из системы при 401
             logout();
             window.location.href = '/login';
-          } else if (response.status === 403) {
+          } else if (branchesResponse.status === 403) {
             errorMessage = 'Доступ запрещен';
-          } else if (response.status === 500) {
+          } else if (branchesResponse.status === 500) {
             errorMessage = 'Внутренняя ошибка сервера';
           }
         }
         updateState({ error: errorMessage, loading: false });
+      }
+
+      // Обработка ответа уведомлений
+      if (notificationsResponse.ok) {
+        const data = await notificationsResponse.json();
+        const notificationsMap: Record<string, any> = {};
+        data.forEach((n: any) => {
+          notificationsMap[n.branchId] = n;
+        });
+        setLastNotifications(notificationsMap);
       }
     } catch (err) {
       console.error('Error loading branches with journals:', err);
@@ -374,9 +520,56 @@ export default function SafetyJournal() {
     }
   }, [user, token, fetchWithAuth, updateState, logout]);
 
+  // Загрузка информации о последних оповещениях (оставлена для совместимости, но теперь вызывается внутри loadBranchesWithJournals)
+  const loadLastNotifications = useCallback(async () => {
+    try {
+      const response = await fetchWithAuth(`${API}/jurists/safety/last-notifications`);
+      if (response.ok) {
+        const data = await response.json();
+        const notificationsMap: Record<string, any> = {};
+        data.forEach((n: any) => {
+          notificationsMap[n.branchId] = n;
+        });
+        setLastNotifications(notificationsMap);
+      }
+    } catch (error) {
+      console.error('Error loading last notifications:', error);
+    }
+  }, [fetchWithAuth]);
+
+  // Оповещение филиалов с не заполненными журналами
+  const handleNotifyUnfilled = useCallback(async () => {
+    setNotifying(true);
+    try {
+      const response = await fetchWithAuth(`${API}/jurists/safety/notify-unfilled`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        notificationSystem.addNotification('Успех', data.message || 'Оповещения отправлены', 'success');
+        // Обновляем информацию о последних оповещениях
+        await loadLastNotifications();
+        // Обновляем данные филиалов
+        await loadBranchesWithJournals();
+      } else {
+        const errorData = await response.json();
+        notificationSystem.addNotification('Ошибка', errorData.message || 'Не удалось отправить оповещения', 'error');
+      }
+    } catch (error) {
+      notificationSystem.addNotification('Ошибка', 'Ошибка соединения с сервером', 'error');
+    } finally {
+      setNotifying(false);
+    }
+  }, [fetchWithAuth, loadLastNotifications, loadBranchesWithJournals]);
+
   // Загружаем данные только при монтировании компонента
   useEffect(() => {
     loadBranchesWithJournals();
+    loadLastNotifications();
   }, []); // Убираем зависимости, чтобы избежать самопроизвольных перезагрузок
 
   // Предотвращаем сброс позиции скролла при загрузке
@@ -476,9 +669,8 @@ export default function SafetyJournal() {
         }
       }
 
-      // Загружаем файлы по одному, так как API принимает только один файл за раз
-      const uploadedFiles: JournalFile[] = [];
-      for (const file of files) {
+      // Загружаем файлы параллельно для лучшей производительности
+      const uploadPromises = files.map(async (file: File) => {
         const formData = new FormData();
         formData.append('branchJournalId', branchJournalId);
         formData.append('file', file);
@@ -490,13 +682,12 @@ export default function SafetyJournal() {
 
         if (!response.ok) {
           const errorData = await response.json();
-          notificationSystem.addNotification('Ошибка', errorData.message || 'Ошибка загрузки файла', 'error');
-          return;
+          throw new Error(errorData.message || 'Ошибка загрузки файла');
         }
 
         // Получаем данные загруженного файла из ответа API
         const responseData = await response.json();
-        const uploadedFile: JournalFile = {
+        return {
           file_id: responseData.file_id || `temp_${Date.now()}_${Math.random()}`,
           original_filename: responseData.original_filename || file.name,
           content_type: responseData.content_type || file.type,
@@ -504,9 +695,11 @@ export default function SafetyJournal() {
           description: responseData.description || '',
           download_url: responseData.download_url || '#',
           view_url: responseData.view_url || '#'
-        };
-        uploadedFiles.push(uploadedFile);
-      }
+        } as JournalFile;
+      });
+
+      // Ждем завершения всех загрузок
+      const uploadedFiles = await Promise.all(uploadPromises);
 
       // Обновляем локальное состояние - добавляем информацию о загруженных файлах и меняем статус
       console.log('Updating local state with uploaded files:', uploadedFiles);
@@ -716,6 +909,38 @@ export default function SafetyJournal() {
     }
   }, [selectedJournal, fetchWithAuth, closeFileView]);
 
+  // Функция для открытия чата по филиалу
+  const handleOpenChat = useCallback((branchId: string, branchName: string) => {
+    // Создаем временный объект журнала для совместимости с модалкой
+    // Используем первый журнал филиала или создаем минимальный объект
+    const branch = branches.find(b => b.branch_id === branchId);
+    const firstJournal = branch?.journals?.[0];
+    
+    if (firstJournal) {
+      setSelectedJournal({
+        ...firstJournal,
+        branch_id: branchId,
+        branch_name: branchName
+      });
+    } else {
+      // Если журналов нет, создаем минимальный объект
+      setSelectedJournal({
+        id: '',
+        journal_id: '',
+        journal_title: '',
+        journal_type: 'ОТ',
+        branch_id: branchId,
+        branch_name: branchName,
+        status: 'pending',
+        filled_at: null,
+        approved_at: null,
+        period_start: '',
+        period_end: ''
+      } as SafetyJournal);
+    }
+    openChat();
+  }, [openChat, branches]);
+
   // Обработчик фильтров
 
   // Обработчики фильтров филиалов
@@ -765,44 +990,66 @@ export default function SafetyJournal() {
   }, [branches]);
 
   const branchOptions = useMemo(() => {
-    const filteredBranches = branchFilters.rrs 
-      ? branches.filter(branch => branch.rrs_name === branchFilters.rrs)
+    const filteredBranches = debouncedFilters.rrs 
+      ? branches.filter(branch => branch.rrs_name === debouncedFilters.rrs)
       : branches;
     return filteredBranches.map(branch => ({ 
       value: branch.branch_id, 
       label: branch.branch_name 
     }));
-  }, [branches, branchFilters.rrs]);
+  }, [branches, debouncedFilters.rrs]);
 
-  // Фильтрация филиалов с журналами по вкладкам и фильтрам
+  // Фильтрация филиалов с журналами по вкладкам и фильтрам (используем debounced фильтры)
   const filteredBranches = useMemo(() => {
     let result = branches;
     
-    // Применяем фильтры
-    if (branchFilters.rrs) {
-      result = result.filter(branch => branch.rrs_name === branchFilters.rrs);
+    // Применяем фильтры (используем debounced значения)
+    if (debouncedFilters.rrs) {
+      result = result.filter(branch => branch.rrs_name === debouncedFilters.rrs);
     }
-    if (branchFilters.branch) {
-      result = result.filter(branch => branch.branch_id === branchFilters.branch);
+    if (debouncedFilters.branch) {
+      result = result.filter(branch => branch.branch_id === debouncedFilters.branch);
     }
     
-    // Применяем фильтрацию по вкладкам
-    if (activeTab !== 'all') {
+    // Применяем фильтрацию по вкладкам (если не используются отдельные фильтры)
+    const useTabFilter = activeTab !== 'all' && !debouncedFilters.journalType && !debouncedFilters.status;
+    
+    if (useTabFilter) {
       result = result.map(branch => ({
-      ...branch,
-      journals: branch.journals.filter(journal => {
-        if (activeTab === 'ОТ' || activeTab === 'ПБ') {
-          return journal.journal_type === activeTab;
-        }
-        return journal.status === activeTab;
-      })
-    })).filter(branch => branch.journals.length > 0); // Скрываем филиалы без журналов
+        ...branch,
+        journals: branch.journals.filter(journal => {
+          if (activeTab === 'ОТ' || activeTab === 'ПБ') {
+            return journal.journal_type === activeTab;
+          }
+          return journal.status === activeTab;
+        })
+      })).filter(branch => branch.journals.length > 0);
+    } else {
+      // Применяем фильтры по виду журнала и состоянию
+      result = result.map(branch => ({
+        ...branch,
+        journals: branch.journals.filter(journal => {
+          let matches = true;
+          
+          // Фильтр по виду журнала
+          if (debouncedFilters.journalType) {
+            matches = matches && journal.journal_type === debouncedFilters.journalType;
+          }
+          
+          // Фильтр по состоянию
+          if (debouncedFilters.status) {
+            matches = matches && journal.status === debouncedFilters.status;
+          }
+          
+          return matches;
+        })
+      })).filter(branch => branch.journals.length > 0);
     }
     
     // Сортировка журналов теперь происходит на backend
     
     return result;
-  }, [branches, activeTab, branchFilters, state.forceUpdate]);
+  }, [branches, activeTab, debouncedFilters, state.forceUpdate]);
 
   // Пагинация филиалов
   const paginatedBranches = useMemo(() => {
@@ -885,8 +1132,24 @@ export default function SafetyJournal() {
     }
   }, [scrollPosition, loading]);
 
-  // Подсчет статистики для вкладок (мемоизированный с оптимизацией)
+  // Подсчет статистики для вкладок (мемоизированный с оптимизацией - только необходимые зависимости)
   const stats = useMemo(() => {
+    // Используем более точные зависимости - только количество филиалов и журналов
+    const totalJournalsCount = branches.reduce((sum, branch) => sum + branch.journals.length, 0);
+    
+    // Если нет журналов, возвращаем нули
+    if (totalJournalsCount === 0) {
+      return {
+        total: 0,
+        labor_protection: 0,
+        fire_safety: 0,
+        pending: 0,
+        approved: 0,
+        rejected: 0,
+        under_review: 0,
+      };
+    }
+    
     const allJournals = branches.flatMap(branch => branch.journals);
     
     // Используем reduce для более эффективного подсчета
@@ -913,7 +1176,7 @@ export default function SafetyJournal() {
       rejected: 0,
       under_review: 0,
     });
-  }, [branches, state.forceUpdate]);
+  }, [branches.length, branches.map(b => `${b.branch_id}:${b.journals.length}:${b.journals.map(j => `${j.id}:${j.status}`).join(',')}`).join('|'), state.forceUpdate]);
 
   if (loading) {
     return (
@@ -978,7 +1241,69 @@ export default function SafetyJournal() {
               На проверке ({stats.under_review || 0})
             </Tabs.Tab>
           </Tabs.List>
-          <Group gap='sm'>
+          <Group gap='sm' wrap="nowrap">
+            <SegmentedControl
+              value={viewMode}
+              onChange={(value) => {
+                const newMode = value as 'list' | 'grid';
+                setViewMode(newMode);
+                // Сохраняем в localStorage для немедленного применения
+                try {
+                  localStorage.setItem('safety-journal-view-mode', newMode);
+                } catch (error) {
+                  console.error('Ошибка при сохранении viewMode в localStorage:', error);
+                }
+              }}
+              data={[
+                { label: <IconList size={16} />, value: 'list' },
+                { label: <IconApps size={16} />, value: 'grid' }
+              ]}
+              size="sm"
+            />
+            {/* Фильтры в одном ряду */}
+            <Select
+              placeholder="РРС"
+              data={rrsOptions.sort((a, b) => a.label.localeCompare(b.label))}
+              value={branchFilters.rrs}
+              onChange={handleRrsFilterChange}
+              searchable
+              clearable
+              style={{ minWidth: 150 }}
+              leftSection={<IconFilter size={16} />}
+            />
+            <Select
+              placeholder="Филиал"
+              data={branchOptions.sort((a, b) => a.label.localeCompare(b.label))}
+              value={branchFilters.branch}
+              onChange={handleBranchFilterChange}
+              searchable
+              clearable
+              style={{ minWidth: 150 }}
+            />
+            {(branchFilters.rrs || branchFilters.branch) && (
+              <Button
+                variant="light"
+                size="sm"
+                onClick={() => {
+                  setBranchFilters({ rrs: '', branch: '', journalType: '', status: '' });
+                  setBranchPagination({ page: 1, pageSize: 5 });
+                }}
+              >
+                Сбросить
+              </Button>
+            )}
+            <Tooltip label="Оповестить филиалы с не заполненными журналами">
+              <ActionIcon 
+                variant="outline" 
+                size={35} 
+                aria-label="Notify unfilled" 
+                onClick={handleNotifyUnfilled}
+                loading={notifying}
+                color="orange"
+              >
+                <IconBell stroke={1.5} />
+              </ActionIcon>
+            </Tooltip>
             <ActionIcon variant="outline" size={35} aria-label="Settings" onClick={handleRefreshData}>
               <IconRefresh  stroke={1.5} />
             </ActionIcon>
@@ -988,68 +1313,6 @@ export default function SafetyJournal() {
           </Group>
           </Group>
         </Tabs>
-
-              {/* Фильтры в аккордеоне */}
-              <Accordion
-                value={showFilters ? 'filters' : null}
-                onChange={(value) => setShowFilters(value === 'filters')}
-                styles={{
-                  control: {
-                    minHeight: '10px',
-                    '&:hover': {
-                      backgroundColor: 'var(--theme-bg-secondary)',
-                    },
-                  },
-                  content: {
-                    padding: '0 12px 12px 12px',
-                  },
-                  item: {
-                    marginBottom: '0',
-                  },
-                }}
-              >
-                <Accordion.Item value="filters">
-                  <Accordion.Control>
-                    <Group gap="md" align="center">
-                      <IconFilter size={20} />
-                      <Text  fw={600}>Фильтры</Text>
-                    </Group>
-                  </Accordion.Control>
-                  <Accordion.Panel>
-                    <Group gap="md" align="end">
-                      <Select
-                        label="РРС"
-                        placeholder="Выберите РРС"
-                        data={rrsOptions.sort((a, b) => a.label.localeCompare(b.label))}
-                        value={branchFilters.rrs}
-                        onChange={handleRrsFilterChange}
-                        searchable
-                        clearable
-                        style={{ minWidth: 200 }}
-                      />
-                      <Select
-                        label="Филиал"
-                        placeholder="Выберите филиал"
-                        data={branchOptions.sort((a, b) => a.label.localeCompare(b.label))}
-                        value={branchFilters.branch}
-                        onChange={handleBranchFilterChange}
-                        searchable
-                        clearable
-                        style={{ minWidth: 200 }}
-                      />
-                      <Button
-                        variant="light"
-                        onClick={() => {
-                          setBranchFilters({ rrs: '', branch: '' });
-                          setBranchPagination({ page: 1, pageSize: 5 });
-                        }}
-                      >
-                        Сбросить
-                      </Button>
-                    </Group>
-                  </Accordion.Panel>
-                </Accordion.Item>
-              </Accordion>
               
             </Stack>
           </Paper>
@@ -1093,23 +1356,48 @@ export default function SafetyJournal() {
             </Stack>
           </Paper>
         ) : (
-          <Stack gap="lg" ref={branchesContainerRef}>
-            {paginatedBranches.map((branch) => (
-              <BranchCard
-                key={branch.branch_id}
-                updateState={updateState}
-                branch={branch}
-                onApproveJournal={(journal) => handleChangeStatus(journal, 'approved')}
-                onRejectJournal={handleChangeStatus}
-                onViewFile={handleViewFiles}
-                onUploadFiles={handleUploadFiles}
-                forceUpdate={state.forceUpdate}
-                canManageStatuses={canManageStatuses}
-                expandedBranches={expandedBranches}
-                setExpandedBranches={setExpandedBranches}
-              />
-            ))}
-          </Stack>
+          viewMode === 'list' ? (
+            <Stack gap="lg" ref={branchesContainerRef}>
+              {paginatedBranches.map((branch) => (
+                <BranchCard
+                  key={branch.branch_id}
+                  branch={branch}
+                  onApproveJournal={handleChangeStatus}
+                  onRejectJournal={handleChangeStatus}
+                  onViewFile={handleViewFiles}
+                  onUploadFiles={handleUploadFiles}
+                  onOpenChat={(branchId: string, branchName: string) => handleOpenChat(branchId, branchName)}
+                  forceUpdate={state.forceUpdate}
+                  canManageStatuses={canManageStatuses}
+                  expandedBranches={expandedBranches}
+                  setExpandedBranches={setExpandedBranches}
+                  lastNotification={lastNotifications[branch.branch_id]}
+                  viewMode={viewMode}
+                />
+              ))}
+            </Stack>
+          ) : (
+            <Grid gutter="md" ref={branchesContainerRef}>
+              {paginatedBranches.map((branch) => (
+                <Grid.Col key={branch.branch_id} span={{ base: 12, sm: 6, lg: 4, xl: 3 }}>
+                  <BranchCard
+                    branch={branch}
+                    onApproveJournal={handleChangeStatus}
+                    onRejectJournal={handleChangeStatus}
+                    onViewFile={handleViewFiles}
+                    onUploadFiles={handleUploadFiles}
+                    onOpenChat={(branchId: string, branchName: string) => handleOpenChat(branchId, branchName)}
+                    forceUpdate={state.forceUpdate}
+                    canManageStatuses={canManageStatuses}
+                    expandedBranches={expandedBranches}
+                    setExpandedBranches={setExpandedBranches}
+                    lastNotification={lastNotifications[branch.branch_id]}
+                    viewMode={viewMode}
+                  />
+                </Grid.Col>
+              ))}
+            </Grid>
+          )
         )}
 
         {/* Пагинация филиалов - размещаем под списком филиалов */}
@@ -1164,15 +1452,18 @@ export default function SafetyJournal() {
 
       </Box>
 
-      {/* Модальные окна */}
+      {/* Модальные окна - условный рендеринг для оптимизации */}
+      {filePreviewOpened && (
       <FilePreviewModal
         opened={filePreviewOpened}
         onClose={closeFilePreview}
         attachments={[]}
         initialIndex={0}
       />
+      )}
 
       {/* Модальное окно для просмотра файлов журнала */}
+      {fileViewOpened && (
       <FilePreviewModal
         opened={fileViewOpened}
         onClose={closeFileView}
@@ -1181,12 +1472,14 @@ export default function SafetyJournal() {
         onDeleteFile={handleDeleteFile} // Кнопка удаления доступна всем пользователям
         requireAuth={true} // Для SafetyJournal требуется передача токена
       />
+      )}
 
       {/* Модальное окно для загрузки файлов */}
+      {fileUploadOpened && selectedJournal && (
       <DynamicFormModal
         opened={fileUploadOpened}
         onClose={closeFileUpload}
-        title={`Загрузка файлов - ${selectedJournal?.journal_title || ''}`}
+          title={`Загрузка файлов - ${selectedJournal.journal_title}`}
         mode="create"
         fields={[
           {
@@ -1203,16 +1496,21 @@ export default function SafetyJournal() {
         submitButtonText="Загрузить"
         loading={fileUploadLoading}
       />
+      )}
 
       {/* Модальное окно подтверждения удаления журнала */}
+      {deleteJournalOpened && selectedJournal && (
       <DynamicFormModal
         opened={deleteJournalOpened}
         onClose={closeDeleteJournal}
-        title={`Удаление журнала - ${selectedJournal?.journal_title || ''}`}
+          title={`Удаление журнала - ${selectedJournal.journal_title}`}
         mode="delete"
         onConfirm={handleDeleteJournal}
         initialValues={{}}
       />
+      )}
+      
+      {qrOpened && (
       <Modal opened={qrOpened} onClose={qrClose} title="QR-код телеграм бота" centered zIndex={99999} size="auto">
         <Image
           radius="md"
@@ -1222,7 +1520,85 @@ export default function SafetyJournal() {
           src={isDark ? tgBotQRImage : tgBotQRImageDark}
         />
       </Modal>
+      )}
+
+      {/* Модальное окно чата по филиалу - draggable */}
+      {chatOpened && selectedJournal && (
+        <ChatModalWithParticipants
+          branchName={selectedJournal.branch_name}
+          branchId={selectedJournal.branch_id}
+          onClose={() => {
+            closeChat();
+            // Очищаем параметры URL при закрытии чата
+            setSearchParams({});
+          }}
+          isDark={isDark}
+          targetMessageId={targetMessageId || undefined}
+          onPreviewFiles={(files, index) => {
+            setChatPreviewFiles(files);
+            setChatPreviewIndex(index);
+            setChatPreviewOpened(true);
+          }}
+        />
+      )}
+
+      {/* Модальное окно предпросмотра файлов из чата - на уровне выше, чтобы не закрывалось при сворачивании */}
+      <FilePreviewModal
+        opened={chatPreviewOpened}
+        onClose={() => setChatPreviewOpened(false)}
+        attachments={chatPreviewFiles}
+        initialIndex={chatPreviewIndex}
+        requireAuth={true}
+      />
       </Box>
     </DndProviderWrapper>
+  );
+}
+
+// Компонент-обертка для передачи участников в DraggableChatModal
+function ChatModalWithParticipants({ 
+  branchName, 
+  branchId, 
+  onClose, 
+  isDark, 
+  onPreviewFiles,
+  targetMessageId
+}: { 
+  branchName: string; 
+  branchId: string; 
+  onClose: () => void; 
+  isDark: boolean; 
+  onPreviewFiles: (files: Array<{ id: string; source: File | string; name?: string; mimeType?: string }>, index: number) => void;
+  targetMessageId?: string;
+}) {
+  const getImageSrc = useCallback((image: string | null | undefined): string => {
+    if (!image) return '';
+    if (image.startsWith('data:')) return image;
+    if (image.startsWith('/9j/') || image.startsWith('iVBORw0KGgo') || image.length > 100) {
+      const imageType = image.startsWith('/9j/') ? 'image/jpeg' : 'image/png';
+      return `data:${imageType};base64,${image}`;
+    }
+    return image;
+  }, []);
+
+  const handleParticipantsChange = useCallback((_newParticipants: Array<{ id: string; name: string; email: string; image: string | null; position: string; branch: string; responsibilityTypes?: string[]; isChecker?: boolean }>) => {
+    // Участники обрабатываются внутри SafetyJournalChat
+  }, []);
+
+  return (
+    <DraggableChatModal
+      onClose={onClose}
+      isDark={isDark}
+    >
+      <SafetyJournalChat
+        branchId={branchId}
+        branchName={branchName}
+        onClose={onClose}
+        onPreviewFiles={onPreviewFiles}
+        onParticipantsChange={handleParticipantsChange}
+        getImageSrc={getImageSrc}
+        targetMessageId={targetMessageId}
+      />
+    </DraggableChatModal>
   );
 }
