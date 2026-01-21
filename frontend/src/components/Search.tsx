@@ -501,7 +501,6 @@ function Search({ opened: externalOpened, onClose: externalOnClose, showButton =
                     size="md"
                     styles={{
                       input: {
-                        background: 'rgba(255, 255, 255, 0.9)',
                         border: '1px solid rgba(255, 255, 255, 0.3)',
                         borderRadius: 'var(--radius-md)',
                         color: 'var(--theme-text-primary)',

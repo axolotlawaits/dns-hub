@@ -179,7 +179,7 @@ function App() {
               width: navOpened ? 225 : 80,
               breakpoint: 'xl', // Установлено большое значение, чтобы не срабатывало
             }}
-        
+            withBorder={false}
             id='page'
             styles={{
               header: {

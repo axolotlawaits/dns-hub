@@ -20,7 +20,6 @@ import {
   IconClock,
 } from '@tabler/icons-react';
 import { useUserContext } from '../hooks/useUserContext';
-import { usePageHeader } from '../contexts/PageHeaderContext';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ru';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -48,7 +47,6 @@ type UserData = {
 
 export default function Events() {
   const { user } = useUserContext();
-  const { setHeader } = usePageHeader();
   const [usersData, setUsersData] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -97,16 +95,6 @@ export default function Events() {
     
     fetchUpcomingBirthdays();
   }, [user?.id, fetchUpcomingBirthdays]);
-
-  useEffect(() => {
-    setHeader({
-      title: 'События'
-    });
-    
-    return () => {
-      setHeader({});
-    };
-  }, [setHeader]);
 
   const getBirthdayStatus = useCallback((userData: UserData) => {
     if (userData.daysUntil === 0) {
