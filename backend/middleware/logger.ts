@@ -1,6 +1,7 @@
 import pino from 'pino'
+import { Request, Response } from 'express';
 
-let logger;
+let logger: any;
 
 if (process.env.NODE_ENV !== 'production') {
   logger = pino({ level: 'silent' })
@@ -16,7 +17,18 @@ if (process.env.NODE_ENV !== 'production') {
     },
   })
   
-  logger = pino({ level: 'info' }, transport)
+  logger = pino({ level: 'info', serializers: { error: pino.stdSerializers.err }}, transport)
 }
 
-export default logger
+const levelHandler = (req: Request, res: Response, err?: Error) => {
+  if (res.statusCode >= 400 && res.statusCode < 500) {
+    return 'warn'
+  } else if (res.statusCode >= 500 || err) {
+    return 'error'
+  } else if (res.statusCode >= 300 && res.statusCode < 400) {
+    return 'silent'
+  }
+  return 'info'
+} 
+
+export { logger, levelHandler }
