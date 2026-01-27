@@ -1,5 +1,6 @@
 // routes/app/navigation.ts
 import express from 'express';
+import { authenticateToken } from '../../middleware/auth.js';
 import { 
   getRootMenuItems, 
   getAllMenuItems,
@@ -16,8 +17,8 @@ const router = express.Router();
 // Маршрут для получения корневых элементов меню
 router.get('/', getRootMenuItems);
 
-// Маршрут для получения всех пунктов меню (включая скрытые)
-router.get('/all', getAllMenuItems);
+// Маршрут для получения всех пунктов меню (включая скрытые) - требует аутентификации
+router.get('/all', authenticateToken, getAllMenuItems);
 
 // Маршрут для получения дочерних элементов меню по parent_id
 router.get('/sub', getNonRootMenuItems);

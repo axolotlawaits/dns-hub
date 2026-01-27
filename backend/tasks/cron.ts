@@ -52,4 +52,139 @@ export const initToolsCron = () => {
     }
   });
 
+  // Очистка истекших временных доступов: каждый час
+  schedule.scheduleJob('0 * * * *', async () => {
+    try {
+      console.log('[Access] Running expired temporary access cleanup...');
+      const now = new Date();
+      // Временная реализация до миграции Prisma
+      // После миграции раскомментировать и использовать правильные типы
+      const allAccesses = await prisma.userToolAccess.findMany({
+        include: {
+          user: {
+            select: { id: true, email: true, name: true }
+          },
+          tool: {
+            select: { id: true, name: true, link: true }
+          }
+        }
+      });
+      
+      // Фильтруем вручную до миграции (после миграции использовать where)
+      const expiredAccesses = allAccesses.filter((access: any) => {
+        return access.isTemporary === true && 
+               access.validUntil && 
+               new Date(access.validUntil) <= now;
+      });
+
+      if (expiredAccesses.length > 0) {
+        console.log(`[Access] Found ${expiredAccesses.length} expired temporary accesses`);
+        
+        // Отправляем уведомления пользователям
+        const { NotificationController } = await import('../controllers/app/notification.js');
+        const socketService = SocketIOService.getInstance();
+        
+        for (const access of expiredAccesses) {
+          const accessAny = access as any;
+          // Уведомление пользователю
+          try {
+            await NotificationController.create({
+              type: 'WARNING',
+              channels: ['IN_APP'],
+              title: `Временный доступ истек: ${accessAny.tool?.name || 'Инструмент'}`,
+              message: `Ваш временный доступ к инструменту "${accessAny.tool?.name || 'Инструмент'}" истек`,
+              senderId: 'system',
+              receiverId: access.userId,
+              toolId: access.toolId,
+              priority: 'MEDIUM'
+            });
+          } catch (notifError) {
+            console.error(`[Access] Failed to send expiration notification to ${accessAny.user?.email || access.userId}:`, notifError);
+          }
+
+          // Socket.IO событие
+          try {
+            socketService.sendEventToUser(access.userId, 'access_updated', {
+              toolId: access.toolId,
+              accessLevel: null,
+              toolName: accessAny.tool?.name || 'Инструмент',
+              toolLink: accessAny.tool?.link || '',
+              expired: true
+            });
+          } catch (socketError) {
+            console.error(`[Access] Failed to send expiration socket event to ${accessAny.user?.email || access.userId}:`, socketError);
+          }
+        }
+
+        // Удаляем истекшие доступы (после миграции использовать where)
+        const idsToDelete = expiredAccesses.map((a: any) => a.id);
+        const deleted = await prisma.userToolAccess.deleteMany({
+          where: {
+            id: { in: idsToDelete }
+          }
+        });
+
+        console.log(`[Access] Deleted ${deleted.count} expired temporary accesses`);
+      }
+    } catch (e) {
+      console.error('[Access] Expired access cleanup error', e);
+    }
+  });
+
+  // Уведомления о скором истечении временных доступов: ежедневно в 09:00
+  schedule.scheduleJob('0 9 * * *', async () => {
+    try {
+      console.log('[Access] Checking for soon-to-expire temporary accesses...');
+      const now = new Date();
+      const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      
+      // Временная реализация до миграции Prisma
+      const allTemporaryAccesses = await prisma.userToolAccess.findMany({
+        include: {
+          user: {
+            select: { id: true, email: true, name: true }
+          },
+          tool: {
+            select: { id: true, name: true, link: true }
+          }
+        }
+      });
+      
+      // Фильтруем вручную до миграции (после миграции использовать where)
+      const soonToExpire = allTemporaryAccesses.filter((access: any) => {
+        if (!access.isTemporary || !access.validUntil) return false;
+        const validUntil = new Date(access.validUntil);
+        return validUntil >= now && validUntil <= sevenDaysLater;
+      });
+
+      if (soonToExpire.length > 0) {
+        console.log(`[Access] Found ${soonToExpire.length} soon-to-expire temporary accesses`);
+        const { NotificationController } = await import('../controllers/app/notification.js');
+        
+        for (const access of soonToExpire) {
+          const accessAny = access as any;
+          const validUntil = accessAny.validUntil;
+          if (!validUntil) continue;
+          const daysLeft = Math.ceil((new Date(validUntil).getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+          try {
+            await NotificationController.create({
+              type: 'INFO',
+              channels: ['IN_APP'],
+              title: `Временный доступ истекает: ${accessAny.tool?.name || 'Инструмент'}`,
+              message: `Ваш временный доступ к инструменту "${accessAny.tool?.name || 'Инструмент'}" истечет через ${daysLeft} ${daysLeft === 1 ? 'день' : daysLeft < 5 ? 'дня' : 'дней'}`,
+              senderId: 'system',
+              receiverId: access.userId,
+              toolId: access.toolId,
+              priority: 'LOW'
+            });
+          } catch (notifError) {
+            console.error(`[Access] Failed to send expiration warning to ${accessAny.user?.email || access.userId}:`, notifError);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[Access] Expiration warning error', e);
+    }
+  });
+
 }

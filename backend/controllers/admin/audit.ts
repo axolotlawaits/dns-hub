@@ -50,6 +50,8 @@ export const getAuditLogs = async (req: Request, res: Response, next: NextFuncti
       entityType,
       startDate,
       endDate,
+      dateFrom,
+      dateTo,
       search
     } = req.query;
 
@@ -72,13 +74,17 @@ export const getAuditLogs = async (req: Request, res: Response, next: NextFuncti
       where.entityType = entityType as string;
     }
 
-    if (startDate || endDate) {
+    // Поддержка как startDate/endDate, так и dateFrom/dateTo
+    const fromDate = dateFrom || startDate;
+    const toDate = dateTo || endDate;
+    
+    if (fromDate || toDate) {
       where.timestamp = {};
-      if (startDate) {
-        where.timestamp.gte = new Date(startDate as string);
+      if (fromDate) {
+        where.timestamp.gte = new Date(fromDate as string);
       }
-      if (endDate) {
-        where.timestamp.lte = new Date(endDate as string);
+      if (toDate) {
+        where.timestamp.lte = new Date(toDate as string);
       }
     }
 

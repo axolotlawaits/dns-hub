@@ -12,7 +12,6 @@ import accessRouter from './routes/app/access.js'
 import newsRouter from './routes/app/news.js'
 import deviceRouter from './routes/app/device.js'
 import radioRouter from './routes/app/radio.js'
-import logsRouter from './routes/app/logs.js'
 import meterReadingRouter from './routes/aho/meterReading.js'
 import searchRouter from './routes/app/search.js'
 import profileRouter from './routes/app/profile.js'
@@ -22,6 +21,7 @@ import notificationRouter from './routes/app/notification.js'
 import correspondenceRouter from './routes/aho/correspondence.js'
 import supplydocsRouter from './routes/accounting/supplydocs.js'
 import rocRouter from './routes/accounting/roc.js'
+import cleaningRouter from './routes/accounting/cleaning.js'
 import navigationRouter from './routes/app/navigation.js'
 import typeRouter from './routes/app/type.js'
 import routeDayRouter from './routes/supply/routeDay.js'
@@ -38,13 +38,19 @@ import shopRouter from './routes/retail/shop.js'
 import commentRouter from './routes/app/comment.js'
 import adminRouter from './routes/admin.js'
 import telegramRouter  from './routes/app/telegram.js'
-import bugReportsRouter from './routes/app/bugReports.js'
 import branchesRouter from './routes/admin/branches.js'
 import usersRouter from './routes/admin/users.js'
 import analyticsRouter from './routes/admin/analytics.js'
 import auditRouter from './routes/admin/audit.js'
 import pollRouter from './routes/app/poll.js'
 import docsRouter from './routes/docs/docs.js'
+import trainingManagersRouter from './routes/Education/Training/managers.js'
+import trainingProgramsRouter from './routes/Education/Training/programs.js'
+import trainingTrainingRouter from './routes/Education/Training/training.js'
+import trainingHomeworkRouter from './routes/Education/Training/homework.js'
+import trainingEmploymentHistoryRouter from './routes/Education/Training/employmentHistory.js'
+import trainingExportRouter from './routes/Education/Training/export.js'
+import trainingAnalyticsRouter from './routes/Education/Training/analytics.js'
 
 import fs from 'fs'
 import cookieParser from 'cookie-parser'
@@ -90,7 +96,7 @@ export const refreshPrivateKey = fs.readFileSync(path.join(__dirname, 'keys/refr
 export const refreshPublicKey = fs.readFileSync(path.join(__dirname, 'keys/refresh_public.pem'), 'utf8');
 
 
-const allowedOrigins = process.env.NODE_ENV === 'production'  ? ['https://dns-zs.partner.ru', 'http://10.0.150.57']  : ['http://localhost:5173', 'http://localhost:5174', 'http://10.0.150.57:5173', 'http://10.0.150.57:5174', 'http://10.0.150.40:5173'];
+const allowedOrigins = process.env.NODE_ENV === 'production'  ? ['https://dns-zs.partner.ru', 'http://10.0.150.180']  : ['http://localhost:5173', 'http://localhost:5174', 'http://10.0.150.180:5173', 'http://10.0.150.180:5174', 'http://10.0.150.40:5173'];
 export const API = process.env.NODE_ENV === 'production' ? `https://dns-zs.partner.ru/hub-api` : 'http://localhost:2000/hub-api';
 export const APIWebSocket = process.env.NODE_ENV === 'production' ? `https://dns-zs.partner.ru/ws` : 'http://localhost:2000/ws';
 
@@ -148,9 +154,6 @@ app.use(cookieParser())
 // Аутентификация
 app.use('/hub-api/user', userRouter)
 
-// Bug reports
-app.use('/hub-api/bug-reports', bugReportsRouter);
-
 // Admin routes (только для DEVELOPER)
 app.use('/hub-api/admin/branches', branchesRouter);
 app.use('/hub-api/admin/users', usersRouter);
@@ -205,6 +208,7 @@ app.use('/hub-api/aho/meter-reading', meterReadingRouter)
 app.use('/hub-api/aho/correspondence', correspondenceRouter)
 app.use('/hub-api/accounting/supply-docs', supplydocsRouter)
 app.use('/hub-api/accounting/roc', rocRouter)
+app.use('/hub-api/accounting/cleaning', cleaningRouter)
 // Файловые загрузки
 app.use('/hub-api/add/media', mediaRouter)
 app.use('/hub-api/add/rk', rkRouter)
@@ -218,11 +222,18 @@ app.use('/hub-api/comments', commentRouter);
 
 // Остальные роуты
 app.use('/hub-api/radio', adminRouter)
-app.use('/hub-api/logs', logsRouter)
 app.use('/hub-api/search', searchRouter)
 app.use('/hub-api/navigation', navigationRouter);
 app.use('/hub-api/type', typeRouter);
 app.use('/hub-api/docs', docsRouter);
+app.use('/hub-api/training/managers', trainingManagersRouter);
+app.use('/hub-api/training/programs', trainingProgramsRouter);
+app.use('/hub-api/training/progress', trainingTrainingRouter);
+// Комментарии используют универсальный роут /hub-api/comments с entityType='TRAINING_MANAGER' или 'TRAINING_PROGRAM'
+app.use('/hub-api/training/homework', trainingHomeworkRouter);
+app.use('/hub-api/training/employment-history', trainingEmploymentHistoryRouter);
+app.use('/hub-api/training/export', trainingExportRouter);
+app.use('/hub-api/training/analytics', trainingAnalyticsRouter);
 
 // Ленивая загрузка scanner роутера
 let scannerRouterLoaded = false;

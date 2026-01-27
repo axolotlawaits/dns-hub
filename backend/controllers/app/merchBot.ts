@@ -736,12 +736,6 @@ class MerchBotService {
     }
   }
 
-  // Обновление меню (не используется, заменено на обновление через editMessageReplyMarkup)
-  private async updateMenu(ctx: MerchContext, buttonsHierarchy: any): Promise<void> {
-    // Метод оставлен для обратной совместимости, но не используется
-    // Меню теперь обновляется через editMessageReplyMarkup в showMainMenu/showSubMenu
-  }
-
   // Показать дополнительные категории
   private async showMoreCategories(ctx: MerchContext): Promise<void> {
     try {

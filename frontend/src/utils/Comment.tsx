@@ -34,7 +34,7 @@ export interface Comment {
 
 interface CommentProps {
   entityId: string;
-  entityType: 'SHOP' | 'DOCS';
+  entityType: 'SHOP' | 'DOCS' | 'TRAINING_MANAGER' | 'TRAINING_PROGRAM';
   onCommentsChange?: (count: number) => void;
   fetchComments: (id: string, page?: number, limit?: number) => Promise<{ comments: Comment[]; total: number; page: number; totalPages: number }>;
   createComment: (id: string, content: string, parentId?: string | null) => Promise<Comment>;

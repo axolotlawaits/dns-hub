@@ -99,9 +99,26 @@ function generateHtml(notification: NotificationWithRelations, isDark: boolean =
     buttonHover: '#0284c7',   // primary-600
   };
 
-  const cta = actionUrl
+  // Получаем URL фронтенда для правильных ссылок
+  const hubFrontendUrl = process.env.HUB_FRONTEND_URL || process.env.HUB_API_URL?.replace('/hub-api', '') || 'http://localhost:5173';
+  
+  // Исправляем actionUrl если он относительный
+  let finalActionUrl = actionUrl;
+  if (actionUrl && !actionUrl.startsWith('http://') && !actionUrl.startsWith('https://')) {
+    // Если URL начинается с /, добавляем базовый URL фронтенда
+    if (actionUrl.startsWith('/')) {
+      finalActionUrl = `${hubFrontendUrl}${actionUrl}`;
+    } else {
+      finalActionUrl = `${hubFrontendUrl}/${actionUrl}`;
+    }
+  }
+  
+  // Логотип (можно добавить реальный путь к логотипу)
+  const logoUrl = `${hubFrontendUrl}/favicon.svg`; // Или путь к логотипу портала
+  
+  const cta = finalActionUrl
     ? `<tr><td align="center" style="padding: 24px 0 0 0;">
-          <a href="${escapeAttr(actionUrl)}" target="_blank" style="display:inline-block;padding:12px 24px;border-radius:8px;background:${colors.buttonBg};color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;transition:background 0.2s">${escapeHtml(actionText)}</a>
+          <a href="${escapeAttr(finalActionUrl)}" target="_blank" style="display:inline-block;padding:12px 24px;border-radius:8px;background:${colors.buttonBg};color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;transition:background 0.2s">${escapeHtml(actionText)}</a>
         </td></tr>`
     : '';
 
@@ -115,7 +132,8 @@ function generateHtml(notification: NotificationWithRelations, isDark: boolean =
     body{margin:0;background:${colors.bg};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:${colors.text};line-height:1.6}
     .container{max-width:640px;margin:0 auto;padding:24px}
     .card{background:${colors.card};border-radius:12px;border:1px solid ${colors.border};box-shadow:0 4px 6px -1px rgba(0,0,0,${isDark ? '0.4' : '0.1'}),0 2px 4px -2px rgba(0,0,0,${isDark ? '0.4' : '0.1'})}
-    .header{background:${colors.headerGradient};color:#ffffff;border-radius:12px 12px 0 0;padding:24px}  
+    .header{background:${colors.headerGradient};color:#ffffff;border-radius:12px 12px 0 0;padding:24px;position:relative}  
+    .logo{display:inline-block;margin-bottom:12px;max-width:120px;height:auto}
     .title{margin:4px 0 0 0;font-size:20px;line-height:1.4;font-weight:700}
     .sub{margin:0;font-size:13px;color:rgba(255,255,255,0.9)}
     .content{padding:24px;color:${colors.text}}
@@ -134,6 +152,7 @@ function generateHtml(notification: NotificationWithRelations, isDark: boolean =
       <table class="card" role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse">
         <tr>
           <td class="header">
+            <img src="${escapeAttr(logoUrl)}" alt="DNS Hub" class="logo" style="max-width:120px;height:auto;display:block;margin-bottom:12px" />
             <div style="font-size:12px;color:rgba(255,255,255,0.85);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">${escapeHtml(toolName)}</div>
             <div class="title">${title}</div>
           </td>

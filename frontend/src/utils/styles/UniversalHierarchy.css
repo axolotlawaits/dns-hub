@@ -1,3 +1,4 @@
+/* Используем те же классы, что и в мерче для единообразия */
 .hierarchy-block {
   display: flex;
   align-items: center;
@@ -135,4 +136,3 @@
   width: 100%;
   text-align: left;
 }
-

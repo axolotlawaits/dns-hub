@@ -119,13 +119,14 @@ const dispatchNotification = async (notification: NotificationWithRelations) => 
     }
   }
 
-  if (notification.channel.includes('EMAIL') && wantsEmail) {
-    try {
-      await emailService.send(notification);
-    } catch (error) {
-      console.error(`[Notification] Failed to send EMAIL:`, error);
-    }
-  }
+  // Email-уведомления отключены
+  // if (notification.channel.includes('EMAIL') && wantsEmail) {
+  //   try {
+  //     await emailService.send(notification);
+  //   } catch (error) {
+  //     console.error(`[Notification] Failed to send EMAIL:`, error);
+  //   }
+  // }
 
   if (notification.channel.includes('TELEGRAM') && notification.receiver?.telegramChatId) {
     try {

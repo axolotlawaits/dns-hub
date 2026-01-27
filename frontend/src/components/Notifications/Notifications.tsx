@@ -230,8 +230,34 @@ function NotificationsList() {
                 if (notification.action && typeof notification.action === 'object') {
                   const action = notification.action as any;
                   if (action.type === 'NAVIGATE' && action.url) {
-                    // Переходим по URL из action
-                    navigate(action.url);
+                    const currentPath = window.location.pathname;
+                    const notificationUrl = action.url;
+                    
+                    // Закрываем popup уведомлений при переходе
+                    // Попытка закрыть popup через событие (если используется в Header)
+                    const closeEvent = new CustomEvent('closeNotificationsPopup');
+                    window.dispatchEvent(closeEvent);
+                    
+                    // Если мы уже на странице Safety Journal и уведомление тоже для Safety Journal
+                    if (currentPath.includes('/jurists/safety') && notificationUrl.includes('/jurists/safety')) {
+                      // Извлекаем параметры из URL уведомления
+                      const urlObj = new URL(notificationUrl, window.location.origin);
+                      const branchId = urlObj.searchParams.get('branchId');
+                      const chatId = urlObj.searchParams.get('chatId');
+                      const messageId = urlObj.searchParams.get('messageId');
+                      
+                      // Обновляем URL параметры без редиректа
+                      const newParams = new URLSearchParams();
+                      if (branchId) newParams.set('branchId', branchId);
+                      if (chatId) newParams.set('chatId', chatId);
+                      if (messageId) newParams.set('messageId', messageId);
+                      
+                      navigate(`${currentPath}?${newParams.toString()}`, { replace: true });
+                    } else {
+                      // Если мы не на странице Safety Journal, делаем обычный редирект
+                      navigate(notificationUrl);
+                    }
+                    
                     // Отмечаем как прочитанное при клике
                     if (isUnread && notification.id) {
                       markAsRead(notification.id);

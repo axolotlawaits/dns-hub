@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {  ActionIcon,  AppShell,  Avatar,  Menu,  Divider,  Group,  Text,  Tooltip, Transition, Box, Button, Badge, ThemeIcon, ScrollArea, Loader, Stack } from '@mantine/core';
-import {  IconBrightnessDown,  IconLogin,  IconLogout,  IconMoon,  IconUser, IconSearch, IconBell, IconAlertCircle, IconInfoCircle, IconCheck, IconX, IconMail } from '@tabler/icons-react';
+import {  IconBrightnessDown,  IconLogin,  IconLogout,  IconMoon,  IconUser, IconSearch, IconBell, IconAlertCircle, IconInfoCircle, IconCheck, IconX } from '@tabler/icons-react';
 import { useNavigate } from 'react-router';
 import { useUserContext } from '../hooks/useUserContext';
+import { clearAllAuthStorage } from '../utils/storage';
 import { useTheme } from '../contexts/ThemeContext';
 import { usePageHeader } from '../contexts/PageHeaderContext';
 import { useDisclosure } from '@mantine/hooks';
@@ -69,7 +70,7 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
   const { lastNotification } = useSocketIO();
   // useNotifications уже обрабатывает push-уведомления в App.tsx,
   // здесь мы только добавляем уведомление в список
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fetchingRef = useRef(false); // Защита от одновременных запросов
 
   // Декодируем токен для проверки impersonatedBy
@@ -110,16 +111,11 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
         // Восстанавливаем токен и данные администратора
         localStorage.setItem('token', adminToken);
         localStorage.setItem('user', adminUser);
-        localStorage.removeItem('adminToken');
-        localStorage.removeItem('adminUser');
         // Перезагружаем страницу для применения токена администратора
         window.location.href = '/profile/admin?tab=users';
       } else {
         // Если токен администратора не найден, просто переходим на страницу логина
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        localStorage.removeItem('adminToken');
-        localStorage.removeItem('adminUser');
+        clearAllAuthStorage();
         window.location.href = '/login';
       }
     } catch (error) {
@@ -127,8 +123,7 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
   };
 
   const onLogout = () => {
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
+    clearAllAuthStorage();
     logout();
     navigate('/login');
   };
@@ -181,6 +176,19 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
       }
     }
   }, [user?.id]);
+
+  // Закрытие popup при переходе по уведомлению (через событие)
+  useEffect(() => {
+    const handleClosePopup = () => {
+      setMenuOpened(false);
+    };
+    
+    window.addEventListener('closeNotificationsPopup', handleClosePopup);
+    
+    return () => {
+      window.removeEventListener('closeNotificationsPopup', handleClosePopup);
+    };
+  }, []);
 
   // Загрузка уведомлений при монтировании и периодическое обновление
   useEffect(() => {
@@ -295,10 +303,8 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
         }
       });
       
-      // Открываем меню уведомлений, если оно закрыто, чтобы пользователь увидел новое уведомление
-      if (!menuOpened) {
-        setMenuOpened(true);
-      }
+      // Popup уведомлений не должен открываться автоматически
+      // Пользователь сам откроет popup, если нужно
     }
   }, [lastNotification, user?.id, menuOpened]);
 
@@ -699,8 +705,32 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
                                     if (notification.action && typeof notification.action === 'object') {
                                       const action = notification.action as any;
                                       if (action.type === 'NAVIGATE' && action.url) {
-                                        // Переходим по URL из action (используем window.location для надежности)
-                                        window.location.href = action.url;
+                                        const currentPath = window.location.pathname;
+                                        const notificationUrl = action.url;
+                                        
+                                        // Закрываем popup уведомлений при переходе
+                                        setMenuOpened(false);
+                                        
+                                        // Если мы уже на странице Safety Journal и уведомление тоже для Safety Journal
+                                        if (currentPath.includes('/jurists/safety') && notificationUrl.includes('/jurists/safety')) {
+                                          // Извлекаем параметры из URL уведомления
+                                          const urlObj = new URL(notificationUrl, window.location.origin);
+                                          const branchId = urlObj.searchParams.get('branchId');
+                                          const chatId = urlObj.searchParams.get('chatId');
+                                          const messageId = urlObj.searchParams.get('messageId');
+                                          
+                                          // Обновляем URL параметры без редиректа
+                                          const newParams = new URLSearchParams();
+                                          if (branchId) newParams.set('branchId', branchId);
+                                          if (chatId) newParams.set('chatId', chatId);
+                                          if (messageId) newParams.set('messageId', messageId);
+                                          
+                                          navigate(`${currentPath}?${newParams.toString()}`, { replace: true });
+                                        } else {
+                                          // Если мы не на странице Safety Journal, делаем обычный редирект
+                                          navigate(notificationUrl);
+                                        }
+                                        
                                         // Отмечаем как прочитанное при клике
                                         if (isUnread && notification.id) {
                                           markAsRead(notification.id);

@@ -396,36 +396,15 @@
 /* Исправление позиционирования навигации на всех размерах экрана */
 .mantine-AppShell-navbar {
   left: 0 !important;
+  right: auto !important;
   top: 64px !important;
   bottom: 65px !important;
+  position: fixed !important;
 }
 
 [data-navigation] {
   left: 0 !important;
+  right: auto !important;
   position: fixed !important;
 }
 
-/* Медиа-запросы для адаптивности */
-@media (max-width: 768px) {
-  .mantine-AppShell-navbar {
-    left: 0 !important;
-    right: auto !important;
-  }
-  
-  [data-navigation] {
-    left: 0 !important;
-    right: auto !important;
-  }
-}
-
-@media (min-width: 769px) and (max-width: 1200px) {
-  .mantine-AppShell-navbar {
-    left: 0 !important;
-    right: auto !important;
-  }
-  
-  [data-navigation] {
-    left: 0 !important;
-    right: auto !important;
-  }
-}

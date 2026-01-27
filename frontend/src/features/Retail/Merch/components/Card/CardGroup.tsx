@@ -8,6 +8,9 @@ import { useApp } from '../../context/SelectedCategoryContext';
 import { useCardStore, type CardItem } from '../../data/CardData';
 import { CustomModal } from '../../../../../utils/CustomModal';
 import { notificationSystem } from '../../../../../utils/Push';
+import { useUserContext } from '../../../../../hooks/useUserContext';
+import { API } from '../../../../../config/constants';
+import useAuthFetch from '../../../../../hooks/useAuthFetch';
 import './CardGroup.css';
 
 //---------------------------------------------Группа карточек
@@ -19,6 +22,9 @@ interface CardGroupProps {
 function CardGroup({ hasFullAccess = true, onCardsUpdate }: CardGroupProps) {
   const { selectedId } = useApp();
   const { cards, loading, error, pagination, loadCardsByCategory, removeCard, toggleCardActive } = useCardStore();
+  const { user } = useUserContext();
+  const authFetch = useAuthFetch();
+  const viewModeLoadedRef = useRef(false);
   
   const visibleCards = cards;
   const [addModalOpened, { open: openAddModal, close: closeAddModal }] = useDisclosure(false);
@@ -33,6 +39,82 @@ function CardGroup({ hasFullAccess = true, onCardsUpdate }: CardGroupProps) {
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollParentRef = useRef<HTMLElement | null>(null);
+
+  // Загружаем предпочтение пользователя из UserSettings (только один раз при монтировании)
+  useEffect(() => {
+    const loadViewMode = async () => {
+      if (!user?.id || viewModeLoadedRef.current) return;
+      
+      try {
+        const response = await authFetch(`${API}/user/settings/${user.id}/merch_view_mode`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+        
+        // 404 - это нормально, настройка еще не создана, используем значение по умолчанию
+        if (response && response.ok) {
+          const data = await response.json();
+          const savedMode = data?.value;
+          if (savedMode === 'list' || savedMode === 'grid') {
+            setViewMode(savedMode);
+          } else {
+            // Если значение некорректное, используем значение по умолчанию
+            setViewMode('list');
+          }
+        } else if (response && response.status === 404) {
+          // Настройка не найдена - это нормально для первого запуска, используем значение по умолчанию
+          setViewMode('list');
+        } else {
+          // Другие ошибки - используем значение по умолчанию
+          setViewMode('list');
+        }
+        
+        // Всегда помечаем, что загрузка завершена, даже если настройка не найдена
+        viewModeLoadedRef.current = true;
+      } catch (error) {
+        // Только реальные ошибки сети логируем (не 404)
+        // В случае ошибки используем базовый вариант - список
+        setViewMode('list');
+        viewModeLoadedRef.current = true;
+      }
+    };
+
+    loadViewMode();
+  }, [user?.id, authFetch]);
+
+  // Сохраняем предпочтение пользователя в UserSettings
+  useEffect(() => {
+    const saveViewMode = async () => {
+      if (!user?.id || !viewModeLoadedRef.current) return;
+      
+      try {
+        const response = await authFetch(`${API}/user/settings`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: user.id,
+            parameter: 'merch_view_mode',
+            value: viewMode,
+          }),
+        });
+        
+        if (!response || !response.ok) {
+          console.error('Ошибка при сохранении настройки отображения');
+        }
+      } catch (error) {
+        console.error('Ошибка при сохранении настройки отображения:', error);
+      }
+    };
+
+    // Сохраняем только если пользователь загружен и настройка уже была загружена
+    if (user?.id && viewModeLoadedRef.current) {
+      saveViewMode();
+    }
+  }, [viewMode, user?.id, authFetch]);
 
   useEffect(() => {
     if (selectedId) {

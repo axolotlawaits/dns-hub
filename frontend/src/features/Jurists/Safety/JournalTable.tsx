@@ -77,7 +77,7 @@ const LocalJournalTable = function LocalJournalTable({
                     </Text>
                   </Tooltip>
                 </td>
-                <td className='table-cell'>
+                <td className='table-cell' onClick={(e) => e.stopPropagation()}>
                   <Group gap="xs" align="center">
                     {(() => {
                       const statusInfo = JOURNAL_STATUS[journal.status as keyof typeof JOURNAL_STATUS];
@@ -149,32 +149,36 @@ const LocalJournalTable = function LocalJournalTable({
                         
                         return (
                           <>
-                            <Tooltip label="Одобрить">
-                              <ActionIcon 
-                                size="sm" 
-                                color="green" 
-                                variant={journal.status === 'approved' ? 'filled' : 'light'} 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setApproveModalOpen(journal.id);
-                                }}
-                              >
-                                <IconCheck size={14} />
-                              </ActionIcon>
-                            </Tooltip>
-                            <Tooltip label="Отклонить">
-                              <ActionIcon 
-                                size="sm" 
-                                color="red" 
-                                variant={journal.status === 'rejected' ? 'filled' : 'light'} 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setRejectModalOpen(journal.id);
-                                }}
-                              >
-                                <IconX size={14} />
-                              </ActionIcon>
-                            </Tooltip>
+                            {journal.status !== 'approved' && (
+                              <Tooltip label="Одобрить">
+                                <ActionIcon 
+                                  size="sm" 
+                                  color="green" 
+                                  variant="light" 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setApproveModalOpen(journal.id);
+                                  }}
+                                >
+                                  <IconCheck size={14} />
+                                </ActionIcon>
+                              </Tooltip>
+                            )}
+                            {journal.status !== 'rejected' && (
+                              <Tooltip label="Отклонить">
+                                <ActionIcon 
+                                  size="sm" 
+                                  color="red" 
+                                  variant="light" 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setRejectModalOpen(journal.id);
+                                  }}
+                                >
+                                  <IconX size={14} />
+                                </ActionIcon>
+                              </Tooltip>
+                            )}
                             <Modal opened={journal.id === approveModalOpen} onClose={() => {setApproveModalOpen(null); setApproveMessage('')}} title='Одобрить журнал' centered zIndex={99999}>
                               <Stack>
                                 <Textarea

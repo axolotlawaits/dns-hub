@@ -1,5 +1,5 @@
 // components/Tools.tsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import * as TablerIcons from "@tabler/icons-react";
 import { Card, SimpleGrid, Text, Group, ThemeIcon, Badge, Button, Stack, Modal } from '@mantine/core';
@@ -120,19 +120,42 @@ export default function Tools({ tools }: ToolsProps) {
     }
   };
 
+  // Фильтруем инструменты: показываем все незащищенные + защищенные с доступом
+  // Незащищенные инструменты доступны всем, защищенные требуют доступа
+  const visibleTools = useMemo(() => {
+    return tools.filter(tool => {
+      // Админы и разработчики видят все
+      if (user && ['ADMIN', 'DEVELOPER'].includes(user.role)) {
+        return true;
+      }
+      // Проверяем, является ли инструмент защищенным
+      const isProtected = isProtectedTool(tool);
+      
+      // Если инструмент не защищен - показываем всем
+      if (!isProtected) {
+        return true;
+      }
+      
+      // Если инструмент защищен - показываем только с доступом
+      const toolHasAccess = hasAccess(tool);
+      return toolHasAccess;
+    });
+  }, [tools, user, access, isProtectedTool, hasAccess]);
+
   return (
     <>
       <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing="lg">
-        {tools.map((tool) => {
+        {visibleTools.map((tool) => {
           const IconComponent = TablerIcons[tool.icon as keyof typeof TablerIcons] as 
             React.ComponentType<{ size?: number; stroke?: number; color?: string }> | undefined;
           
           const toolHasAccess = hasAccess(tool);
           const isRequesting = requestingAccess === tool.id;
+          const isProtected = isProtectedTool(tool);
 
           const CardContent = (
             <>
-              {!toolHasAccess && isProtectedTool(tool) && (
+              {!toolHasAccess && isProtected && (
                 <div style={{
                   position: 'absolute',
                   top: 8,
@@ -149,7 +172,7 @@ export default function Tools({ tools }: ToolsProps) {
                 <Group justify="space-between" align="flex-start" mb="sm">
                   <ThemeIcon 
                     size="xl" 
-                    color={toolHasAccess ? (tool.color || 'blue') : 'gray'} 
+                    color={(toolHasAccess || !isProtected) ? (tool.color || 'blue') : 'gray'} 
                     variant="light"
                     className={classes.toolIcon}
                   >
@@ -193,7 +216,7 @@ export default function Tools({ tools }: ToolsProps) {
                   </Group>
                 )}
 
-                {!toolHasAccess && isProtectedTool(tool) && (
+                {!toolHasAccess && (
                   <Button
                     fullWidth
                     mt="md"
@@ -223,15 +246,16 @@ export default function Tools({ tools }: ToolsProps) {
               className={classes.card}
               padding="lg"
               style={{
-                opacity: toolHasAccess || !isProtectedTool(tool) ? 1 : 0.6,
-                cursor: toolHasAccess || !isProtectedTool(tool) ? 'pointer' : 'not-allowed',
+                opacity: toolHasAccess ? 1 : 0.6,
+                cursor: toolHasAccess ? 'pointer' : 'not-allowed',
                 position: 'relative'
               }}
-              onClick={toolHasAccess ? () => navigate(`/${tool.link}`) : isProtectedTool(tool) ? (e) => {
+              onClick={toolHasAccess || !isProtected ? () => navigate(`/${tool.link}`) : (e) => {
                 e.preventDefault();
+                // Показываем модальное окно запроса доступа только для защищенных инструментов без доступа
                 setSelectedTool(tool);
                 setRequestModalOpened(true);
-              } : () => navigate(`/${tool.link}`)}
+              }}
             >
               {CardContent}
             </Card>

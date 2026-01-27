@@ -1798,7 +1798,9 @@ export const sendMessage = async (req: Request, res: Response) => {
       messageId: string,
       branchId: string
     ) => {
-      // Проверяем, находится ли пользователь в любом активном чате
+      // Проверяем, находится ли пользователь в конкретном активном чате (этого чата)
+      // Сначала проверяем конкретный чат, затем любой активный чат
+      const isInThisChat = socketService.isUserInActiveChat(userId, chatId);
       const isInAnyActiveChat = socketService.isUserInAnyActiveChat(userId);
       
       console.log('[SafetyJournalChat] sendNotificationToUser:', {
@@ -1808,18 +1810,20 @@ export const sendMessage = async (req: Request, res: Response) => {
         branchName,
         chatId,
         messageId,
+        isInThisChat,
         isInAnyActiveChat
       });
       
-      // Отправляем уведомление только если пользователь НЕ в модалке чата
-      if (!isInAnyActiveChat) {
+      // Отправляем уведомление только если пользователь НЕ в этом конкретном чате
+      // Если пользователь в другом чате, все равно отправляем уведомление
+      if (!isInThisChat) {
         const notificationBranchName = branchName && branchName !== 'филиала' ? branchName : 'филиал';
         
         console.log('[SafetyJournalChat] Creating notification for user:', userId);
         
         await NotificationController.create({
           type: 'INFO',
-          channels: ['IN_APP', 'TELEGRAM'],
+          channels: ['IN_APP', 'TELEGRAM', 'EMAIL'],
           title: senderName,
           message: messagePreview,
           senderId: token.userId,
@@ -1886,12 +1890,11 @@ export const sendMessage = async (req: Request, res: Response) => {
       // Получаем всех участников чата (используем ту же логику, что и в getChatParticipants)
       const participantIds = new Set<string>();
       
-      // Добавляем проверяющего
-      if (chat.checkerId) {
-        participantIds.add(chat.checkerId);
-      }
-      
-      // Получаем всех проверяющих (пользователей с FULL доступом)
+      // ВАЖНО: Получаем ВСЕХ проверяющих (может быть несколько проверяющих в чате)
+      // Это включает:
+      // 1. Проверяющего, указанного в чате (chat.checkerId)
+      // 2. Всех пользователей с FULL доступом к Safety Journal
+      // 3. Всех SUPERVISOR
       const safetyTool = await prisma.tool.findFirst({
         where: { link: 'jurists/safety' }
       });
@@ -1920,6 +1923,18 @@ export const sendMessage = async (req: Request, res: Response) => {
           participantIds.add(s.id);
         });
       }
+      
+      // Также добавляем проверяющего из чата (если он еще не добавлен выше)
+      // Это важно, если checkerId не имеет FULL доступа, но указан в чате
+      if (chat.checkerId) {
+        participantIds.add(chat.checkerId);
+      }
+      
+      console.log('[SafetyJournalChat] All checkers (participants with FULL access):', {
+        totalCheckers: participantIds.size,
+        checkerIds: Array.from(participantIds),
+        chatCheckerId: chat.checkerId
+      });
       
       // Получаем ответственных по филиалу из внешнего API
       if (authToken) {
@@ -1979,25 +1994,53 @@ export const sendMessage = async (req: Request, res: Response) => {
         branchId: chat.branchId
       });
       
+      // ВАЖНО: Убеждаемся, что отправитель тоже в списке участников
+      // Это гарантирует, что сообщение отображается в real-time у всех, включая отправителя
+      participantIds.add(token.userId);
+      
+      // Отправляем сообщение через Socket.IO ВСЕМ участникам чата (включая отправителя)
+      // Это гарантирует, что сообщение отображается в real-time у всех пользователей
+      // Учитываем, что участников может быть более 2 (проверяющий + несколько ответственных)
+      console.log('[SafetyJournalChat] Sending message to all participants:', {
+        totalParticipants: participantIds.size,
+        participantIds: Array.from(participantIds),
+        chatId: chat.id,
+        branchId: chat.branchId,
+        senderId: token.userId
+      });
+      
       for (const participantId of participantIds) {
-        if (participantId !== token.userId && !notifiedUserIds.has(participantId)) {
-          // Отправляем сообщение через Socket.IO для отображения в чате
-          socketService.sendChatMessage(participantId, messageData);
+        if (!notifiedUserIds.has(participantId)) {
+          // Отправляем сообщение через Socket.IO для отображения в чате ВСЕМ участникам
+          const sent = socketService.sendChatMessage(participantId, messageData);
           
-          // Отправляем уведомление через единую функцию
-          await sendNotificationToUser(
-            participantId,
-            senderName,
-            messagePreview,
-            branchName,
-            chat.id,
-            finalMessage?.id || message.id,
-            chat.branchId
-          );
+          if (sent) {
+            console.log(`[SafetyJournalChat] Message sent via Socket.IO to participant: ${participantId}`);
+          } else {
+            console.warn(`[SafetyJournalChat] Failed to send message via Socket.IO to participant: ${participantId} (user may be offline)`);
+          }
+          
+          // Отправляем уведомление только другим участникам (не отправителю)
+          if (participantId !== token.userId) {
+            await sendNotificationToUser(
+              participantId,
+              senderName,
+              messagePreview,
+              branchName,
+              chat.id,
+              finalMessage?.id || message.id,
+              chat.branchId
+            );
+          }
           
           notifiedUserIds.add(participantId);
         }
       }
+      
+      console.log('[SafetyJournalChat] Message sent to all participants via Socket.IO:', {
+        totalSent: notifiedUserIds.size,
+        participantIds: Array.from(notifiedUserIds)
+      });
       
       console.log('[SafetyJournalChat] Notifications sent to participants:', notifiedUserIds.size);
     } catch (notifError) {

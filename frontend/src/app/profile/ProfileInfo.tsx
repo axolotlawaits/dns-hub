@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useUserContext } from '../../hooks/useUserContext';
 import { API } from '../../config/constants';
 import { notificationSystem } from '../../utils/Push';
+import { fetchWithAuth } from '../../utils/fetchWithAuth';
 import {  Avatar,  Card,  Text,  Group,  Badge,  Skeleton,  Stack,  Box,  Modal,  Button,  Loader,  CopyButton,  Tooltip,  ActionIcon, Title, Divider, ThemeIcon, Grid, Alert, Switch, SegmentedControl } from '@mantine/core';
 import { DynamicFormModal, FormField } from '../../utils/formModal';
 import { useDisclosure } from '@mantine/hooks';
@@ -114,19 +115,25 @@ const ProfileInfo = () => {
 
   useEffect(() => {
     const fetchUserData = async () => {
-      if (!user?.email) {
+      if (!user?.email || !user?.id) {
         setLoading(false);
         return;
       }
       try {
-        const response = await fetch(`${API}/profile/user-data`, {
+        const response = await fetchWithAuth(`${API}/profile/user-data`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({ email: user.email })
         });
+        
+        // Если получили 401 и refresh token тоже истек, прекращаем выполнение
+        if (response.status === 401) {
+          setLoading(false);
+          return;
+        }
+        
         if (!response.ok) throw new Error('Failed to fetch user data');
         setUserData(await response.json());
       } catch (err) {
@@ -136,7 +143,7 @@ const ProfileInfo = () => {
       }
     };
     fetchUserData();
-  }, [user?.email]);
+  }, [user?.email, user?.id]);
 
   useEffect(() => {
     const checkTelegramConnection = async () => {
@@ -168,33 +175,39 @@ const ProfileInfo = () => {
 
   useEffect(() => {
     const interval = setInterval(async () => {
-      if (user?.id) {
-        try {
-          const response = await fetch(`${API}/telegram/status/${user.id}`, {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('token')}`
+      if (!user?.id) return;
+      
+      // Проверяем, что токен существует перед выполнением запросов
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
+      try {
+        const response = await fetchWithAuth(`${API}/telegram/status/${user.id}`);
+        
+        // Если получили 401 и refresh token тоже истек, прекращаем выполнение
+        if (response.status === 401) {
+          return;
+        }
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.is_connected !== isTelegramConnected) {
+            setIsTelegramConnected(data.is_connected);
+            if (data.user_name) {
+              setTelegramUserName(data.user_name);
             }
-          });
-          if (response.ok) {
-            const data = await response.json();
-            if (data.is_connected !== isTelegramConnected) {
-              setIsTelegramConnected(data.is_connected);
-              if (data.user_name) {
-                setTelegramUserName(data.user_name);
-              }
-              notificationSystem.addNotification(
-                'Успех',
-                'Статус Telegram обновлен',
-                'success'
-              );
-              if (data.is_connected) {
-                closeTelegramModal();
-              }
+            notificationSystem.addNotification(
+              'Успех',
+              'Статус Telegram обновлен',
+              'success'
+            );
+            if (data.is_connected) {
+              closeTelegramModal();
             }
           }
-        } catch (error) {
-          console.error('Error polling Telegram status:', error);
         }
+      } catch (error) {
+        console.error('Error polling Telegram status:', error);
       }
     }, 10000);
 
@@ -202,21 +215,29 @@ const ProfileInfo = () => {
   }, [user?.id, isTelegramConnected]);
 
   const toggleEmailNotifications = async () => {
+    if (!user?.id) return;
+    
     const newValue = !emailNotificationsEnabled;
     setEmailNotificationsEnabled(newValue);
     try {
-      const response = await fetch(`${API}/user/settings`, {
+      const response = await fetchWithAuth(`${API}/user/settings`, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          userId: user?.id,
+          userId: user.id,
           parameter: 'notifications.email',
           value: newValue.toString(),
         }),
       });
+      
+      // Если получили 401 и refresh token тоже истек, прекращаем выполнение
+      if (response.status === 401) {
+        setEmailNotificationsEnabled(!newValue); // Откатываем изменение
+        return;
+      }
+      
       if (!response.ok) throw new Error('Failed to update email notification setting');
       notificationSystem.addNotification(
         'Успех',
@@ -224,6 +245,7 @@ const ProfileInfo = () => {
         'success'
       );
     } catch (error) {
+      setEmailNotificationsEnabled(!newValue); // Откатываем изменение при ошибке
       notificationSystem.addNotification(
         'Ошибка',
         error instanceof Error ? error.message : 'Не удалось обновить настройку рассылки',
@@ -237,12 +259,10 @@ const ProfileInfo = () => {
     if (!user?.id) return;
 
     try {
-      let token = localStorage.getItem('token');
-      let response = await fetch(`${API}/user/settings`, {
+      const response = await fetchWithAuth(`${API}/user/settings`, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           userId: user.id,
@@ -251,48 +271,22 @@ const ProfileInfo = () => {
         }),
       });
 
-      // Если получили 401, пробуем обновить токен
+      // Если получили 401 и refresh token тоже истек, прекращаем выполнение
       if (response.status === 401) {
-        try {
-          const refreshResponse = await fetch(`${API}/refresh-token`, {
-            method: 'POST',
-            credentials: 'include',
-          });
-
-          if (refreshResponse.ok) {
-            const newToken = await refreshResponse.json();
-            localStorage.setItem('token', newToken);
-            token = newToken;
-            
-            // Повторяем запрос с новым токеном
-            response = await fetch(`${API}/user/settings`, {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-              },
-              body: JSON.stringify({
-                userId: user.id,
-                parameter: parameter,
-                value: value
-              }),
-            });
-          }
-        } catch (refreshError) {
-          console.error('Token refresh failed:', refreshError);
-        }
+        throw new Error('Не удалось сохранить настройку: требуется авторизация');
       }
 
       if (!response.ok) {
         throw new Error('Ошибка сохранения настройки');
       }
     } catch (err) {
-      console.error('Error saving bookmarks setting:', err);
+      console.error('Error saving user setting:', err);
       notificationSystem.addNotification(
         'Ошибка',
-        'Не удалось сохранить настройку закладок',
+        err instanceof Error ? err.message : 'Не удалось сохранить настройку',
         'error'
       );
+      throw err;
     }
   };
 
@@ -300,36 +294,12 @@ const ProfileInfo = () => {
     if (!user?.id) return null;
 
     try {
-      let token = localStorage.getItem('token');
-      let response = await fetch(`${API}/user/settings/${user.id}/${parameter}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await fetchWithAuth(`${API}/user/settings/${user.id}/${parameter}`);
 
-      // Если получили 401, пробуем обновить токен
+      // Если получили 401 и refresh token тоже истек, прекращаем выполнение
       if (response.status === 401) {
-        try {
-          const refreshResponse = await fetch(`${API}/refresh-token`, {
-            method: 'POST',
-            credentials: 'include',
-          });
-
-          if (refreshResponse.ok) {
-            const newToken = await refreshResponse.json();
-            localStorage.setItem('token', newToken);
-            token = newToken;
-            
-            // Повторяем запрос с новым токеном
-            response = await fetch(`${API}/user/settings/${user.id}/${parameter}`, {
-              headers: {
-                'Authorization': `Bearer ${token}`
-              }
-            });
-          }
-        } catch (refreshError) {
-          console.error('Token refresh failed:', refreshError);
-        }
+        // fetchWithAuth уже попытался обновить токен, если это не помогло - токен истек
+        return null;
       }
 
       if (!response.ok) {
@@ -338,7 +308,7 @@ const ProfileInfo = () => {
       const data = await response.json();
       return data.value;
     } catch (err) {
-      console.error('Error loading bookmarks setting:', err);
+      console.error('Error loading user setting:', err);
       return null;
     }
   };
@@ -456,6 +426,10 @@ const ProfileInfo = () => {
     const loadSoundSettings = async () => {
       if (!user?.id) return;
       
+      // Проверяем, что токен существует перед выполнением запросов
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
       const soundEnabled = await loadUserSetting('notificationSoundEnabled');
       const soundType = await loadUserSetting('notificationSound');
       
@@ -482,6 +456,12 @@ const ProfileInfo = () => {
   // Загрузка сохраненной настройки количества карточек
   useEffect(() => {
     const loadCardsPerRowSetting = async () => {
+      if (!user?.id) return;
+      
+      // Проверяем, что токен существует перед выполнением запросов
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
       const savedSetting = await loadUserSetting('bookmarks_cards_per_row');
       if (savedSetting && ['3', '6', '9'].includes(savedSetting)) {
         setBookmarksCardsPerRow(parseInt(savedSetting) as 3 | 6 | 9);
@@ -496,6 +476,12 @@ const ProfileInfo = () => {
   // Загрузка настройки автоскрытия футера
   useEffect(() => {
     const loadFooterSetting = async () => {
+      if (!user?.id) return;
+      
+      // Проверяем, что токен существует перед выполнением запросов
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
       const savedSetting = await loadUserSetting('auto_hide_footer');
       if (savedSetting !== null) {
         setAutoHideFooter(savedSetting === 'true');
@@ -514,6 +500,10 @@ const ProfileInfo = () => {
   useEffect(() => {
     const loadTelegramSettings = async () => {
       if (!user?.id) return;
+      
+      // Проверяем, что токен существует перед выполнением запросов
+      const token = localStorage.getItem('token');
+      if (!token) return;
       
       const doorOpening = await loadUserSetting('telegram_door_opening_enabled');
       const notifications = await loadUserSetting('telegram_notifications_enabled');
@@ -577,13 +567,22 @@ const ProfileInfo = () => {
   };
 
   const generateTelegramLink = async () => {
+    if (!user?.id) return;
+    
     setIsGeneratingLink(true);
     try {
-      const response = await fetch(`${API}/telegram/generate-link/${user?.id}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      const response = await fetchWithAuth(`${API}/telegram/generate-link/${user.id}`);
+      
+      // Если получили 401 и refresh token тоже истек, прекращаем выполнение
+      if (response.status === 401) {
+        notificationSystem.addNotification(
+          'Ошибка',
+          'Требуется авторизация для генерации ссылки',
+          'error'
+        );
+        return;
+      }
+      
       if (!response.ok) throw new Error('Failed to generate link');
       const data = await response.json();
       setTelegramLink(data.link);
@@ -601,13 +600,26 @@ const ProfileInfo = () => {
   };
 
   const disconnectTelegram = async () => {
+    if (!user?.id) return;
+    
     try {
-      const response = await fetch(`${API}/telegram/disconnect/${user?.id}`, {
+      const response = await fetchWithAuth(`${API}/telegram/disconnect/${user.id}`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Content-Type': 'application/json'
         }
       });
+      
+      // Если получили 401 и refresh token тоже истек, прекращаем выполнение
+      if (response.status === 401) {
+        notificationSystem.addNotification(
+          'Ошибка',
+          'Требуется авторизация для отвязки Telegram',
+          'error'
+        );
+        return;
+      }
+      
       if (!response.ok) throw new Error('Failed to disconnect Telegram');
       setIsTelegramConnected(false);
       setTelegramUserName('');
@@ -685,11 +697,10 @@ const ProfileInfo = () => {
     setIsUpdating(true);
     try {
       const base64String = newPhoto.split(',')[1];
-      const response = await fetch(`${API}/user/update-photo`, {
+      const response = await fetchWithAuth(`${API}/user/update-photo`, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           login: user.login,
@@ -697,6 +708,13 @@ const ProfileInfo = () => {
           password: values.password
         })
       });
+      
+      // Если получили 401 и refresh token тоже истек, прекращаем выполнение
+      if (response.status === 401) {
+        const errorData = await response.json().catch(() => ({ message: 'Требуется авторизация' }));
+        throw new Error(errorData.message || 'Требуется авторизация для обновления фото');
+      }
+      
       if (!response.ok) {
         const errorData = await response.json();
         if (response.status === 401) throw new Error('Неверный пароль');

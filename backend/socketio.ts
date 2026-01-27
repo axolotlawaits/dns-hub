@@ -387,6 +387,30 @@ export class SocketIOService {
     return success;
   }
 
+  // Отправка произвольного события пользователю
+  public sendEventToUser(userId: string, eventName: string, data: any): boolean {
+    const conns = this.getUserConnections(userId);
+    
+    if (conns.length === 0) {
+      return false;
+    }
+    
+    let success = true;
+    conns.forEach(conn => {
+      try {
+        this.io?.to(conn.socketId).emit(eventName, {
+          ...data,
+          sentAt: new Date().toISOString()
+        });
+        conn.lastActivity = new Date();
+      } catch (err) {
+        console.error(`[Socket.IO] ❌ Error sending event ${eventName} to user ${userId} socket ${conn.socketId}:`, err);
+        success = false;
+      }
+    });
+    return success;
+  }
+
 
   public getConnectedUsers(): string[] {
     return Array.from(this.userToSockets.keys());

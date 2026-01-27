@@ -1,9 +1,9 @@
 import { useEffect, useState, useMemo, useCallback } from "react"
 import { API } from "../../config/constants"
-import { ActionIcon, Select, MultiSelect, TextInput, Tooltip, Box, Title, Text, Group, Card, Badge, LoadingOverlay, Progress, Button, Stack, SegmentedControl } from "@mantine/core"
+import { ActionIcon, Select, MultiSelect, TextInput, Tooltip, Box, Title, Text, Group, Card, Badge, LoadingOverlay, Progress, Button, Stack, SegmentedControl, Paper, ScrollArea } from "@mantine/core"
 import { useDisclosure } from "@mantine/hooks"
 import { Tool } from "../../components/Tools"
-import { IconExternalLink, IconLockAccess, IconSearch, IconUsers, IconUser, IconBriefcase, IconShield, IconClock, IconBell } from "@tabler/icons-react"
+import { IconExternalLink, IconLockAccess, IconSearch, IconUsers, IconUser, IconBriefcase, IconShield, IconClock, IconBell, IconEye, IconCheck, IconX, IconEdit } from "@tabler/icons-react"
 import { useNavigate } from "react-router"
 import { User, UserRole } from "../../contexts/UserContext"
 import { useUserContext } from "../../hooks/useUserContext"
@@ -180,9 +180,22 @@ function Management() {
     changeAccess: useDisclosure(false),
     approveRequest: useDisclosure(false),
     accessRequests: useDisclosure(false),
+    previewChanges: useDisclosure(false),
   }
   
   const [selectedRequest, setSelectedRequest] = useState<any | null>(null)
+  const [previewData, setPreviewData] = useState<{
+    toolId: string;
+    toolName: string;
+    accessLevel: AccessLevel;
+    changes: Array<{
+      entityId: string;
+      entityName: string;
+      currentLevel: AccessLevel | null;
+      newLevel: AccessLevel;
+      action: 'add' | 'update' | 'remove';
+    }>;
+  } | null>(null)
 
   const getEntities = useCallback(async () => {
     setLoading(true)
@@ -270,9 +283,69 @@ function Management() {
     getAccessedTools()
   }, [getAccessedTools])
 
+  // Подготовка предпросмотра изменений
+  const preparePreview = useCallback((toolId: string, accessLevel: AccessLevel) => {
+    if (selectedEntities.length === 0) return null
+
+    const tool = tools.find(t => t.id === toolId)
+    const changes = selectedEntities.map(entityId => {
+      const currentAccess = entitiesAccess.get(entityId) || []
+      const existingAccess = currentAccess.find(acc => acc.toolId === toolId)
+      const currentLevel = existingAccess?.accessLevel || null
+      
+      let action: 'add' | 'update' | 'remove' = 'add'
+      if (existingAccess && accessLevel) {
+        action = currentLevel === accessLevel ? 'update' : 'update'
+      } else if (existingAccess && !accessLevel) {
+        action = 'remove'
+      }
+
+      const entityName = entityType === 'group' 
+        ? (groups.find((g: any) => g.uuid === entityId) as any)?.name || entityId
+        : entityType === 'position'
+        ? (positions.find((p: any) => p.uuid === entityId) as any)?.name || entityId
+        : users.find(u => u.id === entityId)?.name || entityId
+
+      return {
+        entityId,
+        entityName,
+        currentLevel,
+        newLevel: accessLevel,
+        action
+      }
+    })
+
+    return {
+      toolId,
+      toolName: tool?.name || 'Неизвестный инструмент',
+      accessLevel,
+      changes
+    }
+  }, [selectedEntities, entitiesAccess, tools, groups, positions, users, entityType])
+
   // Массовое обновление доступа для всех выбранных сущностей
-  const updateGroupAccess = useCallback(async (toolId: string, accessLevel: AccessLevel) => {
+  const updateGroupAccess = useCallback(async (
+    toolId: string, 
+    accessLevel: AccessLevel, 
+    skipPreview: boolean = false,
+    temporaryAccess?: {
+      isTemporary: boolean;
+      validFrom?: string;
+      validUntil?: string;
+      reason?: string;
+    }
+  ) => {
     if (selectedEntities.length === 0) return
+
+    // Показываем предпросмотр, если не пропущен
+    if (!skipPreview && selectedEntities.length > 1) {
+      const preview = preparePreview(toolId, accessLevel)
+      if (preview) {
+        setPreviewData(preview)
+        modals.previewChanges[1].open()
+        return
+      }
+    }
 
     setBulkOperationProgress(0)
     const total = selectedEntities.length
@@ -282,10 +355,21 @@ function Management() {
     try {
       const updatePromises = selectedEntities.map(async (entityId, index) => {
         try {
+          // Подготовка тела запроса
+          const requestBody: any = { toolId, accessLevel };
+          
+          // Добавляем параметры временного доступа, если указаны
+          if (temporaryAccess?.isTemporary) {
+            requestBody.isTemporary = true;
+            if (temporaryAccess.validFrom) requestBody.validFrom = temporaryAccess.validFrom;
+            if (temporaryAccess.validUntil) requestBody.validUntil = temporaryAccess.validUntil;
+            if (temporaryAccess.reason) requestBody.reason = temporaryAccess.reason;
+          }
+          
           const response = await fetch(`${API}/access/${entityType}/${entityId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({toolId, accessLevel}),
+            body: JSON.stringify(requestBody),
           })
           const json = await response.json()
           if (response.ok) {
@@ -452,6 +536,16 @@ function Management() {
     return toolAccessMap
   }, [selectedEntities, entitiesAccess])
 
+  // Получаем информацию о родителях - создаем маппинг всех инструментов по их ID
+  const parentToolsMap = useMemo(() => {
+    const map = new Map<string | null, Tool>();
+    // Добавляем все инструменты в маппинг по их ID, чтобы можно было найти родителя по parent_id
+    tools.forEach(tool => {
+      map.set(tool.id, tool);
+    });
+    return map;
+  }, [tools]);
+
   // Мемоизированные данные - фильтруем инструменты по доступу пользователя
   const filteredTools = useMemo(() => {
     // DEVELOPER видит все инструменты
@@ -506,6 +600,48 @@ function Management() {
     
     return accessibleTools
   }, [tools, searchQuery, canManageToolAccess, checkIsProtectedTool, protectedToolLinks, user, accessFilter, sortBy, aggregatedAccess, selectedEntities.length])
+
+  // Группировка отфильтрованных инструментов по родителям
+  const groupedTools = useMemo(() => {
+    if (filteredTools.length === 0) return new Map<string | null, Tool[]>();
+    
+    const groups = new Map<string | null, Tool[]>();
+    
+    filteredTools.forEach(tool => {
+      const parentId = (tool as any).parent_id || null;
+      if (!groups.has(parentId)) {
+        groups.set(parentId, []);
+      }
+      groups.get(parentId)!.push(tool);
+    });
+    
+    // Сортируем группы: сначала без родителя, потом по имени родителя
+    const sortedGroups = new Map<string | null, Tool[]>();
+    const entries = Array.from(groups.entries());
+    
+    // Сначала добавляем группы без родителя
+    const noParent = entries.find(([id]) => id === null);
+    if (noParent) {
+      sortedGroups.set(null, noParent[1].sort((a, b) => a.name.localeCompare(b.name, 'ru')));
+    }
+    
+    // Затем добавляем остальные группы, отсортированные по имени родителя
+    const withParent = entries
+      .filter(([id]) => id !== null)
+      .sort(([idA], [idB]) => {
+        const parentA = parentToolsMap.get(idA!);
+        const parentB = parentToolsMap.get(idB!);
+        const nameA = parentA?.name || '';
+        const nameB = parentB?.name || '';
+        return nameA.localeCompare(nameB, 'ru');
+      });
+    
+    withParent.forEach(([id, tools]) => {
+      sortedGroups.set(id, tools.sort((a, b) => a.name.localeCompare(b.name, 'ru')));
+    });
+    
+    return sortedGroups;
+  }, [filteredTools, parentToolsMap])
 
   const entityOptions = useMemo(() => {
     if (entityType === 'group') return groups.map((g: any) => ({value: g.uuid, label: g.name}))
@@ -1031,13 +1167,30 @@ function Management() {
           </Group>
         </Group>
 
-        {/* Сетка инструментов */}
-        <Box style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-          gap: '16px'
-        }}>
-          {filteredTools.map(tool => {
+        {/* Группированные инструменты */}
+        <Stack gap="xl">
+          {Array.from(groupedTools.entries()).map(([parentId, toolsInGroup]) => {
+              if (toolsInGroup.length === 0) return null;
+              
+              const parentTool = parentId ? parentToolsMap.get(parentId) : null;
+              const groupName = parentTool ? parentTool.name : 'Без категории';
+              
+              return (
+                <Box key={parentId || 'no-parent'}>
+                  <Group mb="md" align="center">
+                    <Text size="lg" fw={600} c="var(--theme-text-primary)">
+                      {groupName}
+                    </Text>
+                    <Badge variant="light" color="gray" size="sm">
+                      {toolsInGroup.length}
+                    </Badge>
+                  </Group>
+                  <Box style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                    gap: '16px'
+                  }}>
+                    {toolsInGroup.map(tool => {
             const toolAccess = aggregatedAccess.get(tool.id)
             const hasAccess = !!toolAccess
             const accessLevelsArray = toolAccess?.accessLevels || [] // Массив строк AccessLevel[]
@@ -1157,9 +1310,13 @@ function Management() {
                   </Group>
                 </Group>
               </Card>
-            )
-          })}
-        </Box>
+                    );
+                  })}
+                  </Box>
+                </Box>
+              );
+            })}
+        </Stack>
 
         {filteredTools.length === 0 && (
           <Box style={{
@@ -1193,6 +1350,33 @@ function Management() {
             type: 'select',
             required: true,
             options: accessLevels.map(lvl => ({ value: lvl.type, label: lvl.name }))
+          },
+          {
+            name: 'isTemporary',
+            label: 'Временный доступ',
+            type: 'boolean',
+            required: false
+          },
+          {
+            name: 'validFrom',
+            label: 'Действует с',
+            type: 'date',
+            required: false,
+            disabled: (values: any) => !values.isTemporary
+          },
+          {
+            name: 'validUntil',
+            label: 'Действует до',
+            type: 'date',
+            required: false,
+            disabled: (values: any) => !values.isTemporary
+          },
+          {
+            name: 'reason',
+            label: 'Причина предоставления',
+            type: 'textarea',
+            required: false,
+            disabled: (values: any) => !values.isTemporary
           }
         ]}
         initialValues={{ 
@@ -1206,12 +1390,127 @@ function Management() {
         }}
         onSubmit={(values) => {
           if (selectedTool) {
-            updateGroupAccess(selectedTool.id, values.accessLevel as AccessLevel)
+            const temporaryAccess = values.isTemporary ? {
+              isTemporary: true,
+              validFrom: values.validFrom,
+              validUntil: values.validUntil,
+              reason: values.reason
+            } : undefined;
+            
+            updateGroupAccess(
+              selectedTool.id, 
+              values.accessLevel as AccessLevel, 
+              false,
+              temporaryAccess
+            )
             modals.changeAccess[1].close()
             setSelectedTool(null)
           }
         }}
       />
+
+      {/* Модальное окно предпросмотра изменений */}
+      <CustomModal
+        opened={modals.previewChanges[0]}
+        onClose={modals.previewChanges[1].close}
+        title="Предпросмотр изменений"
+        icon={<IconEye size={20} />}
+        size="xl"
+      >
+        {previewData && (
+          <Stack gap="md">
+            <Paper p="md" withBorder>
+              <Text fw={500} mb="xs">Инструмент:</Text>
+              <Text size="lg" fw={600}>{previewData.toolName}</Text>
+              <Group gap="xs" mt="xs">
+                <Text size="sm" c="dimmed">Новый уровень доступа:</Text>
+                <Badge color={previewData.accessLevel === 'READONLY' ? 'green' : previewData.accessLevel === 'CONTRIBUTOR' ? 'yellow' : 'red'}>
+                  {accessLevels.find(lvl => lvl.type === previewData.accessLevel)?.name || previewData.accessLevel}
+                </Badge>
+              </Group>
+            </Paper>
+
+            <Paper p="md" withBorder>
+              <Text fw={500} mb="md">
+                Изменения для {previewData.changes.length} {previewData.changes.length === 1 
+                  ? entityType === 'group' ? 'группы' : entityType === 'user' ? 'пользователя' : 'должности'
+                  : entityType === 'group' ? 'групп' : entityType === 'user' ? 'пользователей' : 'должностей'}:
+              </Text>
+              <ScrollArea h={400}>
+                <Stack gap="xs">
+                  {previewData.changes.map((change, idx) => (
+                    <Paper key={idx} p="sm" withBorder style={{
+                      backgroundColor: change.action === 'add' ? 'var(--mantine-color-green-0)' :
+                                      change.action === 'remove' ? 'var(--mantine-color-red-0)' :
+                                      'var(--mantine-color-blue-0)'
+                    }}>
+                      <Group justify="space-between" align="flex-start">
+                        <Box style={{ flex: 1 }}>
+                          <Text fw={500} size="sm">{change.entityName}</Text>
+                          <Group gap="xs" mt="xs">
+                            {change.currentLevel ? (
+                              <>
+                                <Group gap={4}>
+                                  <IconX size={14} color="red" />
+                                  <Text size="xs" c="dimmed">Было:</Text>
+                                  <Badge size="xs" variant="light" color="gray">
+                                    {accessLevels.find(lvl => lvl.type === change.currentLevel)?.name || change.currentLevel}
+                                  </Badge>
+                                </Group>
+                                <IconEdit size={14} />
+                                <Group gap={4}>
+                                  <IconCheck size={14} color="green" />
+                                  <Text size="xs" c="dimmed">Стало:</Text>
+                                  <Badge size="xs" variant="light" color={change.newLevel === 'READONLY' ? 'green' : change.newLevel === 'CONTRIBUTOR' ? 'yellow' : 'red'}>
+                                    {accessLevels.find(lvl => lvl.type === change.newLevel)?.name || change.newLevel}
+                                  </Badge>
+                                </Group>
+                              </>
+                            ) : (
+                              <Group gap={4}>
+                                <IconCheck size={14} color="green" />
+                                <Text size="xs" c="dimmed">Будет добавлен:</Text>
+                                <Badge size="xs" variant="light" color={change.newLevel === 'READONLY' ? 'green' : change.newLevel === 'CONTRIBUTOR' ? 'yellow' : 'red'}>
+                                  {accessLevels.find(lvl => lvl.type === change.newLevel)?.name || change.newLevel}
+                                </Badge>
+                              </Group>
+                            )}
+                          </Group>
+                        </Box>
+                        <Badge
+                          size="sm"
+                          color={change.action === 'add' ? 'green' : change.action === 'remove' ? 'red' : 'blue'}
+                          variant="light"
+                        >
+                          {change.action === 'add' ? 'Добавление' : change.action === 'remove' ? 'Удаление' : 'Изменение'}
+                        </Badge>
+                      </Group>
+                    </Paper>
+                  ))}
+                </Stack>
+              </ScrollArea>
+            </Paper>
+
+            <Group justify="flex-end" mt="md">
+              <Button variant="light" onClick={modals.previewChanges[1].close}>
+                Отмена
+              </Button>
+              <Button
+                onClick={async () => {
+                  modals.previewChanges[1].close()
+                  if (previewData) {
+                    await updateGroupAccess(previewData.toolId, previewData.accessLevel, true, undefined)
+                    setPreviewData(null)
+                  }
+                }}
+                color="blue"
+              >
+                Применить изменения
+              </Button>
+            </Group>
+          </Stack>
+        )}
+      </CustomModal>
       
       <DynamicFormModal
         opened={modals.approveRequest[0]}

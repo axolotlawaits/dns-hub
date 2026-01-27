@@ -122,32 +122,6 @@ export const getAnalytics = async (req: Request, res: Response, next: NextFuncti
       _count: true
     });
 
-    // Статистика отчетов об ошибках
-    const totalBugReports = await prisma.bugReport.count({
-      where: {
-        createdAt: {
-          gte: startDate
-        }
-      }
-    });
-    const bugReportsBySeverity = await prisma.bugReport.groupBy({
-      by: ['severity'],
-      where: {
-        createdAt: {
-          gte: startDate
-        }
-      },
-      _count: true
-    });
-    const resolvedBugReports = await prisma.bugReport.count({
-      where: {
-        isResolved: true,
-        createdAt: {
-          gte: startDate
-        }
-      }
-    });
-
     // Статистика активности по дням (последние 30 дней)
     const dailyActivity = await prisma.user.findMany({
       where: {
@@ -250,15 +224,6 @@ export const getAnalytics = async (req: Request, res: Response, next: NextFuncti
         byStatus: feedbackByStatus.map(f => ({
           status: f.status,
           count: f._count
-        }))
-      },
-      bugReports: {
-        total: totalBugReports,
-        resolved: resolvedBugReports,
-        unresolved: totalBugReports - resolvedBugReports,
-        bySeverity: bugReportsBySeverity.map(b => ({
-          severity: b.severity,
-          count: b._count
         }))
       },
       activity: {

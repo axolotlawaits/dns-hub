@@ -26,12 +26,16 @@ import {
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { useAccessContext } from '../../../hooks/useAccessContext';
 import { useUserContext } from '../../../hooks/useUserContext';
-import { AppProvider } from './context/SelectedCategoryContext';
-import Hierarchy from './components/Hierarchy/Hierarchy';
+import { AppProvider, useApp } from './context/SelectedCategoryContext';
+import { UniversalHierarchy, HierarchyItem } from '../../../utils/UniversalHierarchy';
 import CardGroup from './components/Card/CardGroup';
 import { GlobalCardSearchModal } from './components/Card/GlobalCardSearchModal';
 import { CustomModal } from '../../../utils/CustomModal';
-import { HierarchySortModal } from './components/Hierarchy/HierarchySortModal';
+import { UniversalHierarchySortModal } from '../../../utils/UniversalHierarchySortModal';
+import { HierarchyAddModal, HierarchyEditModal, HierarchyDeleteModal } from './components/Hierarchy/Modals/HierarchyModals';
+import { getHierarchyData, type DataItem } from './data/HierarchyData';
+import { API } from '../../../config/constants';
+import useAuthFetch from '../../../hooks/useAuthFetch';
 import MerchStats from './components/Stats/MerchStats';
 import MerchFeedback from './components/Feedback/MerchFeedback';
 import './Merch.css';
@@ -116,9 +120,130 @@ function Merch() {
     return `merch-toggle-button ${isHierarchyVisible ? 'merch-toggle-button--visible' : 'merch-toggle-button--hidden'}`;
   }, [isHierarchyVisible]);
 
-
   return (
     <AppProvider>
+      <MerchContent 
+        hasFullAccess={hasFullAccess}
+        isHierarchyVisible={isHierarchyVisible}
+        toggleHierarchy={toggleHierarchy}
+        toggleButtonClassName={toggleButtonClassName}
+        qrOpened={qrOpened}
+        qrClose={qrClose}
+        qrOpen={qrOpen}
+        qrCodeUrl={qrCodeUrl}
+        botLink={botLink}
+        sortOpened={sortOpened}
+        sortOpen={sortOpen}
+        sortClose={sortClose}
+        globalSearchOpened={globalSearchOpened}
+        globalSearchOpen={globalSearchOpen}
+        globalSearchClose={globalSearchClose}
+      />
+    </AppProvider>
+  );
+}
+
+// Внутренний компонент для использования контекста мерча
+function MerchContent({
+  hasFullAccess,
+  isHierarchyVisible,
+  toggleHierarchy,
+  toggleButtonClassName,
+  qrOpened,
+  qrClose,
+  qrOpen,
+  qrCodeUrl,
+  botLink,
+  sortOpened,
+  sortOpen,
+  sortClose,
+  globalSearchOpened,
+  globalSearchOpen,
+  globalSearchClose
+}: {
+  hasFullAccess: boolean;
+  isHierarchyVisible: boolean;
+  toggleHierarchy: () => void;
+  toggleButtonClassName: string;
+  qrOpened: boolean;
+  qrClose: () => void;
+  qrOpen: () => void;
+  qrCodeUrl: string;
+  botLink: string;
+  sortOpened: boolean;
+  sortOpen: () => void;
+  sortClose: () => void;
+  globalSearchOpened: boolean;
+  globalSearchOpen: () => void;
+  globalSearchClose: () => void;
+}) {
+  const { selectedId, setSelectedId } = useApp();
+
+  // Обертки для модалок, чтобы преобразовать типы
+  const MerchAddModal = useCallback(({ parentItem, onClose, onSuccess }: { parentItem?: HierarchyItem | null; onClose: () => void; onSuccess: () => void }) => {
+    return <HierarchyAddModal parentItem={parentItem as DataItem | undefined} onClose={onClose} onSuccess={onSuccess} />;
+  }, []);
+
+  const MerchEditModal = useCallback(({ item, onClose, onSuccess }: { item: HierarchyItem; onClose: () => void; onSuccess: () => void }) => {
+    return <HierarchyEditModal item={item as DataItem} onClose={onClose} onSuccess={onSuccess} />;
+  }, []);
+
+  const MerchDeleteModal = useCallback(({ item, onClose, onSuccess }: { item: HierarchyItem; onClose: () => void; onSuccess: () => void }) => {
+    return <HierarchyDeleteModal item={item as DataItem} onClose={onClose} onSuccess={onSuccess} />;
+  }, []);
+
+  const authFetch = useAuthFetch();
+
+  // Функция для сохранения порядка категорий через правильный endpoint
+  const handleSaveCategoriesOrder = useCallback(async (items: any[], originalItems: any[]) => {
+    // Группируем изменения по родителям
+    const parentsToUpdate = new Set<string | null>();
+    items.forEach(item => {
+      parentsToUpdate.add(item.parentId);
+      const original = originalItems.find(orig => orig.id === item.id);
+      if (original && original.parentId !== item.parentId) {
+        parentsToUpdate.add(original.parentId);
+      }
+    });
+
+    // Обновляем порядок для каждого родителя
+    for (const parentId of parentsToUpdate) {
+      const sameParentItems = items.filter(i => i.parentId === parentId);
+      const categoryIds = sameParentItems.map(item => item.id);
+
+      // Используем правильный endpoint для обновления порядка
+      const endpoint = parentId 
+        ? `${API}/retail/merch/categories/${parentId}/order`
+        : `${API}/retail/merch/categories/order`;
+      
+      const response = await authFetch(endpoint, {
+        method: 'PATCH',
+        body: JSON.stringify({ categoryIds })
+      });
+
+      if (!response || !response.ok) {
+        throw new Error(`Ошибка обновления порядка для родителя ${parentId || 'null'}`);
+      }
+    }
+
+    // Обновляем parentId для перемещенных элементов
+    for (const item of items) {
+      const original = originalItems.find(orig => orig.id === item.id);
+      if (original && original.parentId !== item.parentId) {
+        const endpoint = `${API}/retail/merch/categories/${item.id}/parent`;
+        const response = await authFetch(endpoint, {
+          method: 'PATCH',
+          body: JSON.stringify({ parentId: item.parentId })
+        });
+
+        if (!response || !response.ok) {
+          throw new Error(`Ошибка обновления родителя для категории ${item.id}`);
+        }
+      }
+    }
+  }, [authFetch]);
+
+  return (
           <Box className="merch-container">
             <Box>
               <Tabs defaultValue="management">
@@ -218,9 +343,28 @@ function Merch() {
                             <Text size="lg" fw={600} className="merch-title">
                               Категории товаров
                             </Text>
-                            <Hierarchy 
+                            <UniversalHierarchy
+                              config={{
+                                fetchItems: async (parentId?: string | null) => {
+                                  return await getHierarchyData(parentId || undefined, 1);
+                                },
+                                parentField: 'parentId',
+                                nameField: 'name',
+                                idField: 'id',
+                                rootFilter: (item) => item.layer === 1 && !item.parentId,
+                                AddModal: MerchAddModal,
+                                EditModal: MerchEditModal,
+                                DeleteModal: MerchDeleteModal,
+                                onItemSelect: (item) => {
+                                  setSelectedId(item.id);
+                                },
+                                onDataUpdate: () => {}
+                              }}
                               hasFullAccess={hasFullAccess}
-                              onDataUpdate={() => {}}
+                              externalSelectedContext={{
+                                selectedId,
+                                setSelectedId
+                              }}
                             />
                           </Box>
                         </Stack>
@@ -343,10 +487,33 @@ function Merch() {
                   },
                 }}
               >
-                <HierarchySortModal
+                <UniversalHierarchySortModal
                   onClose={sortClose}
                   onSuccess={() => {
                     sortClose();
+                    // Обновляем данные после сортировки
+                    window.location.reload();
+                  }}
+                  config={{
+                    fetchEndpoint: `${API}/retail/merch/categories`,
+                    parentField: 'parentId',
+                    sortField: 'sortOrder',
+                    nameField: 'name',
+                    idField: 'id',
+                    additionalFilters: {
+                      layer: 1 // Только категории
+                    },
+                    transformItem: (item: any) => ({
+                      id: item.id,
+                      name: item.name,
+                      parentId: item.parentId || null,
+                      level: 0,
+                      originalLevel: 0,
+                      originalParentId: item.parentId || null,
+                      sortOrder: item.sortOrder || 0,
+                      ...item
+                    }),
+                    onSave: handleSaveCategoriesOrder
                   }}
                 />
               </CustomModal>
@@ -366,7 +533,6 @@ function Merch() {
             )}
           </Box>
         </Box>
-      </AppProvider>
   );
 }
 

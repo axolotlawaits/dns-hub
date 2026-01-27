@@ -16,6 +16,7 @@ import {
   addResponsible,
   deleteResponsible,
   notifyBranchesWithUnfilledJournals,
+  notifyBranchWithUnfilledJournals,
   getLastNotifications
 } from '../../controllers/jurists/safetyJournal.js';
 import { authenticateToken } from '../../middleware/auth.js';
@@ -45,6 +46,11 @@ router.get('/test-external-api', testExternalApi as any);
 
 // Получение списка файлов для журнала
 router.get('/journals/:journalId/files', getJournalFilesList as any);
+
+// Обработчик для GET /files/ без параметров (возвращает ошибку)
+router.get('/files/', (req: Request, res: Response) => {
+  res.status(400).json({ message: 'ID файла не предоставлен. Используйте /files/:fileId' });
+});
 
 // Загрузка файла
 router.post('/files/', upload.single('file'), uploadFile as any);
@@ -77,6 +83,9 @@ router.delete('/branch/responsible', deleteResponsible)
 
 // Оповещение филиалов с не заполненными журналами
 router.post('/notify-unfilled', notifyBranchesWithUnfilledJournals as any);
+
+// Оповещение одного филиала с не заполненными журналами
+router.post('/notify-unfilled/:branchId', notifyBranchWithUnfilledJournals as any);
 
 // Получить информацию о последних оповещениях
 router.get('/last-notifications', getLastNotifications as any);

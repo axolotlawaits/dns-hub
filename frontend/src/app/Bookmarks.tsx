@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { API } from '../config/constants';
-import {  Box,  Text,  Group,  LoadingOverlay,  ActionIcon,  Modal,  ThemeIcon,  Card,  Alert,  Badge, Grid, Tooltip } from '@mantine/core';
+import {  Box,  Text,  Group,  LoadingOverlay,  ActionIcon,  Modal,  ThemeIcon,  Card,  Badge, Grid, Tooltip, Alert } from '@mantine/core';
 import {  IconBookmark,  IconTrash,  IconExternalLink,  IconPlus,  IconX,  IconEdit,  IconGripVertical } from '@tabler/icons-react';
 import { useUserContext } from '../hooks/useUserContext';
 import { useDisclosure } from '@mantine/hooks';
 import { normalizeUrl, isValidUrl } from '../utils/url';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { DynamicFormModal, FormField } from '../utils/formModal';
+import { notificationSystem } from '../utils/Push';
 import './styles/Bookmarks.css';
 
 interface Bookmark {
@@ -32,7 +33,6 @@ export default function BookmarksList() {
   const [deleteModalOpen, { open: openDeleteModal, close: closeDeleteModal }] = useDisclosure(false);
   const [selectedBookmark, setSelectedBookmark] = useState<Bookmark | null>(null);
   const [newBookmark, setNewBookmark] = useState(DEFAULT_BOOKMARK);
-  const [notification, setNotification] = useState<{ message: string; color: string } | null>(null);
   const [cardsPerRow, setCardsPerRow] = useState<3 | 6 | 9>(6);
 
 
@@ -53,12 +53,6 @@ export default function BookmarksList() {
       placeholder: 'https://example.com'
     }
   ];
-
-
-  const showNotification = useCallback((message: string, color: string) => {
-    setNotification({ message, color });
-    setTimeout(() => setNotification(null), 3000);
-  }, []);
 
 
 
@@ -147,9 +141,9 @@ export default function BookmarksList() {
       setNewBookmark(DEFAULT_BOOKMARK);
       setError(null);
       closeAddModal();
-      showNotification('Закладка добавлена', 'green');
+      notificationSystem.addNotification('Успех', 'Закладка добавлена', 'success');
     } catch (err) {
-      showNotification(err instanceof Error ? err.message : 'Ошибка создания закладки', 'red');
+      notificationSystem.addNotification('Ошибка', err instanceof Error ? err.message : 'Ошибка создания закладки', 'error');
     }
   };
 
@@ -182,9 +176,9 @@ export default function BookmarksList() {
       setSelectedBookmark(null);
       setError(null);
       closeEditModal();
-      showNotification('Закладка обновлена', 'green');
+      notificationSystem.addNotification('Успех', 'Закладка обновлена', 'success');
     } catch (err) {
-      showNotification(err instanceof Error ? err.message : 'Ошибка обновления закладки', 'red');
+      notificationSystem.addNotification('Ошибка', err instanceof Error ? err.message : 'Ошибка обновления закладки', 'error');
     }
   };
 
@@ -203,9 +197,9 @@ export default function BookmarksList() {
       setBookmarks(bookmarks.filter(b => b.id !== selectedBookmark.id));
       setSelectedBookmark(null);
       closeDeleteModal();
-      showNotification('Закладка удалена', 'green');
+      notificationSystem.addNotification('Успех', 'Закладка удалена', 'success');
     } catch (err) {
-      showNotification(err instanceof Error ? err.message : 'Ошибка удаления закладки', 'red');
+      notificationSystem.addNotification('Ошибка', err instanceof Error ? err.message : 'Ошибка удаления закладки', 'error');
     }
   };
 
@@ -298,17 +292,6 @@ export default function BookmarksList() {
           Закладки
         </Text>
       </Group>
-
-      {notification && (
-        <Alert
-          color={notification.color}
-          onClose={() => setNotification(null)}
-          withCloseButton
-          mb="md"
-        >
-          {notification.message}
-        </Alert>
-      )}
 
       <Grid gutter="md">
         {visibleBookmarks.map((bookmark) => (

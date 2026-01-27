@@ -151,6 +151,7 @@ export default function DraggableChatModal({
   const modalContent = (
     <Box
       ref={modalRef}
+      data-chat-modal="true"
       style={{
         position: 'fixed',
         left: `${constrainedPosition.x}px`,

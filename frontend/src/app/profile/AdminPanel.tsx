@@ -1,21 +1,20 @@
 import { useState, useEffect } from 'react';
 import { Tabs, Box, Card } from '@mantine/core';
-import { IconTerminal, IconMessageCircle, IconBug, IconTags, IconMenu2, IconBuilding, IconUsers, IconChartBar, IconShield } from '@tabler/icons-react';
-import LogViewer from '../../components/LogViewer';
+import { IconMessageCircle, IconTags, IconMenu2, IconBuilding, IconUsers, IconChartBar, IconShield, IconDashboard } from '@tabler/icons-react';
 import FeedbackModule from '../../features/Feedback/Feedback';
-import BugReports from '../../features/Retail/BugReports/BugReports';
 import TypesManagement from './components/TypesManagement';
 import NavigationManagement from './components/NavigationManagement';
 import BranchesManagement from './components/BranchesManagement';
 import UsersManagement from './components/UsersManagement';
 import Analytics from './components/Analytics';
 import Audit from './components/Audit';
+import AccessDashboard from './components/AccessDashboard';
 
 interface AdminPanelProps {
   initialTab?: string;
 }
 
-function AdminPanel({ initialTab = 'logs' }: AdminPanelProps) {
+function AdminPanel({ initialTab = 'feedback' }: AdminPanelProps) {
   const [activeTab, setActiveTab] = useState<string | null>(initialTab);
 
   useEffect(() => {
@@ -34,22 +33,10 @@ function AdminPanel({ initialTab = 'logs' }: AdminPanelProps) {
         >
           <Tabs.List>
             <Tabs.Tab 
-              value="logs" 
-              leftSection={<IconTerminal size={18} />}
-            >
-              Логи
-            </Tabs.Tab>
-            <Tabs.Tab 
               value="feedback" 
               leftSection={<IconMessageCircle size={18} />}
             >
               Обратная связь
-            </Tabs.Tab>
-            <Tabs.Tab 
-              value="bugreports" 
-              leftSection={<IconBug size={18} />}
-            >
-              Отчеты об ошибках
             </Tabs.Tab>
             <Tabs.Tab 
               value="types" 
@@ -87,25 +74,21 @@ function AdminPanel({ initialTab = 'logs' }: AdminPanelProps) {
             >
               Аудит
             </Tabs.Tab>
+            <Tabs.Tab 
+              value="access-dashboard" 
+              leftSection={<IconDashboard size={18} />}
+            >
+              Статистика доступа
+            </Tabs.Tab>
           </Tabs.List>
         </Tabs>
       </Card>
 
       <Box>
         <Tabs value={activeTab} onChange={setActiveTab}>
-          {activeTab === 'logs' && (
-            <Tabs.Panel value="logs">
-              <LogViewer />
-            </Tabs.Panel>
-          )}
           {activeTab === 'feedback' && (
             <Tabs.Panel value="feedback">
               <FeedbackModule />
-            </Tabs.Panel>
-          )}
-          {activeTab === 'bugreports' && (
-            <Tabs.Panel value="bugreports">
-              <BugReports />
             </Tabs.Panel>
           )}
           {activeTab === 'types' && (
@@ -136,6 +119,11 @@ function AdminPanel({ initialTab = 'logs' }: AdminPanelProps) {
           {activeTab === 'audit' && (
             <Tabs.Panel value="audit">
               <Audit />
+            </Tabs.Panel>
+          )}
+          {activeTab === 'access-dashboard' && (
+            <Tabs.Panel value="access-dashboard">
+              <AccessDashboard />
             </Tabs.Panel>
           )}
         </Tabs>

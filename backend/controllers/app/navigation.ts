@@ -44,13 +44,18 @@ export const getRootMenuItems = async (
 };
 
 // Получение всех пунктов меню (включая скрытые)
+// ВАЖНО: Для безопасности фильтруем инструменты по доступу пользователя
 export const getAllMenuItems = async (
   req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
   try {
-    const menuList = await prisma.tool.findMany({
+    const token = (req as any).token;
+    const userId = token?.userId;
+    
+    // Получаем все инструменты
+    let menuList = await prisma.tool.findMany({
       orderBy: [{ parent_id: 'asc' }, { order: 'asc' }],
       include: {
         types: {
@@ -63,9 +68,101 @@ export const getAllMenuItems = async (
       }
     });
 
+    // Если пользователь не авторизован, возвращаем пустой список
+    if (!userId) {
+      res.status(200).json([]);
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true, email: true }
+    });
+
+    // Если пользователь не найден, возвращаем пустой список
+    if (!user) {
+      res.status(200).json([]);
+      return;
+    }
+
+    // DEVELOPER и ADMIN видят все инструменты
+    if (['DEVELOPER', 'ADMIN'].includes(user.role)) {
+      res.status(200).json(menuList);
+      return;
+    }
+
+    // Для остальных пользователей получаем их доступы
+    const userAccess = await prisma.userToolAccess.findMany({
+      where: { userId },
+      select: { toolId: true }
+    });
+
+    // Получаем доступы через должность
+    let positionAccess: any[] = [];
+    if (user.email) {
+        const userData = await prisma.userData.findUnique({
+          where: { email: user.email },
+          select: {
+            position: {
+              select: {
+                uuid: true,
+                group: {
+                  select: { uuid: true }
+                }
+              }
+            }
+          }
+        });
+
+        if (userData?.position?.uuid) {
+          const posAccess = await prisma.positionToolAccess.findMany({
+            where: { positionId: userData.position.uuid },
+            select: { toolId: true }
+          });
+          positionAccess = posAccess;
+        }
+
+        // Получаем доступы через группу
+        if (userData?.position?.group?.uuid) {
+          const groupAccess = await prisma.groupToolAccess.findMany({
+            where: { groupId: userData.position.group.uuid },
+            select: { toolId: true }
+          });
+          positionAccess = [...positionAccess, ...groupAccess];
+        }
+    }
+
+    // Объединяем все доступы
+    const accessibleToolIds = new Set<string>();
+    userAccess.forEach(access => accessibleToolIds.add(access.toolId));
+    positionAccess.forEach(access => accessibleToolIds.add(access.toolId));
+
+    // Получаем список защищенных инструментов (тех, у которых есть записи в таблицах доступа)
+    const [allUserAccess, allGroupAccess, allPositionAccess] = await Promise.all([
+      prisma.userToolAccess.findMany({ select: { toolId: true } }),
+      prisma.groupToolAccess.findMany({ select: { toolId: true } }),
+      prisma.positionToolAccess.findMany({ select: { toolId: true } })
+    ]);
+
+    const protectedToolIds = new Set<string>();
+    allUserAccess.forEach(a => protectedToolIds.add(a.toolId));
+    allGroupAccess.forEach(a => protectedToolIds.add(a.toolId));
+    allPositionAccess.forEach(a => protectedToolIds.add(a.toolId));
+
+    // Фильтруем: показываем незащищенные инструменты всем, защищенные - только с доступом
+    menuList = menuList.filter(tool => {
+      // Если инструмент не защищен - показываем всем
+      if (!protectedToolIds.has(tool.id)) {
+        return true;
+      }
+      // Если инструмент защищен - требуем доступ
+      return accessibleToolIds.has(tool.id);
+    });
+
     res.status(200).json(menuList);
   } catch (error) {
-    next(error);
+    console.error('[getAllMenuItems] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch menu items', message: error instanceof Error ? error.message : 'Unknown error' });
   }
 };
 
@@ -86,28 +183,113 @@ export const getAllNonRootMenuItems = async (
 };
 
 // Получение списка дочерних элементов меню по parent_id
+// ВАЖНО: Для безопасности фильтруем инструменты по доступу пользователя
 export const getNonRootMenuItems = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ): Promise<void> => {
-    try {
-      const { parent_id } = req.query; // Получаем id из параметров запроса
-      if (!parent_id) {
-        res.status(400).json({ error: 'id is required' });
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { parent_id } = req.query; // Получаем id из параметров запроса
+    if (!parent_id) {
+      res.status(400).json({ error: 'id is required' });
+      return;
+    }
+
+    const token = (req as any).token;
+    const userId = token?.userId;
+
+    let menuList = await prisma.tool.findMany({
+      where: { parent_id: parent_id as string, included: true },
+      orderBy: { order: 'asc' },
+    });
+
+    // Если пользователь авторизован и не DEVELOPER/ADMIN, фильтруем по доступу
+    if (userId) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { role: true, email: true }
+      });
+
+      // DEVELOPER и ADMIN видят все инструменты
+      if (user && ['DEVELOPER', 'ADMIN'].includes(user.role)) {
+        res.status(200).json(menuList);
         return;
       }
-  
-      const menuList = await prisma.tool.findMany({
-        where: { parent_id: parent_id as string, included: true },
-        orderBy: { order: 'asc' },
+
+      // Для остальных пользователей получаем их доступы
+      const userAccess = await prisma.userToolAccess.findMany({
+        where: { userId },
+        select: { toolId: true }
       });
-  
-      res.status(200).json(menuList);
-    } catch (error) {
-      next(error);
+
+      // Получаем доступы через должность и группу
+      let positionAccess: any[] = [];
+      if (user?.email) {
+        const userData = await prisma.userData.findUnique({
+          where: { email: user.email },
+          select: {
+            position: {
+              select: {
+                uuid: true,
+                group: {
+                  select: { uuid: true }
+                }
+              }
+            }
+          }
+        });
+
+        if (userData?.position?.uuid) {
+          const posAccess = await prisma.positionToolAccess.findMany({
+            where: { positionId: userData.position.uuid },
+            select: { toolId: true }
+          });
+          positionAccess = posAccess;
+        }
+
+        if (userData?.position?.group?.uuid) {
+          const groupAccess = await prisma.groupToolAccess.findMany({
+            where: { groupId: userData.position.group.uuid },
+            select: { toolId: true }
+          });
+          positionAccess = [...positionAccess, ...groupAccess];
+        }
+      }
+
+      // Объединяем все доступы
+      const accessibleToolIds = new Set<string>();
+      userAccess.forEach(access => accessibleToolIds.add(access.toolId));
+      positionAccess.forEach(access => accessibleToolIds.add(access.toolId));
+
+      // Получаем список защищенных инструментов
+      const [allUserAccess, allGroupAccess, allPositionAccess] = await Promise.all([
+        prisma.userToolAccess.findMany({ select: { toolId: true } }),
+        prisma.groupToolAccess.findMany({ select: { toolId: true } }),
+        prisma.positionToolAccess.findMany({ select: { toolId: true } })
+      ]);
+
+      const protectedToolIds = new Set<string>();
+      allUserAccess.forEach(a => protectedToolIds.add(a.toolId));
+      allGroupAccess.forEach(a => protectedToolIds.add(a.toolId));
+      allPositionAccess.forEach(a => protectedToolIds.add(a.toolId));
+
+      // Фильтруем: показываем незащищенные инструменты всем, защищенные - только с доступом
+      menuList = menuList.filter(tool => {
+        // Если инструмент не защищен - показываем всем
+        if (!protectedToolIds.has(tool.id)) {
+          return true;
+        }
+        // Если инструмент защищен - требуем доступ
+        return accessibleToolIds.has(tool.id);
+      });
     }
-  };
+
+    res.status(200).json(menuList);
+  } catch (error) {
+    next(error);
+  }
+};
 
 // Получение пункта меню по ID
 export const getMenuItemById = async (

@@ -17,18 +17,25 @@ import {
   Tooltip,
   Modal,
   Code,
-  ScrollArea
+  ScrollArea,
+  Button
 } from '@mantine/core';
+import { DatePickerInput } from '@mantine/dates';
 import {
   IconSearch,
   IconFilter,
   IconEye,
   IconRefresh,
-  IconShield
+  IconShield,
+  IconDownload,
+  IconArrowRight,
+  IconX,
+  IconCheck
 } from '@tabler/icons-react';
 import useAuthFetch from '../../../hooks/useAuthFetch';
 import { API } from '../../../config/constants';
 import { useDisclosure } from '@mantine/hooks';
+import { DateValue } from '@mantine/dates';
 
 interface AuditLog {
   id: string;
@@ -75,13 +82,15 @@ export default function Audit() {
   const [search, setSearch] = useState('');
   const [actionFilter, setActionFilter] = useState<string | null>(null);
   const [entityFilter, setEntityFilter] = useState<string | null>(null);
+  const [dateFrom, setDateFrom] = useState<DateValue | null>(null);
+  const [dateTo, setDateTo] = useState<DateValue | null>(null);
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
   const [detailsOpened, { open: openDetails, close: closeDetails }] = useDisclosure(false);
   const authFetch = useAuthFetch();
 
   useEffect(() => {
     fetchAuditLogs();
-  }, [page, search, actionFilter, entityFilter]);
+  }, [page, search, actionFilter, entityFilter, dateFrom, dateTo]);
 
   const fetchAuditLogs = async () => {
     setLoading(true);
@@ -93,6 +102,13 @@ export default function Audit() {
       if (search) params.append('search', search);
       if (actionFilter) params.append('action', actionFilter);
       if (entityFilter) params.append('entityType', entityFilter);
+      if (dateFrom) params.append('dateFrom', dateFrom.toISOString());
+      if (dateTo) {
+        // Устанавливаем время на конец дня
+        const endOfDay = new Date(dateTo);
+        endOfDay.setHours(23, 59, 59, 999);
+        params.append('dateTo', endOfDay.toISOString());
+      }
 
       const response = await authFetch(`${API}/admin/audit?${params.toString()}`);
       if (response && response.ok) {
@@ -125,20 +141,80 @@ export default function Audit() {
     return ACTION_COLORS[action] || 'gray';
   };
 
+  // Экспорт в CSV
+  const exportToCSV = () => {
+    if (!data) return;
+
+    const rows: string[] = [];
+    
+    // Заголовок
+    const headers = ['Время', 'Пользователь', 'Email', 'Роль', 'Действие', 'Тип сущности', 'ID сущности', 'IP адрес', 'User Agent'];
+    rows.push(headers.join(','));
+
+    // Данные
+    data.logs.forEach(log => {
+      const row = [
+        formatDate(log.timestamp),
+        log.userEmail,
+        log.userEmail,
+        log.userRole,
+        log.action,
+        log.entityType || '',
+        log.entityId || '',
+        log.ipAddress || '',
+        log.userAgent || ''
+      ].map(field => `"${String(field).replace(/"/g, '""')}"`);
+      rows.push(row.join(','));
+    });
+
+    const csvContent = rows.join('\n');
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `audit_logs_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
+  // Парсинг diff из details
+  const parseDiff = (details: any) => {
+    if (!details || typeof details !== 'object') return null;
+    
+    // Ищем поля oldValue и newValue или before и after
+    const oldValue = details.oldValue || details.before || details.old;
+    const newValue = details.newValue || details.after || details.new;
+    
+    if (oldValue !== undefined && newValue !== undefined) {
+      return { oldValue, newValue };
+    }
+    
+    // Если это объект с изменениями
+    if (details.changes) {
+      return details.changes;
+    }
+    
+    return null;
+  };
+
   return (
     <Stack gap="lg">
-      {/* Заголовок и фильтры */}
-      <Group justify="space-between" align="center">
-        <Title order={2}>Аудит и безопасность</Title>
-        <Group>
-          <ActionIcon variant="light" onClick={fetchAuditLogs} loading={loading}>
-            <IconRefresh size={18} />
-          </ActionIcon>
-        </Group>
-      </Group>
-
       {/* Фильтры */}
       <Card shadow="sm" padding="md" radius="md" withBorder>
+        <Group justify="space-between" mb="md">
+          <Title order={4}>Фильтры</Title>
+          <Group gap="xs">
+            <Button
+              leftSection={<IconDownload size={16} />}
+              onClick={exportToCSV}
+              variant="light"
+              size="sm"
+            >
+              Экспорт CSV
+            </Button>
+            <ActionIcon variant="light" onClick={fetchAuditLogs} loading={loading}>
+              <IconRefresh size={18} />
+            </ActionIcon>
+          </Group>
+        </Group>
         <Group gap="md">
           <TextInput
             placeholder="Поиск по email, действию, типу..."
@@ -167,6 +243,20 @@ export default function Audit() {
             data={data?.stats.entities.map((e) => ({ value: e.entityType, label: `${e.entityType} (${e.count})` })) || []}
             clearable
             style={{ width: 200 }}
+          />
+          <DatePickerInput
+            placeholder="Дата от"
+            value={dateFrom}
+            onChange={setDateFrom}
+            clearable
+            style={{ width: 150 }}
+          />
+          <DatePickerInput
+            placeholder="Дата до"
+            value={dateTo}
+            onChange={setDateTo}
+            clearable
+            style={{ width: 150 }}
           />
         </Group>
       </Card>
@@ -326,16 +416,58 @@ export default function Audit() {
               <Text fw={500}>Время:</Text>
               <Text>{formatDate(selectedLog.timestamp)}</Text>
             </Group>
-            {selectedLog.details && (
-              <div>
-                <Text fw={500} mb="xs">
-                  Дополнительные детали:
-                </Text>
-                <ScrollArea h={200}>
-                  <Code block>{JSON.stringify(selectedLog.details, null, 2)}</Code>
-                </ScrollArea>
-              </div>
-            )}
+            {selectedLog.details && (() => {
+              const diff = parseDiff(selectedLog.details);
+              return (
+                <div>
+                  <Text fw={500} mb="xs">
+                    {diff ? 'Изменения:' : 'Дополнительные детали:'}
+                  </Text>
+                  {diff ? (
+                    <Stack gap="xs">
+                      {Object.keys(diff).map((key) => {
+                        const oldVal = typeof diff[key] === 'object' ? diff[key].oldValue : diff[key];
+                        const newVal = typeof diff[key] === 'object' ? diff[key].newValue : undefined;
+                        return (
+                          <Paper key={key} p="xs" withBorder>
+                            <Text size="sm" fw={500} mb="xs">{key}:</Text>
+                            {newVal !== undefined ? (
+                              <Group gap="xs" align="flex-start">
+                                <Box style={{ flex: 1 }}>
+                                  <Group gap="xs" mb={4}>
+                                    <IconX size={14} color="red" />
+                                    <Text size="xs" c="dimmed">Было:</Text>
+                                  </Group>
+                                  <Code block style={{ backgroundColor: '#ffe0e0' }}>
+                                    {typeof oldVal === 'object' ? JSON.stringify(oldVal, null, 2) : String(oldVal)}
+                                  </Code>
+                                </Box>
+                                <IconArrowRight size={16} style={{ marginTop: 8 }} />
+                                <Box style={{ flex: 1 }}>
+                                  <Group gap="xs" mb={4}>
+                                    <IconCheck size={14} color="green" />
+                                    <Text size="xs" c="dimmed">Стало:</Text>
+                                  </Group>
+                                  <Code block style={{ backgroundColor: '#e0ffe0' }}>
+                                    {typeof newVal === 'object' ? JSON.stringify(newVal, null, 2) : String(newVal)}
+                                  </Code>
+                                </Box>
+                              </Group>
+                            ) : (
+                              <Code block>{typeof oldVal === 'object' ? JSON.stringify(oldVal, null, 2) : String(oldVal)}</Code>
+                            )}
+                          </Paper>
+                        );
+                      })}
+                    </Stack>
+                  ) : (
+                    <ScrollArea h={200}>
+                      <Code block>{JSON.stringify(selectedLog.details, null, 2)}</Code>
+                    </ScrollArea>
+                  )}
+                </div>
+              );
+            })()}
           </Stack>
         )}
       </Modal>

@@ -120,11 +120,15 @@ export const refreshToken = async (req: Request, res: Response): Promise<any> =>
   const token = req.cookies.refreshToken
 
   if (!token) {
-    return res.status(401).json({ message: 'No refresh token provided' });
+    return res.status(401).json({ message: 'No refresh token provided', code: 'NO_REFRESH_TOKEN' });
   }
   jwt.verify(token, refreshPublicKey, async (err: any, payload: any) => {
     if (err) {
-      return res.status(403).json({ message: 'Invalid refresh token' });
+      // Проверяем, истек ли токен
+      if (err.name === 'TokenExpiredError') {
+        return res.status(401).json({ message: 'Refresh token has expired. Please login again.', code: 'REFRESH_TOKEN_EXPIRED' });
+      }
+      return res.status(403).json({ message: 'Invalid refresh token', code: 'INVALID_REFRESH_TOKEN' });
     }
     const { exp, iat, ...newPayload } = payload 
     
@@ -138,7 +142,7 @@ export const refreshToken = async (req: Request, res: Response): Promise<any> =>
 
     res.cookie('refreshToken', newRefreshToken, {
       httpOnly: true,
-      secure: true,
+      secure: req.secure || req.headers['x-forwarded-proto'] === 'https',
       sameSite: 'strict',      
       maxAge: 90 * 24 * 60 * 60 * 1000
     })

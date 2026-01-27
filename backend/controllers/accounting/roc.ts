@@ -5,10 +5,22 @@ import { z } from 'zod';
 import { prisma } from '../../server.js';
 import fs from 'fs/promises';
 import uploadRoc from '../../middleware/uploaderRoc.js';
+import {
+  getHierarchyItems,
+  HierarchyConfig
+} from '../../utils/hierarchy.js';
 
 // Type chapters for ROC (align with RK approach: filter by chapter name; model filter optional)
 const ROC_TYPE_CHAPTER = 'Тип договора';
 const ROC_STATUS_CHAPTER = 'Статус договора';
+
+const rocTypeConfig: HierarchyConfig = {
+  modelName: 'type',
+  parentField: 'parent_type',
+  sortField: 'sortOrder',
+  nameField: 'name',
+  childrenRelation: 'children'
+};
 
 const RocSchema = z.object({
   userAddId: z.string(),
@@ -290,13 +302,16 @@ export const getNamesAndInn = async (req: Request, res: Response, next: NextFunc
 
 export const getRocTypes = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const types = await prisma.type.findMany({
-      where: {
-        chapter: ROC_TYPE_CHAPTER,
-        ...(req.query.model_uuid ? { model_uuid: String(req.query.model_uuid) } : {}),
-      },
-      orderBy: { name: 'asc' },
-      select: { id: true, name: true, colorHex: true },
+    const where: any = {
+      chapter: ROC_TYPE_CHAPTER
+    };
+    if (req.query.model_uuid) {
+      where.model_uuid = String(req.query.model_uuid);
+    }
+    
+    const types = await getHierarchyItems(prisma.type, rocTypeConfig, {
+      additionalWhere: where,
+      select: { id: true, name: true, colorHex: true }
     });
     res.status(200).json(types);
     return;
@@ -307,13 +322,16 @@ export const getRocTypes = async (req: Request, res: Response, next: NextFunctio
 
 export const getRocStatuses = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const statuses = await prisma.type.findMany({
-      where: {
-        chapter: ROC_STATUS_CHAPTER,
-        ...(req.query.model_uuid ? { model_uuid: String(req.query.model_uuid) } : {}),
-      },
-      orderBy: { name: 'asc' },
-      select: { id: true, name: true, colorHex: true },
+    const where: any = {
+      chapter: ROC_STATUS_CHAPTER
+    };
+    if (req.query.model_uuid) {
+      where.model_uuid = String(req.query.model_uuid);
+    }
+    
+    const statuses = await getHierarchyItems(prisma.type, rocTypeConfig, {
+      additionalWhere: where,
+      select: { id: true, name: true, colorHex: true }
     });
     res.status(200).json(statuses);
     return;

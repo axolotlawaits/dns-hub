@@ -4,8 +4,7 @@ import {
   getBranches,
   getBranchById,
   createBranch,
-  updateBranch,
-  deleteBranch
+  updateBranch
 } from '../../controllers/admin/branches.js';
 
 const router = Router();
@@ -24,9 +23,6 @@ router.post('/', createBranch);
 
 // Обновление филиала
 router.patch('/:id', updateBranch);
-
-// Удаление филиала
-router.delete('/:id', deleteBranch);
 
 export default router;
 

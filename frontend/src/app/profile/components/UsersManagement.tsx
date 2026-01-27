@@ -312,24 +312,25 @@ export default function UsersManagement() {
   return (
     <Box size="xl">
       <Stack gap="md">
-        <Group justify="space-between">
-          <Title order={2}>Управление пользователями</Title>
-          <Button leftSection={<IconPlus size={18} />} onClick={handleCreate}>
-            Добавить пользователя
-          </Button>
-        </Group>
-
         {error && (
           <Alert icon={<IconAlertCircle size={18} />} color="red" onClose={() => setError(null)} withCloseButton>
             {error}
           </Alert>
         )}
 
-        <FilterGroup
-          filters={filterConfig}
-          columnFilters={columnFilters}
-          onColumnFiltersChange={handleColumnFiltersChange}
-        />
+        {/* Фильтры */}
+        <Group justify="space-between" align="flex-start">
+          <Box style={{ flex: 1 }}>
+            <FilterGroup
+              filters={filterConfig}
+              columnFilters={columnFilters}
+              onColumnFiltersChange={handleColumnFiltersChange}
+            />
+          </Box>
+          <Button leftSection={<IconPlus size={18} />} onClick={handleCreate} style={{ alignSelf: 'flex-start', marginTop: '8px' }}>
+            Добавить пользователя
+          </Button>
+        </Group>
 
         <Paper shadow="sm" radius="md" withBorder>
           {loading ? (

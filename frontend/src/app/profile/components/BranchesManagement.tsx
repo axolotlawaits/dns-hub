@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   Paper,
-  Title,
   Table,
   Button,
   Group,
@@ -15,7 +14,7 @@ import {
   Box,
   Pagination,
 } from '@mantine/core';
-import { IconEdit, IconTrash, IconPlus, IconAlertCircle, IconBuilding } from '@tabler/icons-react';
+import { IconEdit, IconPlus, IconAlertCircle, IconBuilding } from '@tabler/icons-react';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { FilterGroup } from '../../../utils/filter';
 import useAuthFetch from '../../../hooks/useAuthFetch';
@@ -37,7 +36,6 @@ export default function BranchesManagement() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpened, setModalOpened] = useState(false);
-  const [, setDeleteModalOpened] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -84,10 +82,6 @@ export default function BranchesManagement() {
     setModalOpened(true);
   };
 
-  const handleDelete = (branch: Branch) => {
-    setSelectedBranch(branch);
-    setDeleteModalOpened(true);
-  };
 
   const handleSave = async (formData: any) => {
     try {
@@ -122,28 +116,6 @@ export default function BranchesManagement() {
     } catch (error) {
       console.error('Error saving branch:', error);
       setError('Ошибка сохранения филиала');
-    }
-  };
-
-  const _handleConfirmDelete = async () => {
-    if (!selectedBranch) return;
-
-    try {
-      setError(null);
-      const response = await authFetch(`${API}/admin/branches/${selectedBranch.id}`, {
-        method: 'DELETE',
-      });
-      if (response && response.ok) {
-        await fetchBranches();
-        setDeleteModalOpened(false);
-        setSelectedBranch(null);
-      } else {
-        const errorData = await response?.json();
-        setError(errorData?.error || 'Ошибка удаления филиала');
-      }
-    } catch (error) {
-      console.error('Error deleting branch:', error);
-      setError('Ошибка удаления филиала');
     }
   };
 
@@ -220,24 +192,25 @@ export default function BranchesManagement() {
   return (
     <Box  size="xl">
       <Stack gap="md">
-        <Group justify="space-between">
-          <Title order={2}>Управление филиалами</Title>
-          <Button leftSection={<IconPlus size={18} />} onClick={handleCreate}>
-            Добавить филиал
-          </Button>
-        </Group>
-
         {error && (
           <Alert icon={<IconAlertCircle size={18} />} color="red" onClose={() => setError(null)} withCloseButton>
             {error}
           </Alert>
         )}
 
-        <FilterGroup
-          filters={filterConfig}
-          columnFilters={columnFilters}
-          onColumnFiltersChange={handleColumnFiltersChange}
-        />
+        {/* Фильтры */}
+        <Group justify="space-between" align="flex-start">
+          <Box style={{ flex: 1 }}>
+            <FilterGroup
+              filters={filterConfig}
+              columnFilters={columnFilters}
+              onColumnFiltersChange={handleColumnFiltersChange}
+            />
+          </Box>
+          <Button leftSection={<IconPlus size={18} />} onClick={handleCreate} style={{ alignSelf: 'flex-start', marginTop: '8px' }}>
+            Добавить филиал
+          </Button>
+        </Group>
 
         <Paper shadow="sm" p="md" radius="md" withBorder>
           {loading ? (
@@ -297,15 +270,6 @@ export default function BranchesManagement() {
                                 onClick={() => handleEdit(branch)}
                               >
                                 <IconEdit size={18} />
-                              </ActionIcon>
-                            </Tooltip>
-                            <Tooltip label="Удалить">
-                              <ActionIcon
-                                variant="light"
-                                color="red"
-                                onClick={() => handleDelete(branch)}
-                              >
-                                <IconTrash size={18} />
                               </ActionIcon>
                             </Tooltip>
                           </Group>

@@ -151,6 +151,40 @@ export const useNotifications = (userId: string) => {
         return;
       }
 
+      // Проверяем, является ли это уведомлением о сообщении в чате Safety Journal
+      // Если пользователь находится в этом чате, не показываем уведомление
+      if (data.action && typeof data.action === 'object') {
+        const action = data.action as any;
+        const url = action.url || action.href || '';
+        const chatId = action.chatId;
+        
+        // Проверяем, относится ли уведомление к Safety Journal чату
+        if (typeof url === 'string' && url.includes('/jurists/safety') && chatId) {
+          const branchId = url.match(/branchId=([^&]+)/)?.[1];
+          
+          // Проверяем, открыт ли чат в данный момент
+          const currentPath = window.location.pathname;
+          const currentSearch = window.location.search;
+          
+          // Если мы на странице Safety Journal
+          if (currentPath.includes('/jurists/safety')) {
+            // Проверяем, есть ли в URL параметр branchId, который совпадает с уведомлением
+            if (branchId && currentSearch.includes(`branchId=${branchId}`)) {
+              // Проверяем, есть ли модальное окно чата открыто
+              // Ищем элемент с data-chat-modal="true" (это DraggableChatModal)
+              const chatModal = document.querySelector('[data-chat-modal="true"]');
+              
+              // Если модальное окно чата найдено и мы на правильной странице, не показываем уведомление
+              // Сообщение уже видно в чате, не нужно показывать popup
+              if (chatModal) {
+                console.log('[useNotifications] Skipping notification - user is in the chat', { chatId, branchId, url });
+                return;
+              }
+            }
+          }
+        }
+      }
+
       // Воспроизводим звук уведомления
       playNotificationSound();
 

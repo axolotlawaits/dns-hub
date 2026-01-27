@@ -228,9 +228,12 @@ export default function Events() {
                     ? (userData.branch.name as string)
                     : '';
 
+                // Создаем уникальный ключ, комбинируя UUID, дату события и индекс
+                const uniqueKey = `birthday-${userData.uuid || userData.email || 'unknown'}-${item.date.getTime()}-${index}`;
+
                 return (
                   <Card
-                    key={`birthday-${userData.uuid || userData.email || index}`}
+                    key={uniqueKey}
                     shadow="sm"
                     radius="md"
                     padding="md"

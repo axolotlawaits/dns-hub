@@ -483,8 +483,22 @@ export const getFileMetadata = async (req: Request, res: Response) => {
   try {
     const { fileId } = req.params;
 
+    if (!fileId) {
+      return res.status(400).json({ message: 'ID файла не предоставлен' });
+    }
+
+    if (!JOURNALS_API_URL) {
+      console.error('[SafetyJournal] JOURNALS_API_URL is not defined');
+      return res.status(500).json({ message: 'Внешний API не настроен' });
+    }
+
+    const token = getAuthToken(req);
+    if (!token) {
+      return res.status(401).json({ message: 'Токен авторизации не найден' });
+    }
+
     const response = await axios.get(`${JOURNALS_API_URL}/files/${fileId}`, {
-      headers: createAuthHeaders(getAuthToken(req))
+      headers: createAuthHeaders(token)
     });
 
     res.json(response.data);
@@ -503,13 +517,28 @@ export const getFileMetadata = async (req: Request, res: Response) => {
 export const deleteFile = async (req: Request, res: Response) => {
   try {
     const { fileId } = req.params;
+    
+    if (!fileId) {
+      return res.status(400).json({ message: 'ID файла не предоставлен' });
+    }
+
+    if (!JOURNALS_API_URL) {
+      console.error('[SafetyJournal] JOURNALS_API_URL is not defined');
+      return res.status(500).json({ message: 'Внешний API не настроен' });
+    }
+
     const { userId, positionName, groupName } = (req as any).token;
 
     // Удаление файлов доступно всем пользователям (не требует проверки прав)
     console.log('[SafetyJournal] File deletion allowed for all users:', { userId, positionName, groupName, fileId });
 
+    const token = getAuthToken(req);
+    if (!token) {
+      return res.status(401).json({ message: 'Токен авторизации не найден' });
+    }
+
     const response = await axios.delete(`${JOURNALS_API_URL}/files/${fileId}`, {
-      headers: createAuthHeaders(getAuthToken(req))
+      headers: createAuthHeaders(token)
     });
 
     res.json(response.data);
@@ -595,14 +624,20 @@ export const getJournalFilesList = async (req: Request, res: Response) => {
 export const viewFile = async (req: Request, res: Response) => {
   try {
     const { fileId } = req.params;
+    
+    if (!fileId) {
+      return res.status(400).json({ message: 'ID файла не предоставлен' });
+    }
+
+    if (!JOURNALS_API_URL) {
+      console.error('[SafetyJournal] JOURNALS_API_URL is not defined');
+      return res.status(500).json({ message: 'Внешний API не настроен' });
+    }
+
     const token = getAuthToken(req);
     
     if (!token) {
       return res.status(401).json({ message: 'Токен авторизации не найден' });
-    }
-    
-    if (!fileId) {
-      return res.status(400).json({ message: 'ID файла не предоставлен' });
     }
     
     const fileUrl = `${JOURNALS_API_URL}/files/${fileId}/view`;
@@ -667,6 +702,16 @@ export const viewFile = async (req: Request, res: Response) => {
 export const downloadFile = async (req: Request, res: Response) => {
   try {
     const { fileId } = req.params;
+    
+    if (!fileId) {
+      return res.status(400).json({ message: 'ID файла не предоставлен' });
+    }
+
+    if (!JOURNALS_API_URL) {
+      console.error('[SafetyJournal] JOURNALS_API_URL is not defined');
+      return res.status(500).json({ message: 'Внешний API не настроен' });
+    }
+
     const token = getAuthToken(req);
     
     if (!token) {
@@ -1133,7 +1178,7 @@ export const makeBranchJournalDecision = async (req: Request, res: Response) => 
                         if (!isInAnyActiveChat) {
                           await NotificationController.create({
                             type: 'INFO',
-                            channels: ['IN_APP', 'TELEGRAM'],
+                            channels: ['IN_APP', 'TELEGRAM', 'EMAIL'],
                             title: senderName,
                             message: messageText.substring(0, 100),
                             senderId: userId,
@@ -1427,7 +1472,7 @@ export const notifyBranchesWithUnfilledJournals = async (req: Request, res: Resp
                 // Создаем уведомление
                 await NotificationController.create({
                   type: 'WARNING',
-                  channels: ['IN_APP'],
+                  channels: ['IN_APP', 'TELEGRAM', 'EMAIL'],
                   title: senderName,
                   message: `Филиал "${branch.branch_name}" имеет не заполненные журналы: ${journalTitles}`,
                   senderId: userId,
@@ -1508,6 +1553,182 @@ export const notifyBranchesWithUnfilledJournals = async (req: Request, res: Resp
   } catch (error: any) {
     console.error('[SafetyJournal] Error notifying branches:', error);
     res.status(500).json({ message: 'Ошибка отправки оповещений' });
+  }
+};
+
+// Оповещение одного филиала с не заполненными журналами
+export const notifyBranchWithUnfilledJournals = async (req: Request, res: Response) => {
+  try {
+    const { userId } = (req as any).token;
+    const token = getAuthToken(req);
+    const { branchId } = req.params;
+    
+    if (!token) {
+      return res.status(401).json({ message: 'Токен авторизации не найден' });
+    }
+
+    if (!branchId) {
+      return res.status(400).json({ message: 'ID филиала не указан' });
+    }
+
+    // Получаем филиалы с журналами
+    const branchesResponse = await axios.get(`${JOURNALS_API_URL}/me/branches_with_journals`, {
+      headers: createAuthHeaders(token)
+    });
+
+    const branches = branchesResponse.data.branches || [];
+    
+    // Находим нужный филиал
+    const branch = branches.find((b: any) => b.branch_id === branchId);
+    
+    if (!branch) {
+      return res.status(404).json({ message: 'Филиал не найден' });
+    }
+
+    // Проверяем, есть ли не заполненные журналы
+    const unfilledJournals = branch.journals.filter((journal: any) => 
+      journal.status === 'pending' && !journal.filled_at
+    );
+
+    if (unfilledJournals.length === 0) {
+      return res.json({ 
+        message: 'У филиала нет не заполненных журналов',
+        notified: false
+      });
+    }
+
+    // Получаем ответственных по филиалу
+    const responsiblesResponse = await axios.get(
+      `${JOURNALS_API_URL}/branch_responsibles/?branchId=${branch.branch_id}`,
+      { headers: createAuthHeaders(token) }
+    );
+
+    // Структура ответа: массив объектов [{ branch_id, branch_name, responsibles: [...] }]
+    let responsibles: any[] = [];
+    if (responsiblesResponse.data && Array.isArray(responsiblesResponse.data)) {
+      for (const branchData of responsiblesResponse.data) {
+        if (branchData.branch_id === branch.branch_id && branchData.responsibles && Array.isArray(branchData.responsibles)) {
+          responsibles = branchData.responsibles;
+          break;
+        }
+      }
+    }
+
+    if (responsibles.length === 0) {
+      return res.json({ 
+        message: 'У филиала нет назначенных ответственных',
+        notified: false
+      });
+    }
+
+    const journalTitles = unfilledJournals.map((j: any) => `${j.journal_title} (${j.journal_type})`).join(', ');
+
+    // Получаем ответственных по каждому филиалу и отправляем уведомления
+    const { NotificationController } = await import('../app/notification.js');
+    const { SocketIOService } = await import('../../socketio.js');
+    const socketService = SocketIOService.getInstance();
+
+    let notifiedCount = 0;
+
+    // Отправляем уведомления каждому ответственному
+    for (const resp of responsibles) {
+      if (resp.employee_id) {
+        // employee_id из внешнего API должен совпадать с user.id в локальной БД
+        const responsibleUser = await prisma.user.findUnique({
+          where: { id: resp.employee_id },
+          select: { id: true, name: true }
+        });
+
+        if (responsibleUser) {
+          // Получаем ФИО отправителя
+          const sender = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { name: true }
+          });
+          const senderName = sender?.name || 'Пользователь';
+          
+          const notificationBranchName = branch.branch_name && branch.branch_name !== 'филиала' ? branch.branch_name : 'филиал';
+          
+          // Проверяем, находится ли пользователь в любом активном чате
+          const isInAnyActiveChat = socketService.isUserInAnyActiveChat(responsibleUser.id);
+          
+          // Отправляем уведомление только если пользователь не в активном чате
+          if (!isInAnyActiveChat) {
+            // Создаем уведомление
+            await NotificationController.create({
+              type: 'WARNING',
+              channels: ['IN_APP', 'TELEGRAM', 'EMAIL'],
+              title: senderName,
+              message: `Филиал "${branch.branch_name}" имеет не заполненные журналы: ${journalTitles}`,
+              senderId: userId,
+              receiverId: responsibleUser.id,
+              priority: 'MEDIUM',
+              action: {
+                type: 'NAVIGATE',
+                url: `/jurists/safety?branchId=${branch.branch_id}`,
+                branchName: notificationBranchName,
+              },
+            });
+            notifiedCount++;
+          }
+
+          // Отправляем через Socket.IO
+          socketService.sendToUser(responsibleUser.id, {
+            type: 'WARNING',
+            title: 'Требуется заполнение журналов',
+            message: `Филиал "${branch.branch_name}" имеет не заполненные журналы: ${journalTitles}`,
+            createdAt: new Date().toISOString(),
+            action: {
+              type: 'NAVIGATE',
+              url: `/jurists/safety?branchId=${branch.branch_id}`,
+            },
+          });
+        }
+      }
+    }
+
+    // Сохраняем информацию о последнем оповещении
+    const notificationData = {
+      branchId: branch.branch_id,
+      branchName: branch.branch_name,
+      notifiedAt: new Date().toISOString(),
+      notifiedBy: userId,
+      unfilledJournals: unfilledJournals.map((j: any) => ({
+        id: j.id,
+        title: j.journal_title,
+        type: j.journal_type
+      }))
+    };
+
+    // Сохраняем в UserSettings
+    await prisma.userSettings.upsert({
+      where: {
+        userId_parameter: {
+          userId: userId,
+          parameter: `safety_journal_notification_${branch.branch_id}`
+        }
+      },
+      update: {
+        value: JSON.stringify(notificationData)
+      },
+      create: {
+        userId: userId,
+        parameter: `safety_journal_notification_${branch.branch_id}`,
+        value: JSON.stringify(notificationData),
+        type: 'STRING'
+      }
+    });
+
+    res.json({
+      message: `Оповещения отправлены для филиала "${branch.branch_name}"`,
+      branchId: branch.branch_id,
+      branchName: branch.branch_name,
+      notifiedCount,
+      unfilledJournalsCount: unfilledJournals.length
+    });
+  } catch (error: any) {
+    console.error('[SafetyJournal] Error notifying branch:', error);
+    res.status(500).json({ message: 'Ошибка отправки оповещения' });
   }
 };
 

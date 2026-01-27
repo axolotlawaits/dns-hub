@@ -11,6 +11,7 @@ import { DndProviderWrapper } from '../../../utils/dnd';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { TableComponent } from '../../../utils/table';
 import { API } from '../../../config/constants';
+import { getTypesFlat } from '../../../utils/typesData';
 
 // Типы
 interface User {
@@ -208,8 +209,8 @@ export default function SupplyDocsList() {
 
       const [supplyDocsData, ptiuTypes, requirementTypes, branchesData] = await Promise.all([
         fetchData<SupplyDoc[]>(`${API}/accounting/supply-docs?include=statusRequirements,statusOfPTiU`),
-        fetchData<Type[]>(`${API}/type/sub?model_uuid=${MODEL_UUID}&chapter=${CHAPTERS.PTIU}`),
-        fetchData<Type[]>(`${API}/type/sub?model_uuid=${MODEL_UUID}&chapter=${CHAPTERS.REQUIREMENT}`),
+        getTypesFlat(CHAPTERS.PTIU, MODEL_UUID),
+        getTypesFlat(CHAPTERS.REQUIREMENT, MODEL_UUID),
         fetchData<Array<{ uuid: string; name: string }>>(`${API}/search/branch`),
       ]);
 

@@ -75,7 +75,7 @@ const JournalCards = function JournalCards({
               </Group>
 
               {/* Статус */}
-              <Group gap="xs" align="center">
+              <Group gap="xs" align="center" onClick={(e) => e.stopPropagation()}>
                 {StatusIcon && (
                   <StatusIcon 
                     size={16} 
@@ -153,32 +153,36 @@ const JournalCards = function JournalCards({
                     </Text>
                   ) : (
                     <Group gap="xs" justify="center">
-                      <Tooltip label="Одобрить">
-                        <ActionIcon 
-                          size="md" 
-                          color="green" 
-                          variant={journal.status === 'approved' ? 'filled' : 'light'} 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setApproveModalOpen(journal.id);
-                          }}
-                        >
-                          <IconCheck size={16} />
-                        </ActionIcon>
-                      </Tooltip>
-                      <Tooltip label="Отклонить">
-                        <ActionIcon 
-                          size="md" 
-                          color="red" 
-                          variant={journal.status === 'rejected' ? 'filled' : 'light'} 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setRejectModalOpen(journal.id);
-                          }}
-                        >
-                          <IconX size={16} />
-                        </ActionIcon>
-                      </Tooltip>
+                      {journal.status !== 'approved' && (
+                        <Tooltip label="Одобрить">
+                          <ActionIcon 
+                            size="md" 
+                            color="green" 
+                            variant="light" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setApproveModalOpen(journal.id);
+                            }}
+                          >
+                            <IconCheck size={16} />
+                          </ActionIcon>
+                        </Tooltip>
+                      )}
+                      {journal.status !== 'rejected' && (
+                        <Tooltip label="Отклонить">
+                          <ActionIcon 
+                            size="md" 
+                            color="red" 
+                            variant="light" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRejectModalOpen(journal.id);
+                            }}
+                          >
+                            <IconX size={16} />
+                          </ActionIcon>
+                        </Tooltip>
+                      )}
                     </Group>
                   )}
                 </Box>

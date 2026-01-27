@@ -40,6 +40,7 @@ import RouteComponent from '../features/Supply/Loaders/RouteComponent';
 import LoadersHome from '../features/Supply/Loaders/LoadersHome';
 import SupplyDocs from '../features/Accounting/SupplyDocs/SupplyDocs';
 import Roc from '../features/Accounting/Roc/Roc';
+import Cleaning from '../features/Accounting/Cleaning/Cleaning';
 import Media from '../features/Ad/Media/Media';
 import RK from '../features/Ad/RK/RK';
 import Merch from '../features/Retail/Merch/Merch';
@@ -59,10 +60,10 @@ import Trassir from '../features/Retail/Trassir/Trassir';
 import AppStore from '../features/Retail/AppStore/AppStore';
 import Shop from '../features/Retail/Shop/Shop';
 import FeedbackModule from '../features/Feedback/Feedback';
-import BugReports from '../features/Retail/BugReports/BugReports';
-import LogViewer from '../components/LogViewer';
 import AdminPanel from './profile/AdminPanel';
 import Docs from '../features/Docs/Docs';
+import Education from '../features/Education/Education';
+import Training from '../features/Education/Training/Training';
 import { useNotifications } from '../hooks/useNotifications';
 import { useEffect, useState } from 'react';
 import { API } from '../config/constants';
@@ -177,7 +178,7 @@ function App() {
             padding="md"
             navbar={{
               width: navOpened ? 225 : 80,
-              breakpoint: 'xl', // Установлено большое значение, чтобы не срабатывало
+              breakpoint: 'xl', // Отключено для десктопной версии
             }}
             withBorder={false}
             id='page'
@@ -187,7 +188,8 @@ function App() {
               },
               navbar: {
                 position: 'fixed',
-
+                left: 0,
+                right: 'auto',
               },
               main: { 
                 overflow: 'auto',
@@ -227,6 +229,7 @@ function App() {
                 <Route path='/service' element={<Service />} />
                 <Route path='/settlements' element={<Settlements />} />
                 <Route path='/retail' element={<Retail />} />
+                <Route path='/education' element={<Education />} />
                 <Route path='/supply' element={<Supply />} />
                 <Route path='/transformation' element={<Transformation />} />
                 <Route path='/search/*' element={<Handbook />} />
@@ -246,15 +249,15 @@ function App() {
                   <Route path='/scanner' element={<Scanner />} />
                   <Route path="/accounting/supply-docs" element={<SupplyDocs />} />
                   <Route path="/accounting/contracts-register" element={<Roc />} />
+                  <Route path="/accounting/cleaning" element={<Cleaning />} />
                   <Route path='/jurists/safety' element={<Safety />} />
                   <Route path="/add/rk" element={<RK />} />
                   <Route path='/retail/radio' element={<Radio />} />
                   <Route path='/retail/trassir' element={<Trassir />} />
                   <Route path='/retail/shop' element={<Shop />} />
-                  <Route path='/retail/bug-reports' element={<BugReports />} />
-                  <Route path='/logs' element={<LogViewer />} />
                   <Route path='/feedback' element={<FeedbackModule />} />
                   <Route path='/docs/*' element={<Docs />} />
+                  <Route path='/education/training' element={<Training />} />
                   {user.role === 'DEVELOPER' && (
                     <>
                       <Route path='/admin/branches' element={<AdminPanel initialTab="branches" />} />

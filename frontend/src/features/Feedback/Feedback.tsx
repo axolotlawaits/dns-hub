@@ -18,7 +18,6 @@ import {
   Tooltip,
   Divider,
   Tabs,
-  Title
 } from '@mantine/core';
 import {
   IconMail,
@@ -108,6 +107,11 @@ function FeedbackModule() {
 
       const data = await response.json();
       const map: Record<string, string> = {};
+      
+      // Сначала добавляем маппинг всех инструментов из обратной связи (приоритет)
+      if (data.allToolsMap) {
+        Object.assign(map, data.allToolsMap);
+      }
       
       // Добавляем родительские инструменты
       if (data.parentTools) {
@@ -379,8 +383,6 @@ function FeedbackModule() {
   return (
     <Box style={{ width: '100%', padding: 'var(--mantine-spacing-md)' }}>
       <Stack gap="lg">
-        <Title order={2} c="var(--theme-text-primary)">Обратная связь</Title>
-
       {/* Статистика */}
       {stats && (
         <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">

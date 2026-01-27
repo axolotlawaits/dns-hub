@@ -14,14 +14,17 @@ import {
   getProtectedTools,
   getAccessRequests,
   approveAccessRequest,
-  rejectAccessRequest
+  rejectAccessRequest,
 } from '../../controllers/app/access.js';
+import { getAccessAnalytics } from '../../controllers/app/accessAnalytics.js';
 import { authenticateToken } from '../../middleware/auth.js';
 
 const router = express.Router();
 
 // Специфичные маршруты должны быть определены ПЕРЕД параметризованными маршрутами
 router.get('/protected-tools', getProtectedTools)
+
+router.get('/analytics', authenticateToken, getAccessAnalytics)
 
 router.get('/requests/all', authenticateToken, getAccessRequests)
 

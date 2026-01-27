@@ -1,12 +1,14 @@
 // features/Docs/components/CategoryTree.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Stack, Text, Group, Badge, Loader, ActionIcon, Button, Menu } from '@mantine/core';
-import { IconChevronDown, IconChevronRight, IconFolder, IconFolderOpen, IconPlus, IconEdit, IconTrash, IconDots } from '@tabler/icons-react';
+import { IconFolder, IconFolderOpen, IconPlus, IconEdit, IconTrash, IconDots } from '@tabler/icons-react';
 import * as TablerIcons from '@tabler/icons-react';
 import { useUserContext } from '../../../hooks/useUserContext';
 import { DynamicFormModal, type FormField } from '../../../utils/formModal';
 import { getCategories, createCategory, updateCategory, deleteCategory, getCategoryById, KnowledgeCategory } from '../data/DocsData';
 import { notificationSystem } from '../../../utils/Push';
+import { UniversalHierarchy, HierarchyItem } from '../../../utils/UniversalHierarchy';
+import { flattenTree } from '../../../utils/hierarchy';
 
 interface CategoryTreeProps {
   selectedCategory: string | null;
@@ -17,7 +19,6 @@ export default function CategoryTree({ selectedCategory, onSelectCategory }: Cat
   const { user } = useUserContext();
   const [categories, setCategories] = useState<KnowledgeCategory[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   
   // Модалки для управления категориями
   const [createModalOpened, setCreateModalOpened] = useState(false);
@@ -33,16 +34,6 @@ export default function CategoryTree({ selectedCategory, onSelectCategory }: Cat
       setLoading(true);
       const data = await getCategories();
       console.log('[CategoryTree] Загруженные категории:', data);
-      // Логируем иконки для отладки
-      const logCategoryIcons = (cats: KnowledgeCategory[], level = 0) => {
-        cats.forEach(cat => {
-          console.log(`[CategoryTree] Категория "${cat.name}" (id: ${cat.id}) имеет иконку:`, cat.icon);
-          if (cat.children && cat.children.length > 0) {
-            logCategoryIcons(cat.children, level + 1);
-          }
-        });
-      };
-      logCategoryIcons(data);
       setCategories(data);
     } catch (err) {
       console.error('Ошибка при загрузке категорий:', err);
@@ -50,6 +41,16 @@ export default function CategoryTree({ selectedCategory, onSelectCategory }: Cat
       setLoading(false);
     }
   };
+
+  // Преобразуем дерево категорий в плоский список для UniversalHierarchy
+  const flatCategories = useMemo(() => {
+    return flattenTree(categories, {
+      parentField: 'parentId',
+      sortField: 'order',
+      nameField: 'name',
+      childrenField: 'children'
+    });
+  }, [categories]);
 
   useEffect(() => {
     loadCategories();
@@ -233,167 +234,6 @@ export default function CategoryTree({ selectedCategory, onSelectCategory }: Cat
     },
   ];
 
-  const toggleCategory = (categoryId: string) => {
-    setExpandedCategories((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(categoryId)) {
-        newSet.delete(categoryId);
-      } else {
-        newSet.add(categoryId);
-      }
-      return newSet;
-    });
-  };
-
-  const renderCategory = (category: KnowledgeCategory, level: number = 0) => {
-    const isExpanded = expandedCategories.has(category.id);
-    const isSelected = selectedCategory === category.id;
-    const hasChildren = category.children && category.children.length > 0;
-
-    return (
-      <div key={category.id}>
-        <Group
-          gap="xs"
-          p="xs"
-          style={{
-            paddingLeft: `${level * 20 + 8}px`,
-            cursor: 'pointer',
-            backgroundColor: isSelected ? 'var(--mantine-color-blue-light)' : 'transparent',
-            borderRadius: '4px',
-          }}
-          onClick={() => onSelectCategory(category.id)}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = isSelected
-              ? 'var(--mantine-color-blue-light)'
-              : 'var(--mantine-color-gray-light)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = isSelected
-              ? 'var(--mantine-color-blue-light)'
-              : 'transparent';
-          }}
-        >
-          {hasChildren && (
-            <ActionIcon
-              variant="subtle"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleCategory(category.id);
-              }}
-            >
-              {isExpanded ? <IconChevronDown size={16} /> : <IconChevronRight size={16} />}
-            </ActionIcon>
-          )}
-          {!hasChildren && <div style={{ width: '24px' }} />}
-           {(() => {
-             // Получаем иконку из category.icon, если она указана
-             let CategoryIcon: React.ComponentType<{ size?: number; color?: string; stroke?: number }> | null = null;
-             
-             if (category.icon && category.icon.trim()) {
-               const iconName = category.icon.trim();
-               
-               // Пытаемся найти иконку в TablerIcons (используем ту же логику, что и в Navigation.tsx)
-               const IconComponent = TablerIcons[iconName as keyof typeof TablerIcons] as React.ComponentType<{
-                 size?: number;
-                 color?: string;
-                 stroke?: number;
-               }>;
-               
-               // Проверяем, что компонент существует (без строгой проверки типа, так как компоненты могут быть обёрнуты)
-               if (IconComponent) {
-                 CategoryIcon = IconComponent;
-               } else {
-                 // Если иконка не найдена, логируем для отладки
-                 console.warn(`[CategoryTree] Иконка "${iconName}" не найдена в TablerIcons для категории "${category.name}" (id: ${category.id})`);
-                 console.log(`[CategoryTree] Доступные ключи в TablerIcons содержащие "${iconName}":`, 
-                   Object.keys(TablerIcons).filter(key => key.toLowerCase().includes(iconName.toLowerCase())).slice(0, 5)
-                 );
-               }
-             } else {
-               // Логируем, если иконка не указана
-               if (category.icon === null || category.icon === undefined) {
-                 console.log(`[CategoryTree] Категория "${category.name}" (id: ${category.id}) не имеет иконки`);
-               }
-             }
-             
-             // Если иконка не найдена или не указана, используем дефолтные
-             if (!CategoryIcon) {
-               CategoryIcon = isExpanded ? IconFolderOpen : IconFolder;
-             }
-             
-             return <CategoryIcon size={18} color={category.color} stroke={1.5} />;
-           })()}
-          <Text size="sm" fw={isSelected ? 600 : 400} style={{ flex: 1 }}>
-            {category.name}
-          </Text>
-          {category._count?.articles && (
-            <Badge size="xs" variant="light">
-              {category._count.articles}
-            </Badge>
-          )}
-          {isAdmin && (
-            <Menu position="bottom-start" withinPortal>
-              <Menu.Target>
-                <ActionIcon
-                  variant="subtle"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                  }}
-                >
-                  <IconDots size={16} />
-                </ActionIcon>
-              </Menu.Target>
-              <Menu.Dropdown>
-                <Menu.Item
-                  leftSection={<IconPlus size={16} />}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setParentCategoryId(category.id);
-                    setCreateModalOpened(true);
-                  }}
-                >
-                  Добавить подкатегорию
-                </Menu.Item>
-                <Menu.Item
-                  leftSection={<IconEdit size={16} />}
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    try {
-                      const fullCategory = await getCategoryById(category.id);
-                      setSelectedCategoryForEdit(fullCategory);
-                      setEditModalOpened(true);
-                    } catch (err) {
-                      console.error('Ошибка при загрузке категории:', err);
-                    }
-                  }}
-                >
-                  Редактировать
-                </Menu.Item>
-                <Menu.Item
-                  leftSection={<IconTrash size={16} />}
-                  color="red"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedCategoryForEdit(category);
-                    setDeleteModalOpened(true);
-                  }}
-                >
-                  Удалить
-                </Menu.Item>
-              </Menu.Dropdown>
-            </Menu>
-          )}
-        </Group>
-        {hasChildren && isExpanded && (
-          <div>
-            {category.children?.map((child) => renderCategory(child, level + 1))}
-          </div>
-        )}
-      </div>
-    );
-  };
 
   if (loading) {
     return <Loader size="sm" />;
@@ -425,7 +265,108 @@ export default function CategoryTree({ selectedCategory, onSelectCategory }: Cat
             </Button>
           )}
         </Group>
-        {categories.map((category) => renderCategory(category))}
+        <UniversalHierarchy
+          config={{
+            initialData: flatCategories,
+            parentField: 'parentId',
+            nameField: 'name',
+            renderItem: (item: HierarchyItem, isSelected: boolean, hasChildren: boolean) => {
+              const category = item as KnowledgeCategory;
+              let CategoryIcon: React.ComponentType<{ size?: number; color?: string; stroke?: number }> | null = null;
+              
+              if (category.icon && category.icon.trim()) {
+                const iconName = category.icon.trim();
+                const IconComponent = TablerIcons[iconName as keyof typeof TablerIcons] as React.ComponentType<{
+                  size?: number;
+                  color?: string;
+                  stroke?: number;
+                }>;
+                if (IconComponent) {
+                  CategoryIcon = IconComponent;
+                }
+              }
+              
+              if (!CategoryIcon) {
+                CategoryIcon = hasChildren ? IconFolderOpen : IconFolder;
+              }
+              
+              return (
+                <Group gap="xs" style={{ width: '100%' }}>
+                  <CategoryIcon size={18} color={category.color} stroke={1.5} />
+                  <Text size="sm" fw={isSelected ? 600 : 400} style={{ flex: 1 }}>
+                    {category.name}
+                  </Text>
+                  {category._count?.articles && (
+                    <Badge size="xs" variant="light">
+                      {category._count.articles}
+                    </Badge>
+                  )}
+                  {isAdmin && (
+                    <Menu position="bottom-start" withinPortal>
+                      <Menu.Target>
+                        <ActionIcon
+                          variant="subtle"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                          }}
+                        >
+                          <IconDots size={16} />
+                        </ActionIcon>
+                      </Menu.Target>
+                      <Menu.Dropdown>
+                        <Menu.Item
+                          leftSection={<IconPlus size={16} />}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setParentCategoryId(category.id);
+                            setCreateModalOpened(true);
+                          }}
+                        >
+                          Добавить подкатегорию
+                        </Menu.Item>
+                        <Menu.Item
+                          leftSection={<IconEdit size={16} />}
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                              const fullCategory = await getCategoryById(category.id);
+                              setSelectedCategoryForEdit(fullCategory);
+                              setEditModalOpened(true);
+                            } catch (err) {
+                              console.error('Ошибка при загрузке категории:', err);
+                            }
+                          }}
+                        >
+                          Редактировать
+                        </Menu.Item>
+                        <Menu.Item
+                          leftSection={<IconTrash size={16} />}
+                          color="red"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedCategoryForEdit(category);
+                            setDeleteModalOpened(true);
+                          }}
+                        >
+                          Удалить
+                        </Menu.Item>
+                      </Menu.Dropdown>
+                    </Menu>
+                  )}
+                </Group>
+              );
+            },
+            onItemSelect: (item) => {
+              onSelectCategory(item.id);
+            },
+            onDataUpdate: () => {
+              loadCategories();
+            }
+          }}
+          hasFullAccess={isAdmin}
+          initialSelectedId={selectedCategory}
+        />
       </Stack>
 
       {/* Модалка создания категории */}

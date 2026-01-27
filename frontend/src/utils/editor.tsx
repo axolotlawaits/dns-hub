@@ -16,6 +16,7 @@ import python from 'highlight.js/lib/languages/python';
 import sql from 'highlight.js/lib/languages/sql';
 import bash from 'highlight.js/lib/languages/bash';
 import { IconBold, IconItalic, IconUnderline, IconStrikethrough, IconH2, IconH3, IconList, IconCode, IconLink, IconPhoto, IconFileUpload } from '@tabler/icons-react';
+import { notificationSystem } from './Push';
 import '../utils/styles/editor.css';
 
 // Инициализируем lowlight с поддержкой языков
@@ -123,7 +124,7 @@ const TiptapEditor: React.FC<TiptapEditorProps> = ({ content, onChange, telegram
 
     // В toolbar загружаем только изображения
     if (!file.type.startsWith('image/')) {
-      alert('В панели инструментов можно загружать только изображения. Для других файлов используйте раздел "Вложения"');
+      notificationSystem.addNotification('Информация', 'В панели инструментов можно загружать только изображения. Для других файлов используйте раздел "Вложения"', 'info');
       event.target.value = '';
       return;
     }
@@ -140,7 +141,7 @@ const TiptapEditor: React.FC<TiptapEditorProps> = ({ content, onChange, telegram
       }, 100);
     } catch (error) {
       console.error('Ошибка при загрузке файла:', error);
-      alert('Ошибка при загрузке файла');
+      notificationSystem.addNotification('Ошибка', 'Ошибка при загрузке файла', 'error');
     }
     
     // Сбрасываем input для возможности повторной загрузки того же файла

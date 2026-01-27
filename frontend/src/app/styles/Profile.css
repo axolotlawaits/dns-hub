@@ -461,39 +461,6 @@
   }
 }
 
-/* Адаптивность */
-@media (max-width: 768px) {
-  .profile-container {
-    padding: var(--space-4);
-  }
-  
-  .access-selection-area {
-    grid-template-columns: 1fr;
-    gap: var(--space-4);
-  }
-  
-  .access-tools {
-    grid-template-columns: 1fr;
-  }
-  
-  .tool-card {
-    flex-direction: column;
-    gap: var(--space-3);
-    text-align: center;
-  }
-  
-  .tool-card-action {
-    justify-content: center;
-  }
-  
-  .profile-main-card .mantine-Grid-root {
-    flex-direction: column;
-  }
-  
-  .avatar-container {
-    margin-bottom: var(--space-4);
-  }
-}
 
 /* Темная тема */
 [data-mantine-color-scheme="dark"] .profile-main-card,

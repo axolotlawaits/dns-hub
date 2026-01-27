@@ -195,7 +195,7 @@ export const deleteBranch = async (req: Request, res: Response): Promise<any> =>
 
   try {
     const { id } = req.params;
-    // TODO: Реализовать удаление филиала
+    // Удаление филиалов не поддерживается
     return res.status(501).json({
       success: false,
       error: 'Not implemented yet'

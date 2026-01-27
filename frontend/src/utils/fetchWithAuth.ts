@@ -1,8 +1,11 @@
 import { API } from '../config/constants';
+import { clearUserStorage } from './storage';
 
 // Глобальная переменная для отслеживания процесса обновления токена
 let isRefreshing = false;
 let refreshPromise: Promise<string | null> | null = null;
+// Флаг, указывающий что refresh token истек (чтобы не пытаться обновлять повторно)
+let refreshTokenExpired = false;
 
 /**
  * Утилита для выполнения fetch запросов с автоматической обработкой 401 ошибок
@@ -46,6 +49,11 @@ export const fetchWithAuth = async (
 
   // Функция для обновления токена (с защитой от множественных вызовов)
   const refreshToken = async (): Promise<string | null> => {
+    // Если refresh token уже истек, не пытаемся обновлять снова
+    if (refreshTokenExpired) {
+      return null;
+    }
+
     // Если уже идет процесс обновления, ждем его завершения
     if (isRefreshing && refreshPromise) {
       return refreshPromise;
@@ -69,25 +77,30 @@ export const fetchWithAuth = async (
           const newToken = data.token || data.accessToken || data;
           if (newToken) {
             setToken(newToken);
+            // Сбрасываем флаг, если токен успешно обновлен
+            refreshTokenExpired = false;
             return newToken;
           }
         }
         
-        // Если refresh не удался (401/403), значит refresh token истек или отсутствует
-        // Не логируем ошибку для каждого запроса, чтобы не засорять консоль
+        // Если refresh не удался (401/403), помечаем что refresh token истек
+        if (response.status === 401 || response.status === 403) {
+          refreshTokenExpired = true;
+          // Не логируем для каждого запроса, чтобы не засорять консоль
+        }
+        
         // Очищаем токен и данные пользователя
         setToken(null);
-        localStorage.removeItem('user');
-        localStorage.removeItem('domain');
+        clearUserStorage();
         return null;
       } catch (error) {
         // Сетевые ошибки логируем только один раз
         if (!isRefreshing) {
           console.error('[fetchWithAuth] Network error while refreshing token:', error);
         }
+        refreshTokenExpired = true;
         setToken(null);
-        localStorage.removeItem('user');
-        localStorage.removeItem('domain');
+        clearUserStorage();
         return null;
       } finally {
         isRefreshing = false;
@@ -117,8 +130,8 @@ export const fetchWithAuth = async (
   });
 
   // Если получили 401, пробуем обновить токен и повторить запрос
-  // НО только если это НЕ запрос на refresh-token
-  if (response.status === 401 && !url.includes('/refresh-token')) {
+  // НО только если это НЕ запрос на refresh-token и refresh token еще не истек
+  if (response.status === 401 && !url.includes('/refresh-token') && !refreshTokenExpired) {
     const newToken = await refreshToken();
     
     if (newToken) {
@@ -129,10 +142,15 @@ export const fetchWithAuth = async (
         headers,
       });
     } else {
-      // Если токен не обновился, возвращаем исходный ответ 401
+      // Если токен не обновился (refresh token истек), возвращаем исходный ответ 401
       // Компонент может обработать это и сделать logout
+      // Не логируем каждый запрос, чтобы не засорять консоль
       return response;
     }
+  } else if (response.status === 401 && refreshTokenExpired) {
+    // Если refresh token уже истек, не пытаемся обновлять и не логируем
+    // Просто возвращаем ответ 401
+    return response;
   }
 
   return response;

@@ -4,7 +4,7 @@ import { IconArchive, IconPlus, IconArrowsSort, IconAlertCircle, IconTrash, Icon
 import { useDisclosure } from '@mantine/hooks';
 import { useForm } from '@mantine/form';
 import axios from 'axios';
-import { notifications } from '@mantine/notifications';
+import { notificationSystem } from '../utils/Push';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { API } from '../config/constants';
@@ -78,11 +78,7 @@ export function SlideAdmin() {
       const response = await axios.get(`${API}/add/sliders/`);
       setSlides(response.data);
     } catch (error) {
-      notifications.show({
-        title: 'Ошибка',
-        message: 'Не удалось загрузить слайды',
-        color: 'red',
-      });
+      notificationSystem.addNotification('Ошибка', 'Не удалось загрузить слайды', 'error');
     } finally {
       setLoading(false);
     }
@@ -95,11 +91,7 @@ export function SlideAdmin() {
   const handleAddSlide = async () => {
     try {
       if (!user?.id) {
-        notifications.show({
-          title: 'Ошибка',
-          message: 'Пользователь не авторизован',
-          color: 'red',
-        });
+        notificationSystem.addNotification('Ошибка', 'Пользователь не авторизован', 'error');
         return;
       }
 
@@ -118,11 +110,13 @@ export function SlideAdmin() {
         formData.append('attachment', selectedFile);
       }
 
-      notifications.show({
-        title: 'Успех',
-        message: 'Слайд успешно добавлен',
-        color: 'green',
+      await axios.post(`${API}/add/sliders/`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
       });
+
+      notificationSystem.addNotification('Успех', 'Слайд успешно добавлен', 'success');
       closeAddSlide();
       form.reset();
       setSelectedFile(null);
@@ -130,18 +124,10 @@ export function SlideAdmin() {
     } catch (error) {
       if (axios.isAxiosError(error)) {
         console.error('Error response:', error.response?.data);
-        notifications.show({
-          title: 'Ошибка',
-          message: error.response?.data?.message || 'Не удалось добавить слайд',
-          color: 'red',
-        });
+        notificationSystem.addNotification('Ошибка', error.response?.data?.message || 'Не удалось добавить слайд', 'error');
       } else {
         console.error('Error:', error);
-        notifications.show({
-          title: 'Ошибка',
-          message: 'Не удалось добавить слайд',
-          color: 'red',
-        });
+        notificationSystem.addNotification('Ошибка', 'Не удалось добавить слайд', 'error');
       }
     }
   };
@@ -167,39 +153,23 @@ export function SlideAdmin() {
           'Content-Type': 'multipart/form-data',
         },
       });
-      notifications.show({
-        title: 'Успех',
-        message: 'Слайд успешно обновлен',
-        color: 'green',
-      });
+      notificationSystem.addNotification('Успех', 'Слайд успешно обновлен', 'success');
       closeEditSlide();
       form.reset();
       setSelectedFile(null);
       fetchSlides();
     } catch (error) {
-      notifications.show({
-        title: 'Ошибка',
-        message: 'Не удалось обновить слайд',
-        color: 'red',
-      });
+      notificationSystem.addNotification('Ошибка', 'Не удалось обновить слайд', 'error');
     }
   };
 
   const handleDeleteSlide = async (id: string) => {
     try {
       await axios.delete(`${API}/add/sliders/${id}`);
-      notifications.show({
-        title: 'Успех',
-        message: 'Слайд успешно удален',
-        color: 'green',
-      });
+      notificationSystem.addNotification('Успех', 'Слайд успешно удален', 'success');
       fetchSlides();
     } catch (error) {
-      notifications.show({
-        title: 'Ошибка',
-        message: 'Не удалось удалить слайд',
-        color: 'red',
-      });
+      notificationSystem.addNotification('Ошибка', 'Не удалось удалить слайд', 'error');
     }
   };
 
@@ -209,11 +179,7 @@ export function SlideAdmin() {
       openOrderChanged();
       setSortMode(false);
     } catch (error) {
-      notifications.show({
-        title: 'Ошибка',
-        message: 'Не удалось обновить порядок',
-        color: 'red',
-      });
+      notificationSystem.addNotification('Ошибка', 'Не удалось обновить порядок', 'error');
     }
   };
 

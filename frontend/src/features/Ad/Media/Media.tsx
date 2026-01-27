@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { API } from '../../../config/constants';
+import { getTypesFlat } from '../../../utils/typesData';
 import { useUserContext } from '../../../hooks/useUserContext';
 import { usePageHeader } from '../../../contexts/PageHeaderContext';
 import { notificationSystem } from '../../../utils/Push';
@@ -153,9 +154,9 @@ export default function MediaList() {
   }, [showNotification]);
 
   const fetchTypeOptions = useCallback(async () => {
-    const data = await fetchData(`${API}/type/sub?model_uuid=${MODEL_UUID}&chapter=${CHAPTER}`);
-    return data.map((type: any) => ({ value: type.id, label: type.name }));
-  }, [fetchData]);
+    const data = await getTypesFlat(CHAPTER, MODEL_UUID);
+    return data.map((type) => ({ value: type.id, label: type.name }));
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {

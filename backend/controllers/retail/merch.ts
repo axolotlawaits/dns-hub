@@ -6,6 +6,20 @@ import fs from 'fs';
 import path from 'path';
 import { prisma, API } from '../../server.js';
 import { logUserAction } from '../../middleware/audit.js';
+import {
+  getHierarchyItems,
+  getMaxSortOrder,
+  updateItemsOrder,
+  HierarchyConfig
+} from '../../utils/hierarchy.js';
+
+const merchConfig: HierarchyConfig = {
+  modelName: 'merch',
+  parentField: 'parentId',
+  sortField: 'sortOrder',
+  nameField: 'name',
+  childrenRelation: 'children'
+};
 
 // Схемы валидации
 const MerchCategorySchema = z.object({
@@ -29,29 +43,22 @@ export const getMerchHierarchy = async (req: Request, res: Response, next: NextF
   try {
     const { parentId, layer } = req.query;
     
-    let whereClause: any = {};
+    let additionalWhere: any = {};
     
     // Логика по принципу старого MerchBot:
     // 1. Если parentId не указан - загружаем корневые категории (parentId = null, layer = 1)
     // 2. Если parentId указан - загружаем детей этого родителя с указанным layer
-    if (parentId) {
-      whereClause.parentId = parentId as string;
-      // Если также указан layer, добавляем его к условию
-      if (layer !== undefined) {
-        whereClause.layer = parseInt(layer as string);
-      }
-    } else {
+    if (!parentId) {
       // По умолчанию загружаем корневые категории (parentId = null, layer = 1)
-      whereClause.parentId = null;
-      whereClause.layer = 1;
+      additionalWhere.layer = 1;
+    } else if (layer !== undefined) {
+      // Если также указан layer, добавляем его к условию
+      additionalWhere.layer = parseInt(layer as string);
     }
 
-    const categories = await prisma.merch.findMany({
-      where: whereClause,
-      orderBy: [
-        { sortOrder: 'asc' },
-        { name: 'asc' }
-      ],
+    const categories = await getHierarchyItems(prisma.merch, merchConfig, {
+      parentId: parentId as string | null | undefined,
+      additionalWhere,
       include: {
         children: {
           select: {
@@ -466,17 +473,12 @@ export const createMerchCard = [
       }
 
       // Определяем следующий sortOrder для карточки в этой категории
-      const lastCard = await prisma.merch.findFirst({
-        where: {
-          parentId: categoryId,
-          layer: 0
-        },
-        orderBy: {
-          sortOrder: 'desc'
-        }
-      });
-
-      const nextSortOrder = lastCard ? lastCard.sortOrder + 1 : 0;
+      const nextSortOrder = await getMaxSortOrder(
+        prisma.merch,
+        merchConfig,
+        categoryId,
+        { layer: 0 }
+      );
 
       // Создаем карточку с layer = 0
       const newCard = await prisma.merch.create({
@@ -1085,7 +1087,7 @@ export const updateAttachmentsOrder = async (req: Request, res: Response, next: 
   }
 };
 
-// Обновить порядок карточек
+// Обновить порядок карточек (использует универсальную систему)
 export const updateCardsOrder = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { categoryId } = req.params;
@@ -1095,13 +1097,25 @@ export const updateCardsOrder = async (req: Request, res: Response, next: NextFu
       return res.status(400).json({ error: 'cardIds должен быть массивом' });
     }
 
-    // Обновляем sortOrder для каждой карточки
-    for (let i = 0; i < cardIds.length; i++) {
-      await prisma.merch.update({
-        where: { id: cardIds[i], layer: 0 },
-        data: { sortOrder: i }
-      });
+    // Проверяем, что все элементы являются карточками (layer = 0)
+    const cards = await prisma.merch.findMany({
+      where: { 
+        id: { in: cardIds },
+        layer: 0
+      },
+      select: { id: true }
+    });
+
+    if (cards.length !== cardIds.length) {
+      return res.status(400).json({ error: 'Некоторые элементы не являются карточками' });
     }
+
+    // Используем универсальную функцию updateItemsOrder
+    await updateItemsOrder(
+      prisma.merch,
+      merchConfig,
+      cardIds
+    );
 
     return res.json({ success: true });
   } catch (error) {
@@ -1110,7 +1124,7 @@ export const updateCardsOrder = async (req: Request, res: Response, next: NextFu
   }
 };
 
-// Обновить порядок категорий
+// Обновить порядок категорий (использует универсальную систему)
 export const updateCategoriesOrder = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { parentId } = req.params; // parentId может быть null для корневых категорий
@@ -1120,13 +1134,25 @@ export const updateCategoriesOrder = async (req: Request, res: Response, next: N
       return res.status(400).json({ error: 'categoryIds должен быть массивом' });
     }
 
-    // Обновляем sortOrder для каждой категории
-    for (let i = 0; i < categoryIds.length; i++) {
-      await prisma.merch.update({
-        where: { id: categoryIds[i], layer: 1 },
-        data: { sortOrder: i }
-      });
+    // Проверяем, что все элементы являются категориями (layer = 1)
+    const categories = await prisma.merch.findMany({
+      where: { 
+        id: { in: categoryIds },
+        layer: 1
+      },
+      select: { id: true }
+    });
+
+    if (categories.length !== categoryIds.length) {
+      return res.status(400).json({ error: 'Некоторые элементы не являются категориями' });
     }
+
+    // Используем универсальную функцию updateItemsOrder
+    await updateItemsOrder(
+      prisma.merch,
+      merchConfig,
+      categoryIds
+    );
 
     return res.json({ success: true });
   } catch (error) {

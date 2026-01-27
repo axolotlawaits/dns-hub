@@ -5,6 +5,11 @@ import { emailService } from '../../services/email.js';
 import fs from 'fs/promises';
 import path from 'path';
 import multer from 'multer';
+import {
+  getHierarchyItems,
+  HierarchyConfig
+} from '../../utils/hierarchy.js';
+import { getToolByLink } from '../../utils/toolUtils.js';
 
 // Функция для проверки доступа к управлению доступом для RK
 const checkRKAccess = async (userId: string): Promise<boolean> => {
@@ -115,10 +120,28 @@ const checkRKAccess = async (userId: string): Promise<boolean> => {
 const upload = multer({ dest: 'uploads/' });
 const __dirname = path.resolve()
 // Константы для типов и статусов
-const TYPE_MODEL_UUID = "944287fa-7599-4ff6-aa48-1dd81406f38c";
 const TYPE_CHAPTER = "Тип вывески";
-const STATUS_MODEL_UUID = "944287fa-7599-4ff6-aa48-1dd81406f38c";
 const STATUS_CHAPTER = "Статус согласования";
+
+// Получить model_uuid для RK tool
+const getRKModelUuid = async (): Promise<string> => {
+  let rkTool = await getToolByLink('add/rk');
+  if (!rkTool) {
+    rkTool = await getToolByLink('/add/rk');
+  }
+  if (!rkTool) {
+    throw new Error('Tool для RK не найден в базе данных');
+  }
+  return rkTool.id;
+};
+
+const rkTypeConfig: HierarchyConfig = {
+  modelName: 'type',
+  parentField: 'parent_type',
+  sortField: 'sortOrder',
+  nameField: 'name',
+  childrenRelation: 'children'
+};
 
 // Целевые должности для уведомлений и отображения ФИО
 const RK_MANAGER_POSITIONS = [
@@ -1077,17 +1100,17 @@ export const deleteRK = async (req: Request, res: Response, next: NextFunction):
 // Методы для получения справочников
 export const getRKTypes = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const types = await prisma.type.findMany({
-      where: {
-        model_uuid: TYPE_MODEL_UUID,
-        chapter: TYPE_CHAPTER,
+    const modelUuid = await getRKModelUuid();
+    const types = await getHierarchyItems(prisma.type, rkTypeConfig, {
+      additionalWhere: {
+        model_uuid: modelUuid,
+        chapter: TYPE_CHAPTER
       },
       select: {
         id: true,
         name: true,
         colorHex: true
-      },
-      orderBy: { name: 'asc' }
+      }
     });
     res.status(200).json(types);
   } catch (error) {
@@ -1097,17 +1120,17 @@ export const getRKTypes = async (req: Request, res: Response, next: NextFunction
 
 export const getRKStatuses = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const statuses = await prisma.type.findMany({
-      where: {
-        model_uuid: STATUS_MODEL_UUID,
-        chapter: STATUS_CHAPTER,
+    const modelUuid = await getRKModelUuid();
+    const statuses = await getHierarchyItems(prisma.type, rkTypeConfig, {
+      additionalWhere: {
+        model_uuid: modelUuid,
+        chapter: STATUS_CHAPTER
       },
       select: {
         id: true,
         name: true,
         colorHex: true
-      },
-      orderBy: { name: 'asc' }
+      }
     });
     res.status(200).json(statuses);
   } catch (error) {

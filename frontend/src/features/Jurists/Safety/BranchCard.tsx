@@ -1,9 +1,9 @@
-import { useState, useEffect, memo } from 'react';
+import { useState, useEffect, useCallback, memo } from 'react';
 import { API } from '../../../config/constants';
 import { notificationSystem } from '../../../utils/Push';
 import { Button, Box, Group, ActionIcon, Text, Stack, Paper, Badge, Tooltip, Divider, Select, Popover, Modal } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconChevronDown, IconChevronUp, IconUsers, IconX, IconEyePlus, IconMessageDots, IconBell, IconFileText } from '@tabler/icons-react';
+import { IconChevronDown, IconChevronUp, IconUsers, IconX, IconEyePlus, IconMessageDots, IconBell, IconFileText, IconClock } from '@tabler/icons-react';
 import dayjs from 'dayjs';
 import { Branch, SafetyJournal } from './SafetyJournal';
 import useAuthFetch from '../../../hooks/useAuthFetch';
@@ -32,6 +32,7 @@ interface BranchCardProps {
   onViewFile: (journal: SafetyJournal) => void;
   onUploadFiles: (journal: SafetyJournal) => void;
   onOpenChat: (branchId: string, branchName: string) => void;
+  onNotifyBranch?: (branchId: string) => Promise<void>;
   forceUpdate?: number;
   canManageStatuses: boolean;
   expandedBranches: Set<string>;
@@ -72,6 +73,7 @@ const BranchCardComponent = function BranchCardComponent({
   onViewFile,
   onUploadFiles,
   onOpenChat,
+  onNotifyBranch,
   forceUpdate,
   canManageStatuses,
   expandedBranches,
@@ -88,7 +90,27 @@ const BranchCardComponent = function BranchCardComponent({
   const [responsible, setResponsible] = useState<ResponsibleEmployeeAddType>({employeeId: '', responsibilityType: ''})
   const [responsibleData, setResponsibleData] = useState<ResponsibleObjDataType>()
   const [resPopoverOpened, setResPopoverOpened] = useState(false)
+  const [notifyingBranch, setNotifyingBranch] = useState(false)
   const authFetch  = useAuthFetch()
+
+  // Проверяем, есть ли не заполненные журналы у филиала
+  const hasUnfilledJournals = branch.journals.some((journal: SafetyJournal) => 
+    journal.status === 'pending' && !journal.filled_at
+  )
+
+  // Обработчик отправки уведомления филиалу
+  const handleNotifyBranch = useCallback(async () => {
+    if (!onNotifyBranch) return;
+    
+    setNotifyingBranch(true);
+    try {
+      await onNotifyBranch(branch.branch_id);
+    } catch (error) {
+      console.error('Ошибка при отправке уведомления филиалу:', error);
+    } finally {
+      setNotifyingBranch(false);
+    }
+  }, [onNotifyBranch, branch.branch_id]);
 
   // Синхронизируем локальное состояние с глобальным
   useEffect(() => {
@@ -216,17 +238,36 @@ const BranchCardComponent = function BranchCardComponent({
                 >
                   {branch.branch_name}
                 </Text>
-                {lastNotification && (
-                  <Tooltip 
-                    label={`Последнее оповещение: ${dayjs(lastNotification.notifiedAt).format('DD.MM.YYYY HH:mm')}`}
-                    multiline
-                    w={300}
-                  >
-                    <ActionIcon size="xs" variant="light" color="orange">
-                      <IconBell size={12} />
-                    </ActionIcon>
-                  </Tooltip>
-                )}
+                <Group gap="xs">
+                  {lastNotification && (
+                    <Tooltip 
+                      label={`Последнее оповещение: ${dayjs(lastNotification.notifiedAt).format('DD.MM.YYYY HH:mm')}`}
+                      multiline
+                      w={300}
+                    >
+                      <Group gap={4} style={{ cursor: 'default' }}>
+                        <IconClock size={12} style={{ color: 'var(--mantine-color-orange-6)' }} />
+                        <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+                          {dayjs(lastNotification.notifiedAt).format('DD.MM HH:mm')}
+                        </Text>
+                      </Group>
+                    </Tooltip>
+                  )}
+                  {onNotifyBranch && hasUnfilledJournals && (
+                    <Tooltip label="Отправить уведомление филиалу">
+                      <ActionIcon 
+                        size="xs" 
+                        variant="light" 
+                        color="orange"
+                        onClick={handleNotifyBranch}
+                        loading={notifyingBranch}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <IconBell size={12} />
+                      </ActionIcon>
+                    </Tooltip>
+                  )}
+                </Group>
               </Group>
               {isGridMode ? (
                 <Stack gap="xs">
@@ -526,7 +567,8 @@ const BranchCard = memo(BranchCardComponent, (prevProps: BranchCardProps, nextPr
     prevProps.canManageStatuses === nextProps.canManageStatuses &&
     prevProps.expandedBranches.size === nextProps.expandedBranches.size &&
     prevProps.expandedBranches.has(prevProps.branch.branch_id) === nextProps.expandedBranches.has(nextProps.branch.branch_id) &&
-    prevProps.viewMode === nextProps.viewMode
+    prevProps.viewMode === nextProps.viewMode &&
+    prevProps.onNotifyBranch === nextProps.onNotifyBranch
   );
   
   // Если viewMode изменился, обязательно перерисовываем

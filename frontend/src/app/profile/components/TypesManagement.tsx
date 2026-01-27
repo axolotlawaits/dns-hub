@@ -19,11 +19,16 @@ import {
   Divider,
   Box
 } from '@mantine/core';
-import { IconEdit, IconTrash, IconPlus, IconAlertCircle, IconTags, IconFolder, IconChevronRight, IconChevronDown } from '@tabler/icons-react';
+import { IconEdit, IconTrash, IconPlus, IconAlertCircle, IconTags, IconFolder, IconChevronRight, IconChevronDown, IconArrowsSort, IconX } from '@tabler/icons-react';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { FilterGroup } from '../../../utils/filter';
 import useAuthFetch from '../../../hooks/useAuthFetch';
 import { API } from '../../../config/constants';
+import { buildTree, flattenTree, getAllDescendantIds } from '../../../utils/hierarchy';
+import { UniversalHierarchySortModal } from '../../../utils/UniversalHierarchySortModal';
+import { UniversalHierarchy, HierarchyItem } from '../../../utils/UniversalHierarchy';
+import { CustomModal } from '../../../utils/CustomModal';
+import { useDisclosure } from '@mantine/hooks';
 
 interface Type {
   id: string;
@@ -57,11 +62,13 @@ export default function TypesManagement() {
   const [modalOpened, setModalOpened] = useState(false);
   const [deleteModalOpened, setDeleteModalOpened] = useState(false);
   const [selectedType, setSelectedType] = useState<Type | null>(null);
+  const [selectedTypeForChildren, setSelectedTypeForChildren] = useState<Type | null>(null); // Для просмотра дочерних элементов
   const [selectedToolId, setSelectedToolId] = useState<string | null>(null);
   const [selectedChapter, setSelectedChapter] = useState<string | null>(null);
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [sortModalOpened, { open: openSortModal, close: closeSortModal }] = useDisclosure(false);
 
   const authFetch = useAuthFetch();
 
@@ -73,14 +80,20 @@ export default function TypesManagement() {
   const fetchTypes = async () => {
     try {
       setLoading(true);
+      setError(null);
       const response = await authFetch(`${API}/type`);
       if (response && response.ok) {
         const data = await response.json();
-        setTypes(data);
+        setTypes(Array.isArray(data) ? data : []);
+      } else {
+        const errorData = await response?.json().catch(() => ({ error: 'Unknown error' }));
+        setError(errorData?.error || 'Ошибка загрузки типов');
+        setTypes([]);
       }
     } catch (error) {
       console.error('Error fetching types:', error);
-      setError('Ошибка загрузки типов');
+      setError(error instanceof Error ? error.message : 'Ошибка загрузки типов');
+      setTypes([]);
     } finally {
       setLoading(false);
     }
@@ -144,7 +157,7 @@ export default function TypesManagement() {
       const data = {
         ...formData,
         parent_type: formData.parent_type || null,
-        sortOrder: formData.sortOrder ?? 0,
+        // sortOrder автоматически вычисляется триггером в БД
       };
       
       if (selectedType) {
@@ -323,14 +336,6 @@ export default function TypesManagement() {
       required: false,
       placeholder: '#000000',
     },
-    {
-      name: 'sortOrder',
-      label: 'Порядок сортировки',
-      type: 'number' as const,
-      required: false,
-      min: 0,
-      placeholder: '0',
-    },
   ], [tools, parentTypeOptions]);
 
   const initialValues = useMemo(() => selectedType ? {
@@ -382,53 +387,80 @@ export default function TypesManagement() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [tools, types]);
 
-  // Строим иерархию типов для выбранного раздела
-  const buildTypeHierarchy = (typesList: Type[]): Type[] => {
-    const typeMap = new Map<string, Type & { level: number }>();
-    
-    // Создаем карту всех типов с уровнем вложенности
-    typesList.forEach(type => {
-      typeMap.set(type.id, { ...type, level: 0 });
-    });
-    
-    // Определяем уровни вложенности
-    const setLevel = (typeId: string, level: number = 0): number => {
-      const type = typeMap.get(typeId);
-      if (!type) return level;
-      
-      if (type.parent_type) {
-        const parentLevel = setLevel(type.parent_type, level + 1);
-        type.level = parentLevel;
-        return parentLevel;
-      }
-      type.level = level;
-      return level;
-    };
-    
-    typesList.forEach(type => {
-      setLevel(type.id);
-    });
-    
-    // Сортируем: сначала по уровню, потом по sortOrder, потом по имени
-    const sortedTypes = Array.from(typeMap.values()).sort((a, b) => {
-      if (a.level !== b.level) return a.level - b.level;
-      if ((a.sortOrder ?? 0) !== (b.sortOrder ?? 0)) return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
-      return a.name.localeCompare(b.name);
-    });
-    
-    return sortedTypes;
-  };
-
-  // Получаем типы выбранного раздела с иерархией
-  const selectedChapterTypes = useMemo(() => {
+  // Получаем типы выбранного раздела с иерархией (плоский список для UniversalHierarchy)
+  const selectedChapterTypesFlat = useMemo(() => {
     if (!selectedToolId || !selectedChapter) return [];
     const filtered = types.filter(type => 
       type.model_uuid === selectedToolId && 
       (type.chapter || 'Без раздела') === selectedChapter
     );
     const filteredTypes = applyFilters(filtered);
-    return buildTypeHierarchy(filteredTypes);
+    return flattenTree(buildTree(filteredTypes, {
+      parentField: 'parent_type',
+      sortField: 'sortOrder',
+      nameField: 'name',
+      childrenField: 'children'
+    }), {
+      parentField: 'parent_type',
+      sortField: 'sortOrder',
+      nameField: 'name',
+      childrenField: 'children'
+    });
   }, [types, selectedToolId, selectedChapter, chapterFilter, nameFilter]);
+
+  // Получаем все дочерние элементы выбранного типа рекурсивно (плоский список для UniversalHierarchy)
+  const selectedTypeChildrenFlat = useMemo(() => {
+    if (!selectedTypeForChildren) return [];
+    
+    // Получаем все ID потомков рекурсивно
+    const descendantIds = getAllDescendantIds(types, selectedTypeForChildren.id, {
+      parentField: 'parent_type'
+    });
+    
+    // Добавляем прямых детей
+    const directChildrenIds = types
+      .filter(type => type.parent_type === selectedTypeForChildren.id)
+      .map(type => type.id);
+    
+    // Объединяем и получаем уникальные ID
+    const allChildrenIds = new Set([...directChildrenIds, ...descendantIds]);
+    
+    // Получаем все дочерние элементы
+    const children = types.filter(type => allChildrenIds.has(type.id));
+    
+    // Строим дерево и разворачиваем его
+    return flattenTree(buildTree(children, {
+      parentField: 'parent_type',
+      sortField: 'sortOrder',
+      nameField: 'name',
+      childrenField: 'children'
+    }), {
+      parentField: 'parent_type',
+      sortField: 'sortOrder',
+      nameField: 'name',
+      childrenField: 'children'
+    });
+  }, [types, selectedTypeForChildren]);
+
+  // Получаем все типы в плоском виде для UniversalHierarchy (чтобы дочерние элементы могли быть найдены)
+  const allTypesFlat = useMemo(() => {
+    const filtered = applyFilters(types.filter(type => 
+      type.model_uuid === selectedToolId && 
+      (type.chapter || 'Без раздела') === selectedChapter
+    ));
+    const tree = buildTree(filtered, {
+      parentField: 'parent_type',
+      sortField: 'sortOrder',
+      nameField: 'name',
+      childrenField: 'children'
+    });
+    return flattenTree(tree, {
+      parentField: 'parent_type',
+      sortField: 'sortOrder',
+      nameField: 'name',
+      childrenField: 'children'
+    });
+  }, [types, selectedToolId, selectedChapter, applyFilters]);
 
   const handleColumnFiltersChange = (columnId: string, value: any) => {
     setColumnFilters(prev => {
@@ -458,13 +490,6 @@ export default function TypesManagement() {
   return (
     <Box size="xl">
       <Stack gap="md">
-        <Group justify="space-between">
-          <Title order={2}>Управление типами</Title>
-          <Button leftSection={<IconPlus size={18} />} onClick={handleCreate}>
-            Добавить тип
-          </Button>
-        </Group>
-
         {error && (
           <Alert icon={<IconAlertCircle size={18} />} color="red" onClose={() => setError(null)} withCloseButton>
             {error}
@@ -472,11 +497,18 @@ export default function TypesManagement() {
         )}
 
         {/* Фильтры */}
-        <FilterGroup
-          filters={filterConfig}
-          columnFilters={columnFilters}
-          onColumnFiltersChange={handleColumnFiltersChange}
-        />
+        <Group justify="space-between" align="flex-start">
+          <Box style={{ flex: 1 }}>
+            <FilterGroup
+              filters={filterConfig}
+              columnFilters={columnFilters}
+              onColumnFiltersChange={handleColumnFiltersChange}
+            />
+          </Box>
+          <Button leftSection={<IconPlus size={18} />} onClick={handleCreate} style={{ alignSelf: 'flex-start', marginTop: '8px' }}>
+            Добавить тип
+          </Button>
+        </Group>
 
         {/* Две колонки: инструменты и типы */}
         <Grid gutter="md">
@@ -636,8 +668,8 @@ export default function TypesManagement() {
             <Divider orientation="vertical" />
           </Grid.Col>
 
-          {/* Правая колонка: Типы выбранного инструмента */}
-          <Grid.Col span={7.5}>
+          {/* Правая колонка: Типы выбранного инструмента или дочерние элементы */}
+          <Grid.Col span={selectedTypeForChildren ? 3.5 : 7.5}>
             <Paper shadow="sm" p="md" radius="md" withBorder h="calc(100vh - 300px)">
               <Stack gap="md" h="100%">
                 <Group justify="space-between">
@@ -649,9 +681,23 @@ export default function TypesManagement() {
                       </Text>
                     )}
                   </Title>
-                  {selectedChapterTypes.length > 0 && (
-                    <Badge variant="light">{selectedChapterTypes.length}</Badge>
-                  )}
+                  <Group gap="xs">
+                    {selectedChapterTypesFlat.length > 0 && (
+                      <Badge variant="light">{selectedChapterTypesFlat.length}</Badge>
+                    )}
+                    {selectedToolId && selectedChapter && (
+                      <Tooltip label="Сортировка иерархии">
+                        <ActionIcon
+                          variant="light"
+                          color="blue"
+                          onClick={openSortModal}
+                          disabled={selectedChapterTypesFlat.length === 0}
+                        >
+                          <IconArrowsSort size={18} />
+                        </ActionIcon>
+                      </Tooltip>
+                    )}
+                  </Group>
                 </Group>
                 {loading ? (
                   <Text c="dimmed">Загрузка...</Text>
@@ -673,7 +719,7 @@ export default function TypesManagement() {
                         : 'Выберите раздел слева для просмотра типов'}
                     </Text>
                   </Box>
-                ) : selectedChapterTypes.length === 0 ? (
+                ) : selectedChapterTypesFlat.length === 0 ? (
                   <Box
                     style={{
                       display: 'flex',
@@ -693,198 +739,244 @@ export default function TypesManagement() {
                   </Box>
                 ) : (
                   <ScrollArea h="100%">
-                    <Table striped highlightOnHover>
-                      <Table.Thead>
-                        <Table.Tr>
-                          <Table.Th>Название</Table.Th>
-                          <Table.Th>Родитель</Table.Th>
-                          <Table.Th>Порядок</Table.Th>
-                          <Table.Th>Цвет</Table.Th>
-                          <Table.Th>Действия</Table.Th>
-                        </Table.Tr>
-                      </Table.Thead>
-                      <Table.Tbody>
-                        {selectedChapterTypes.map((type: Type & { level?: number }) => {
-                          const level = type.level || 0;
+                    <UniversalHierarchy
+                      config={{
+                        initialData: selectedChapterTypesFlat,
+                        parentField: 'parent_type',
+                        nameField: 'name',
+                        renderItem: (item: HierarchyItem, isSelected: boolean, hasChildren: boolean) => {
+                          const type = item as Type;
                           const parentType = types.find(t => t.id === type.parent_type);
-                          const hasChildren = types.some(t => t.parent_type === type.id);
-                          
-                          // Вычисляем цвет границы с прозрачностью
-                          const getBorderColor = () => {
-                            if (level === 0) return undefined;
-                            const baseColor = parentType?.colorHex || 'var(--mantine-color-gray-4)';
-                            // Если это hex цвет, добавляем прозрачность через rgba
-                            if (baseColor.startsWith('#')) {
-                              const r = parseInt(baseColor.slice(1, 3), 16);
-                              const g = parseInt(baseColor.slice(3, 5), 16);
-                              const b = parseInt(baseColor.slice(5, 7), 16);
-                              return `rgba(${r}, ${g}, ${b}, 0.3)`;
-                            }
-                            return baseColor;
-                          };
-                          
                           return (
-                            <Table.Tr 
-                              key={type.id}
-                              style={{
-                                borderLeft: level > 0 ? `3px solid ${getBorderColor()}` : undefined,
-                              }}
-                            >
-                              <Table.Td>
-                                <Group gap="xs" style={{ paddingLeft: `${level * 24}px`, position: 'relative' }}>
-                                  {/* Индикатор уровня с визуальными элементами */}
-                                  <Group gap={6} style={{ position: 'relative', zIndex: 1 }}>
-                                    {/* Отступы для уровней */}
-                                  {level > 0 && (
-                                      <Group gap={2} style={{ width: `${(level - 1) * 20}px`, justifyContent: 'flex-end' }}>
-                                        {/* Вертикальная линия для каждого уровня */}
-                                        {Array.from({ length: level }).map((_, idx) => (
-                                          <Box
-                                            key={idx}
-                                            style={{
-                                              width: '2px',
-                                              height: '100%',
-                                              backgroundColor: idx === level - 1 
-                                                ? (parentType?.colorHex || 'var(--mantine-color-gray-5)')
-                                                : 'transparent',
-                                              opacity: 0.4,
-                                              marginRight: idx < level - 1 ? '18px' : '0',
-                                            }}
-                                          />
-                                        ))}
-                                        {/* Горизонтальная линия и стрелка */}
-                                        <Box
-                                          style={{
-                                            width: '10px',
-                                            height: '2px',
-                                            backgroundColor: parentType?.colorHex || 'var(--mantine-color-gray-5)',
-                                            opacity: 0.5,
-                                          }}
-                                        />
-                                    <IconChevronRight 
-                                      size={14} 
-                                      style={{ 
-                                            opacity: 0.7,
-                                            color: parentType?.colorHex || 'var(--mantine-color-gray-6)',
-                                            marginLeft: '-4px',
-                                            marginRight: '2px'
-                                      }} 
-                                    />
-                                      </Group>
-                                  )}
-                                    {/* Иконка типа */}
-                                    {hasChildren ? (
-                                      <IconFolder 
-                                        size={18} 
-                                        style={{ 
-                                          opacity: 0.8, 
-                                          color: type.colorHex || 'var(--mantine-color-blue-6)',
-                                          flexShrink: 0
-                                        }} 
-                                      />
-                                    ) : level === 0 ? (
-                                      <IconTags size={16} style={{ opacity: 0.6, flexShrink: 0 }} />
-                                    ) : (
-                                      <Box 
-                                        style={{ 
-                                          width: 18, 
-                                          height: 18, 
-                                          display: 'flex', 
-                                          alignItems: 'center', 
-                                          justifyContent: 'center',
-                                          flexShrink: 0
-                                        }}
-                                      >
-                                        <Box
-                                          style={{
-                                            width: '6px',
-                                            height: '6px',
-                                            borderRadius: '50%',
-                                            backgroundColor: parentType?.colorHex || 'var(--mantine-color-gray-5)',
-                                            opacity: 0.6,
-                                          }}
-                                        />
-                                      </Box>
-                                    )}
-                                    {/* Название типа */}
-                                  <Text 
-                                      fw={level === 0 ? 600 : level === 1 ? 500 : 400}
-                                      c={type.colorHex || (level === 0 ? undefined : 'dimmed')}
-                                      size="sm"
-                                      style={{ flex: 1 }}
-                                  >
-                                    {type.name}
-                                  </Text>
-                                  </Group>
-                                </Group>
-                              </Table.Td>
-                              <Table.Td>
-                                {parentType ? (
-                                  <Badge 
-                                    variant="light" 
+                            <Group gap="xs" style={{ width: '100%' }}>
+                              {hasChildren ? (
+                                <IconFolder 
+                                  size={18} 
+                                  style={{ 
+                                    opacity: 0.8, 
+                                    color: type.colorHex || 'var(--mantine-color-blue-6)',
+                                    flexShrink: 0
+                                  }} 
+                                />
+                              ) : (
+                                <IconTags size={16} style={{ opacity: 0.6, flexShrink: 0 }} />
+                              )}
+                              <Text 
+                                fw={isSelected ? 600 : 400}
+                                c={type.colorHex || (isSelected ? undefined : 'dimmed')}
+                                size="sm"
+                                style={{ flex: 1 }}
+                              >
+                                {type.name}
+                              </Text>
+                              {parentType && (
+                                <Badge 
+                                  variant="light" 
+                                  size="xs"
+                                  style={{ 
+                                    backgroundColor: parentType.colorHex 
+                                      ? `${parentType.colorHex}20` 
+                                      : undefined 
+                                  }}
+                                >
+                                  {parentType.name}
+                                </Badge>
+                              )}
+                              {type.colorHex && (
+                                <Badge
+                                  size="xs"
+                                  style={{ 
+                                    backgroundColor: type.colorHex,
+                                    color: '#fff',
+                                    border: 'none'
+                                  }}
+                                >
+                                  {type.colorHex}
+                                </Badge>
+                              )}
+                              <Group gap="xs" onClick={(e) => e.stopPropagation()}>
+                                <Tooltip label="Редактировать">
+                                  <ActionIcon
+                                    variant="light"
+                                    color="blue"
                                     size="sm"
-                                    style={{ 
-                                      backgroundColor: parentType.colorHex 
-                                        ? `${parentType.colorHex}20` 
-                                        : undefined 
-                                    }}
+                                    onClick={() => handleEdit(type)}
                                   >
-                                    {parentType.name}
-                                  </Badge>
-                                ) : (
-                                  <Text c="dimmed" size="sm">Корневой</Text>
-                                )}
-                              </Table.Td>
-                              <Table.Td>
-                                <Text size="sm">{type.sortOrder ?? 0}</Text>
-                              </Table.Td>
-                              <Table.Td>
-                                {type.colorHex ? (
-                                  <Badge
-                                    style={{ 
-                                      backgroundColor: type.colorHex,
-                                      color: '#fff',
-                                      border: 'none'
-                                    }}
+                                    <IconEdit size={16} />
+                                  </ActionIcon>
+                                </Tooltip>
+                                <Tooltip label="Удалить">
+                                  <ActionIcon
+                                    variant="light"
+                                    color="red"
+                                    size="sm"
+                                    onClick={() => handleDelete(type)}
                                   >
-                                    {type.colorHex}
-                                  </Badge>
-                                ) : (
-                                  <Text c="dimmed">—</Text>
-                                )}
-                              </Table.Td>
-                              <Table.Td>
-                                <Group gap="xs">
-                                  <Tooltip label="Редактировать">
+                                    <IconTrash size={16} />
+                                  </ActionIcon>
+                                </Tooltip>
+                                {hasChildren && (
+                                  <Tooltip label="Показать дочерние элементы">
                                     <ActionIcon
                                       variant="light"
-                                      color="blue"
-                                      onClick={() => handleEdit(type)}
+                                      color="gray"
+                                      size="sm"
+                                      onClick={() => setSelectedTypeForChildren(type)}
                                     >
-                                      <IconEdit size={18} />
+                                      <IconFolder size={16} />
                                     </ActionIcon>
                                   </Tooltip>
-                                  <Tooltip label="Удалить">
-                                    <ActionIcon
-                                      variant="light"
-                                      color="red"
-                                      onClick={() => handleDelete(type)}
-                                    >
-                                      <IconTrash size={18} />
-                                    </ActionIcon>
-                                  </Tooltip>
-                                </Group>
-                              </Table.Td>
-                            </Table.Tr>
+                                )}
+                              </Group>
+                            </Group>
                           );
-                        })}
-                      </Table.Tbody>
-                    </Table>
+                        },
+                        onItemSelect: (item) => {
+                          const type = item as Type;
+                          const hasChildren = types.some(t => t.parent_type === type.id);
+                          if (hasChildren) {
+                            setSelectedTypeForChildren(type);
+                          }
+                        },
+                        onDataUpdate: () => {
+                          fetchTypes();
+                        }
+                      }}
+                      hasFullAccess={true}
+                    />
                   </ScrollArea>
                 )}
               </Stack>
             </Paper>
           </Grid.Col>
+
+          {/* Колонка дочерних элементов (если выбран тип с детьми) */}
+          {selectedTypeForChildren && (
+            <>
+              <Grid.Col span={0.5}>
+                <Divider orientation="vertical" />
+              </Grid.Col>
+              <Grid.Col span={3.5}>
+                <Paper shadow="sm" p="md" radius="md" withBorder h="calc(100vh - 300px)">
+                  <Stack gap="md" h="100%">
+                    <Group justify="space-between">
+                      <Title order={4}>
+                        Дочерние элементы
+                        <Text span c="dimmed" size="sm" fw={400}>
+                          {' '}({selectedTypeForChildren.name})
+                        </Text>
+                      </Title>
+                      <Group gap="xs">
+                        <Badge variant="light">{selectedTypeChildrenFlat.length}</Badge>
+                        <ActionIcon
+                          variant="subtle"
+                          color="gray"
+                          onClick={() => setSelectedTypeForChildren(null)}
+                        >
+                          <IconX size={16} />
+                        </ActionIcon>
+                      </Group>
+                    </Group>
+                    {selectedTypeChildrenFlat.length === 0 ? (
+                      <Box
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          height: '100%',
+                          flexDirection: 'column',
+                          gap: 16,
+                        }}
+                      >
+                        <IconFolder size={48} style={{ color: 'var(--mantine-color-dimmed)' }} />
+                        <Text c="dimmed">У этого типа нет дочерних элементов</Text>
+                      </Box>
+                    ) : (
+                      <ScrollArea h="100%">
+                        <UniversalHierarchy
+                          config={{
+                            initialData: allTypesFlat,
+                            parentField: 'parent_type',
+                            nameField: 'name',
+                            rootFilter: (item) => {
+                              // Показываем только прямых дочерних элементов выбранного типа
+                              // UniversalHierarchy сам найдет и отобразит их потомков рекурсивно
+                              return item['parent_type'] === selectedTypeForChildren.id;
+                            },
+                            renderItem: (item: HierarchyItem, isSelected: boolean, hasChildren: boolean) => {
+                              const type = item as Type;
+                              return (
+                                <Group gap="xs" style={{ width: '100%' }}>
+                                  {hasChildren ? (
+                                    <IconFolder 
+                                      size={18} 
+                                      style={{ 
+                                        opacity: 0.8, 
+                                        color: type.colorHex || 'var(--mantine-color-blue-6)',
+                                        flexShrink: 0
+                                      }} 
+                                    />
+                                  ) : (
+                                    <IconTags size={16} style={{ opacity: 0.6, flexShrink: 0 }} />
+                                  )}
+                                  <Text 
+                                    fw={isSelected ? 600 : 400}
+                                    c={type.colorHex || (isSelected ? undefined : 'dimmed')}
+                                    size="sm"
+                                    style={{ flex: 1 }}
+                                  >
+                                    {type.name}
+                                  </Text>
+                                  {type.colorHex && (
+                                    <Badge
+                                      size="xs"
+                                      style={{ 
+                                        backgroundColor: type.colorHex,
+                                        color: '#fff',
+                                        border: 'none'
+                                      }}
+                                    >
+                                      {type.colorHex}
+                                    </Badge>
+                                  )}
+                                  <Group gap="xs" onClick={(e) => e.stopPropagation()}>
+                                    <Tooltip label="Редактировать">
+                                      <ActionIcon
+                                        variant="light"
+                                        color="blue"
+                                        size="sm"
+                                        onClick={() => handleEdit(type)}
+                                      >
+                                        <IconEdit size={16} />
+                                      </ActionIcon>
+                                    </Tooltip>
+                                    <Tooltip label="Удалить">
+                                      <ActionIcon
+                                        variant="light"
+                                        color="red"
+                                        size="sm"
+                                        onClick={() => handleDelete(type)}
+                                      >
+                                        <IconTrash size={16} />
+                                      </ActionIcon>
+                                    </Tooltip>
+                                  </Group>
+                                </Group>
+                              );
+                            },
+                            onDataUpdate: () => {
+                              fetchTypes();
+                            }
+                          }}
+                          hasFullAccess={true}
+                        />
+                      </ScrollArea>
+                    )}
+                  </Stack>
+                </Paper>
+              </Grid.Col>
+            </>
+          )}
         </Grid>
 
         <DynamicFormModal
@@ -946,6 +1038,101 @@ export default function TypesManagement() {
             </Button>
           </Group>
         </Modal>
+
+        {/* Модалка сортировки иерархии */}
+        {selectedToolId && selectedChapter && (
+          <CustomModal
+            opened={sortModalOpened}
+            onClose={closeSortModal}
+            title="Сортировка иерархии типов"
+            size="xl"
+            icon={<IconArrowsSort size={20} />}
+          >
+            <UniversalHierarchySortModal
+              onClose={closeSortModal}
+              onSuccess={() => {
+                fetchTypes();
+                closeSortModal();
+              }}
+              config={{
+                fetchEndpoint: `${API}/type`,
+                updateItemEndpoint: (id: string) => `${API}/type/${id}`,
+                parentField: 'parent_type',
+                sortField: 'sortOrder',
+                nameField: 'name',
+                additionalFilters: {
+                  model_uuid: selectedToolId,
+                  chapter: selectedChapter
+                },
+                transformItem: (item: Type) => {
+                  const { id, name, parent_type, sortOrder, ...rest } = item;
+                  return {
+                    id,
+                    name,
+                    parentId: parent_type || null,
+                    level: 0,
+                    originalLevel: 0,
+                    originalParentId: parent_type || null,
+                    sortOrder: sortOrder || 0,
+                    ...rest
+                  };
+                },
+                onSave: async (items, originalItems) => {
+                  // Находим все измененные элементы
+                  const movedItems = items.filter(item => {
+                    const original = originalItems.find(orig => orig.id === item.id);
+                    if (!original) return false;
+                    
+                    if (item.parent_type !== original.parent_type || item.level !== original.level) {
+                      return true;
+                    }
+                    
+                    const currentSameParent = items.filter(i => i.parent_type === item.parent_type);
+                    const originalSameParent = originalItems.filter(i => i.parent_type === original.parent_type);
+                    
+                    const currentIndex = currentSameParent.findIndex(i => i.id === item.id);
+                    const originalIndex = originalSameParent.findIndex(i => i.id === item.id);
+                    
+                    return currentIndex !== originalIndex;
+                  });
+
+                  // Группируем изменения по родителям
+                  const parentsToUpdate = new Set<string | null>();
+                  movedItems.forEach(item => {
+                    parentsToUpdate.add(item.parent_type);
+                    const original = originalItems.find(orig => orig.id === item.id);
+                    if (original && original.parent_type !== item.parent_type) {
+                      parentsToUpdate.add(original.parent_type);
+                    }
+                  });
+
+                  // Обновляем порядок для каждого родителя
+                  for (const parentId of parentsToUpdate) {
+                    const sameParentItems = items.filter(i => i.parent_type === parentId);
+                    for (let i = 0; i < sameParentItems.length; i++) {
+                      const item = sameParentItems[i];
+                      await authFetch(`${API}/type/${item.id}`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ sortOrder: i })
+                      });
+                    }
+                  }
+
+                  // Обновляем parent_type для перемещенных элементов
+                  for (const item of movedItems) {
+                    const original = originalItems.find(orig => orig.id === item.id);
+                    if (original && original.parent_type !== item.parent_type) {
+                      await authFetch(`${API}/type/${item.id}`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ parent_type: item.parent_type })
+                      });
+                    }
+                  }
+                }
+              }}
+            />
+          </CustomModal>
+        )}
       </Stack>
     </Box>
   );

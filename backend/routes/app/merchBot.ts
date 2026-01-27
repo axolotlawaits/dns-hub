@@ -1914,9 +1914,6 @@ router.post('/feedback/:id/response', authenticateToken, async (req: any, res: a
       }
     });
 
-    // Если нужно отправить email, здесь можно добавить логику отправки
-    // TODO: Добавить отправку email
-
     res.json({
       id: response.id,
       feedbackId: response.feedbackId,
@@ -2096,6 +2093,38 @@ router.get('/feedback/tools', authenticateToken, async (req: any, res: any) => {
       }
     });
 
+    // Получаем все уникальные tool (link) из обратной связи
+    const feedbackTools = await (prisma as any).feedback.findMany({
+      select: {
+        tool: true
+      },
+      distinct: ['tool']
+    });
+
+    const feedbackToolLinks = new Set(feedbackTools.map((fb: any) => fb.tool));
+
+    // Получаем все инструменты, которые используются в обратной связи (даже если не включены)
+    const allFeedbackTools = await prisma.tool.findMany({
+      where: {
+        link: {
+          in: Array.from(feedbackToolLinks)
+        }
+      },
+      select: {
+        id: true,
+        name: true,
+        link: true,
+        description: true,
+        parent_id: true
+      }
+    });
+
+    // Создаем маппинг link -> name для всех инструментов из обратной связи
+    const allToolsMap: Record<string, string> = {};
+    allFeedbackTools.forEach(tool => {
+      allToolsMap[tool.link] = tool.name;
+    });
+
     // Формируем список родительских инструментов
     const parentToolsList = parentTools.map(tool => ({
       value: tool.link,
@@ -2140,7 +2169,9 @@ router.get('/feedback/tools', authenticateToken, async (req: any, res: any) => {
         { value: 'other', label: 'Другое' }
       ],
       linkToIdMap: linkToIdMap,
-      parentToolsWithChildren: parentToolsWithChildren
+      parentToolsWithChildren: parentToolsWithChildren,
+      // Добавляем маппинг всех инструментов из обратной связи
+      allToolsMap: allToolsMap
     });
   } catch (error) {
     console.error('Error fetching feedback tools:', error);

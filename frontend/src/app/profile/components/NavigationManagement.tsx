@@ -3,27 +3,30 @@ import { ColumnFiltersState } from '@tanstack/react-table';
 import {
   Paper,
   Title,
-  Table,
   Button,
   Group,
   Modal,
-  ActionIcon,
-  Tooltip,
   Badge,
   Stack,
   Alert,
   Text,
   Grid,
-  ScrollArea,
   Divider,
-  Box
+  Box,
+  ActionIcon,
+  Tooltip
 } from '@mantine/core';
-import { IconEdit, IconTrash, IconPlus, IconAlertCircle, IconMenu2, IconChevronRight } from '@tabler/icons-react';
+import { IconPlus, IconAlertCircle, IconMenu2, IconArrowsSort } from '@tabler/icons-react';
 import * as TablerIcons from '@tabler/icons-react';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { FilterGroup } from '../../../utils/filter';
 import useAuthFetch from '../../../hooks/useAuthFetch';
 import { API } from '../../../config/constants';
+import { UniversalHierarchy, HierarchyItem } from '../../../utils/UniversalHierarchy';
+import { UniversalHierarchySortModal } from '../../../utils/UniversalHierarchySortModal';
+import { flattenTree, buildTree } from '../../../utils/hierarchy';
+import { CustomModal } from '../../../utils/CustomModal';
+import { useDisclosure } from '@mantine/hooks';
 
 interface MenuItem {
   id: string;
@@ -51,6 +54,7 @@ export default function NavigationManagement() {
   const [isChildMode, setIsChildMode] = useState(false); // Режим создания дочернего элемента
   const [error, setError] = useState<string | null>(null);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [sortModalOpened, { open: openSortModal, close: closeSortModal }] = useDisclosure(false);
 
   const authFetch = useAuthFetch();
 
@@ -61,14 +65,20 @@ export default function NavigationManagement() {
   const fetchMenuItems = async () => {
     try {
       setLoading(true);
+      setError(null);
       const response = await authFetch(`${API}/navigation/all`);
       if (response && response.ok) {
         const data = await response.json();
-        setMenuItems(data);
+        setMenuItems(Array.isArray(data) ? data : []);
+      } else {
+        const errorData = await response?.json().catch(() => ({ error: 'Unknown error' }));
+        setError(errorData?.error || 'Ошибка загрузки пунктов меню');
+        setMenuItems([]);
       }
     } catch (error) {
       console.error('Error fetching menu items:', error);
-      setError('Ошибка загрузки пунктов меню');
+      setError(error instanceof Error ? error.message : 'Ошибка загрузки пунктов меню');
+      setMenuItems([]);
     } finally {
       setLoading(false);
     }
@@ -83,16 +93,51 @@ export default function NavigationManagement() {
     setModalOpened(true);
   };
 
-  const handleEdit = (item: MenuItem) => {
+  const handleEdit = useCallback((item: MenuItem) => {
     setSelectedItem(item);
     setIsChildMode(!!item.parent_id);
     setModalOpened(true);
-  };
+  }, []);
 
-  const handleDelete = (item: MenuItem) => {
+  const handleDelete = useCallback((item: MenuItem) => {
     setSelectedItem(item);
     setDeleteModalOpened(true);
-  };
+  }, []);
+
+  // Обертки для модалок UniversalHierarchy
+  const NavigationAddModal = useCallback(({ parentItem, onSuccess }: { parentItem?: HierarchyItem | null; onClose: () => void; onSuccess: () => void }) => {
+    // Если parentItem передан, значит добавляем дочерний элемент
+    if (parentItem) {
+      handleCreate(true, parentItem.id);
+    } else {
+      // Иначе добавляем корневой элемент
+      handleCreate(false);
+    }
+    onSuccess(); // Закрываем модалку UniversalHierarchy
+    return null;
+  }, [handleCreate]);
+
+  const NavigationEditModal = useCallback(({ item, onSuccess }: { item: HierarchyItem; onClose: () => void; onSuccess: () => void }) => {
+    handleEdit(item as MenuItem);
+    onSuccess(); // Закрываем модалку UniversalHierarchy
+    return null;
+  }, [handleEdit]);
+
+  const NavigationDeleteModal = useCallback(({ item, onSuccess }: { item: HierarchyItem; onClose: () => void; onSuccess: () => void }) => {
+    handleDelete(item as MenuItem);
+    onSuccess(); // Закрываем модалку UniversalHierarchy
+    return null;
+  }, [handleDelete]);
+
+  // Обработчик для AddModal в правой колонке (для дочерних элементов)
+  const NavigationAddModalForChildren = useCallback(({ onSuccess }: { parentItem?: HierarchyItem | null; onClose: () => void; onSuccess: () => void }) => {
+    // Для правой колонки всегда передаем selectedRootItem как parentItem
+    if (selectedRootItem) {
+      handleCreate(true, selectedRootItem);
+    }
+    onSuccess();
+    return null;
+  }, [selectedRootItem, handleCreate]);
 
   const handleSave = async (formData: any) => {
     try {
@@ -397,32 +442,49 @@ export default function NavigationManagement() {
       .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
   }, [menuItems, includedFilter, nameFilter]);
 
-  // Получаем дочерние элементы выбранного корневого пункта с иерархией
-  const childItems = useMemo(() => {
+  // Получаем все элементы меню в плоском виде для UniversalHierarchy (чтобы дочерние элементы могли быть найдены)
+  const allMenuItemsFlat = useMemo(() => {
+    const filtered = applyFilters(menuItems);
+    const tree = buildTree(filtered, {
+      parentField: 'parent_id',
+      sortField: 'order',
+      nameField: 'name',
+      childrenField: 'children'
+    });
+    return flattenTree(tree, {
+      parentField: 'parent_id',
+      sortField: 'order',
+      nameField: 'name',
+      childrenField: 'children'
+    });
+  }, [menuItems, applyFilters]);
+
+  // Получаем корневые элементы (плоский список для UniversalHierarchy)
+  const rootItemsFlat = useMemo(() => {
+    const filtered = applyFilters(rootItemsForLeftColumn);
+    return filtered.map(item => ({ ...item, parent_id: null }));
+  }, [rootItemsForLeftColumn, applyFilters]);
+
+  // Получаем дочерние элементы выбранного корневого пункта с иерархией (плоский список для UniversalHierarchy)
+  const childItemsFlat = useMemo(() => {
     if (!selectedRootItem) return [];
     
-    // Рекурсивная функция для построения дерева дочерних элементов
-    const buildChildTree = (parentId: string, level: number = 0): Array<MenuItem & { level: number }> => {
-      const children = menuItems
-        .filter(item => item.parent_id === parentId)
-        .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
-      
-      const result: Array<MenuItem & { level: number }> = [];
-      
-      for (const child of children) {
-        if (applyFilters([child]).length > 0) {
-          result.push({ ...child, level });
-          // Рекурсивно получаем дочерние элементы
-          const grandchildren = buildChildTree(child.id, level + 1);
-          result.push(...grandchildren);
-        }
-      }
-      
-      return result;
-    };
+    const children = menuItems.filter(item => item.parent_id === selectedRootItem);
+    const filtered = applyFilters(children);
+    const tree = buildTree(filtered, {
+      parentField: 'parent_id',
+      sortField: 'order',
+      nameField: 'name',
+      childrenField: 'children'
+    });
     
-    return buildChildTree(selectedRootItem, 0);
-  }, [menuItems, selectedRootItem, includedFilter, nameFilter]);
+    return flattenTree(tree, {
+      parentField: 'parent_id',
+      sortField: 'order',
+      nameField: 'name',
+      childrenField: 'children'
+    });
+  }, [menuItems, selectedRootItem, applyFilters]);
 
   const filterConfig = useMemo(() => [
     {
@@ -456,9 +518,22 @@ export default function NavigationManagement() {
   return (
     <Box size="xl">
       <Stack gap="md">
-        <Group justify="space-between">
-          <Title order={2}>Управление пунктами меню</Title>
-          <Group>
+        {error && (
+          <Alert icon={<IconAlertCircle size={18} />} color="red" onClose={() => setError(null)} withCloseButton>
+            {error}
+          </Alert>
+        )}
+
+        {/* Фильтры */}
+        <Group justify="space-between" align="flex-start">
+          <Box style={{ flex: 1 }}>
+            <FilterGroup
+              filters={filterConfig}
+              columnFilters={columnFilters}
+              onColumnFiltersChange={handleColumnFiltersChange}
+            />
+          </Box>
+          <Group gap="xs" style={{ alignSelf: 'flex-start', marginTop: '8px' }}>
             <Button 
               leftSection={<IconPlus size={18} />} 
               onClick={() => handleCreate(false)}
@@ -478,108 +553,75 @@ export default function NavigationManagement() {
           </Group>
         </Group>
 
-        {error && (
-          <Alert icon={<IconAlertCircle size={18} />} color="red" onClose={() => setError(null)} withCloseButton>
-            {error}
-          </Alert>
-        )}
-
-        {/* Фильтры */}
-        <FilterGroup
-          filters={filterConfig}
-          columnFilters={columnFilters}
-          onColumnFiltersChange={handleColumnFiltersChange}
-        />
-
         {/* Две колонки: корневые и дочерние */}
         <Grid gutter="md">
-          {/* Левая колонка: Все пункты с иерархией */}
+          {/* Левая колонка: Корневые пункты с иерархией */}
           <Grid.Col span={4}>
             <Paper shadow="sm" p="md" radius="md" withBorder h="calc(100vh - 300px)">
               <Stack gap="md" h="100%">
                 <Group justify="space-between">
                   <Title order={4}>Корневые пункты</Title>
-                  <Badge variant="light">{rootItemsForLeftColumn.length}</Badge>
+                  <Group gap="xs">
+                    <Badge variant="light">{rootItemsFlat.length}</Badge>
+                    {rootItemsFlat.length > 0 && (
+                      <Tooltip label="Сортировка иерархии">
+                        <ActionIcon
+                          variant="light"
+                          color="blue"
+                          onClick={openSortModal}
+                        >
+                          <IconArrowsSort size={18} />
+                        </ActionIcon>
+                      </Tooltip>
+                    )}
+                  </Group>
                 </Group>
                 {loading ? (
                   <Text c="dimmed">Загрузка...</Text>
                 ) : (
-                  <ScrollArea h="100%">
-                    {rootItemsForLeftColumn.length === 0 ? (
-                      <Text c="dimmed" ta="center" py="xl">
-                        Нет корневых пунктов
-                      </Text>
-                    ) : (
-                      <Table striped highlightOnHover>
-                        <Table.Tbody>
-                          {rootItemsForLeftColumn.map((item) => (
-                            <Table.Tr
-                              key={item.id}
-                              style={{
-                                cursor: 'pointer',
-                                backgroundColor: selectedRootItem === item.id
-                                  ? 'var(--theme-bg-secondary)'
-                                  : undefined,
-                              }}
-                              onClick={() => setSelectedRootItem(item.id)}
-                            >
-                              <Table.Td>
-                                <Group gap="xs">
-                                  {(() => {
-                                    const IconComponent = TablerIcons[item.icon as keyof typeof TablerIcons] as 
-                                      React.ComponentType<{ size?: number; stroke?: number }> | undefined;
-                                    return IconComponent ? (
-                                      <IconComponent size={16} stroke={1.5} />
-                                    ) : (
-                                      <IconMenu2 size={16} />
-                                    );
-                                  })()}
-                                  <Text fw={selectedRootItem === item.id ? 600 : 400}>
-                                    {item.name}
-                                  </Text>
-                                </Group>
-                              </Table.Td>
-                              <Table.Td>
-                                <Badge color={item.included ? 'green' : 'gray'} size="sm">
-                                  {item.included ? 'Вкл' : 'Скрыт'}
-                                </Badge>
-                              </Table.Td>
-                              <Table.Td>
-                                <Group gap="xs">
-                                  <Tooltip label="Редактировать">
-                                    <ActionIcon
-                                      variant="subtle"
-                                      color="blue"
-                                      size="sm"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleEdit(item);
-                                      }}
-                                    >
-                                      <IconEdit size={16} />
-                                    </ActionIcon>
-                                  </Tooltip>
-                                  <Tooltip label="Удалить">
-                                    <ActionIcon
-                                      variant="subtle"
-                                      color="red"
-                                      size="sm"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDelete(item);
-                                      }}
-                                    >
-                                      <IconTrash size={16} />
-                                    </ActionIcon>
-                                  </Tooltip>
-                                </Group>
-                              </Table.Td>
-                            </Table.Tr>
-                          ))}
-                        </Table.Tbody>
-                      </Table>
-                    )}
-                  </ScrollArea>
+                  <Box style={{ flex: 1, overflow: 'auto' }}>
+                    <UniversalHierarchy
+                      config={{
+                        initialData: rootItemsFlat, // Только корневые элементы без дочерних
+                        parentField: 'parent_id',
+                        nameField: 'name',
+                        idField: 'id',
+                        rootFilter: (item) => !item.parent_id, // Все элементы уже корневые
+                        disableExpansion: true, // Отключаем раскрытие дочерних элементов в левой колонке
+                        AddModal: NavigationAddModal,
+                        EditModal: NavigationEditModal,
+                        DeleteModal: NavigationDeleteModal,
+                        renderItem: (item: HierarchyItem, isSelected: boolean) => {
+                          const menuItem = item as MenuItem;
+                          const IconComponent = TablerIcons[menuItem.icon as keyof typeof TablerIcons] as 
+                            React.ComponentType<{ size?: number; stroke?: number }> | undefined;
+                          return (
+                            <Group gap="xs" style={{ width: '100%' }}>
+                              {IconComponent ? (
+                                <IconComponent size={16} stroke={1.5} />
+                              ) : (
+                                <IconMenu2 size={16} />
+                              )}
+                              <Text fw={isSelected ? 600 : 400} style={{ flex: 1 }}>
+                                {menuItem.name}
+                              </Text>
+                              <Badge color={menuItem.included ? 'green' : 'gray'} size="sm">
+                                {menuItem.included ? 'Вкл' : 'Скрыт'}
+                              </Badge>
+                            </Group>
+                          );
+                        },
+                        onItemSelect: (item) => {
+                          setSelectedRootItem(item.id);
+                        },
+                        onDataUpdate: () => {
+                          fetchMenuItems();
+                        }
+                      }}
+                      hasFullAccess={true}
+                      initialSelectedId={selectedRootItem}
+                    />
+                  </Box>
                 )}
               </Stack>
             </Paper>
@@ -604,8 +646,8 @@ export default function NavigationManagement() {
                     )}
                   </Title>
                   <Group>
-                    {childItems.length > 0 && (
-                      <Badge variant="light">{childItems.length}</Badge>
+                    {childItemsFlat.length > 0 && (
+                      <Badge variant="light">{childItemsFlat.length}</Badge>
                     )}
                     {selectedRootItem && (
                       <Button 
@@ -637,106 +679,52 @@ export default function NavigationManagement() {
                       Выберите корневой пункт слева для просмотра дочерних элементов
                     </Text>
                   </Box>
-                ) : childItems.length === 0 ? (
-                  <Box
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      height: '100%',
-                      flexDirection: 'column',
-                      gap: 16,
-                    }}
-                  >
-                    <IconMenu2 size={48} color="var(--mantine-color-gray-4)" />
-                    <Text c="dimmed">У этого пункта нет дочерних элементов</Text>
-                  </Box>
                 ) : (
-                  <ScrollArea h="100%">
-                    <Table striped highlightOnHover>
-                      <Table.Thead>
-                        <Table.Tr>
-                          <Table.Th>Название</Table.Th>
-                          <Table.Th>Иконка</Table.Th>
-                          <Table.Th>Ссылка</Table.Th>
-                          <Table.Th>Порядок</Table.Th>
-                          <Table.Th>Статус</Table.Th>
-                          <Table.Th>Действия</Table.Th>
-                        </Table.Tr>
-                      </Table.Thead>
-                      <Table.Tbody>
-                        {childItems.map((item) => (
-                          <Table.Tr key={item.id}>
-                            <Table.Td>
-                              <Group gap="xs" style={{ paddingLeft: `${item.level * 20}px` }}>
-                                {item.level > 0 && (
-                                  <IconChevronRight 
-                                    size={14} 
-                                    style={{ 
-                                      opacity: 0.4,
-                                      marginRight: '4px'
-                                    }} 
-                                  />
-                                )}
-                                <Text fw={item.level === 0 ? 500 : 400}>
-                                  {item.name}
-                                </Text>
-                              </Group>
-                            </Table.Td>
-                            <Table.Td>
-                              <Group gap="xs">
-                                {(() => {
-                                  const IconComponent = TablerIcons[item.icon as keyof typeof TablerIcons] as 
-                                    React.ComponentType<{ size?: number; stroke?: number }> | undefined;
-                                  return IconComponent ? (
-                                    <>
-                                      <IconComponent size={18} stroke={1.5} />
-                                      <Text size="xs" c="dimmed" style={{ fontFamily: 'monospace' }}>
-                                        {item.icon}
-                                      </Text>
-                                    </>
-                                  ) : (
-                                    <Text size="sm" c="dimmed">{item.icon || '—'}</Text>
-                                  );
-                                })()}
-                              </Group>
-                            </Table.Td>
-                            <Table.Td>
-                              <Text size="sm" c="dimmed">{item.link}</Text>
-                            </Table.Td>
-                            <Table.Td>{item.order}</Table.Td>
-                            <Table.Td>
-                              <Badge color={item.included ? 'green' : 'gray'}>
-                                {item.included ? 'Включен' : 'Скрыт'}
+                  <Box style={{ flex: 1, overflow: 'auto' }}>
+                    <UniversalHierarchy
+                      config={{
+                        initialData: allMenuItemsFlat,
+                        parentField: 'parent_id',
+                        nameField: 'name',
+                        idField: 'id',
+                        rootFilter: (item) => {
+                          // Показываем только прямых дочерних элементов выбранного корневого пункта
+                          // UniversalHierarchy сам найдет и отобразит их потомков рекурсивно
+                          return item.parent_id === selectedRootItem;
+                        },
+                        AddModal: NavigationAddModalForChildren,
+                        EditModal: NavigationEditModal,
+                        DeleteModal: NavigationDeleteModal,
+                        renderItem: (item: HierarchyItem, isSelected: boolean) => {
+                          const menuItem = item as MenuItem;
+                          const IconComponent = TablerIcons[menuItem.icon as keyof typeof TablerIcons] as 
+                            React.ComponentType<{ size?: number; stroke?: number }> | undefined;
+                          return (
+                            <Group gap="xs" style={{ width: '100%' }}>
+                              {IconComponent ? (
+                                <IconComponent size={16} stroke={1.5} />
+                              ) : (
+                                <IconMenu2 size={16} />
+                              )}
+                              <Text fw={isSelected ? 600 : 400} style={{ flex: 1 }}>
+                                {menuItem.name}
+                              </Text>
+                              <Badge color={menuItem.included ? 'green' : 'gray'} size="sm">
+                                {menuItem.included ? 'Включен' : 'Скрыт'}
                               </Badge>
-                            </Table.Td>
-                            <Table.Td>
-                              <Group gap="xs">
-                                <Tooltip label="Редактировать">
-                                  <ActionIcon
-                                    variant="light"
-                                    color="blue"
-                                    onClick={() => handleEdit(item)}
-                                  >
-                                    <IconEdit size={18} />
-                                  </ActionIcon>
-                                </Tooltip>
-                                <Tooltip label="Удалить">
-                                  <ActionIcon
-                                    variant="light"
-                                    color="red"
-                                    onClick={() => handleDelete(item)}
-                                  >
-                                    <IconTrash size={18} />
-                                  </ActionIcon>
-                                </Tooltip>
-                              </Group>
-                            </Table.Td>
-                          </Table.Tr>
-                        ))}
-                      </Table.Tbody>
-                    </Table>
-                  </ScrollArea>
+                            </Group>
+                          );
+                        },
+                        onItemSelect: () => {
+                          // Можно добавить логику выбора дочернего элемента
+                        },
+                        onDataUpdate: () => {
+                          fetchMenuItems();
+                        }
+                      }}
+                      hasFullAccess={true}
+                    />
+                  </Box>
                 )}
               </Stack>
             </Paper>
@@ -801,6 +789,98 @@ export default function NavigationManagement() {
             </Button>
           </Group>
         </Modal>
+
+        {/* Модалка сортировки иерархии */}
+        {rootItemsFlat.length > 0 && (
+          <CustomModal
+            opened={sortModalOpened}
+            onClose={closeSortModal}
+            title="Сортировка иерархии навигации"
+            size="xl"
+            icon={<IconArrowsSort size={20} />}
+          >
+            <UniversalHierarchySortModal
+              onClose={closeSortModal}
+              onSuccess={() => {
+                fetchMenuItems();
+                closeSortModal();
+              }}
+              config={{
+                fetchEndpoint: `${API}/navigation/all`,
+                updateItemEndpoint: (id: string) => `${API}/navigation/${id}`,
+                parentField: 'parent_id',
+                sortField: 'order',
+                nameField: 'name',
+                idField: 'id',
+                transformItem: (item: MenuItem) => {
+                  const { id, name, parent_id, order, ...rest } = item;
+                  return {
+                    id,
+                    name,
+                    parentId: parent_id || null,
+                    level: 0,
+                    originalLevel: 0,
+                    originalParentId: parent_id || null,
+                    sortOrder: order || 0,
+                    ...rest
+                  };
+                },
+                onSave: async (items, originalItems) => {
+                  // Находим все измененные элементы
+                  const movedItems = items.filter(item => {
+                    const original = originalItems.find(orig => orig.id === item.id);
+                    if (!original) return false;
+                    
+                    if (item.parentId !== original.parentId || item.level !== original.level) {
+                      return true;
+                    }
+                    
+                    const currentSameParent = items.filter(i => i.parentId === item.parentId);
+                    const originalSameParent = originalItems.filter(i => i.parentId === original.parentId);
+                    
+                    const currentIndex = currentSameParent.findIndex(i => i.id === item.id);
+                    const originalIndex = originalSameParent.findIndex(i => i.id === item.id);
+                    
+                    return currentIndex !== originalIndex;
+                  });
+
+                  // Группируем изменения по родителям
+                  const parentsToUpdate = new Set<string | null>();
+                  movedItems.forEach(item => {
+                    parentsToUpdate.add(item.parentId);
+                    const original = originalItems.find(orig => orig.id === item.id);
+                    if (original && original.parentId !== item.parentId) {
+                      parentsToUpdate.add(original.parentId);
+                    }
+                  });
+
+                  // Обновляем порядок для каждого родителя
+                  for (const parentId of parentsToUpdate) {
+                    const sameParentItems = items.filter(i => i.parentId === parentId);
+                    for (let i = 0; i < sameParentItems.length; i++) {
+                      const item = sameParentItems[i];
+                      await authFetch(`${API}/navigation/${item.id}`, {
+                        method: 'PATCH',
+                        body: JSON.stringify({ order: i })
+                      });
+                    }
+                  }
+
+                  // Обновляем parent_id для перемещенных элементов
+                  for (const item of movedItems) {
+                    const original = originalItems.find(orig => orig.id === item.id);
+                    if (original && original.parentId !== item.parentId) {
+                      await authFetch(`${API}/navigation/${item.id}`, {
+                        method: 'PATCH',
+                        body: JSON.stringify({ parent_id: item.parentId })
+                      });
+                    }
+                  }
+                }
+              }}
+            />
+          </CustomModal>
+        )}
       </Stack>
     </Box>
   );

@@ -1,7 +1,3 @@
-// ========================================
-// ГЕНЕРАТОР И ДАННЫЕ - Generator & Datasource
-// ========================================
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,10 +6,6 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
-
-// ========================================
-// ENUMS - Перечисления
-// ========================================
 
 enum Role {
   DEVELOPER
@@ -64,55 +56,29 @@ enum Activity {
   Off
 }
 
-
 enum AppCategory {
-  MOBILE      // Мобильные приложения
-  DESKTOP     // Десктопные приложения
-  UTILITY     // Утилиты
-  TOOL        // Инструменты
+  MOBILE
+  DESKTOP
+  UTILITY
+  TOOL
 }
 
 enum AppType {
-  ANDROID_APK // Android APK
-  WINDOWS_EXE // Windows EXE
-  WINDOWS_MSI // Windows MSI
-  MACOS_DMG   // macOS DMG
-  LINUX_DEB   // Linux DEB
-  LINUX_RPM   // Linux RPM
-  ARCHIVE     // Архив (ZIP, RAR)
-}
-
-enum BugReportErrorType {
-  CRASH                 // Критическая ошибка (краш приложения)
-  NETWORK_ERROR         // Ошибка сети
-  AUTHENTICATION_ERROR  // Ошибка аутентификации
-  MEDIA_ERROR           // Ошибка воспроизведения
-  DOWNLOAD_ERROR        // Ошибка загрузки
-  PERMISSION_ERROR      // Ошибка разрешений
-  STORAGE_ERROR         // Ошибка хранилища
-  SOCKET_ERROR          // Ошибка Socket.IO
-  PERFORMANCE_ISSUE     // Проблема производительности
-  UNKNOWN_ERROR         // Неизвестная ошибка
-}
-
-enum BugReportSeverity {
-  LOW       // Низкая - не влияет на работу
-  MEDIUM    // Средняя - частично влияет на работу
-  HIGH      // Высокая - серьезно влияет на работу
-  CRITICAL  // Критическая - приложение не работает
+  ANDROID_APK
+  WINDOWS_EXE
+  WINDOWS_MSI
+  MACOS_DMG
+  LINUX_DEB
+  LINUX_RPM
+  ARCHIVE
 }
 
 enum NetworkType {
-  WiFi      // WiFi
-  Mobile    // Мобильная сеть
-  Ethernet  // Ethernet
+  WiFi
+  Mobile
+  Ethernet
 }
 
-// ========================================
-// СПРАВОЧНИКИ - Reference Data
-// ========================================
-
-// Организационная структура
 model Branch {
   uuid          String         @id @default(uuid())
   division      String
@@ -138,6 +104,7 @@ model Branch {
   userData      UserData[]
   shops         Shop[]
   shopReserves  ShopReserve[] @relation("ShopReserveBranch")
+  cleaningBranches CleaningBranch[] @relation("CleaningBranch")
 }
 
 model Group {
@@ -157,7 +124,6 @@ model Position {
   userData             UserData[]
 }
 
-// Типы и категории
 model Type {
   id                     String         @id @default(uuid())
   model_uuid             String
@@ -181,6 +147,11 @@ model Type {
   correspondenceSenderSubTypes   Correspondence[]  @relation("CorrespondenceSenderSubType")
   correspondenceSenderSubSubTypes Correspondence[] @relation("CorrespondenceSenderSubSubType")
   correspondenceDocumentTypes    Correspondence[]  @relation("CorrespondenceDocumentType")
+  managerStatuses                Manager[]          @relation("ManagerStatus")
+  trainingStatuses               TrainingProgress[] @relation("TrainingStatus")
+  trainingTypes                  TrainingProgram[]   @relation("TrainingType")
+  employmentChangeTypes          EmploymentHistory[] @relation("EmploymentChangeType")
+  homeworkStatuses               HomeworkStatus[]    @relation("HomeworkStatus")
 
   @@index([parent_type])
   @@index([model_uuid, chapter])
@@ -188,7 +159,6 @@ model Type {
   @@index([parent_type, sortOrder])
 }
 
-// Инструменты и доступы
 model Tool {
   id                   String               @id @default(uuid())
   parent_id            String?
@@ -204,10 +174,6 @@ model Tool {
   types                Type[]
   userToolAccesses     UserToolAccess[]
 }
-
-// ========================================
-// ПОЛЬЗОВАТЕЛИ И АУТЕНТИФИКАЦИЯ
-// ========================================
 
 model User {
   id                     String                     @id @default(uuid())
@@ -259,10 +225,13 @@ model User {
   pollVotes              PollVote[]    @relation("PollVoter")
   knowledgeArticlesAuthored KnowledgeArticle[] @relation("KnowledgeArticleAuthor")
   knowledgeArticlesUpdated  KnowledgeArticle[] @relation("KnowledgeArticleUpdater")
+  cleaningDocuments         CleaningDocument[] @relation("CleaningDocumentUploader")
   knowledgeArticleVersions  KnowledgeArticleVersion[] @relation("KnowledgeArticleVersionCreator")
   knowledgeAttachments      KnowledgeAttachment[] @relation("KnowledgeAttachmentUploader")
   knowledgeComments         KnowledgeComment[] @relation("KnowledgeCommentAuthor")
   knowledgeFavorites        KnowledgeFavorite[] @relation("KnowledgeFavoriteUser")
+  manager                   Manager?
+  homeworkChecker           HomeworkStatus[] @relation("HomeworkChecker")
 }
 
 model UserData {
@@ -300,7 +269,7 @@ model ScanSession {
   folderName  String
   startedAt   DateTime     @default(now())
   stoppedAt   DateTime?
-  status      String       @default("active") // active, completed, stopped
+  status      String       @default("active")
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   files       ScannedFile[]
 
@@ -338,11 +307,6 @@ model Printer {
   @@index([hasScanner])
 }
 
-// ========================================
-// РЕГИСТРЫ - Operational Data
-// ========================================
-
-// Устройства и оборудование
 model Devices {
   id           String   @id @default(uuid())
   createdAt    DateTime @default(now())
@@ -358,10 +322,9 @@ model Devices {
   macAddress   String?
   branchId     String
   branch       Branch   @relation(fields: [branchId], references: [uuid])
-  userEmail    String?  // Email пользователя для связи с UserData
+  userEmail    String?
 }
 
-// Уведомления
 model Notifications {
   id         String                @id @default(uuid())
   type       NotificationType
@@ -388,7 +351,6 @@ model Notifications {
   @@index([toolId])
 }
 
-// Новости
 model News {
   id          String   @id @default(uuid())
   name        String
@@ -398,7 +360,6 @@ model News {
   user        User     @relation(fields: [userId], references: [id])
 }
 
-// Закладки
 model Bookmarks {
   id         String  @id @default(uuid())
   name       String
@@ -408,13 +369,12 @@ model Bookmarks {
   user       User    @relation(fields: [userId], references: [id])
 }
 
-// Опросы
 model Poll {
   id          String      @id @default(uuid())
   question    String
   isActive    Boolean     @default(true)
-  startDate   DateTime?   // Дата начала опроса (null = бессрочно)
-  endDate     DateTime?   // Дата окончания опроса (null = бессрочно)
+  startDate   DateTime?
+  endDate     DateTime?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   createdById String
@@ -456,11 +416,6 @@ model PollVote {
   @@index([userId])
 }
 
-// ========================================
-// МОДУЛЬ AXO (Административно-хозяйственный отдел)
-// ========================================
-
-// Показания счетчиков
 model MeterReading {
   id          String   @id @default(uuid())
   createdAt   DateTime @default(now())
@@ -470,26 +425,25 @@ model MeterReading {
   user        User     @relation(fields: [userId], references: [id])
 }
 
-// Корреспонденция
 model Correspondence {
   id                    String                        @id @default(uuid())
   createdAt             DateTime                      @default(now())
-  ReceiptDate           DateTime                      // Дата получения
-  userAdd               String                        // Кто добавил запись
-  senderTypeId          String                        // Тип отправителя (связь с Type)
+  ReceiptDate           DateTime
+  userAdd               String
+  senderTypeId          String
   senderType            Type                          @relation("CorrespondenceSenderType", fields: [senderTypeId], references: [id])
-  senderSubTypeId       String?                       // Подтип (только для суда: Федеральные суды / Мировые судьи)
+  senderSubTypeId       String?
   senderSubType         Type?                        @relation("CorrespondenceSenderSubType", fields: [senderSubTypeId], references: [id])
-  senderSubSubTypeId    String?                       // Подподтип (только для федеральных судов)
+  senderSubSubTypeId    String?
   senderSubSubType      Type?                        @relation("CorrespondenceSenderSubSubType", fields: [senderSubSubTypeId], references: [id])
-  senderName            String                        // Наименование отправителя / ФИО
-  documentTypeId        String                        // Тип документа (связь с Type)
+  senderName            String
+  documentTypeId        String
   documentType          Type                          @relation("CorrespondenceDocumentType", fields: [documentTypeId], references: [id])
-  comments              String?                       // Комментарии (номер дела, ФИО стороны и т.д.)
-  responsibleId         String                        // Ответственный за обработку
+  comments              String?
+  responsibleId         String
   responsible           User                          @relation("CorrespondenceResponsible", fields: [responsibleId], references: [id])
-  documentNumber        String?                       // Номер документа
-  trackNumber           String?                       // Трек-номер для отслеживания посылки
+  documentNumber        String?
+  trackNumber           String?
   user                  User                          @relation("CorrespondenceUser", fields: [userAdd], references: [id])
   attachments           CorrespondenceAttachment[]
   
@@ -512,11 +466,6 @@ model CorrespondenceAttachment {
   user           User           @relation(fields: [userAdd], references: [id])
 }
 
-// ========================================
-// МОДУЛЬ СНАБЖЕНИЯ
-// ========================================
-
-// Маршруты
 model Route {
   id         String     @id @default(uuid())
   name       String     @unique
@@ -559,7 +508,6 @@ model Loader {
   filial    Filial   @relation(fields: [filialId], references: [id], onDelete: Cascade)
 }
 
-// Документы снабжения
 model SupplyDocs {
   id                     String                 @id @default(uuid())
   createdAt              DateTime               @default(now())
@@ -596,11 +544,6 @@ model SupplyDocsAttachment {
   user       User       @relation(fields: [userAdd], references: [id])
 }
 
-// ========================================
-// МОДУЛЬ ДОБАВЛЕНИЯ КОНТЕНТА
-// ========================================
-
-// Медиа
 model Media {
   id              String            @id @default(uuid())
   createdAt       DateTime          @default(now())
@@ -628,7 +571,6 @@ model MediaAttachment {
   userAdd   User     @relation(fields: [userAddId], references: [id])
 }
 
-// Рекламные конструкции
 model RK {
   id            String         @id @default(uuid())
   createdAt     DateTime       @default(now())
@@ -664,7 +606,6 @@ model RKAttachment {
   userAdd            User           @relation(fields: [userAddId], references: [id])
 }
 
-// Слайдер
 model Slider {
   id          String    @id @default(uuid())
   addedById   String
@@ -686,11 +627,6 @@ model Slider {
   updatedBy   User?     @relation("updated", fields: [updatedById], references: [id])
 }
 
-// ========================================
-// МОДУЛЬ ЮРИДИЧЕСКОЙ СЛУЖБЫ
-// ========================================
-
-// Документы
 model Doc {
   id              String    @id @default(uuid())
   fullName        String
@@ -712,7 +648,6 @@ model Doc {
   roc             Roc[]
 }
 
-// Реестр контрактов
 model Roc {
   id                     String          @id @default(uuid())
   createdAt              DateTime        @default(now())
@@ -753,11 +688,6 @@ model RocAttachment {
   userAdd    User     @relation(fields: [userAddId], references: [id])
 }
 
-// ========================================
-// МОДУЛЬ РОЗНИЧНОЙ ТОРГОВЛИ
-// ========================================
-
-// Печатные услуги
 model PrintService {
   id        String   @id @default(uuid())
   branchId  String
@@ -772,20 +702,17 @@ model PrintService {
   branch    Branch   @relation("BranchPrint", fields: [branchId], references: [uuid])
 }
 
-// Магазин приложений
 model App {
   id            String        @id @default(uuid())
-  name          String        // Название приложения
-  category      AppCategory   // Категория приложения
-  appType       AppType       // Тип приложения
-  description   String?       // Описание приложения
-  icon          String?       // Путь к иконке
+  name          String
+  category      AppCategory
+  appType       AppType
+  description   String?
+  icon          String?
   isActive      Boolean       @default(true)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
-  
-  // Связи
-  versions      AppVersion[]  // Версии приложения
+  versions      AppVersion[]
   
   @@index([category])
   @@index([appType])
@@ -793,21 +720,18 @@ model App {
   @@index([createdAt])
 }
 
-// Модель версии приложения
 model AppVersion {
   id          String   @id @default(uuid())
-  appId       String   // ID приложения
-  version     String   // Версия (например, "1.0.0")
-  fileName    String   // Имя файла
-  filePath    String   // Путь к файлу
-  fileSize    Int      // Размер файла в байтах
-  description String?  // Описание изменений в версии
-  isActive    Boolean  @default(true) // Активная версия
-  downloadCount Int    @default(0) // Количество скачиваний
+  appId       String
+  version     String
+  fileName    String
+  filePath    String
+  fileSize    Int
+  description String?
+  isActive    Boolean  @default(true)
+  downloadCount Int    @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
-  // Связи
   app         App      @relation(fields: [appId], references: [id], onDelete: Cascade)
   
   @@index([appId])
@@ -815,10 +739,6 @@ model AppVersion {
   @@index([isActive])
   @@index([createdAt])
 }
-
-// ========================================
-// МОДУЛЬ РАДИО
-// ========================================
 
 model RadioStream {
   id               String    @id @default(cuid())
@@ -837,67 +757,6 @@ model RadioStream {
   @@map("RadioStream")
 }
 
-// Отчеты об ошибках DNS Radio
-model BugReport {
-  id                String              @id @default(uuid())
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  
-  // Основная информация
-  deviceId          String              // Уникальный ID устройства
-  userId            String?             // ID пользователя
-  userEmail         String?             // Email пользователя
-  branchType        String?             // Тип филиала
-  branchName        String?             // Название филиала
-  
-  // Информация об ошибке
-  errorType         BugReportErrorType  // Тип ошибки
-  errorMessage      String              // Описание ошибки
-  stackTrace        String?             // Стек вызовов
-  severity          BugReportSeverity   // Серьезность ошибки
-  
-  // Информация об устройстве
-  appVersion        String              // Версия приложения
-  androidVersion    String?             // Версия Android
-  deviceModel       String?             // Модель устройства
-  deviceManufacturer String?            // Производитель
-  
-  // Системная информация
-  memoryUsage       Int?                // Использование памяти в MB
-  storageFree       Int?                // Свободное место в MB
-  networkType       NetworkType?        // Тип сети
-  isOnline          Boolean?            // Статус подключения
-  
-  // Контекст
-  userAction        String?             // Действие пользователя
-  sessionId         String?             // ID сессии
-  timestamp         DateTime            // Время ошибки
-  
-  // Дополнительные данные (JSON)
-  additionalData    Json?               // Дополнительная информация
-  
-  // Статус
-  isAutoReport      Boolean             @default(true)  // Автоматический отчет
-  isResolved        Boolean             @default(false) // Решена ли ошибка
-  resolvedAt        DateTime?           // Время решения
-  resolvedBy        String?             // Кто решил
-  resolutionNotes   String?             // Заметки о решении
-  
-  // Индексы для быстрого поиска
-  @@index([deviceId])
-  @@index([errorType])
-  @@index([severity])
-  @@index([isResolved])
-  @@index([createdAt])
-  @@index([timestamp])
-  @@index([userEmail])
-  @@index([branchType])
-}
-
-// ========================================
-// МОДУЛЬ МЕРЧАНДАЙЗИНГА
-// ========================================
-
 model Merch {
   id          String   @id @default(uuid())
   parentId    String?
@@ -905,14 +764,13 @@ model Merch {
   children    Merch[]  @relation("CategoryHierarchy")
   name        String
   description String?
-  isActive    Boolean  @default(true) // ← новое поле
-  sortOrder   Int      @default(0)    // ← порядок сортировки
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   layer       Int
-  attachments MerchAttachment[]   // Связи с attachments
+  attachments MerchAttachment[]
 
-  // Индексы для оптимизации запросов
   @@index([parentId])
   @@index([layer])
   @@index([isActive])
@@ -928,20 +786,18 @@ model MerchAttachment {
   source    String
   type      String
   recordId  String
-  sortOrder Int      @default(0)    // ← порядок сортировки
+  sortOrder Int      @default(0)
   merch     Merch    @relation(fields: [recordId], references: [id], onDelete: Cascade)
   userAdd   User     @relation(fields: [userAddId], references: [id])
 
-  // Индексы для оптимизации запросов
   @@index([recordId])
   @@index([recordId, sortOrder])
   @@index([type])
 }
 
-// Telegram бот для мерча
 model MerchTgUser {
   id        String   @id @default(uuid())
-  userId    Int      @unique // Telegram user ID
+  userId    Int      @unique
   username  String?
   firstName String?
   lastName  String?
@@ -961,7 +817,6 @@ model MerchTgUserStats {
   timestamp DateTime     @default(now())
   user      MerchTgUser @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Индексы для оптимизации запросов статистики
   @@index([userId])
   @@index([action])
   @@index([timestamp])
@@ -969,28 +824,24 @@ model MerchTgUserStats {
   @@index([action, timestamp])
 }
 
-// ========================================
-// ДОСКА ОБЪЯВЛЕНИЙ (AVITO-подобная)
-// ========================================
-
 enum ShopStatus {
-  ACTIVE     // Активно
-  SOLD       // Продано
-  ARCHIVED   // Архивировано
-  MODERATION // На модерации
+  ACTIVE
+  SOLD
+  ARCHIVED
+  MODERATION
 }
 
 enum ItemCondition {
-  NEW        // Новое
-  EXCELLENT  // Отличное
-  GOOD       // Хорошее
-  SATISFACTORY // Удовлетворительное
-  POOR       // Плохое
+  NEW
+  EXCELLENT
+  GOOD
+  SATISFACTORY
+  POOR
 }
 
 model Shop {
   id          String      @id @default(uuid())
-  title       String      // Название товара (было title)
+  title       String
   description String?     @db.Text
   categoryId  String
   category    Type        @relation(fields: [categoryId], references: [id])
@@ -999,15 +850,14 @@ model Shop {
   status      ShopStatus  @default(ACTIVE)
   userId      String
   user        User        @relation(fields: [userId], references: [id])
-  // Поля товара (объявление = товар)
-  quantity    Int         @default(1) // Количество
-  article     String?     // Артикул
-  condition   ItemCondition @default(GOOD) // Состояние
+  quantity    Int         @default(1)
+  article     String?
+  condition   ItemCondition @default(GOOD)
   views       Int         @default(0)
-  isPromoted  Boolean     @default(false) // Платное продвижение
+  isPromoted  Boolean     @default(false)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
-  publishedAt DateTime?   // Дата публикации
+  publishedAt DateTime?
   attachments ShopAttachment[]
   reserves    ShopReserve[]
 
@@ -1024,9 +874,9 @@ model ShopAttachment {
   id        String   @id @default(uuid())
   shopId    String
   shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  source    String   // Путь к файлу
+  source    String
   sortOrder Int      @default(0)
-  isMain    Boolean  @default(false) // Главное изображение
+  isMain    Boolean  @default(false)
   createdAt DateTime @default(now())
 
   @@index([shopId])
@@ -1037,13 +887,13 @@ model ShopReserve {
   id          String   @id @default(uuid())
   shopId      String
   shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  requesterId String   // Кто запросил резерв
+  requesterId String
   requester   User     @relation("ShopReserveRequester", fields: [requesterId], references: [id], onDelete: Cascade)
-  branchId    String?  // Филиал запросившего (опционально)
+  branchId    String?
   branch      Branch?   @relation("ShopReserveBranch", fields: [branchId], references: [uuid], onDelete: SetNull)
-  quantity    Int      // Количество в резерве
-  status      String   @default("PENDING") // PENDING, APPROVED, REJECTED, COMPLETED
-  shipmentDocNumber String? // Номер документа отгрузки
+  quantity    Int
+  status      String   @default("PENDING")
+  shipmentDocNumber String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   approvedAt  DateTime?
@@ -1054,18 +904,17 @@ model ShopReserve {
   @@index([status])
 }
 
-// Универсальная модель комментариев
 model Comment {
   id         String   @id @default(uuid())
-  entityType String   // Тип сущности (SHOP, POST, etc.)
-  entityId   String   // ID сущности
-  senderId   String   // Отправитель комментария
+  entityType String
+  entityId   String
+  senderId   String
   sender     User     @relation("CommentSender", fields: [senderId], references: [id], onDelete: Cascade)
   message    String   @db.Text
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-  readAt     DateTime? // Когда прочитано владельцем сущности
-  parentId   String?  // ID родительского комментария (для вложенных комментариев)
+  readAt     DateTime?
+  parentId   String?
   parent     Comment? @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies    Comment[] @relation("CommentReplies")
 
@@ -1075,11 +924,10 @@ model Comment {
   @@index([parentId])
 }
 
-// Чат для SafetyJournal
 model SafetyJournalChat {
   id          String                      @id @default(uuid())
-  branchId    String                      // ID филиала (UUID из Branch)
-  checkerId   String                      // ID проверяющего (пользователь с полным доступом)
+  branchId    String
+  checkerId   String
   checker     User                        @relation("SafetyJournalChatChecker", fields: [checkerId], references: [id], onDelete: Cascade)
   createdAt   DateTime                    @default(now())
   updatedAt   DateTime                    @updatedAt
@@ -1098,11 +946,11 @@ model SafetyJournalChatMessage {
   senderId      String
   sender        User                     @relation("SafetyJournalChatMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
   message       String                   @db.Text
-  readAt        DateTime?                // Когда сообщение прочитано получателем
+  readAt        DateTime?
   createdAt     DateTime                 @default(now())
-  updatedAt     DateTime                 @updatedAt // Время последнего обновления сообщения
-  isEdited      Boolean                  @default(false) // Флаг, указывающий, было ли сообщение отредактировано
-  quotedMessageId String?                // ID цитируемого сообщения
+  updatedAt     DateTime                 @updatedAt
+  isEdited      Boolean                  @default(false)
+  quotedMessageId String?
   quotedMessage   SafetyJournalChatMessage? @relation("QuotedMessage", fields: [quotedMessageId], references: [id], onDelete: SetNull)
   replies         SafetyJournalChatMessage[] @relation("QuotedMessage")
   attachments   ChatMessageAttachment[]
@@ -1126,41 +974,38 @@ model ChatMessageAttachment {
   @@index([messageId])
 }
 
-// Универсальная таблица обратной связи
 enum FeedbackStatus {
-  NEW         // Новое
-  IN_PROGRESS // В работе
-  RESOLVED    // Решено
-  REJECTED    // Отклонено
+  NEW
+  IN_PROGRESS
+  RESOLVED
+  REJECTED
 }
 
 enum FeedbackPriority {
-  LOW      // Низкий
-  MEDIUM   // Средний
-  HIGH     // Высокий
-  CRITICAL // Критический
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
 }
 
 model Feedback {
   id          String          @id @default(uuid())
-  tool        String          // Инструмент/модуль (merch, radio, и т.д.)
-  userId      String?         // ID пользователя (может быть из разных источников)
+  tool        String
+  userId      String?
   email       String
   text        String
-  photos      String[]        @default([]) // Массив путей к фотографиям
-  metadata    Json?           // Дополнительные данные (имя пользователя, username и т.д.)
+  photos      String[]        @default([])
+  metadata    Json?
   createdAt   DateTime        @default(now())
   isRead      Boolean         @default(false)
   readAt      DateTime?
-  readBy      String?         // ID пользователя системы, который прочитал
-  
-  // Новые поля для улучшений
+  readBy      String?
   status      FeedbackStatus  @default(NEW)
   priority    FeedbackPriority @default(MEDIUM)
-  tags        String[]        @default([]) // Теги/категории
-  assignedTo  String?         // ID пользователя системы, назначенного для обработки
-  pinned      Boolean         @default(false) // Закреплено ли сообщение
-  responses   FeedbackResponse[] // Ответы на обратную связь
+  tags        String[]        @default([])
+  assignedTo  String?
+  pinned      Boolean         @default(false)
+  responses   FeedbackResponse[]
   
   @@index([tool])
   @@index([createdAt])
@@ -1177,23 +1022,18 @@ model FeedbackResponse {
   id          String   @id @default(uuid())
   feedbackId  String
   feedback    Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
-  userId      String   // ID пользователя системы, который ответил
+  userId      String
   user        User     @relation(fields: [userId], references: [id])
-  text        String   // Текст ответа
+  text        String
   createdAt   DateTime @default(now())
-  sentAt      DateTime? // Когда был отправлен ответ (если отправлен по email)
-  sentEmail   Boolean  @default(false) // Отправлен ли ответ по email
+  sentAt      DateTime?
+  sentEmail   Boolean  @default(false)
   
   @@index([feedbackId])
   @@index([createdAt])
   @@index([userId])
 }
 
-// ========================================
-// СВЯЗУЮЩИЕ ТАБЛИЦЫ - Junction Tables
-// ========================================
-
-// Доступы к инструментам
 model GroupToolAccess {
   id          String      @id @default(uuid())
   toolId      String
@@ -1221,13 +1061,17 @@ model UserToolAccess {
   userId      String
   toolId      String
   accessLevel AccessLevel
+  validFrom   DateTime?
+  validUntil  DateTime?
+  isTemporary Boolean    @default(false)
+  grantedBy   String?
+  reason      String?
   tool        Tool        @relation(fields: [toolId], references: [id])
   user        User        @relation(fields: [userId], references: [id])
 
   @@unique([userId, toolId], name: "userId_toolId")
 }
 
-// Изображения филиалов
 model BranchImage {
   id          String @id @default(uuid())
   link        String
@@ -1235,15 +1079,14 @@ model BranchImage {
   branch      Branch @relation(fields: [branch_uuid], references: [uuid])
 }
 
-// Аудит действий пользователей
 model AuditLog {
   id          String   @id @default(uuid())
   userId      String
   userEmail   String?
-  action      String   // CREATE, UPDATE, DELETE, LOGIN, LOGOUT, etc.
-  entityType  String?  // User, Tool, Branch, etc.
-  entityId    String?  // ID сущности
-  details     Json?    // Дополнительные детали действия
+  action      String
+  entityType  String?
+  entityId    String?
+  details     Json?
   ipAddress   String?
   userAgent   String?
   timestamp   DateTime @default(now())
@@ -1256,7 +1099,6 @@ model AuditLog {
   @@index([userId, timestamp])
 }
 
-// Логи открытия дверей Trassir
 model TrassirDoorLog {
   id        String   @id @default(uuid())
   doorId    Int
@@ -1271,11 +1113,6 @@ model TrassirDoorLog {
   @@map("TrassirDoorLog")
 }
 
-// ========================================
-// БАЗА ЗНАНИЙ (DOCS)
-// ========================================
-
-// Статья базы знаний
 model KnowledgeArticle {
   id          String   @id @default(uuid())
   title       String
@@ -1311,7 +1148,6 @@ model KnowledgeArticle {
   @@index([viewCount])
 }
 
-// Категория (отдел/раздел)
 model KnowledgeCategory {
   id          String   @id @default(uuid())
   name        String
@@ -1330,7 +1166,6 @@ model KnowledgeCategory {
   @@index([order])
 }
 
-// Версии статей
 model KnowledgeArticleVersion {
   id          String   @id @default(uuid())
   articleId   String
@@ -1349,7 +1184,6 @@ model KnowledgeArticleVersion {
   @@index([createdAt])
 }
 
-// Прикрепленные файлы
 model KnowledgeAttachment {
   id          String   @id @default(uuid())
   articleId   String
@@ -1365,7 +1199,6 @@ model KnowledgeAttachment {
   @@index([articleId])
 }
 
-// Комментарии
 model KnowledgeComment {
   id          String   @id @default(uuid())
   articleId   String
@@ -1384,7 +1217,6 @@ model KnowledgeComment {
   @@index([parentId])
 }
 
-// Избранное
 model KnowledgeFavorite {
   id          String   @id @default(uuid())
   articleId   String
@@ -1395,4 +1227,137 @@ model KnowledgeFavorite {
   
   @@unique([articleId, userId])
   @@index([userId])
+}
+
+model Manager {
+  id                    String              @id @default(uuid())
+  userId                String               @unique
+  user                  User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  statusId              String
+  status                Type                 @relation("ManagerStatus", fields: [statusId], references: [id])
+  branchCount           Int?
+  employeeCount         Int?
+  employmentHistory     EmploymentHistory[]
+  trainingProgress      TrainingProgress[]
+  homeworkStatuses      HomeworkStatus[]
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  
+  @@index([userId])
+  @@index([statusId])
+}
+
+model EmploymentHistory {
+  id            String                @id @default(uuid())
+  managerId     String
+  manager       Manager               @relation(fields: [managerId], references: [id], onDelete: Cascade)
+  changeTypeId  String
+  changeType    Type                  @relation("EmploymentChangeType", fields: [changeTypeId], references: [id])
+  fromBranchId  String?
+  toBranchId    String?
+  fromPosition  String?
+  toPosition    String?
+  changeDate    DateTime
+  notes         String?
+  createdAt     DateTime              @default(now())
+  
+  @@index([managerId])
+  @@index([changeDate])
+  @@index([changeTypeId])
+}
+
+model TrainingProgram {
+  id            String              @id @default(uuid())
+  name          String
+  typeId        String
+  type          Type                @relation("TrainingType", fields: [typeId], references: [id])
+  parentId      String?
+  parent        TrainingProgram?    @relation("ProgramHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children      TrainingProgram[]   @relation("ProgramHierarchy")
+  order         Int                 @default(0)
+  isRequired    Boolean             @default(false)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  progress      TrainingProgress[]
+  homework      HomeworkStatus[]
+
+  @@index([parentId])
+  @@index([typeId])
+  @@index([isRequired])
+}
+
+model TrainingProgress {
+  id                String              @id @default(uuid())
+  managerId         String
+  manager           Manager             @relation(fields: [managerId], references: [id], onDelete: Cascade)
+  trainingProgramId String
+  trainingProgram   TrainingProgram    @relation(fields: [trainingProgramId], references: [id], onDelete: Cascade)
+  statusId          String
+  status            Type                @relation("TrainingStatus", fields: [statusId], references: [id])
+  completionDate    DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  
+  @@unique([managerId, trainingProgramId])
+  @@index([managerId])
+  @@index([statusId])
+}
+
+model HomeworkStatus {
+  id                String              @id @default(uuid())
+  managerId         String
+  manager           Manager             @relation(fields: [managerId], references: [id], onDelete: Cascade)
+  trainingProgramId String
+  trainingProgram   TrainingProgram     @relation(fields: [trainingProgramId], references: [id], onDelete: Cascade)
+  statusId          String
+  status            Type                @relation("HomeworkStatus", fields: [statusId], references: [id])
+  checkerId         String?
+  checker           User?               @relation("HomeworkChecker", fields: [checkerId], references: [id])
+  submissionDate    DateTime?
+  checkDate         DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  @@unique([managerId, trainingProgramId])
+  @@index([managerId])
+  @@index([statusId])
+}
+
+model CleaningBranch {
+  id                    String              @id @default(uuid())
+  branchId              String
+  branch                Branch               @relation("CleaningBranch", fields: [branchId], references: [uuid], onDelete: Cascade)
+  folder                String               @default("Рабочий") // "Архив" | "Рабочий"
+  organizationName      String?
+  wetCleaningTime       String?
+  wetCleaningCost       String?
+  territoryCleaningTime String?
+  territoryCleaningCost String?
+  documentsReceived     Boolean              @default(false)
+  documentsReceivedAt   DateTime?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  documents             CleaningDocument[]
+  
+  @@unique([branchId])
+  @@index([branchId])
+  @@index([folder])
+  @@index([documentsReceived])
+  @@index([updatedAt])
+}
+
+model CleaningDocument {
+  id            String          @id @default(uuid())
+  cleaningBranchId String
+  cleaningBranch CleaningBranch @relation(fields: [cleaningBranchId], references: [id], onDelete: Cascade)
+  fileName      String
+  fileUrl       String
+  fileSize      Int
+  mimeType      String
+  uploadedById String
+  uploadedBy    User             @relation("CleaningDocumentUploader", fields: [uploadedById], references: [id])
+  uploadedAt    DateTime         @default(now())
+  
+  @@index([cleaningBranchId])
+  @@index([uploadedById])
+  @@index([uploadedAt])
 }

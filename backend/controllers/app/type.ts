@@ -2,6 +2,20 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../../server.js';
 import { z } from 'zod';
+import {
+  getHierarchyItems,
+  buildTree,
+  checkIfDescendant,
+  HierarchyConfig
+} from '../../utils/hierarchy.js';
+
+const typeConfig: HierarchyConfig = {
+  modelName: 'type',
+  parentField: 'parent_type',
+  sortField: 'sortOrder',
+  nameField: 'name',
+  childrenRelation: 'children'
+};
 
 // Схема валидации для создания типа
 const createTypeSchema = z.object({
@@ -30,7 +44,7 @@ export const getTypes = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const types = await prisma.type.findMany({
+    const types = await getHierarchyItems(prisma.type, typeConfig, {
       select: {
         id: true,
         model_uuid: true,
@@ -56,16 +70,15 @@ export const getTypes = async (
             id: true,
             name: true,
             sortOrder: true
-          },
-          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }]
+          }
         }
-      },
-      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      }
     });
 
     res.status(200).json(types);
   } catch (error) {
-    next(error);
+    console.error('[getTypes] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch types', message: error instanceof Error ? error.message : 'Unknown error' });
   }
 };
 
@@ -93,9 +106,7 @@ export const getTypeById = async (
             colorHex: true
           }
         },
-        children: {
-          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }]
-        }
+        children: true
       }
     });
 
@@ -117,7 +128,7 @@ export const getTypesByModelUuid = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { model_uuid, chapter, parent_type } = req.query;
+    const { model_uuid, chapter, parent_type, tree: returnTree } = req.query;
     
     if (!model_uuid && !chapter) {
       res.status(400).json({ error: 'model_uuid is required' });
@@ -127,12 +138,20 @@ export const getTypesByModelUuid = async (
     const where: any = {};
     if (model_uuid) where.model_uuid = model_uuid as string;
     if (chapter) where.chapter = chapter as string;
-    if (parent_type !== undefined) {
+    
+    // Если запрошено дерево, получаем ВСЕ элементы для построения полной иерархии
+    // Если дерево не запрошено и указан parent_type, фильтруем только детей этого родителя
+    const needTree = returnTree === 'true' || returnTree === '1';
+    const parentIdForQuery = needTree ? undefined : (parent_type as string | null | undefined);
+    
+    if (!needTree && parent_type !== undefined) {
       where.parent_type = parent_type === 'null' || parent_type === '' ? null : parent_type as string;
     }
 
-    const types = await prisma.type.findMany({
-      where,
+    // Получаем типы с правильной сортировкой
+    const types = await getHierarchyItems(prisma.type, typeConfig, {
+      parentId: parentIdForQuery,
+      additionalWhere: where,
       select: {
         id: true,
         chapter: true,
@@ -151,20 +170,35 @@ export const getTypesByModelUuid = async (
             id: true,
             name: true
           }
-        },
-        children: {
-          select: {
-            id: true,
-            name: true,
-            sortOrder: true
-          },
-          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }]
         }
-      },
-      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      }
     });
 
-    res.status(200).json(types);
+    // Если запрошено дерево, строим его из ВСЕХ элементов с правильной сортировкой детей
+    if (needTree) {
+      const tree = buildTree(
+        types, 
+        typeConfig.parentField, 
+        typeConfig.childrenRelation,
+        null,
+        typeConfig.sortField,
+        typeConfig.nameField
+      );
+      
+      // Если указан parent_type, фильтруем только детей этого родителя
+      if (parent_type !== undefined) {
+        const parentId = parent_type === 'null' || parent_type === '' ? null : parent_type as string;
+        const filtered = parentId === null 
+          ? tree.filter(item => !item.parent_type)
+          : tree.filter(item => item.parent_type === parentId);
+        res.status(200).json(filtered);
+      } else {
+        res.status(200).json(tree);
+      }
+    } else {
+      // По умолчанию возвращаем плоский список (как было раньше)
+      res.status(200).json(types);
+    }
   } catch (error) {
     next(error);
   }
@@ -223,9 +257,7 @@ export const createType = async (
             colorHex: true
           }
         },
-        children: {
-          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }]
-        }
+        children: true
       }
     });
 
@@ -301,7 +333,12 @@ export const updateType = async (
         }
 
         // Проверяем, что новый parent не является потомком текущего типа
-        const isDescendant = await checkIfDescendant(validatedData.parent_type, id);
+        const isDescendant = await checkIfDescendant(
+          prisma.type,
+          typeConfig,
+          id,
+          validatedData.parent_type
+        );
         if (isDescendant) {
           res.status(400).json({ error: 'Cannot set parent: would create circular dependency' });
           return;
@@ -326,9 +363,7 @@ export const updateType = async (
             colorHex: true
           }
         },
-        children: {
-          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }]
-        }
+        children: true
       }
     });
 
@@ -346,23 +381,6 @@ export const updateType = async (
   }
 };
 
-// Вспомогательная функция для проверки, является ли один тип потомком другого
-async function checkIfDescendant(ancestorId: string, descendantId: string): Promise<boolean> {
-  const type = await prisma.type.findUnique({
-    where: { id: descendantId },
-    select: { parent_type: true }
-  });
-
-  if (!type || !type.parent_type) {
-    return false;
-  }
-
-  if (type.parent_type === ancestorId) {
-    return true;
-  }
-
-  return checkIfDescendant(ancestorId, type.parent_type);
-}
 
 // Удаление типа
 export const deleteType = async (

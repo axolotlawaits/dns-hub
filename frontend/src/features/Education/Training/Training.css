@@ -1,0 +1,32 @@
+.training-container {
+  padding: 20px;
+}
+
+.manager-card {
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.manager-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.training-status-badge {
+  font-size: 12px;
+}
+
+.program-tree {
+  padding-left: 20px;
+}
+
+.program-item {
+  padding: 8px;
+  margin: 4px 0;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.program-item:hover {
+  background-color: var(--mantine-color-gray-1);
+}

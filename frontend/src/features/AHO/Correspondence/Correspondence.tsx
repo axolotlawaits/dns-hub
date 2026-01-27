@@ -260,13 +260,28 @@ export default function CorrespondenceList() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [correspondenceData, usersData, senderTypesData, documentTypesData, senderNamesData] = await Promise.all([
+        const { getTypes } = await import('../../../utils/typesData');
+        const { getToolByLink } = await import('../../../utils/toolUtils');
+        
+        // Получаем tool для correspondence чтобы получить model_uuid
+        const correspondenceTool = await getToolByLink('aho/correspondence');
+        
+        const [correspondenceData, usersData, senderNamesData] = await Promise.all([
           fetchData(`${API}/aho/correspondence`),
           fetchUsers(),
-          fetchData(`${API}/aho/correspondence/types/sender`),
-          fetchData(`${API}/aho/correspondence/types/document`),
           fetchData(`${API}/aho/correspondence/sender-names`).catch(() => []) // Загружаем существующие наименования
         ]);
+
+        // Загружаем типы через универсальную систему
+        let senderTypesData: Type[] = [];
+        let documentTypesData: Type[] = [];
+        
+        if (correspondenceTool) {
+          [senderTypesData, documentTypesData] = await Promise.all([
+            getTypes('Отправитель', correspondenceTool.id, undefined, true), // tree=true для иерархии
+            getTypes('Тип документа', correspondenceTool.id, undefined, false) // плоский список
+          ]);
+        }
         
         // Извлекаем подтипы и подподтипы из иерархии senderTypes
         const senderSubTypes: Type[] = [];

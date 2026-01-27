@@ -354,7 +354,7 @@ export const login = async (req: Request, res: Response): Promise<any> => {
 
       res.cookie('refreshToken', refreshToken, {
         httpOnly: true,
-        secure: true,
+        secure: req.secure || req.headers['x-forwarded-proto'] === 'https',
         sameSite: 'strict',      
         maxAge: 90 * 24 * 60 * 60 * 1000
       })
@@ -434,7 +434,7 @@ export const login = async (req: Request, res: Response): Promise<any> => {
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
-      secure: true,
+      secure: req.secure || req.headers['x-forwarded-proto'] === 'https',
       sameSite: 'strict',      
       maxAge: 90 * 24 * 60 * 60 * 1000
     })
@@ -698,7 +698,7 @@ export const getUserData = async (req: Request, res: Response): Promise<any> => 
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
-      secure: true,
+      secure: req.secure || req.headers['x-forwarded-proto'] === 'https',
       sameSite: 'strict',      
       maxAge: 90 * 24 * 60 * 60 * 1000
     })

@@ -1153,6 +1153,25 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
   const theme = useMantineTheme();
   const { isDark } = useThemeContext();
   const authFetch = useAuthFetch();
+  
+  // ИСПРАВЛЕНО: Мемоизируем access, чтобы избежать ререндеров при изменении ссылки на массив
+  const accessStableRef = useRef<typeof access>([]);
+  const accessHashRef = useRef<string>('');
+  
+  const stableAccess = useMemo(() => {
+    const currentHash = JSON.stringify(
+      [...access]
+        .sort((a, b) => `${a.toolId}:${a.link}:${a.accessLevel}`.localeCompare(`${b.toolId}:${b.link}:${b.accessLevel}`))
+    );
+    
+    if (accessHashRef.current === currentHash && accessStableRef.current.length > 0) {
+      return accessStableRef.current;
+    }
+    
+    accessHashRef.current = currentHash;
+    accessStableRef.current = access;
+    return access;
+  }, [access]);
   // checkers больше не используется для ответственных - они видят только чат
   const [branchesWithChats, setBranchesWithChats] = useState<BranchWithChats[]>([]);
   const [branchSearchQuery, setBranchSearchQuery] = useState<string>('');
@@ -1198,6 +1217,13 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
   const [branchJournals, setBranchJournals] = useState<Array<{ id: string; journal_id: string; journal_title: string; journal_type: 'ОТ' | 'ПБ'; status: 'approved' | 'pending' | 'rejected' | 'under_review'; period_start: string; period_end: string; files?: Array<{ file_id: string; original_filename: string; content_type: string; is_deleted: boolean; description: string; download_url: string; view_url: string }> }>>([]);
   const [journalsPopoverOpened, setJournalsPopoverOpened] = useState(false);
   const [journalsLoading, setJournalsLoading] = useState(false);
+  
+  // Мемоизируем отсортированный список журналов: одобренные (approved) в конце
+  const sortedBranchJournals = useMemo(() => {
+    const approved = branchJournals.filter(j => j.status === 'approved');
+    const notApproved = branchJournals.filter(j => j.status !== 'approved');
+    return [...notApproved, ...approved];
+  }, [branchJournals]);
   const [messageText, setMessageText] = useState('');
   const [failedMessages, setFailedMessages] = useState<Map<string, { message: string; timestamp: number }>>(new Map());
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -1241,18 +1267,19 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
   const [participantsPopoverOpened, setParticipantsPopoverOpened] = useState(false);
 
   // Проверяем, является ли пользователь проверяющим
+  // ИСПРАВЛЕНО: Используем stableAccess для предотвращения ререндеров
   const isChecker = useMemo(() => {
-    if (!user || !access) return false;
+    if (!user || !stableAccess) return false;
     
     if (user.role === 'SUPERVISOR') {
       return true;
     }
     
-    return access.some(tool => 
+    return stableAccess.some(tool => 
       tool.link === 'jurists/safety' && 
       tool.accessLevel === 'FULL'
     );
-  }, [user, access]);
+  }, [user, stableAccess]);
 
   // Refs для стабилизации зависимостей sendMessage, чтобы избежать пересоздания функции
   const chatRef = useRef(chat);
@@ -1309,13 +1336,29 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
     try {
       const response = await authFetch(`${API}/jurists/safety/chat/branches-with-chats`);
 
+      // Если ошибка 403 (Forbidden), это нормально для не-проверяющих - просто игнорируем
+      if (response && response.status === 403) {
+        console.log('[loadBranchesWithChats] Access denied - user is not a checker');
+        setBranchesWithChats([]);
+        setLoading(false);
+        return;
+      }
+
       if (!response || !response.ok) {
         throw new Error('Failed to load branches with chats');
       }
 
       const data = await response.json();
       setBranchesWithChats(data);
-    } catch (error) {
+    } catch (error: any) {
+      // Если ошибка 403 (Forbidden), это нормально для не-проверяющих - просто игнорируем
+      if (error?.response?.status === 403 || error?.status === 403 || (error?.message && error.message.includes('403'))) {
+        console.log('[loadBranchesWithChats] Access denied - user is not a checker');
+        setBranchesWithChats([]);
+        setLoading(false);
+        return;
+      }
+      
       console.error('[loadBranchesWithChats] Error loading branches:', error);
       const errorMessage = error instanceof Error ? error.message : 'Не удалось загрузить список филиалов';
       notificationSystem.addNotification('Ошибка', errorMessage, 'error');
@@ -1510,6 +1553,12 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
           if (typeof msg.message !== 'string') {
             return false;
           }
+          // Не фильтруем статусные сообщения (они важны для отображения статусов журналов)
+          const isStatusMessage = msg.statusType !== null && msg.statusType !== undefined;
+          if (isStatusMessage) {
+            return true; // Всегда сохраняем статусные сообщения
+          }
+          // Для обычных сообщений: должны быть либо текст, либо вложения
           return msg.message.trim() !== '' || (msg.attachments && msg.attachments.length > 0);
         });
       
@@ -1532,11 +1581,19 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
           const dateB = new Date(b.createdAt).getTime();
           return dateA - dateB;
         });
-        setMessages(sortedMessages);
+        // Удаляем дубликаты по ID перед установкой состояния
+        const uniqueMessages = sortedMessages.reduce((acc, msg) => {
+          const msgId = String(msg.id);
+          if (!acc.some(m => String(m.id) === msgId)) {
+            acc.push(msg);
+          }
+          return acc;
+        }, [] as ChatMessage[]);
+        setMessages(uniqueMessages);
         setMessagesPage(1);
         // Сохраняем в кеш только первую страницу
         if (page === 1) {
-          messagesCacheRef.current.set(chatId, sortedMessages);
+          messagesCacheRef.current.set(chatId, uniqueMessages);
         }
       }
 
@@ -1893,15 +1950,20 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
   }, [selectedChat]);
 
   // Отправляем событие об активном чате на сервер
+  // Для проверяющих используем selectedChat, для ответственных - chat
   useEffect(() => {
-    if (socket && selectedChat?.id) {
+    if (!socket) return;
+    
+    const activeChatId = isChecker ? selectedChat?.id : chat?.id;
+    
+    if (activeChatId) {
       // Устанавливаем активный чат
-      socket.emit('set_active_chat', { chatId: selectedChat.id });
-    } else if (socket) {
+      socket.emit('set_active_chat', { chatId: activeChatId });
+    } else {
       // Очищаем активный чат при закрытии
       socket.emit('set_active_chat', { chatId: null });
     }
-  }, [socket, selectedChat?.id]);
+  }, [socket, selectedChat?.id, chat?.id, isChecker]);
 
   // Обработка Socket.IO событий
   useEffect(() => {
@@ -1951,17 +2013,31 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
       return;
     }
 
-    // Удаляем предыдущий обработчик, если он был зарегистрирован для другого чата/филиала
+    // Удаляем предыдущие обработчики, если они были зарегистрированы для другого чата/филиала
     if (socketHandlerRegistered.current && socketHandlerRegistered.current !== handlerKey) {
       currentSocket.off('notification');
+      currentSocket.off('new_message');
+      currentSocket.off('user_typing');
+      currentSocket.off('messages_read');
       socketHandlerRegistered.current = null;
     }
 
+    // Объявляем обработчик сообщений до его использования
     const handleNewMessage = (data: any) => {
       // КРИТИЧНО: Получаем актуальные значения из ref, чтобы избежать проблем с устаревшими замыканиями
       const actualChat = isChecker ? selectedChatRef.current : currentChatRef.current;
-      // Для ответственных используем branchId из чата, если он есть, иначе из пропсов
-      const actualBranchId = actualChat?.branchId || (isChecker ? undefined : branchId);
+      // Для проверяющих: используем branchId из чата, если он есть, или из списка филиалов, или из данных сообщения
+      // Для ответственных: используем branchId из чата, если он есть, иначе из пропсов
+      let actualBranchId: string | undefined;
+      if (isChecker) {
+        actualBranchId = actualChat?.branchId;
+        // Если branchId не определен из чата, но есть в данных сообщения, используем его
+        if (!actualBranchId && data.branchId) {
+          actualBranchId = String(data.branchId);
+        }
+      } else {
+        actualBranchId = actualChat?.branchId || branchId;
+      }
       
       // Обработка события удаления сообщения
       if (data.type === 'SAFETY_JOURNAL_MESSAGE_DELETED') {
@@ -1990,11 +2066,17 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
       const isStatusMessage = messageText && typeof messageText === 'string' && !!getStatusMessageType(messageText);
       
       // Проверяем, что это сообщение для текущего чата
-      // Для проверяющих: data.chatId === actualChat.id
+      // Для проверяющих: data.chatId === actualChat.id или data.branchId совпадает
       // Для ответственных: data.branchId === actualBranchId (так как у них может быть другой chatId)
       // Все ответственные находятся в одном чате по branchId, независимо от типа (ОТ или ПБ)
       const chatIdMatch = data.chatId && actualChat?.id && String(data.chatId) === String(actualChat.id);
-      const branchIdMatch = data.branchId && actualBranchId && String(data.branchId) === String(actualBranchId);
+      // Для проверяющих: проверяем branchId даже если чат не открыт (используем branchId из данных сообщения)
+      // Для ответственных: проверяем branchId из чата или пропсов (если чат еще не загружен, используем branchId из пропсов)
+      const branchIdMatch = data.branchId && (
+        actualBranchId ? String(data.branchId) === String(actualBranchId) :
+        (isChecker ? branchesWithChats.some(b => String(b.branchId) === String(data.branchId)) :
+         (branchId && String(data.branchId) === String(branchId)))
+      );
       
       // Для ответственных проверяем только branchId, так как они все в одном чате по филиалу
       // Для проверяющих проверяем chatId или branchId
@@ -2012,10 +2094,27 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
         
         if (isChecker) {
           // Для проверяющих: сообщение должно быть для текущего чата или филиала
-          return chatIdMatch || branchIdMatch;
+          // Важно: проверяем branchId даже если чат не загружен, чтобы получать сообщения от ответственных
+          if (chatIdMatch) return true;
+          if (branchIdMatch) return true;
+          
+          // Дополнительная проверка: если есть branchId в данных, проверяем его со всеми открытыми чатами
+          if (data.branchId && branchesWithChats.length > 0) {
+            const messageBranchId = String(data.branchId);
+            const hasBranchInList = branchesWithChats.some(b => String(b.branchId) === messageBranchId);
+            if (hasBranchInList) {
+              // Если филиал есть в списке, но чат не открыт, все равно принимаем сообщение
+              // Это позволяет получать сообщения даже если чат еще не открыт
+              return true;
+            }
+          }
+          
+          return false;
         } else {
           // Для ответственных: сообщение должно быть для текущего филиала или статусное сообщение
-          return branchIdMatch || statusBranchMatch;
+          // Также проверяем branchId из пропсов, если actualBranchId не определен (чат еще не загружен)
+          const branchIdFromProps = branchId && data.branchId && String(data.branchId) === String(branchId);
+          return branchIdMatch || statusBranchMatch || branchIdFromProps;
         }
       })();
       
@@ -2055,13 +2154,9 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
         return;
       }
       
-      // Игнорируем сообщения от самого себя только для обычных сообщений (не системных)
-      // Сообщения об изменении статуса журнала должны отображаться всегда, даже если они от проверяющего
-      
-      // Игнорируем только обычные сообщения от самого себя (не системные/статусные)
-      if (!isStatusMessage && data.message?.senderId && String(data.message.senderId) === String(user?.id)) {
-        return;
-      }
+      // НЕ игнорируем сообщения от самого себя - они должны отображаться в real-time
+      // Это важно для синхронизации между вкладками/устройствами и для подтверждения отправки
+      // Сообщения об изменении статуса журнала должны отображаться всегда
       
       // Сообщение для текущего чата - обрабатываем его
       // data.message уже содержит объект с полями {id, message, sender, createdAt}
@@ -2081,8 +2176,15 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
         
         setMessages(prev => {
           const messageId = String(newMessage.id);
+          // Проверяем, нет ли уже такого сообщения
           if (prev.some(m => String(m.id) === messageId)) {
-            return prev;
+            // Если сообщение уже есть, обновляем его (на случай, если пришла обновленная версия)
+            const updated = prev.map(m => String(m.id) === messageId ? newMessage : m);
+            // Обновляем кеш
+            if (actualChat?.id) {
+              messagesCacheRef.current.set(actualChat.id, updated);
+            }
+            return updated;
           }
         
         // Дополнительная проверка перед добавлением (только при ошибке)
@@ -2099,21 +2201,38 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
           const normalizedPrev = prev.map(normalizeMessage).filter((msg: ChatMessage) => {
             return typeof msg.message === 'string';
           });
-          const updated = [...normalizedPrev, newMessage];
+          // Удаляем дубликаты
+          const uniquePrev = normalizedPrev.reduce((acc, msg) => {
+            const msgId = String(msg.id);
+            if (!acc.some(m => String(m.id) === msgId)) {
+              acc.push(msg);
+            }
+            return acc;
+          }, [] as ChatMessage[]);
+          // Сортируем по дате и добавляем новое сообщение
+          const allMessages = [...uniquePrev, newMessage].sort((a, b) => {
+            const dateA = new Date(a.createdAt).getTime();
+            const dateB = new Date(b.createdAt).getTime();
+            return dateA - dateB;
+          });
           // Обновляем кеш
           if (actualChat?.id) {
-            messagesCacheRef.current.set(actualChat.id, updated);
+            messagesCacheRef.current.set(actualChat.id, allMessages);
           }
-          return updated;
+          return allMessages;
         }
         
-        // В нормальном случае просто добавляем новое сообщение
-        const updated = [...prev, newMessage];
+        // В нормальном случае просто добавляем новое сообщение и сортируем
+        const allMessages = [...prev, newMessage].sort((a, b) => {
+          const dateA = new Date(a.createdAt).getTime();
+          const dateB = new Date(b.createdAt).getTime();
+          return dateA - dateB;
+        });
         // Обновляем кеш
         if (actualChat?.id) {
-          messagesCacheRef.current.set(actualChat.id, updated);
+          messagesCacheRef.current.set(actualChat.id, allMessages);
         }
-        return updated;
+        return allMessages;
         });
         
         // Обновляем lastMessage в списке филиалов для проверяющего (если сообщение для текущего чата)
@@ -2241,7 +2360,9 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
       });
     };
 
+    // Обрабатываем как 'notification' (для уведомлений), так и 'new_message' (для чата)
     currentSocket.on('notification', handleNewMessage);
+    currentSocket.on('new_message', handleNewMessage); // Добавляем обработчик для sendChatMessage
     currentSocket.on('user_typing', handleUserTyping);
     currentSocket.on('messages_read', handleMessagesRead);
     socketHandlerRegistered.current = handlerKey;
@@ -2249,6 +2370,7 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
     return () => {
       if (socketHandlerRegistered.current === handlerKey) {
         currentSocket.off('notification', handleNewMessage);
+        currentSocket.off('new_message', handleNewMessage); // Удаляем обработчик для sendChatMessage
         currentSocket.off('user_typing', handleUserTyping);
         currentSocket.off('messages_read', handleMessagesRead);
         socketHandlerRegistered.current = null;
@@ -2286,13 +2408,14 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
     if (initialLoadDone.current || !shouldLoad) return;
     
     // Ждем, пока access и user загрузятся, чтобы правильно определить isChecker
-    if (!access || !user) {
+    if (!stableAccess || !user) {
       return;
     }
     
     // Дополнительная проверка: убеждаемся, что isChecker определен правильно
+    // ИСПРАВЛЕНО: Используем stableAccess вместо access для предотвращения ререндеров
     const userIsChecker = user.role === 'SUPERVISOR' || 
-      (access.some(tool => tool.link === 'jurists/safety' && tool.accessLevel === 'FULL'));
+      (stableAccess.some(tool => tool.link === 'jurists/safety' && tool.accessLevel === 'FULL'));
     
     if (userIsChecker) {
       // Для проверяющего загружаем филиалы с чатами (но не загружаем чат сразу)
@@ -2304,7 +2427,7 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
     
     initialLoadDone.current = true;
     prevBranchIdRef.current = branchId;
-  }, [access, user, loadCheckers, loadBranchesWithChats, shouldLoad, branchId]);
+  }, [stableAccess, user, loadCheckers, loadBranchesWithChats, shouldLoad, branchId]);
   
   // Автоматическое открытие чата для конкретного филиала (для проверяющих)
   useEffect(() => {
@@ -2781,13 +2904,13 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
       } else {
         if (response) {
           const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-          alert(`Ошибка при удалении сообщения: ${errorData.error || response.statusText || 'Unknown error'}`);
+          notificationSystem.addNotification('Ошибка', `Ошибка при удалении сообщения: ${errorData.error || response.statusText || 'Unknown error'}`, 'error');
         } else {
-          alert('Ошибка при удалении сообщения: No response');
+          notificationSystem.addNotification('Ошибка', 'Ошибка при удалении сообщения: No response', 'error');
         }
       }
     } catch (error) {
-      alert('Ошибка при удалении сообщения');
+      notificationSystem.addNotification('Ошибка', 'Ошибка при удалении сообщения', 'error');
     }
   }, [messageToDelete, isChecker, selectedChat, chat, token]);
 
@@ -2968,7 +3091,7 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
   }, [sendMessage]);
 
   // Обработчик для отправки события "печатает..."
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleTyping = useCallback(() => {
     if (!socket || !user?.id) return;
     
@@ -3282,49 +3405,77 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
                             <Box style={{ display: 'flex', justifyContent: 'center', padding: '12px' }}>
                               <Loader size="xs" />
                             </Box>
-                          ) : branchJournals.length > 0 ? (
-                              branchJournals.map((journal) => {
-                                const statusColors: Record<string, string> = {
-                                  approved: isDark ? theme.colors.green[7] : theme.colors.green[6],
-                                  pending: isDark ? theme.colors.yellow[7] : theme.colors.yellow[6],
-                                  rejected: isDark ? theme.colors.red[7] : theme.colors.red[6],
-                                  under_review: isDark ? theme.colors.blue[7] : theme.colors.blue[6],
-                                };
-                                const statusLabels: Record<string, string> = {
-                                  approved: 'Принят',
-                                  pending: 'Ожидает',
-                                  rejected: 'Отклонен',
-                                  under_review: 'На проверке',
-                                };
-                                return (
-                                  <Box key={journal.id} style={{ padding: '6px 8px', borderRadius: '4px', backgroundColor: isDark ? theme.colors.dark[6] : theme.colors.gray[1] }}>
-                                    <Stack gap={4}>
-                                      <Text fw={500} size="xs" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>
-                                        {journal.journal_title}
-                                      </Text>
-                                      <Group gap={4} wrap="nowrap">
-                                        <Badge size="xs" variant="light" color={journal.journal_type === 'ОТ' ? 'orange' : 'red'}>
-                                          {journal.journal_type}
-                                        </Badge>
-                                        <Badge size="xs" variant="light" color={statusColors[journal.status] || 'gray'}>
-                                          {statusLabels[journal.status] || journal.status}
-                                        </Badge>
-                                      </Group>
-                                      {(journal.period_start || journal.period_end) && (
-                                        <Text size="xs" c="dimmed" style={{ lineHeight: 1.2 }}>
-                                          {journal.period_start && journal.period_end 
-                                            ? `${dayjs(journal.period_start).format('DD.MM.YYYY')} - ${dayjs(journal.period_end).format('DD.MM.YYYY')}`
-                                            : journal.period_start 
-                                            ? `с ${dayjs(journal.period_start).format('DD.MM.YYYY')}`
-                                            : journal.period_end
-                                            ? `до ${dayjs(journal.period_end).format('DD.MM.YYYY')}`
-                                            : ''}
+                          ) : sortedBranchJournals.length > 0 ? (
+                            <ScrollArea 
+                              h={sortedBranchJournals.length > 6 ? 420 : undefined}
+                              type="auto"
+                              styles={{
+                                viewport: {
+                                  maxHeight: sortedBranchJournals.length > 6 ? '420px' : 'none',
+                                }
+                              }}
+                            >
+                              <Stack gap={4}>
+                                {sortedBranchJournals.map((journal) => {
+                                  const isApproved = journal.status === 'approved';
+                                  const statusColors: Record<string, string> = {
+                                    approved: isDark ? theme.colors.gray[6] : theme.colors.gray[4], // Приглушенный цвет для одобренных
+                                    pending: isDark ? theme.colors.yellow[7] : theme.colors.yellow[6],
+                                    rejected: isDark ? theme.colors.red[7] : theme.colors.red[6],
+                                    under_review: isDark ? theme.colors.blue[7] : theme.colors.blue[6],
+                                  };
+                                  const statusLabels: Record<string, string> = {
+                                    approved: 'Принят',
+                                    pending: 'Ожидает',
+                                    rejected: 'Отклонен',
+                                    under_review: 'На проверке',
+                                  };
+                                  return (
+                                    <Box 
+                                      key={journal.id} 
+                                      style={{ 
+                                        padding: '6px 8px', 
+                                        borderRadius: '4px', 
+                                        backgroundColor: isApproved 
+                                          ? (isDark ? theme.colors.dark[5] : theme.colors.gray[0]) // Приглушенный фон для одобренных
+                                          : (isDark ? theme.colors.dark[6] : theme.colors.gray[1]),
+                                        opacity: isApproved ? 0.7 : 1 // Приглушенная прозрачность для одобренных
+                                      }}
+                                    >
+                                      <Stack gap={4}>
+                                        <Text 
+                                          fw={isApproved ? 400 : 500} 
+                                          size="xs" 
+                                          c={isApproved ? 'dimmed' : undefined}
+                                          style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}
+                                        >
+                                          {journal.journal_title}
                                         </Text>
-                                      )}
-                                    </Stack>
-                                  </Box>
-                                );
-                              })
+                                        <Group gap={4} wrap="nowrap">
+                                          <Badge size="xs" variant="light" color={journal.journal_type === 'ОТ' ? 'orange' : 'red'}>
+                                            {journal.journal_type}
+                                          </Badge>
+                                          <Badge size="xs" variant="light" color={statusColors[journal.status] || 'gray'}>
+                                            {statusLabels[journal.status] || journal.status}
+                                          </Badge>
+                                        </Group>
+                                        {(journal.period_start || journal.period_end) && (
+                                          <Text size="xs" c="dimmed" style={{ lineHeight: 1.2 }}>
+                                            {journal.period_start && journal.period_end 
+                                              ? `${dayjs(journal.period_start).format('DD.MM.YYYY')} - ${dayjs(journal.period_end).format('DD.MM.YYYY')}`
+                                              : journal.period_start 
+                                              ? `с ${dayjs(journal.period_start).format('DD.MM.YYYY')}`
+                                              : journal.period_end
+                                              ? `до ${dayjs(journal.period_end).format('DD.MM.YYYY')}`
+                                              : ''}
+                                          </Text>
+                                        )}
+                                      </Stack>
+                                    </Box>
+                                  );
+                                })}
+                              </Stack>
+                            </ScrollArea>
                             ) : (
                               <Text size="xs" c="dimmed" style={{ textAlign: 'center', padding: '6px' }}>
                                 Нет журналов
@@ -3691,6 +3842,86 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
                     </Box>
                   )}
                   
+                  {/* Отображение цитируемого сообщения над полем ввода */}
+                  {quotedMessage && (
+                    <Box
+                      px="md"
+                      pt="xs"
+                      pb="xs"
+                      style={{
+                        backgroundColor: isDark ? 'rgba(37, 38, 43, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                        borderTop: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
+                      }}
+                    >
+                      <Box
+                        p="xs"
+                        style={{
+                          backgroundColor: isDark ? 'rgba(77, 171, 247, 0.2)' : 'rgba(51, 154, 240, 0.15)',
+                          borderRadius: '8px',
+                          border: `1px solid ${isDark ? 'rgba(77, 171, 247, 0.4)' : 'rgba(51, 154, 240, 0.3)'}`,
+                          width: '100%',
+                          minHeight: '50px',
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                        }}
+                      >
+                        <Group 
+                          gap="xs" 
+                          align="flex-start"
+                          style={{ width: '100%', margin: 0 }}
+                          wrap="nowrap"
+                        >
+                          <IconQuote 
+                            size={18} 
+                            style={{ 
+                              color: isDark ? '#4dabf7' : '#339af0',
+                              flexShrink: 0,
+                              marginTop: '2px'
+                            }} 
+                          />
+                          <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
+                            <Group gap={4} wrap="nowrap" style={{ margin: 0 }}>
+                              <Text size="sm" c={isDark ? '#4dabf7' : '#339af0'} style={{ flexShrink: 0, margin: 0 }}>
+                                В ответ
+                              </Text>
+                              <Text size="sm" fw={500} c={isDark ? '#ffffff' : '#000000'} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>
+                                {quotedMessage.sender?.name || 'Пользователь'}
+                              </Text>
+                            </Group>
+                            <Text 
+                              size="sm" 
+                              c={isDark ? '#ffffff' : '#000000'}
+                              style={{ 
+                                opacity: 0.9,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical',
+                                lineHeight: 1.4,
+                                margin: 0
+                              }}
+                            >
+                              {quotedMessage.message || (quotedMessage.attachments && quotedMessage.attachments.length > 0 
+                                ? `📎 ${quotedMessage.attachments.length} ${quotedMessage.attachments.length === 1 ? 'файл' : 'файлов'}`
+                                : 'Сообщение')}
+                            </Text>
+                          </Stack>
+                          <ActionIcon
+                            size="md"
+                            variant="subtle"
+                            onClick={() => setQuotedMessage(null)}
+                            title="Убрать цитату"
+                            style={{ flexShrink: 0, margin: 0 }}
+                            color="gray"
+                          >
+                            <IconX size={18} />
+                          </ActionIcon>
+                        </Group>
+                      </Box>
+                    </Box>
+                  )}
+                  
                   {/* Поле ввода (проверяющий всегда может писать) */}
                   <MessageInput
                     key={editingMessageId || 'new-message'}
@@ -3864,49 +4095,77 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
                           <Box style={{ display: 'flex', justifyContent: 'center', padding: '12px' }}>
                             <Loader size="xs" />
                           </Box>
-                        ) : branchJournals.length > 0 ? (
-                            branchJournals.map((journal) => {
-                              const statusColors: Record<string, string> = {
-                                approved: isDark ? theme.colors.green[7] : theme.colors.green[6],
-                                pending: isDark ? theme.colors.yellow[7] : theme.colors.yellow[6],
-                                rejected: isDark ? theme.colors.red[7] : theme.colors.red[6],
-                                under_review: isDark ? theme.colors.blue[7] : theme.colors.blue[6],
-                              };
-                              const statusLabels: Record<string, string> = {
-                                approved: 'Принят',
-                                pending: 'Ожидает',
-                                rejected: 'Отклонен',
-                                under_review: 'На проверке',
-                              };
-                              return (
-                                <Box key={journal.id} style={{ padding: '6px 8px', borderRadius: '4px', backgroundColor: isDark ? theme.colors.dark[6] : theme.colors.gray[1] }}>
-                                  <Stack gap={4}>
-                                    <Text fw={500} size="xs" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>
-                                      {journal.journal_title}
-                                    </Text>
-                                    <Group gap={4} wrap="nowrap">
-                                      <Badge size="xs" variant="light" color={journal.journal_type === 'ОТ' ? 'orange' : 'red'}>
-                                        {journal.journal_type}
-                                      </Badge>
-                                      <Badge size="xs" variant="light" color={statusColors[journal.status] || 'gray'}>
-                                        {statusLabels[journal.status] || journal.status}
-                                      </Badge>
-                                    </Group>
-                                    {(journal.period_start || journal.period_end) && (
-                                      <Text size="xs" c="dimmed" style={{ lineHeight: 1.2 }}>
-                                        {journal.period_start && journal.period_end 
-                                          ? `${dayjs(journal.period_start).format('DD.MM.YYYY')} - ${dayjs(journal.period_end).format('DD.MM.YYYY')}`
-                                          : journal.period_start 
-                                          ? `с ${dayjs(journal.period_start).format('DD.MM.YYYY')}`
-                                          : journal.period_end
-                                          ? `до ${dayjs(journal.period_end).format('DD.MM.YYYY')}`
-                                          : ''}
+                        ) : sortedBranchJournals.length > 0 ? (
+                          <ScrollArea 
+                            h={sortedBranchJournals.length > 6 ? 420 : undefined}
+                            type="auto"
+                            styles={{
+                              viewport: {
+                                maxHeight: sortedBranchJournals.length > 6 ? '420px' : 'none',
+                              }
+                            }}
+                          >
+                            <Stack gap={4}>
+                              {sortedBranchJournals.map((journal) => {
+                                const isApproved = journal.status === 'approved';
+                                const statusColors: Record<string, string> = {
+                                  approved: isDark ? theme.colors.gray[6] : theme.colors.gray[4], // Приглушенный цвет для одобренных
+                                  pending: isDark ? theme.colors.yellow[7] : theme.colors.yellow[6],
+                                  rejected: isDark ? theme.colors.red[7] : theme.colors.red[6],
+                                  under_review: isDark ? theme.colors.blue[7] : theme.colors.blue[6],
+                                };
+                                const statusLabels: Record<string, string> = {
+                                  approved: 'Принят',
+                                  pending: 'Ожидает',
+                                  rejected: 'Отклонен',
+                                  under_review: 'На проверке',
+                                };
+                                return (
+                                  <Box 
+                                    key={journal.id} 
+                                    style={{ 
+                                      padding: '6px 8px', 
+                                      borderRadius: '4px', 
+                                      backgroundColor: isApproved 
+                                        ? (isDark ? theme.colors.dark[5] : theme.colors.gray[0]) // Приглушенный фон для одобренных
+                                        : (isDark ? theme.colors.dark[6] : theme.colors.gray[1]),
+                                      opacity: isApproved ? 0.7 : 1 // Приглушенная прозрачность для одобренных
+                                    }}
+                                  >
+                                    <Stack gap={4}>
+                                      <Text 
+                                        fw={isApproved ? 400 : 500} 
+                                        size="xs" 
+                                        c={isApproved ? 'dimmed' : undefined}
+                                        style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}
+                                      >
+                                        {journal.journal_title}
                                       </Text>
-                                    )}
-                                  </Stack>
-                                </Box>
-                              );
-                            })
+                                      <Group gap={4} wrap="nowrap">
+                                        <Badge size="xs" variant="light" color={journal.journal_type === 'ОТ' ? 'orange' : 'red'}>
+                                          {journal.journal_type}
+                                        </Badge>
+                                        <Badge size="xs" variant="light" color={statusColors[journal.status] || 'gray'}>
+                                          {statusLabels[journal.status] || journal.status}
+                                        </Badge>
+                                      </Group>
+                                      {(journal.period_start || journal.period_end) && (
+                                        <Text size="xs" c="dimmed" style={{ lineHeight: 1.2 }}>
+                                          {journal.period_start && journal.period_end 
+                                            ? `${dayjs(journal.period_start).format('DD.MM.YYYY')} - ${dayjs(journal.period_end).format('DD.MM.YYYY')}`
+                                            : journal.period_start 
+                                            ? `с ${dayjs(journal.period_start).format('DD.MM.YYYY')}`
+                                            : journal.period_end
+                                            ? `до ${dayjs(journal.period_end).format('DD.MM.YYYY')}`
+                                            : ''}
+                                        </Text>
+                                      )}
+                                    </Stack>
+                                  </Box>
+                                );
+                              })}
+                            </Stack>
+                          </ScrollArea>
                           ) : (
                             <Text size="xs" c="dimmed" style={{ textAlign: 'center', padding: '6px' }}>
                               Нет журналов

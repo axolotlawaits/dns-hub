@@ -1,49 +1,101 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../server.js';
 import { AccessLevel } from '@prisma/client';
+import { SocketIOService } from '../../socketio.js';
 
 /* full access info for user */
 
 export const getFullAccessInfo = async (req: Request, res: Response): Promise<any>  => {
-  const userId = req.params.id 
-  const userEmail = req.query.email as string
-  
-  // Проверяем наличие email перед запросом
-  if (!userEmail) {
-    return res.status(400).json({error: 'Email parameter is required'})
-  }
-  
-  /*fetch user position and group info */
-  const userPosAndGroup = await prisma.userData.findUnique({
-    where: {email: userEmail},
-    select: {
-      position: {
-        select: {
-          uuid: true,
-          group: { select: { uuid: true } }
-        }
-      }
+  try {
+    const userId = req.params.id 
+    const userEmail = req.query.email as string
+    
+    // Проверяем наличие email перед запросом
+    if (!userEmail) {
+      return res.status(400).json({error: 'Email parameter is required'})
     }
-  })
-  
-  if (userPosAndGroup) {
-    const groupId = userPosAndGroup?.position?.group?.uuid
-    const positionId = userPosAndGroup?.position?.uuid
+    
+    if (!userId) {
+      return res.status(400).json({error: 'User ID parameter is required'})
+    }
+    
+    /*fetch user position and group info */
+    let userPosAndGroup = null
+    try {
+      userPosAndGroup = await prisma.userData.findUnique({
+        where: {email: userEmail},
+        select: {
+          position: {
+            select: {
+              uuid: true,
+              group: { select: { uuid: true } }
+            }
+          }
+        }
+      })
+    } catch (error) {
+      console.error('[getFullAccessInfo] Error fetching userData:', error)
+      // Продолжаем выполнение, даже если не удалось получить userData
+    }
+    
+    if (userPosAndGroup && userPosAndGroup.position) {
+      const groupId = userPosAndGroup.position?.group?.uuid
+      const positionId = userPosAndGroup.position?.uuid
 
-    const [user, group, position] = await Promise.all([
-      prisma.userToolAccess.findMany({where: {userId}, select: {
-        tool: {select: {id: true, link: true}}, accessLevel: true
-      }}),
-      prisma.groupToolAccess.findMany({where: {groupId}, select: {
-        tool: {select: {id: true, link: true}}, accessLevel: true
-      }}),
-      prisma.positionToolAccess.findMany({where: {positionId}, select: {
-        tool: {select: {id: true, link: true}}, accessLevel: true
-      }})
-    ])
+      // Формируем where условия для временных доступов
+      // Проверяем, существуют ли поля isTemporary и validUntil в схеме
+      const userAccessWhere: any = { userId }
+      
+      // Пытаемся добавить фильтр для временных доступов только если поля существуют
+      try {
+        // Проверяем наличие полей через пробный запрос
+        const testAccess = await prisma.userToolAccess.findFirst({
+          where: { userId },
+          select: { id: true }
+        })
+        
+        // Если запрос прошел успешно, пытаемся добавить фильтр для временных доступов
+        // Но пока используем простой запрос без фильтра, так как поля могут быть еще не в БД
+        userAccessWhere.userId = userId
+      } catch (error) {
+        // Если произошла ошибка, просто используем userId
+        console.warn('[getFullAccessInfo] Could not filter temporary accesses:', error)
+      }
 
-    if (user && group && position) {
-      const combined = [...user, ...group, ...position]
+      const [user, group, position] = await Promise.all([
+        prisma.userToolAccess.findMany({
+          where: userAccessWhere,
+          select: {
+            tool: {select: {id: true, link: true}}, 
+            accessLevel: true
+          }
+        }).catch((error) => {
+          console.error('[getFullAccessInfo] Error fetching userToolAccess:', error)
+          return []
+        }),
+        groupId ? prisma.groupToolAccess.findMany({
+          where: {groupId}, 
+          select: {
+            tool: {select: {id: true, link: true}}, 
+            accessLevel: true
+          }
+        }).catch((error) => {
+          console.error('[getFullAccessInfo] Error fetching groupToolAccess:', error)
+          return []
+        }) : Promise.resolve([]),
+        positionId ? prisma.positionToolAccess.findMany({
+          where: {positionId}, 
+          select: {
+            tool: {select: {id: true, link: true}}, 
+            accessLevel: true
+          }
+        }).catch((error) => {
+          console.error('[getFullAccessInfo] Error fetching positionToolAccess:', error)
+          return []
+        }) : Promise.resolve([])
+      ])
+
+      const combined = [...(user || []), ...(group || []), ...(position || [])]
       const levels: Record<AccessLevel, number> = { READONLY: 1, CONTRIBUTOR: 2, FULL: 3 }
 
       type FlattenedAccessEntry = {
@@ -54,8 +106,14 @@ export const getFullAccessInfo = async (req: Request, res: Response): Promise<an
       const accessMap = new Map<string, FlattenedAccessEntry>()
 
       for (const entry of combined) {
-        const toolId = entry.tool.id
-        const link = entry.tool.link
+        const toolId = (entry as any).tool?.id || (entry as any).toolId
+        const link = (entry as any).tool?.link || ''
+        
+        if (!toolId) {
+          console.warn('[getFullAccessInfo] Entry without toolId:', entry)
+          continue
+        }
+        
         const existing = accessMap.get(toolId)
         
         if (!existing) {
@@ -70,25 +128,31 @@ export const getFullAccessInfo = async (req: Request, res: Response): Promise<an
 
       res.status(200).json(uniqueAccessWithHighestLevel)
     } else {
-      res.status(400).json({error: 'ошибка при поиске инструментов с доступом'})
+      // Если не найдена информация о пользователе, возвращаем только прямые доступы пользователя
+      const userAccess = await prisma.userToolAccess.findMany({
+        where: {
+          userId
+        },
+        select: {
+          tool: {select: {id: true, link: true}}, 
+          accessLevel: true
+        }
+      }).catch((error) => {
+        console.error('[getFullAccessInfo] Error fetching userToolAccess (fallback):', error)
+        return []
+      })
+      
+      const accessList = userAccess.map(access => ({
+        toolId: (access as any).tool?.id || (access as any).toolId,
+        link: (access as any).tool?.link || '',
+        accessLevel: access.accessLevel
+      })).filter(access => access.toolId) // Фильтруем записи без toolId
+      
+      res.status(200).json(accessList)
     }
-  } else {
-    // Если не найдена информация о пользователе, возвращаем только прямые доступы пользователя
-    const userAccess = await prisma.userToolAccess.findMany({
-      where: {userId}, 
-      select: {
-        tool: {select: {id: true, link: true}}, 
-        accessLevel: true
-      }
-    })
-    
-    const accessList = userAccess.map(access => ({
-      toolId: access.tool.id,
-      link: access.tool.link,
-      accessLevel: access.accessLevel
-    }))
-    
-    res.status(200).json(accessList)
+  } catch (error) {
+    console.error('[getFullAccessInfo] Unexpected error:', error)
+    res.status(500).json({error: 'Internal server error', message: error instanceof Error ? error.message : 'Unknown error'})
   }
 }
 
@@ -157,7 +221,7 @@ export const getUserAccessInfo = async (req: Request, res: Response): Promise<an
 
 export const updateUserAccessInfo = async (req: Request, res: Response): Promise<any>  => {
   try {
-    const { toolId, accessLevel } = req.body
+    const { toolId, accessLevel, validFrom, validUntil, isTemporary, reason } = req.body
     const userId = req.params.id
     const token = (req as any).token;
     const grantedBy = token?.userId;
@@ -167,14 +231,46 @@ export const updateUserAccessInfo = async (req: Request, res: Response): Promise
       where: { userId_toolId: { userId, toolId }}
     });
 
+    // Подготовка данных для временного доступа
+    const updateData: any = { accessLevel };
+    const createData: any = { 
+      accessLevel,
+      tool: { connect: { id: toolId } },
+      user: { connect: { id: userId } }
+    };
+
+    // Если указаны параметры временного доступа
+    if (isTemporary) {
+      updateData.isTemporary = true;
+      createData.isTemporary = true;
+      if (validFrom) {
+        updateData.validFrom = new Date(validFrom as string);
+        createData.validFrom = new Date(validFrom as string);
+      }
+      if (validUntil) {
+        updateData.validUntil = new Date(validUntil as string);
+        createData.validUntil = new Date(validUntil as string);
+      }
+      if (reason) {
+        updateData.reason = reason;
+        createData.reason = reason;
+      }
+      if (grantedBy) {
+        updateData.grantedBy = grantedBy;
+        createData.grantedBy = grantedBy;
+      }
+    } else {
+      // Если не временный, очищаем поля
+      updateData.isTemporary = false;
+      updateData.validFrom = null;
+      updateData.validUntil = null;
+      createData.isTemporary = false;
+    }
+
     const access = await prisma.userToolAccess.upsert({
       where: { userId_toolId: { userId, toolId }},
-      update: { accessLevel },
-      create: { 
-        accessLevel,
-        tool: { connect: { id: toolId } },
-        user: { connect: { id: userId } }
-      },
+      update: updateData,
+      create: createData,
       include: {
         user: {
           select: { id: true, name: true, email: true }
@@ -210,6 +306,20 @@ export const updateUserAccessInfo = async (req: Request, res: Response): Promise
         }
       }
       
+      // Отправляем Socket.IO событие для обновления доступа в реальном времени
+      try {
+        const socketService = SocketIOService.getInstance();
+        socketService.sendEventToUser(userId, 'access_updated', {
+          toolId: toolId,
+          accessLevel: accessLevel,
+          toolName: access.tool.name,
+          toolLink: access.tool.link
+        });
+        console.log(`[Access] Sent access_updated event to user ${userId} for tool ${toolId}`);
+      } catch (socketError) {
+        console.error('Failed to send access_updated socket event:', socketError);
+      }
+      
       res.status(200).json(access)
     } else {
       res.status(400).json({error: 'ошибка обновления доступа'})
@@ -238,40 +348,52 @@ export const deleteUserAccessInfo = async (req: Request, res: Response): Promise
           select: { id: true, name: true, link: true }
         }
       }
-    });
+    })
 
     if (!access) {
-      return res.status(404).json({error: 'Доступ не найден'})
+      return res.status(404).json({error: 'Access not found'})
     }
 
-    const deletedAccess = await prisma.userToolAccess.delete({
+    // Удаляем доступ
+    await prisma.userToolAccess.delete({
       where: { userId_toolId: { userId, toolId }}
     })
-    
-    if (deletedAccess) {
-      // Отправляем уведомление пользователю о снятии доступа
-      if (userId !== revokedBy) {
-        const { NotificationController } = await import('./notification.js');
-        try {
-          await NotificationController.create({
-            type: 'WARNING',
-            channels: ['IN_APP', 'EMAIL'],
-            title: `Доступ снят: ${access.tool.name}`,
-            message: `Вам снят доступ к инструменту "${access.tool.name}"`,
-            senderId: revokedBy || userId,
-            receiverId: userId,
-            toolId: toolId,
-            priority: 'MEDIUM'
-          });
-        } catch (notifError) {
-          console.error('Failed to send access revocation notification:', notifError);
-        }
-      }
-      
-      res.status(200).json(deletedAccess)
-    } else {
-      res.status(400).json({error: 'ошибка обновления доступа'})
+
+    // Отправляем Socket.IO событие для обновления доступа в реальном времени
+    try {
+      const socketService = SocketIOService.getInstance();
+      socketService.sendEventToUser(userId, 'access_updated', {
+        toolId: toolId,
+        accessLevel: null, // null означает, что доступ удален
+        toolName: access.tool.name,
+        toolLink: access.tool.link,
+        deleted: true
+      });
+      console.log(`[Access] Sent access_updated event (deleted) to user ${userId} for tool ${toolId}`);
+    } catch (socketError) {
+      console.error('Failed to send access_updated socket event:', socketError);
     }
+
+    // Отправляем уведомление пользователю о снятии доступа
+    if (userId !== revokedBy) {
+      const { NotificationController } = await import('./notification.js');
+      try {
+        await NotificationController.create({
+          type: 'WARNING',
+          channels: ['IN_APP', 'EMAIL'],
+          title: `Доступ снят: ${access.tool.name}`,
+          message: `Вам снят доступ к инструменту "${access.tool.name}"`,
+          senderId: revokedBy || userId,
+          receiverId: userId,
+          toolId: toolId,
+          priority: 'MEDIUM'
+        });
+      } catch (notifError) {
+        console.error('Failed to send access revocation notification:', notifError);
+      }
+    }
+
+    res.status(200).json({success: true, message: 'Access deleted successfully'})
   } catch (error) {
     console.error('Error deleting user access:', error);
     res.status(500).json({error: 'ошибка обновления доступа'})
@@ -870,6 +992,20 @@ export const approveAccessRequest = async (req: Request, res: Response): Promise
       });
     } catch (notifError) {
       console.error('Failed to send approval notification:', notifError);
+    }
+    
+    // Отправляем Socket.IO событие для обновления доступа в реальном времени
+    try {
+      const socketService = SocketIOService.getInstance();
+      socketService.sendEventToUser(requesterId, 'access_updated', {
+        toolId: toolId,
+        accessLevel: accessLevel,
+        toolName: metadata?.toolName || 'Инструмент',
+        toolLink: metadata?.toolLink || ''
+      });
+      console.log(`[Access] Sent access_updated event to user ${requesterId} for tool ${toolId}`);
+    } catch (socketError) {
+      console.error('Failed to send access_updated socket event:', socketError);
     }
     
     res.status(200).json({

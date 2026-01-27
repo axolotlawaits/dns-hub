@@ -19,7 +19,6 @@ import {
   IconUsers,
   IconBell,
   IconMessageCircle,
-  IconBug,
   IconTrendingUp,
   IconBuilding,
   IconActivity
@@ -57,12 +56,6 @@ interface AnalyticsData {
   feedback: {
     total: number;
     byStatus: Array<{ status: string; count: number }>;
-  };
-  bugReports: {
-    total: number;
-    resolved: number;
-    unresolved: number;
-    bySeverity: Array<{ severity: string; count: number }>;
   };
   activity: {
     daily: Record<string, number>;
@@ -139,9 +132,8 @@ export default function Analytics() {
 
   return (
     <Stack gap="lg">
-      {/* Заголовок и выбор периода */}
-      <Group justify="space-between" align="center">
-        <Title order={2}>Аналитика и статистика</Title>
+      {/* Выбор периода */}
+      <Group justify="flex-end" align="center">
         <Select
           value={period}
           onChange={(value) => value && setPeriod(value)}
@@ -214,25 +206,6 @@ export default function Analytics() {
             </Group>
           </Card>
         </Grid.Col>
-
-        <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-          <Card shadow="sm" padding="lg" radius="md" withBorder>
-            <Group justify="space-between">
-              <div>
-                <Text size="xs" c="dimmed" tt="uppercase" fw={700}>
-                  Ошибки
-                </Text>
-                <Text fw={700} size="xl">
-                  {data.bugReports.total}
-                </Text>
-                <Text size="xs" c="dimmed">
-                  Решено: {data.bugReports.resolved}
-                </Text>
-              </div>
-              <IconBug size={40} style={{ color: 'var(--mantine-color-red-6)' }} />
-            </Group>
-          </Card>
-        </Grid.Col>
       </Grid>
 
       {/* Графики и детали */}
@@ -296,38 +269,6 @@ export default function Analytics() {
                         <Tooltip />
                       </PieChart>
                     </ResponsiveContainer>
-                  ) : (
-                    <Text c="dimmed" size="sm">Нет данных</Text>
-                  )}
-                </Card>
-
-                <Card shadow="sm" padding="lg" radius="md" withBorder>
-                  <Title order={5} mb="md">
-                    Ошибки по серьезности
-                  </Title>
-                  {data.bugReports.bySeverity.length > 0 ? (
-                    <Stack gap="xs">
-                      {data.bugReports.bySeverity.map((item) => (
-                        <div key={item.severity}>
-                          <Group justify="space-between" mb={4}>
-                            <Text size="sm">{item.severity}</Text>
-                            <Badge>{item.count}</Badge>
-                          </Group>
-                          <Progress
-                            value={(item.count / data.bugReports.total) * 100}
-                            color={
-                              item.severity === 'CRITICAL'
-                                ? 'red'
-                                : item.severity === 'HIGH'
-                                ? 'orange'
-                                : item.severity === 'MEDIUM'
-                                ? 'yellow'
-                                : 'blue'
-                            }
-                          />
-                        </div>
-                      ))}
-                    </Stack>
                   ) : (
                     <Text c="dimmed" size="sm">Нет данных</Text>
                   )}

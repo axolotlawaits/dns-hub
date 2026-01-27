@@ -1,6 +1,12 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../server.js';
 import { z } from 'zod';
+import {
+  getHierarchyItems,
+  buildTree,
+  HierarchyConfig
+} from '../../utils/hierarchy.js';
+import { getToolByLink } from '../../utils/toolUtils.js';
 
 // Схемы валидации
 const createAdSchema = z.object({
@@ -232,33 +238,57 @@ const createCategorySchema = z.object({
   sortOrder: z.number().int().default(0),
 });
 
+const shopTypeConfig: HierarchyConfig = {
+  modelName: 'type',
+  parentField: 'parent_type',
+  sortField: 'sortOrder',
+  nameField: 'name',
+  childrenRelation: 'children'
+};
+
 // Получить все категории
 export const getCategories = async (req: Request, res: Response) => {
   try {
-    const tool = await prisma.tool.findFirst({
-      where: { link: 'retail/shop' },
-    });
+    const tool = await getToolByLink('retail/shop');
 
     if (!tool) {
       return res.status(404).json({ error: 'Tool not found' });
     }
-    const categories = await prisma.type.findMany({
-      where: {
+
+    // Получаем ВСЕ типы для данного chapter и model_uuid (без фильтра по parent_type)
+    // чтобы построить полное дерево с иерархией
+    const allTypes = await getHierarchyItems(prisma.type, shopTypeConfig, {
+      additionalWhere: {
         model_uuid: tool.id,
-        chapter: 'Категория',
-        parent_type: null, // Только корневые категории
+        chapter: 'Категория'
       },
-      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-      include: {
-        children: {
-          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-        },
+      select: {
+        id: true,
+        chapter: true,
+        name: true,
+        colorHex: true,
+        parent_type: true,
+        sortOrder: true,
         _count: {
-          select: { shops: true } as any, // Временно для обхода ошибки типов
-        },
-      },
+          select: { shops: true } as any
+        }
+      }
     });
-    res.json(categories);
+
+    // Строим дерево из всех типов с правильной сортировкой
+    const tree = buildTree(
+      allTypes,
+      shopTypeConfig.parentField,
+      shopTypeConfig.childrenRelation,
+      null,
+      shopTypeConfig.sortField,
+      shopTypeConfig.nameField
+    );
+
+    // Фильтруем только корневые категории (parent_type = null)
+    const rootCategories = tree.filter(item => !item.parent_type);
+    
+    res.json(rootCategories);
   } catch (error) {
     console.error('[Ads] Error getting categories:', error);
     res.status(500).json({ error: 'Failed to get categories' });
@@ -299,9 +329,7 @@ export const initCategories = async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    const tool = await prisma.tool.findFirst({
-      where: { link: 'retail/shop' },
-    });
+    const tool = await getToolByLink('retail/shop');
 
     if (!tool) {
       return res.status(404).json({ error: 'Tool not found' });
@@ -369,9 +397,7 @@ export const createCategory = async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    const tool = await prisma.tool.findFirst({
-      where: { link: 'retail/shop' },
-    });
+    const tool = await getToolByLink('retail/shop');
 
     if (!tool) {
       return res.status(404).json({ error: 'Tool not found' });
@@ -717,6 +743,82 @@ export const confirmReserve = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('[Shop] Error confirming reserve:', error);
     res.status(500).json({ error: 'Failed to confirm reserve' });
+  }
+};
+
+// Отменить резерв (может отменить как автор объявления, так и тот, кто забронировал)
+export const cancelReserve = async (req: Request, res: Response) => {
+  try {
+    const { reserveId } = req.params;
+    const userId = (req as any).token?.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const reserve = await prisma.shopReserve.findUnique({
+      where: { id: reserveId },
+      include: {
+        shop: {
+          select: { id: true, title: true, userId: true },
+        },
+        requester: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    if (!reserve) {
+      return res.status(404).json({ error: 'Резерв не найден' });
+    }
+
+    // Проверяем права: может отменить автор объявления или тот, кто забронировал
+    const isOwner = reserve.shop.userId === userId;
+    const isRequester = reserve.requester.id === userId;
+
+    if (!isOwner && !isRequester) {
+      return res.status(403).json({ error: 'Доступ запрещен' });
+    }
+
+    // Нельзя отменить уже завершенный резерв
+    if (reserve.status === 'COMPLETED') {
+      return res.status(400).json({ error: 'Нельзя отменить завершенный резерв' });
+    }
+
+    const updated = await prisma.shopReserve.update({
+      where: { id: reserveId },
+      data: {
+        status: 'CANCELLED',
+      },
+    });
+
+    // Отправляем уведомление другой стороне
+    try {
+      const { NotificationController } = await import('../app/notification.js');
+      const receiverId = isOwner ? reserve.requester.id : reserve.shop.userId;
+      const cancelledBy = isOwner ? 'продавцом' : 'покупателем';
+      
+      await NotificationController.create({
+        type: 'INFO',
+        channels: ['IN_APP', 'TELEGRAM'],
+        title: 'Резерв отменен',
+        message: `Резерв по объявлению "${reserve.shop.title}" отменен ${cancelledBy}`,
+        senderId: userId,
+        receiverId: receiverId,
+        priority: 'MEDIUM',
+        action: {
+          type: 'NAVIGATE',
+          url: `/retail/shop?reserveId=${reserveId}`,
+        },
+      });
+    } catch (notifError) {
+      console.error('[Shop] Error sending notification:', notifError);
+    }
+
+    res.json(updated);
+  } catch (error) {
+    console.error('[Shop] Error cancelling reserve:', error);
+    res.status(500).json({ error: 'Failed to cancel reserve' });
   }
 };
 

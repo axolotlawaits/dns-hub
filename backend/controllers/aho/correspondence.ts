@@ -5,6 +5,12 @@ import fs from 'fs/promises';
 import path from 'path';
 import { NotificationController } from '../app/notification.js';
 import { trackParcel, getLastStatus } from '../../services/pochta-tracking.js';
+import {
+  getHierarchyItems,
+  buildTree,
+  HierarchyConfig
+} from '../../utils/hierarchy.js';
+import { getToolByLinkOrThrow } from '../../utils/toolUtils.js';
 
 // Types
 type MulterFiles = Express.Multer.File[] | undefined;
@@ -485,17 +491,17 @@ export const updateCorrespondence = async (
   }
 };
 
+const correspondenceTypeConfig: HierarchyConfig = {
+  modelName: 'type',
+  parentField: 'parent_type',
+  sortField: 'sortOrder',
+  nameField: 'name',
+  childrenRelation: 'children'
+};
+
 // Получить Tool для корреспонденции
 const getCorrespondenceTool = async () => {
-  const tool = await prisma.tool.findFirst({
-    where: { link: 'aho/correspondence' },
-  });
-
-  if (!tool) {
-    throw new Error('Tool для корреспонденции не найден в базе данных');
-  }
-
-  return tool;
+  return await getToolByLinkOrThrow('aho/correspondence', 'Tool для корреспонденции не найден в базе данных');
 };
 
 // Функция для отправки уведомления ответственному
@@ -592,25 +598,38 @@ export const getSenderTypes = async (
 ): Promise<any> => {
   try {
     const tool = await getCorrespondenceTool();
-    const types = await prisma.type.findMany({
-      where: {
+    
+    // Получаем ВСЕ типы для данного chapter и model_uuid (без фильтра по parent_type)
+    // чтобы построить полное дерево с иерархией
+    const allTypes = await getHierarchyItems(prisma.type, correspondenceTypeConfig, {
+      additionalWhere: {
         model_uuid: tool.id,
-        chapter: 'Отправитель',
-        parent_type: null, // Только корневые типы
+        chapter: 'Отправитель'
       },
-      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-      include: {
-        children: {
-          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-          include: {
-            children: {
-              orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-            },
-          },
-        },
-      },
+      select: {
+        id: true,
+        chapter: true,
+        name: true,
+        colorHex: true,
+        parent_type: true,
+        sortOrder: true
+      }
     });
-    res.status(200).json(types);
+
+    // Строим дерево из всех типов с правильной сортировкой
+    const tree = buildTree(
+      allTypes,
+      correspondenceTypeConfig.parentField,
+      correspondenceTypeConfig.childrenRelation,
+      null,
+      correspondenceTypeConfig.sortField,
+      correspondenceTypeConfig.nameField
+    );
+
+    // Фильтруем только корневые типы (parent_type = null)
+    const rootTypes = tree.filter(item => !item.parent_type);
+    
+    res.status(200).json(rootTypes);
   } catch (error) {
     next(error);
   }
@@ -624,18 +643,17 @@ export const getDocumentTypes = async (
 ): Promise<any> => {
   try {
     const tool = await getCorrespondenceTool();
-    const types = await prisma.type.findMany({
-      where: {
+    const types = await getHierarchyItems(prisma.type, correspondenceTypeConfig, {
+      additionalWhere: {
         model_uuid: tool.id,
-        chapter: 'Тип документа',
+        chapter: 'Тип документа'
       },
-      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
       select: {
         id: true,
         name: true,
         colorHex: true,
-        sortOrder: true,
-      },
+        sortOrder: true
+      }
     });
     res.status(200).json(types);
   } catch (error) {

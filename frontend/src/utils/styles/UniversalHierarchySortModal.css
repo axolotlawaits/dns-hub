@@ -1,7 +1,6 @@
 .hierarchy-sort-container {
   position: relative;
   min-height: 400px;
-
 }
 
 .hierarchy-sort-item {
@@ -65,30 +64,16 @@
   background-color: light-dark(var(--mantine-color-orange-1), rgba(255, 107, 0, 0.15));
 }
 
-/* Стили для карточек - визуальное отличие от категорий */
-.hierarchy-sort-item[data-type="card"] {
-  background-color: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6));
-  border-color: light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
-  opacity: 0.95;
-  padding-left: calc(var(--mantine-spacing-xl) + 20px); /* Дополнительный отступ для карточек */
-}
-
-.hierarchy-sort-item[data-type="card"]:hover {
-  background-color: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-5));
-}
-
-/* Стили для выбранной категории */
-.hierarchy-sort-item-selected[data-type="category"] {
+.hierarchy-sort-item-selected {
   border: 2px solid var(--color-accent-60) !important;
   box-shadow: 0 0 0 3px var(--color-accent-10);
 }
 
-[data-mantine-color-scheme="dark"] .hierarchy-sort-item-selected[data-type="category"] {
+[data-mantine-color-scheme="dark"] .hierarchy-sort-item-selected {
   border: 2px solid var(--color-accent-70) !important;
   box-shadow: 0 0 0 3px var(--color-accent-20);
 }
 
-/* Стили для визуальной обратной связи при перетаскивании карточки на категорию */
 .hierarchy-sort-item-drag-over {
   border: 2px solid var(--color-accent-60) !important;
   background-color: light-dark(var(--color-accent-10), var(--color-accent-20)) !important;

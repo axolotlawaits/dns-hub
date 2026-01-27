@@ -386,15 +386,39 @@ const RKList: React.FC = () => {
     try {
       setLoading(true);
       
+      // Получаем tool для rk чтобы получить model_uuid
+      const toolResponse = await fetch(`${API}/navigation/all`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      let rkTool: any = null;
+      if (toolResponse.ok) {
+        const tools = await toolResponse.json();
+        rkTool = tools.find((t: any) => t.link === 'add/rk');
+      }
 
-      const [rkList, types, statuses, branches] = await Promise.all([
+      const { getTypesFlat } = await import('../../../utils/typesData');
+      
+      const [rkList, branches] = await Promise.all([
         fetchData(`${API}/add/rk`),
-        fetchData(`${API}/add/rk/types/list`),
-        fetchData(`${API}/add/rk/statuses/list`),
         fetchData(`${API}/add/rk/branches/list`)
       ]);
 
       setRkData(Array.isArray(rkList) ? rkList : []);
+
+      // Загружаем типы и статусы через универсальную систему
+      let types: any[] = [];
+      let statuses: any[] = [];
+      
+      if (rkTool) {
+        [types, statuses] = await Promise.all([
+          getTypesFlat('Тип вывески', rkTool.id),
+          getTypesFlat('Статус согласования', rkTool.id)
+        ]);
+      } else {
+        console.warn('[RK] Tool для RK не найден');
+      }
 
       setTypeOptions(types.map((t: any) => ({
         value: t.id,

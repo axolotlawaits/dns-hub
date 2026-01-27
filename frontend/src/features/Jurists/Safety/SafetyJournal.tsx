@@ -97,6 +97,29 @@ export default function SafetyJournal() {
   const { access } = useAccessContext();
   const { isDark } = useThemeContext()
   const { setHeader, clearHeader } = usePageHeader();
+  
+  // ИСПРАВЛЕНО: Мемоизируем access, чтобы избежать ререндеров при изменении ссылки на массив
+  // Используем ref для хранения предыдущего значения и сравнения по содержимому
+  const accessStableRef = useRef<typeof access>([]);
+  const accessHashRef = useRef<string>('');
+  
+  const stableAccess = useMemo(() => {
+    // Вычисляем хеш текущего access
+    const currentHash = JSON.stringify(
+      [...access]
+        .sort((a, b) => `${a.toolId}:${a.link}:${a.accessLevel}`.localeCompare(`${b.toolId}:${b.link}:${b.accessLevel}`))
+    );
+    
+    // Если хеш не изменился, возвращаем предыдущий массив (та же ссылка = нет ререндера)
+    if (accessHashRef.current === currentHash && accessStableRef.current.length > 0) {
+      return accessStableRef.current;
+    }
+    
+    // Хеш изменился или это первая загрузка - обновляем refs и возвращаем новый массив
+    accessHashRef.current = currentHash;
+    accessStableRef.current = access;
+    return access;
+  }, [access]);
 
   // Объединенное состояние для лучшей производительности
   const [state, setState] = useState({
@@ -114,18 +137,19 @@ export default function SafetyJournal() {
   });
 
   // Мемоизированная проверка доступа к управлению статусами
+  // ИСПРАВЛЕНО: Используем стабильный access для предотвращения ререндеров
   const canManageStatuses = useMemo(() => {
     // SUPERVISOR имеет полный доступ
     if (user?.role === 'SUPERVISOR') {
       return true;
     }
     
-    // Проверяем доступ через useAccessContext - только FULL доступ для управления статусами
-    return access.some(tool => 
+    // Используем стабильный access вместо прямого доступа
+    return stableAccess.some(tool => 
       tool.link === 'jurists/safety' && 
       tool.accessLevel === 'FULL'
     );
-  }, [access, user?.role]);
+  }, [stableAccess, user?.role]);
 
   // Деструктуризация для удобства
   const { branches, loading, error, activeTab } = state;
@@ -155,6 +179,8 @@ export default function SafetyJournal() {
   const [deleteJournalOpened, { close: closeDeleteJournal }] = useDisclosure(false);
   const [qrOpened, { open: qrOpen, close: qrClose }] = useDisclosure(false);
   const [chatOpened, { open: openChat, close: closeChat }] = useDisclosure(false);
+  // Флаг для отслеживания намеренного закрытия чата (чтобы не открывать его снова из-за задержки обновления URL)
+  const chatClosedIntentionallyRef = useRef(false);
   const [chatPreviewOpened, setChatPreviewOpened] = useState(false);
   const [chatPreviewFiles, setChatPreviewFiles] = useState<Array<{ id: string; source: File | string; name?: string; mimeType?: string }>>([]);
   const [chatPreviewIndex, setChatPreviewIndex] = useState(0);
@@ -172,42 +198,72 @@ export default function SafetyJournal() {
 
   // Обработка URL параметров для открытия чата из уведомления
   useEffect(() => {
-    if (targetBranchId && !chatOpened && branches.length > 0) {
+    // Если чат был намеренно закрыт, не открываем его снова из-за задержки обновления URL
+    if (chatClosedIntentionallyRef.current && !targetBranchId) {
+      // Сбрасываем флаг, если URL параметры уже очищены
+      chatClosedIntentionallyRef.current = false;
+      return;
+    }
+    
+    // Если чат был намеренно закрыт, но URL параметры еще не очищены - игнорируем
+    if (chatClosedIntentionallyRef.current) {
+      return;
+    }
+    
+    if (targetBranchId && branches.length > 0) {
       const branch = branches.find(b => b.branch_id === targetBranchId);
       if (branch) {
-        const firstJournal = branch.journals?.[0];
-        if (firstJournal) {
-          setSelectedJournal({
-            ...firstJournal,
-            branch_id: targetBranchId,
-            branch_name: branch.branch_name
-          });
-        } else {
-          setSelectedJournal({
-            id: '',
-            journal_id: '',
-            journal_title: '',
-            journal_type: 'ОТ',
-            branch_id: targetBranchId,
-            branch_name: branch.branch_name,
-            status: 'pending',
-            filled_at: null,
-            approved_at: null,
-            period_start: '',
-            period_end: ''
-          } as SafetyJournal);
-        }
-        openChat();
-        // Очищаем параметры URL после открытия чата (кроме messageId, он нужен для прокрутки)
-        // Используем setTimeout, чтобы дать время чату открыться
-        setTimeout(() => {
-          if (!targetMessageId) {
-            setSearchParams({});
+        // Проверяем, нужно ли обновить чат (если branchId изменился или чат не открыт)
+        const currentBranchId = selectedJournal?.branch_id;
+        const branchIdChanged = currentBranchId && currentBranchId !== targetBranchId;
+        
+        if (!chatOpened || branchIdChanged) {
+          const firstJournal = branch.journals?.[0];
+          if (firstJournal) {
+            setSelectedJournal({
+              ...firstJournal,
+              branch_id: targetBranchId,
+              branch_name: branch.branch_name
+            });
+          } else {
+            setSelectedJournal({
+              id: '',
+              journal_id: '',
+              journal_title: '',
+              journal_type: 'ОТ',
+              branch_id: targetBranchId,
+              branch_name: branch.branch_name,
+              status: 'pending',
+              filled_at: null,
+              approved_at: null,
+              period_start: '',
+              period_end: ''
+            } as SafetyJournal);
           }
-        }, 100);
+          
+          // Если чат уже открыт, но branchId изменился - закрываем и открываем заново
+          if (chatOpened && branchIdChanged) {
+            closeChat();
+            // Используем setTimeout, чтобы дать время чату закрыться перед открытием
+            setTimeout(() => {
+              openChat();
+            }, 50);
+          } else if (!chatOpened) {
+            // Если чат не открыт - просто открываем
+            openChat();
+          }
+          
+          // Очищаем параметры URL после открытия чата (кроме messageId, он нужен для прокрутки)
+          // Используем setTimeout, чтобы дать время чату открыться
+          setTimeout(() => {
+            if (!targetMessageId) {
+              setSearchParams({});
+            }
+          }, 100);
+        }
       }
     }
-  }, [targetBranchId, targetMessageId, branches, chatOpened, openChat, setSearchParams]);
+  }, [targetBranchId, targetMessageId, branches, chatOpened, openChat, closeChat, setSearchParams, selectedJournal?.branch_id]);
   
   // Пагинация для филиалов
   const [branchPagination, setBranchPagination] = useState(() => {
@@ -563,6 +619,32 @@ export default function SafetyJournal() {
       notificationSystem.addNotification('Ошибка', 'Ошибка соединения с сервером', 'error');
     } finally {
       setNotifying(false);
+    }
+  }, [fetchWithAuth, loadLastNotifications, loadBranchesWithJournals]);
+
+  // Оповещение одного филиала с не заполненными журналами
+  const handleNotifyBranch = useCallback(async (branchId: string) => {
+    try {
+      const response = await fetchWithAuth(`${API}/jurists/safety/notify-unfilled/${branchId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        notificationSystem.addNotification('Успех', data.message || 'Оповещение отправлено', 'success');
+        // Обновляем информацию о последних оповещениях
+        await loadLastNotifications();
+        // Обновляем данные филиалов
+        await loadBranchesWithJournals();
+      } else {
+        const errorData = await response.json();
+        notificationSystem.addNotification('Ошибка', errorData.message || 'Не удалось отправить оповещение', 'error');
+      }
+    } catch (error) {
+      notificationSystem.addNotification('Ошибка', 'Ошибка соединения с сервером', 'error');
     }
   }, [fetchWithAuth, loadLastNotifications, loadBranchesWithJournals]);
 
@@ -1098,15 +1180,18 @@ export default function SafetyJournal() {
   }, [paginatedBranches, expandedBranches, loadBranchesWithJournals]);
 
   // Устанавливаем заголовок страницы
+  // ИСПРАВЛЕНО: Убраны лишние зависимости и мемоизирован icon, чтобы избежать ререндеров
+  const headerIcon = useMemo(() => <Text size="xl" fw={700} c="white">🛡️</Text>, []);
+  
   useEffect(() => {
     setHeader({
       title: 'Журналы охраны труда и пожарной безопасности',
       subtitle: 'Управление журналами по охране труда и пожарной безопасности',
-      icon: <Text size="xl" fw={700} c="white">🛡️</Text>,
+      icon: headerIcon,
     });
 
     return () => clearHeader();
-  }, [setHeader, clearHeader, handleRefreshData, loading]);
+  }, [setHeader, clearHeader, headerIcon]);
 
   // Восстанавливаем позицию скролла после обновления данных
   useEffect(() => {
@@ -1132,9 +1217,15 @@ export default function SafetyJournal() {
     }
   }, [scrollPosition, loading]);
 
-  // Подсчет статистики для вкладок (мемоизированный с оптимизацией - только необходимые зависимости)
-  const stats = useMemo(() => {
-    // Используем более точные зависимости - только количество филиалов и журналов
+  // Подсчет статистики для вкладок (мемоизированный с оптимизацией)
+  // ИСПРАВЛЕНО: Используем стабильные зависимости, чтобы избежать лишних ререндеров
+  // Используем ref для отслеживания предыдущего значения и предотвращения лишних пересчетов
+  const prevStatsRef = useRef<{
+    hash: string;
+    stats: ReturnType<typeof calculateStats>;
+  } | null>(null);
+  
+  const calculateStats = useCallback(() => {
     const totalJournalsCount = branches.reduce((sum, branch) => sum + branch.journals.length, 0);
     
     // Если нет журналов, возвращаем нули
@@ -1176,7 +1267,32 @@ export default function SafetyJournal() {
       rejected: 0,
       under_review: 0,
     });
-  }, [branches.length, branches.map(b => `${b.branch_id}:${b.journals.length}:${b.journals.map(j => `${j.id}:${j.status}`).join(',')}`).join('|'), state.forceUpdate]);
+  }, [branches]);
+  
+  const stats = useMemo(() => {
+    // Вычисляем простой хеш для отслеживания изменений без создания новых массивов
+    // Используем цикл вместо map для оптимизации
+    let hashParts: string[] = [];
+    hashParts.push(`${branches.length}`);
+    for (const b of branches) {
+      const journalStatuses: string[] = [];
+      for (const j of b.journals) {
+        journalStatuses.push(j.status);
+      }
+      hashParts.push(`${b.branch_id}:${b.journals.length}:${journalStatuses.join(',')}`);
+    }
+    const hash = `${hashParts.join('|')}:${state.forceUpdate}`;
+    
+    // Если хеш не изменился, возвращаем предыдущее значение
+    if (prevStatsRef.current && prevStatsRef.current.hash === hash) {
+      return prevStatsRef.current.stats;
+    }
+    
+    // Пересчитываем статистику
+    const newStats = calculateStats();
+    prevStatsRef.current = { hash, stats: newStats };
+    return newStats;
+  }, [branches, state.forceUpdate, calculateStats]);
 
   if (loading) {
     return (
@@ -1367,6 +1483,7 @@ export default function SafetyJournal() {
                   onViewFile={handleViewFiles}
                   onUploadFiles={handleUploadFiles}
                   onOpenChat={(branchId: string, branchName: string) => handleOpenChat(branchId, branchName)}
+                  onNotifyBranch={handleNotifyBranch}
                   forceUpdate={state.forceUpdate}
                   canManageStatuses={canManageStatuses}
                   expandedBranches={expandedBranches}
@@ -1387,6 +1504,7 @@ export default function SafetyJournal() {
                     onViewFile={handleViewFiles}
                     onUploadFiles={handleUploadFiles}
                     onOpenChat={(branchId: string, branchName: string) => handleOpenChat(branchId, branchName)}
+                    onNotifyBranch={handleNotifyBranch}
                     forceUpdate={state.forceUpdate}
                     canManageStatuses={canManageStatuses}
                     expandedBranches={expandedBranches}
@@ -1528,6 +1646,8 @@ export default function SafetyJournal() {
           branchName={selectedJournal.branch_name}
           branchId={selectedJournal.branch_id}
           onClose={() => {
+            // Устанавливаем флаг намеренного закрытия перед очисткой URL
+            chatClosedIntentionallyRef.current = true;
             closeChat();
             // Очищаем параметры URL при закрытии чата
             setSearchParams({});

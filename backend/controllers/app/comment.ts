@@ -82,8 +82,17 @@ export const createComment = async (req: Request, res: Response) => {
           select: { userId: true },
         });
         ownerId = shop?.userId || null;
+      } else if (data.entityType === 'TRAINING_MANAGER') {
+        const manager = await prisma.manager.findUnique({
+          where: { id: data.entityId },
+          select: { userId: true },
+        });
+        ownerId = manager?.userId || null;
+      } else if (data.entityType === 'TRAINING_PROGRAM') {
+        // Для программ обучения владелец - это создатель программы или администратор
+        // Можно добавить поле creatorId в TrainingProgram если нужно
+        ownerId = null; // Пока нет владельца программы
       }
-      // Здесь можно добавить другие типы сущностей
 
       if (ownerId && ownerId !== token.userId) {
         const { NotificationController } = await import('./notification.js');
@@ -97,7 +106,9 @@ export const createComment = async (req: Request, res: Response) => {
           priority: 'MEDIUM',
           action: {
             type: 'NAVIGATE',
-            url: `/${data.entityType.toLowerCase()}/${data.entityId}`,
+            url: data.entityType === 'TRAINING_MANAGER' || data.entityType === 'TRAINING_PROGRAM'
+              ? `/training`
+              : `/${data.entityType.toLowerCase()}/${data.entityId}`,
           },
         });
       }
@@ -299,6 +310,14 @@ export const markCommentsAsRead = async (req: Request, res: Response) => {
         select: { userId: true },
       });
       ownerId = shop?.userId || null;
+    } else if (entityType === 'TRAINING_MANAGER') {
+      const manager = await prisma.manager.findUnique({
+        where: { id: entityId },
+        select: { userId: true },
+      });
+      ownerId = manager?.userId || null;
+    } else if (entityType === 'TRAINING_PROGRAM') {
+      ownerId = null; // Пока нет владельца программы
     }
 
     if (!ownerId || ownerId !== token.userId) {

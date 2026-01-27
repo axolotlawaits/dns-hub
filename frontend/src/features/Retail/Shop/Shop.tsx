@@ -51,7 +51,7 @@ interface ShopCategory {
   id: string;
   name: string;
   colorHex?: string;
-  parent_type?: string;
+  parent_type?: string | null;
   children?: ShopCategory[];
   _count?: { shops: number };
 }
@@ -144,24 +144,17 @@ function Shop() {
 
   const fetchCategories = async () => {
     try {
-      const response = await authFetch(`${API}/retail/shop/categories`);
+      const { getTypes } = await import('../../../utils/typesData');
+      const { getToolByLink } = await import('../../../utils/toolUtils');
       
-      // Если response === null, значит произошел logout из-за истекшего refresh token
-      if (response === null) {
-        console.warn('[Shop] Failed to fetch categories: user logged out');
-        return;
-      }
-      
-      if (response.ok) {
-        const data = await response.json();
-        setCategories(data || []);
+      // Получаем tool для shop чтобы получить model_uuid
+      const shopTool = await getToolByLink('retail/shop');
+      if (shopTool) {
+        const categories = await getTypes('Категория', shopTool.id, undefined, true); // tree=true для иерархии
+        setCategories(categories || []);
         if (process.env.NODE_ENV === 'development') {
-          console.log('[Shop] Categories loaded:', data?.length || 0);
+          console.log('[Shop] Categories loaded:', categories?.length || 0);
         }
-      } else {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        console.error('[Shop] Error fetching categories:', response.status, errorData);
-        setCategories([]);
       }
     } catch (error) {
       console.error('[Shop] Error fetching categories:', error);
@@ -900,6 +893,7 @@ function Shop() {
                                   case 'APPROVED': return 'Подтверждено';
                                   case 'REJECTED': return 'Отклонено';
                                   case 'COMPLETED': return 'Завершено';
+                                  case 'CANCELLED': return 'Отменено';
                                   default: return status;
                                 }
                               };
@@ -916,6 +910,7 @@ function Shop() {
                                           color={
                                             isPending ? 'yellow' : 
                                             isApproved ? 'green' : 
+                                            r.status === 'CANCELLED' ? 'red' :
                                             'gray'
                                           }
                                         >
@@ -925,6 +920,42 @@ function Shop() {
                                           <Text size="xs" c="dimmed">
                                             Документ отгрузки: {r.shipmentDocNumber}
                                           </Text>
+                                        )}
+                                        {(isPending || isApproved) && (
+                                          <Button
+                                            size="xs"
+                                            variant="light"
+                                            color="red"
+                                            fullWidth
+                                            mt="xs"
+                                            onClick={async () => {
+                                              if (!confirm('Вы уверены, что хотите отменить бронирование?')) {
+                                                return;
+                                              }
+                                              try {
+                                                const resp = await authFetch(`${API}/retail/shop/reserves/${r.id}/cancel`, {
+                                                  method: 'POST',
+                                                });
+                                                if (resp?.ok) {
+                                                  notificationSystem.addNotification('Успешно', 'Бронирование отменено', 'success');
+                                                  // Обновляем карточку
+                                                  const reload = await authFetch(`${API}/retail/shop/${selectedShop.id}`);
+                                                  if (reload?.ok) {
+                                                    const data = await reload.json();
+                                                    setSelectedShop(data);
+                                                  }
+                                                  fetchShops();
+                                                } else {
+                                                  const err = await resp?.json();
+                                                  notificationSystem.addNotification('Ошибка', err?.error || 'Не удалось отменить бронирование', 'error');
+                                                }
+                                              } catch (error) {
+                                                notificationSystem.addNotification('Ошибка', 'Не удалось отменить бронирование', 'error');
+                                              }
+                                            }}
+                                          >
+                                            Отменить бронирование
+                                          </Button>
                                         )}
                                       </>
                                     ) : (
@@ -936,6 +967,7 @@ function Shop() {
                                           color={
                                             isPending ? 'yellow' : 
                                             isApproved ? 'green' : 
+                                            r.status === 'CANCELLED' ? 'red' :
                                             'gray'
                                           }
                                         >
@@ -993,6 +1025,42 @@ function Shop() {
                                               Подтвердить
                                             </Button>
                                           </Stack>
+                                        )}
+                                        {(isPending || isApproved) && isOwner && (
+                                          <Button
+                                            size="xs"
+                                            variant="light"
+                                            color="red"
+                                            fullWidth
+                                            mt="xs"
+                                            onClick={async () => {
+                                              if (!confirm('Вы уверены, что хотите отменить бронирование?')) {
+                                                return;
+                                              }
+                                              try {
+                                                const resp = await authFetch(`${API}/retail/shop/reserves/${r.id}/cancel`, {
+                                                  method: 'POST',
+                                                });
+                                                if (resp?.ok) {
+                                                  notificationSystem.addNotification('Успешно', 'Бронирование отменено', 'success');
+                                                  // Обновляем карточку
+                                                  const reload = await authFetch(`${API}/retail/shop/${selectedShop.id}`);
+                                                  if (reload?.ok) {
+                                                    const data = await reload.json();
+                                                    setSelectedShop(data);
+                                                  }
+                                                  fetchShops();
+                                                } else {
+                                                  const err = await resp?.json();
+                                                  notificationSystem.addNotification('Ошибка', err?.error || 'Не удалось отменить бронирование', 'error');
+                                                }
+                                              } catch (error) {
+                                                notificationSystem.addNotification('Ошибка', 'Не удалось отменить бронирование', 'error');
+                                              }
+                                            }}
+                                          >
+                                            Отменить бронирование
+                                          </Button>
                                         )}
                                       </>
                                     )}
