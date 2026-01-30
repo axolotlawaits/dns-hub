@@ -43,8 +43,16 @@ export const useSocketIO = () => {
       socket.on('connection_ack', () => {
       });
 
-      socket.on('notification', (message) => {
-        setLastNotification(message);
+      socket.on('notification', (message: any) => {
+        // ИСПРАВЛЕНО: Обновляем состояние только если это новое уведомление (по ID)
+        // Это предотвращает ререндеры при повторных событиях
+        setLastNotification((prev: any) => {
+          // Если это то же самое уведомление, не обновляем состояние
+          if (prev && prev.id === message.id) {
+            return prev;
+          }
+          return message;
+        });
       });
 
       socket.on('system_metrics', (metrics) => {

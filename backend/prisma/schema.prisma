@@ -4,6 +4,8 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  // Примечание: Предупреждение о `url` относится к Prisma 7, текущая версия - 6.19.1
+  // В Prisma 6 свойство `url` в datasource является корректным и необходимым
   url      = env("DATABASE_URL")
 }
 

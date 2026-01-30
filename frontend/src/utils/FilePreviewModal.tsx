@@ -7,10 +7,65 @@ import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 import './styles/FilePreviewModal.css';
 
-// Настройка worker для PDF.js - используем unpkg
+// Настройка worker для PDF.js
+// ИСПРАВЛЕНО: Для react-pdf v10+ используем CDN с правильным форматом
 if (typeof window !== 'undefined') {
-  pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+  // Используем CDN с правильным путем для react-pdf v10
+  pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
+  
+  // Альтернативный вариант через unpkg (fallback)
+  // pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 }
+
+// ИСПРАВЛЕНО: Выносим опции PDF.js за пределы компонента, чтобы избежать пересоздания при каждом рендере
+// Это предотвращает ошибку "Cannot read properties of null (reading 'sendWithPromise')"
+const pdfOptions = {
+  httpHeaders: {},
+  withCredentials: false,
+  verbosity: 0, // Уменьшаем уровень логирования
+  cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
+  cMapPacked: true,
+  workerSrc: typeof window !== 'undefined' ? pdfjs.GlobalWorkerOptions.workerSrc : undefined,
+};
+
+// Кеш для blob URL, чтобы не загружать один и тот же файл повторно
+const blobUrlCache = new Map<string, { blobUrl: string; timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 минут
+const MAX_CACHE_SIZE = 50; // Максимум 50 файлов в кеше
+
+// Очистка старых записей из кеша
+const cleanupCache = () => {
+  const now = Date.now();
+  const entriesToDelete: string[] = [];
+  
+  for (const [key, value] of blobUrlCache.entries()) {
+    if (now - value.timestamp > CACHE_TTL) {
+      entriesToDelete.push(key);
+      try {
+        URL.revokeObjectURL(value.blobUrl);
+      } catch (e) {
+        // Игнорируем ошибки очистки
+      }
+    }
+  }
+  
+  entriesToDelete.forEach(key => blobUrlCache.delete(key));
+  
+  // Если кеш все еще слишком большой, удаляем самые старые
+  if (blobUrlCache.size > MAX_CACHE_SIZE) {
+    const sortedEntries = Array.from(blobUrlCache.entries())
+      .sort((a, b) => a[1].timestamp - b[1].timestamp);
+    const toRemove = sortedEntries.slice(0, blobUrlCache.size - MAX_CACHE_SIZE);
+    toRemove.forEach(([key, value]) => {
+      blobUrlCache.delete(key);
+      try {
+        URL.revokeObjectURL(value.blobUrl);
+      } catch (e) {
+        // Игнорируем ошибки очистки
+      }
+    });
+  }
+};
 
 // Интерфейсы для типизации
 interface AuthFileLoaderProps {
@@ -33,7 +88,7 @@ interface AuthImageProps {
   style?: React.CSSProperties;
 }
 
-// Компонент для загрузки файлов с заголовками авторизации. Исправить зависимости
+// Компонент для загрузки файлов с заголовками авторизации
 const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: AuthFileLoaderProps) => {
     const [blobUrl, setBlobUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
@@ -43,9 +98,27 @@ const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: 
       if (!src || src.trim() === '') return;
 
       let currentBlobUrl: string | null = null;
+      let isMounted = true;
 
-      if (src.startsWith('http') && !src.startsWith('blob:')) {
-        // Для защищённых URL добавляем заголовки авторизации
+      // ИСПРАВЛЕНО: Обрабатываем как относительные пути (без http), так и абсолютные URL
+      const finalSrc = src.startsWith('http') || src.startsWith('blob:') 
+        ? src 
+        : (src.startsWith('/') ? `${API}${src}` : `${API}/${src}`);
+      
+      if (finalSrc.startsWith('http') && !finalSrc.startsWith('blob:')) {
+        // ИСПРАВЛЕНО: Проверяем кеш перед загрузкой (используем finalSrc для кеша)
+        cleanupCache();
+        const cached = blobUrlCache.get(finalSrc);
+        if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+          if (isMounted) {
+            setBlobUrl(cached.blobUrl);
+            setLoading(false);
+            if (onLoad) onLoad();
+          }
+          return;
+        }
+
+        // УПРОЩЕНО: Убрали AbortController для упрощения логики и устранения проблем в Strict Mode
         const fetchWithAuthRetry = async () => {
           const doFetch = async (token?: string | null) => {
             const headers: HeadersInit = {};
@@ -53,24 +126,39 @@ const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: 
               headers['Authorization'] = `Bearer ${token}`;
             }
 
-            const response = await fetch(src, { headers, credentials: 'include' });
+            const response = await fetch(finalSrc, { 
+              headers, 
+              credentials: 'include'
+            });
+            
+            if (!isMounted) {
+              return null;
+            }
+            
             if (response.status === 401) {
               throw Object.assign(new Error('Unauthorized'), { status: 401 });
             }
             if (!response.ok) {
               // Для 404 не показываем ошибку, просто возвращаем null
               if (response.status === 404) {
-                setError(false);
-                setLoading(false);
+                if (isMounted) {
+                  setError(false);
+                  setLoading(false);
+                }
                 return null;
               }
               throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
             }
 
             const contentType = response.headers.get('content-type');
-            if (contentType && onMimeTypeDetected) {
+            if (contentType && onMimeTypeDetected && isMounted) {
               onMimeTypeDetected(contentType);
             }
+            
+            if (!isMounted) {
+              return null;
+            }
+            
             return response.blob();
           };
 
@@ -78,6 +166,15 @@ const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: 
             // Первая попытка с текущим токеном
             const token = localStorage.getItem('token');
             const blob = await doFetch(token);
+            
+            // Проверяем, не был ли компонент размонтирован
+            if (!isMounted) {
+              if (blob && currentBlobUrl) {
+                URL.revokeObjectURL(currentBlobUrl);
+              }
+              return;
+            }
+            
             if (!blob) {
               setError(true);
               setLoading(false);
@@ -85,10 +182,20 @@ const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: 
             }
             const newBlobUrl = URL.createObjectURL(blob);
             currentBlobUrl = newBlobUrl;
-            setBlobUrl(newBlobUrl);
-            setLoading(false);
-            if (onLoad) onLoad();
+            
+            // ИСПРАВЛЕНО: Сохраняем в кеш для повторного использования (используем finalSrc)
+            blobUrlCache.set(finalSrc, { blobUrl: newBlobUrl, timestamp: Date.now() });
+            
+            if (isMounted) {
+              setBlobUrl(newBlobUrl);
+              setLoading(false);
+              if (onLoad) onLoad();
+            }
           } catch (err: any) {
+            if (!isMounted) {
+              return;
+            }
+            
             // Если получили 401, пробуем обновить токен и повторить запрос
             if (err?.status === 401) {
               try {
@@ -100,7 +207,19 @@ const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: 
                 if (refreshResponse.ok) {
                   const newToken = await refreshResponse.json();
                   localStorage.setItem('token', newToken);
+                  
+                  if (!isMounted) {
+                    return;
+                  }
+                  
                   const blob = await doFetch(newToken);
+                  if (!isMounted) {
+                    if (blob) {
+                      URL.revokeObjectURL(URL.createObjectURL(blob));
+                    }
+                    return;
+                  }
+                  
                   if (!blob) {
                     setError(true);
                     setLoading(false);
@@ -108,9 +227,15 @@ const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: 
                   }
                   const newBlobUrl = URL.createObjectURL(blob);
                   currentBlobUrl = newBlobUrl;
-                  setBlobUrl(newBlobUrl);
-                  setLoading(false);
-                  if (onLoad) onLoad();
+                  
+                  // Сохраняем в кеш (используем finalSrc)
+                  blobUrlCache.set(finalSrc, { blobUrl: newBlobUrl, timestamp: Date.now() });
+                  
+                  if (isMounted) {
+                    setBlobUrl(newBlobUrl);
+                    setLoading(false);
+                    if (onLoad) onLoad();
+                  }
                   return;
                 }
               } catch (refreshError) {
@@ -118,14 +243,29 @@ const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: 
               }
             }
 
-            console.error('AuthFileLoader: Error loading file:', err);
-            setError(true);
-            setLoading(false);
-            if (onError) onError();
+            if (isMounted) {
+              setError(true);
+              setLoading(false);
+              if (onError) onError();
+            }
           }
         };
 
         void fetchWithAuthRetry();
+        
+        return () => {
+          // Помечаем компонент как размонтированный
+          isMounted = false;
+          
+          // Очищаем blob URL, если он был создан
+          if (currentBlobUrl && currentBlobUrl.startsWith('blob:')) {
+            try {
+              URL.revokeObjectURL(currentBlobUrl);
+            } catch (error) {
+              // Игнорируем ошибки очистки
+            }
+          }
+        };
       } else {
         // Для локальных URL и blob URL используем как есть
         setBlobUrl(null);
@@ -134,12 +274,15 @@ const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: 
       }
 
       return () => {
+        // Помечаем компонент как размонтированный
+        isMounted = false;
+        
         // Очистка при размонтировании или изменении src
         if (currentBlobUrl && currentBlobUrl.startsWith('blob:')) {
           try {
             URL.revokeObjectURL(currentBlobUrl);
           } catch (error) {
-            console.warn('Failed to revoke blob URL:', error);
+            // Игнорируем ошибки очистки
           }
         }
       };
@@ -152,7 +295,7 @@ const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: 
           try {
             URL.revokeObjectURL(blobUrl);
           } catch (error) {
-            console.warn('Failed to revoke blob URL on unmount:', error);
+            // Игнорируем ошибки очистки
           }
         }
       };
@@ -274,13 +417,7 @@ const PdfThumbnail = ({ src, className }: PdfThumbnailProps) => {
         onLoadError={onDocumentLoadError}
         loading={null}
         className="pdf-thumbnail-document"
-        options={{
-          httpHeaders: {},
-          withCredentials: false,
-          verbosity: 0, // Уменьшаем уровень логирования
-          cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
-          cMapPacked: true,
-        }}
+        options={pdfOptions}
       >
         <Page
           pageNumber={pageNumber}
@@ -877,15 +1014,35 @@ export const FilePreviewModal = ({
     });
   }, []);
 
+  // ИСПРАВЛЕНО: Оптимизирован handleFileSelect с debounce для предотвращения множественных кликов
+  const handleFileSelectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const handleFileSelect = useCallback((index: number) => {
     if (index === currentIndex) return; // Не переключаем если уже выбран этот файл
 
-    setLoading(true);
-    // Небольшая задержка для плавного перехода
-    setTimeout(() => {
-      setCurrentIndex(index);
-    }, 50);
+    // Отменяем предыдущий таймаут, если он есть
+    if (handleFileSelectTimeoutRef.current) {
+      clearTimeout(handleFileSelectTimeoutRef.current);
+    }
+
+    // Используем requestAnimationFrame для неблокирующего обновления UI
+    requestAnimationFrame(() => {
+      setLoading(true);
+      // Небольшая задержка для плавного перехода и предотвращения множественных кликов
+      handleFileSelectTimeoutRef.current = setTimeout(() => {
+        setCurrentIndex(index);
+        handleFileSelectTimeoutRef.current = null;
+      }, 100); // Увеличена задержка до 100ms для лучшей производительности
+    });
   }, [currentIndex]);
+
+  // Очистка таймаута при размонтировании
+  useEffect(() => {
+    return () => {
+      if (handleFileSelectTimeoutRef.current) {
+        clearTimeout(handleFileSelectTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Функция для открытия файла в новой вкладке с токеном авторизации
   const openInNewTab = useCallback(async () => {
@@ -1163,11 +1320,18 @@ export const FilePreviewModal = ({
         return (
           <Box
             key={meta.id}
-            onClick={() => handleFileSelect(index)}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleFileSelect(index);
+            }}
             className={`file-preview-modal__thumbnail${isActive ? ' file-preview-modal__thumbnail--active' : ''}`}
+            style={{ cursor: 'pointer' }}
           >
             <Box className="file-preview-modal__thumbnail-preview">
-              {meta.isImage && meta.previewUrl && meta.previewUrl.trim() !== '' && (
+              {/* ИСПРАВЛЕНО: Ленивая загрузка thumbnails - загружаем только активный файл и соседние */}
+              {meta.isImage && meta.previewUrl && meta.previewUrl.trim() !== '' && 
+               (isActive || Math.abs(index - currentIndex) <= 2) && (
                 <AuthFileLoader src={meta.previewUrl}>
                   {(blobUrl: string) => {
                     if (!blobUrl || blobUrl.trim() === '') {
@@ -1184,7 +1348,9 @@ export const FilePreviewModal = ({
                 </AuthFileLoader>
               )}
 
-              {meta.isVideo && meta.previewUrl && meta.previewUrl.trim() !== '' && (
+              {/* ИСПРАВЛЕНО: Ленивая загрузка thumbnails для видео */}
+              {meta.isVideo && meta.previewUrl && meta.previewUrl.trim() !== '' && 
+               (isActive || Math.abs(index - currentIndex) <= 2) && (
                 <AuthFileLoader src={meta.previewUrl}>
                   {(blobUrl: string) => {
                     if (!blobUrl || blobUrl.trim() === '') {

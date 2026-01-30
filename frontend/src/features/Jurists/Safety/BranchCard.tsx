@@ -33,6 +33,7 @@ interface BranchCardProps {
   onUploadFiles: (journal: SafetyJournal) => void;
   onOpenChat: (branchId: string, branchName: string) => void;
   onNotifyBranch?: (branchId: string) => Promise<void>;
+  onResponsibleChange?: () => void; // Callback для обновления списка филиалов после изменения ответственных
   forceUpdate?: number;
   canManageStatuses: boolean;
   expandedBranches: Set<string>;
@@ -43,6 +44,9 @@ interface BranchCardProps {
     unfilledJournals?: Array<{ id: string; title: string; type: string }>;
   };
   viewMode?: 'list' | 'grid';
+  // ИСПРАВЛЕНО: Передаем данные ответственных из кэша, чтобы избежать множественных запросов
+  responsibleData?: ResponsibleObjDataType;
+  onResponsibleDataChange?: (branchId: string, data: ResponsibleObjDataType | undefined) => void;
 }
 
 const STYLES = {
@@ -74,12 +78,15 @@ const BranchCardComponent = function BranchCardComponent({
   onUploadFiles,
   onOpenChat,
   onNotifyBranch,
+  onResponsibleChange,
   forceUpdate,
   canManageStatuses,
   expandedBranches,
   setExpandedBranches,
   lastNotification,
-  viewMode: _viewMode = 'list' // Используется для мемоизации, но не в рендере
+  viewMode: _viewMode = 'list', // Используется для мемоизации, но не в рендере
+  responsibleData: propResponsibleData,
+  onResponsibleDataChange
 }: BranchCardProps) {
   const [isExpanded, setIsExpanded] = useState(expandedBranches.has(branch.branch_id));
   const [journalsModalOpened, { open: openJournalsModal, close: closeJournalsModal }] = useDisclosure(false);
@@ -105,9 +112,12 @@ const BranchCardComponent = function BranchCardComponent({
     setNotifyingBranch(true);
     try {
       await onNotifyBranch(branch.branch_id);
-    } catch (error) {
-      console.error('Ошибка при отправке уведомления филиалу:', error);
+    } catch (error: any) {
+      console.error('[BranchCard] Ошибка при отправке уведомления филиалу:', error);
+      // Исключение уже обработано в handleNotifyBranch родительского компонента
+      // Здесь просто логируем для отладки
     } finally {
+      // Всегда сбрасываем состояние загрузки, даже если произошла ошибка
       setNotifyingBranch(false);
     }
   }, [onNotifyBranch, branch.branch_id]);
@@ -129,16 +139,68 @@ const BranchCardComponent = function BranchCardComponent({
     responsibleOpen()
   }
 
-  const getResponsive = async () => {
-    const response = await authFetch(`${API}/jurists/safety/branch/responsible?branchId=${branch.branch_id}`)
-    if (response && response.ok) {
-      const json = await response?.json()
-      const [responsible] = json
-      setResponsibleData(responsible)
+  // ИСПРАВЛЕНО: Используем данные из props, если они есть, иначе загружаем
+  const getResponsive = useCallback(async () => {
+    // Если данные переданы из родителя, используем их
+    if (propResponsibleData !== undefined) {
+      setResponsibleData(propResponsibleData);
+      return;
     }
-  }
+    
+    // Иначе загружаем самостоятельно (fallback для обратной совместимости)
+    try {
+      const response = await authFetch(`${API}/jurists/safety/branch/responsible?branchId=${branch.branch_id}`)
+      if (response && response.ok) {
+        const json = await response?.json()
+        
+        // ИСПРАВЛЕНО: API возвращает массив [{ branch_id, branch_name, responsibles: [...] }]
+        // Нужно найти элемент с нужным branch_id
+        let branchData: ResponsibleObjDataType | undefined = undefined;
+        if (Array.isArray(json)) {
+          if (json.length > 0) {
+            branchData = json.find((item: any) => item.branch_id === branch.branch_id) || json[0]
+          }
+        } else if (json && typeof json === 'object') {
+          // Если это объект напрямую (старый формат)
+          branchData = json
+        }
+        
+        setResponsibleData(branchData);
+        // Уведомляем родителя об обновлении данных
+        if (onResponsibleDataChange) {
+          onResponsibleDataChange(branch.branch_id, branchData);
+        }
+      } else {
+        setResponsibleData(undefined);
+        if (onResponsibleDataChange) {
+          onResponsibleDataChange(branch.branch_id, undefined);
+        }
+      }
+    } catch (error) {
+      setResponsibleData(undefined);
+      if (onResponsibleDataChange) {
+        onResponsibleDataChange(branch.branch_id, undefined);
+      }
+    }
+  }, [branch.branch_id, authFetch, propResponsibleData, onResponsibleDataChange])
+
+  // ИСПРАВЛЕНО: Загружаем ответственных только если они не переданы из родителя
+  useEffect(() => {
+    if (propResponsibleData === undefined) {
+      getResponsive();
+    } else {
+      setResponsibleData(propResponsibleData);
+    }
+  }, [propResponsibleData, getResponsive]);
 
   const addResponsive = async () => {
+    // ИСПРАВЛЕНО: Валидация перед отправкой
+    if (!responsible?.employeeId || !responsible?.responsibilityType || 
+        (responsible.responsibilityType !== 'ОТ' && responsible.responsibilityType !== 'ПБ')) {
+      notificationSystem.addNotification('Ошибка', 'Заполните все поля корректно', 'error')
+      return
+    }
+
     const response = await authFetch(`${API}/jurists/safety/branch/responsible`, {
       method: 'POST',
       headers: {
@@ -146,15 +208,52 @@ const BranchCardComponent = function BranchCardComponent({
       },
       body: JSON.stringify({
         branchId: branch.branch_id,
-        employeeId: responsible?.employeeId,
-        responsibilityType: responsible?.responsibilityType
+        employeeId: responsible.employeeId,
+        responsibilityType: responsible.responsibilityType
       }),
     })
 
     if (response && response.ok) {
       notificationSystem.addNotification('Успех', 'Ответственный добавлен', 'success')
+      // Обновляем список ответственных после успешного добавления
+      await getResponsive()
+      // ИСПРАВЛЕНО: Вызываем колбэк для обновления списка филиалов в родительском компоненте
+      if (onResponsibleChange) {
+        onResponsibleChange()
+      }
+      // ИСПРАВЛЕНО: Обновляем кэш в родительском компоненте
+      if (onResponsibleDataChange && responsibleData) {
+        onResponsibleDataChange(branch.branch_id, responsibleData);
+      }
     } else {
-      notificationSystem.addNotification('Ошибка', 'Ошибка при добавлении ответственного', 'error')
+      // ИСПРАВЛЕНО: Показываем детали ошибки
+      let errorMessage = 'Ошибка при добавлении ответственного'
+      let errorCode = null
+      try {
+        const errorData = await response?.json()
+        errorMessage = errorData?.message || errorData?.detail || errorMessage
+        errorCode = errorData?.code
+      } catch (e) {
+        // Игнорируем ошибку парсинга
+      }
+      
+      // ИСПРАВЛЕНО: Если это ошибка дубликата, обновляем список т.к. запись уже существует
+      if (errorCode === 'DUPLICATE' || response?.status === 409 || response?.status === 422) {
+        notificationSystem.addNotification('Информация', errorMessage || 'Ответственный уже назначен', 'info')
+        // ИСПРАВЛЕНО: Небольшая задержка перед обновлением
+        await new Promise(resolve => setTimeout(resolve, 500))
+        // Обновляем список, т.к. запись уже существует
+        await getResponsive()
+        if (onResponsibleChange) {
+          onResponsibleChange()
+        }
+        // ИСПРАВЛЕНО: Обновляем кэш в родительском компоненте
+        if (onResponsibleDataChange && responsibleData) {
+          onResponsibleDataChange(branch.branch_id, responsibleData);
+        }
+      } else {
+        notificationSystem.addNotification('Ошибка', errorMessage, 'error')
+      }
     }
   }
 
@@ -172,6 +271,18 @@ const BranchCardComponent = function BranchCardComponent({
     })
     if (response && response.ok) {
       notificationSystem.addNotification('Успех', 'Ответственный удален', 'success')
+      // ИСПРАВЛЕНО: Небольшая задержка перед обновлением
+      await new Promise(resolve => setTimeout(resolve, 500))
+      // Обновляем список ответственных после успешного удаления
+      await getResponsive()
+      // ИСПРАВЛЕНО: Вызываем колбэк для обновления списка филиалов в родительском компоненте
+      if (onResponsibleChange) {
+        onResponsibleChange()
+      }
+      // ИСПРАВЛЕНО: Обновляем кэш в родительском компоненте
+      if (onResponsibleDataChange && responsibleData) {
+        onResponsibleDataChange(branch.branch_id, responsibleData);
+      }
     } else {
       notificationSystem.addNotification('Ошибка', 'Ошибка при удалении ответственного', 'error')
     }
@@ -302,7 +413,13 @@ const BranchCardComponent = function BranchCardComponent({
                       <IconMessageDots size={14} />
                     </ActionIcon>
                   </Tooltip>
-                  <Popover width={300} position="bottom" withArrow shadow="md" opened={resPopoverOpened} onChange={setResPopoverOpened} zIndex={100}>
+                  <Popover width={300} position="bottom" withArrow shadow="md" opened={resPopoverOpened} onChange={(opened) => {
+                    setResPopoverOpened(opened)
+                    // Загружаем данные при открытии Popover
+                    if (opened) {
+                      getResponsive()
+                    }
+                  }} zIndex={100}>
                     <Popover.Target>
                       <Tooltip label="Ответственные по ПБ и ОТ">
                         <ActionIcon
@@ -310,7 +427,7 @@ const BranchCardComponent = function BranchCardComponent({
                           variant="outline"
                           color="blue"
                           style={{ cursor: 'pointer' }}
-                          onClick={() => {setResPopoverOpened((o) => !o), getResponsive()}}
+                          onClick={() => setResPopoverOpened((o) => !o)}
                         >
                           <IconUsers size={14} />
                         </ActionIcon>
@@ -325,31 +442,49 @@ const BranchCardComponent = function BranchCardComponent({
                         <Divider />
                         <Stack gap="xs">
                           <Text size="xs" fw={500} c="blue">По пожарной безопасности:</Text>
-                          {responsibleData && responsibleData.responsibles?.length > 0 && 
-                          responsibleData.responsibles.filter(res => res.responsibility_type === 'ПБ').map(res => (
-                            <Group key={res.employee_id}>
-                              <Text size="xs" c="dimmed">{res.employee_name}</Text>
-                              <Tooltip label="Удалить ответственного">
-                                <ActionIcon variant="light" aria-label="Settings" size='sm' color='red' onClick={() => openDeleteModal(res.employee_id, 'ПБ')}>
-                                  <IconX stroke={1.5} />
-                                </ActionIcon>
-                              </Tooltip>
-                            </Group>                         
-                          ))}
+                          {responsibleData && responsibleData.responsibles?.length > 0 ? (
+                            responsibleData.responsibles.filter((res: ResponsibleDataType) => res.responsibility_type === 'ПБ').length > 0 ? (
+                              responsibleData.responsibles.filter((res: ResponsibleDataType) => res.responsibility_type === 'ПБ').map((res: ResponsibleDataType) => (
+                                <Group key={res.employee_id}>
+                                  <Text size="xs" c="dimmed">{res.employee_name}</Text>
+                                  {canManageStatuses && (
+                                    <Tooltip label="Удалить ответственного">
+                                      <ActionIcon variant="light" aria-label="Settings" size='sm' color='red' onClick={() => openDeleteModal(res.employee_id, 'ПБ')}>
+                                        <IconX stroke={1.5} />
+                                      </ActionIcon>
+                                    </Tooltip>
+                                  )}
+                                </Group>
+                              ))
+                            ) : (
+                              <Text size="xs" c="dimmed" style={{ fontStyle: 'italic' }}>Нет назначенных</Text>
+                            )
+                          ) : (
+                            <Text size="xs" c="dimmed" style={{ fontStyle: 'italic' }}>Нет назначенных</Text>
+                          )}
                         </Stack>
                         <Stack gap="xs">
                           <Text size="xs" fw={500} c="green">По охране труда:</Text>
-                          {responsibleData && responsibleData.responsibles?.length > 0 && 
-                            responsibleData.responsibles.filter(res => res.responsibility_type === 'ОТ').map(res => (
-                            <Group key={res.employee_id}>
-                              <Text size="xs" c="dimmed">{res.employee_name}</Text>
-                              <Tooltip label="Удалить ответственного">
-                                <ActionIcon variant="light" aria-label="Settings" size='sm' color='red' onClick={() => openDeleteModal(res.employee_id, 'ОТ')}>
-                                  <IconX stroke={1.5} />
-                                </ActionIcon>
-                              </Tooltip>
-                            </Group>
-                          ))}
+                          {responsibleData && responsibleData.responsibles?.length > 0 ? (
+                            responsibleData.responsibles.filter((res: ResponsibleDataType) => res.responsibility_type === 'ОТ').length > 0 ? (
+                              responsibleData.responsibles.filter((res: ResponsibleDataType) => res.responsibility_type === 'ОТ').map((res: ResponsibleDataType) => (
+                                <Group key={res.employee_id}>
+                                  <Text size="xs" c="dimmed">{res.employee_name}</Text>
+                                  {canManageStatuses && (
+                                    <Tooltip label="Удалить ответственного">
+                                      <ActionIcon variant="light" aria-label="Settings" size='sm' color='red' onClick={() => openDeleteModal(res.employee_id, 'ОТ')}>
+                                        <IconX stroke={1.5} />
+                                      </ActionIcon>
+                                    </Tooltip>
+                                  )}
+                                </Group>
+                              ))
+                            ) : (
+                              <Text size="xs" c="dimmed" style={{ fontStyle: 'italic' }}>Нет назначенных</Text>
+                            )
+                          ) : (
+                            <Text size="xs" c="dimmed" style={{ fontStyle: 'italic' }}>Нет назначенных</Text>
+                          )}
                         </Stack>
                       </Stack>
                     </Popover.Dropdown>
@@ -375,7 +510,13 @@ const BranchCardComponent = function BranchCardComponent({
                     <IconMessageDots size={16} />
                   </ActionIcon>
                 </Tooltip>
-                <Popover width={300} position="bottom" withArrow shadow="md" opened={resPopoverOpened} onChange={setResPopoverOpened} zIndex={100}>
+                <Popover width={300} position="bottom" withArrow shadow="md" opened={resPopoverOpened} onChange={(opened) => {
+                  setResPopoverOpened(opened)
+                  // Загружаем данные при открытии Popover
+                  if (opened) {
+                    getResponsive()
+                  }
+                }} zIndex={100}>
                   <Popover.Target>
                     <Tooltip label="Ответственные по ПБ и ОТ">
                       <ActionIcon
@@ -383,7 +524,7 @@ const BranchCardComponent = function BranchCardComponent({
                         variant="light"
                         color="blue"
                         style={{ cursor: 'pointer' }}
-                        onClick={() => {setResPopoverOpened((o) => !o), getResponsive()}}
+                        onClick={() => setResPopoverOpened((o) => !o)}
                       >
                         <IconUsers size={16} />
                       </ActionIcon>
@@ -398,31 +539,49 @@ const BranchCardComponent = function BranchCardComponent({
                       <Divider />
                       <Stack gap="xs">
                         <Text size="xs" fw={500} c="blue">По пожарной безопасности:</Text>
-                        {responsibleData && responsibleData.responsibles?.length > 0 && 
-                        responsibleData.responsibles.filter(res => res.responsibility_type === 'ПБ').map(res => (
-                          <Group key={res.employee_id}>
-                            <Text size="xs" c="dimmed">{res.employee_name}</Text>
-                            <Tooltip label="Удалить ответственного">
-                              <ActionIcon variant="light" aria-label="Settings" size='sm' color='red' onClick={() => openDeleteModal(res.employee_id, 'ПБ')}>
-                                <IconX stroke={1.5} />
-                              </ActionIcon>
-                            </Tooltip>
-                          </Group>                         
-                        ))}
+                        {responsibleData && responsibleData.responsibles?.length > 0 ? (
+                          responsibleData.responsibles.filter((res: ResponsibleDataType) => res.responsibility_type === 'ПБ').length > 0 ? (
+                            responsibleData.responsibles.filter((res: ResponsibleDataType) => res.responsibility_type === 'ПБ').map((res: ResponsibleDataType) => (
+                              <Group key={res.employee_id}>
+                                <Text size="xs" c="dimmed">{res.employee_name}</Text>
+                                {canManageStatuses && (
+                                  <Tooltip label="Удалить ответственного">
+                                    <ActionIcon variant="light" aria-label="Settings" size='sm' color='red' onClick={() => openDeleteModal(res.employee_id, 'ПБ')}>
+                                      <IconX stroke={1.5} />
+                                    </ActionIcon>
+                                  </Tooltip>
+                                )}
+                              </Group>
+                            ))
+                          ) : (
+                            <Text size="xs" c="dimmed" style={{ fontStyle: 'italic' }}>Нет назначенных</Text>
+                          )
+                        ) : (
+                          <Text size="xs" c="dimmed" style={{ fontStyle: 'italic' }}>Нет назначенных</Text>
+                        )}
                       </Stack>
                       <Stack gap="xs">
                         <Text size="xs" fw={500} c="green">По охране труда:</Text>
-                        {responsibleData && responsibleData.responsibles?.length > 0 && 
-                          responsibleData.responsibles.filter(res => res.responsibility_type === 'ОТ').map(res => (
-                          <Group key={res.employee_id}>
-                            <Text size="xs" c="dimmed">{res.employee_name}</Text>
-                            <Tooltip label="Удалить ответственного">
-                              <ActionIcon variant="light" aria-label="Settings" size='sm' color='red' onClick={() => openDeleteModal(res.employee_id, 'ОТ')}>
-                                <IconX stroke={1.5} />
-                              </ActionIcon>
-                            </Tooltip>
-                          </Group>
-                        ))}
+                        {responsibleData && responsibleData.responsibles?.length > 0 ? (
+                          responsibleData.responsibles.filter((res: ResponsibleDataType) => res.responsibility_type === 'ОТ').length > 0 ? (
+                            responsibleData.responsibles.filter((res: ResponsibleDataType) => res.responsibility_type === 'ОТ').map((res: ResponsibleDataType) => (
+                              <Group key={res.employee_id}>
+                                <Text size="xs" c="dimmed">{res.employee_name}</Text>
+                                {canManageStatuses && (
+                                  <Tooltip label="Удалить ответственного">
+                                    <ActionIcon variant="light" aria-label="Settings" size='sm' color='red' onClick={() => openDeleteModal(res.employee_id, 'ОТ')}>
+                                      <IconX stroke={1.5} />
+                                    </ActionIcon>
+                                  </Tooltip>
+                                )}
+                              </Group>
+                            ))
+                          ) : (
+                            <Text size="xs" c="dimmed" style={{ fontStyle: 'italic' }}>Нет назначенных</Text>
+                          )
+                        ) : (
+                          <Text size="xs" c="dimmed" style={{ fontStyle: 'italic' }}>Нет назначенных</Text>
+                        )}
                       </Stack>
                     </Stack>
                   </Popover.Dropdown>
@@ -482,13 +641,27 @@ const BranchCardComponent = function BranchCardComponent({
                   />
                 </Group>
               </Stack>
-              <Button variant='light' onClick={() => {addResponsive(), closeAddResonsibleModal()}}>Назначить</Button>
+              <Button variant='light' onClick={async () => {
+                await addResponsive()
+                closeAddResonsibleModal()
+                // Открываем Popover после добавления, чтобы показать обновленный список
+                if (!resPopoverOpened) {
+                  setResPopoverOpened(true)
+                }
+              }}>Назначить</Button>
             </Stack>
           </Modal>
           <Modal opened={deleteResId !== null} onClose={closeDeleteModal} title="Удаление ответственного" centered>
             <Group grow>
               <Button variant='light' onClick={closeDeleteModal}>Отмена</Button>
-              <Button onClick={() => {deleteResponsive(), closeDeleteModal()}}>Удалить</Button>
+              <Button onClick={async () => {
+                await deleteResponsive()
+                closeDeleteModal()
+                // Открываем Popover после удаления, чтобы показать обновленный список
+                if (!resPopoverOpened) {
+                  setResPopoverOpened(true)
+                }
+              }}>Удалить</Button>
             </Group>
           </Modal>
         </Group>
@@ -568,7 +741,8 @@ const BranchCard = memo(BranchCardComponent, (prevProps: BranchCardProps, nextPr
     prevProps.expandedBranches.size === nextProps.expandedBranches.size &&
     prevProps.expandedBranches.has(prevProps.branch.branch_id) === nextProps.expandedBranches.has(nextProps.branch.branch_id) &&
     prevProps.viewMode === nextProps.viewMode &&
-    prevProps.onNotifyBranch === nextProps.onNotifyBranch
+    prevProps.onNotifyBranch === nextProps.onNotifyBranch &&
+    prevProps.onResponsibleChange === nextProps.onResponsibleChange
   );
   
   // Если viewMode изменился, обязательно перерисовываем

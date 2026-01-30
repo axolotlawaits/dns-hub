@@ -196,8 +196,27 @@ export default function SafetyJournal() {
   // Debounce для фильтров (300ms задержка) - оптимизация производительности
   const [debouncedFilters] = useDebouncedValue(branchFilters, 300);
 
+  // ОПТИМИЗАЦИЯ: Ref для отслеживания предыдущего targetBranchId, чтобы избежать лишних проверок
+  const prevTargetBranchIdRef = useRef<string | undefined>(undefined);
+  const prevSelectedBranchIdRef = useRef<string | undefined>(undefined);
+  const branchesRef = useRef<BranchWithJournals[]>([]);
+  
+  // Синхронизируем ref с branches
+  useEffect(() => {
+    branchesRef.current = branches;
+  }, [branches]);
+  
+  // ОПТИМИЗАЦИЯ: Ref для хранения таймаутов, чтобы их можно было очистить
+  const urlParamsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
   // Обработка URL параметров для открытия чата из уведомления
   useEffect(() => {
+    // Очищаем предыдущие таймауты при изменении зависимостей
+    if (urlParamsTimeoutRef.current) {
+      clearTimeout(urlParamsTimeoutRef.current);
+      urlParamsTimeoutRef.current = null;
+    }
+    
     // Если чат был намеренно закрыт, не открываем его снова из-за задержки обновления URL
     if (chatClosedIntentionallyRef.current && !targetBranchId) {
       // Сбрасываем флаг, если URL параметры уже очищены
@@ -210,12 +229,27 @@ export default function SafetyJournal() {
       return;
     }
     
-    if (targetBranchId && branches.length > 0) {
-      const branch = branches.find(b => b.branch_id === targetBranchId);
+    // ОПТИМИЗАЦИЯ: Проверяем, изменился ли targetBranchId или selectedJournal.branch_id
+    const currentSelectedBranchId = selectedJournal?.branch_id;
+    const targetBranchIdChanged = prevTargetBranchIdRef.current !== targetBranchId;
+    const selectedBranchIdChanged = prevSelectedBranchIdRef.current !== currentSelectedBranchId;
+    
+    // Если ничего не изменилось и чат уже открыт - не делаем ничего
+    if (!targetBranchIdChanged && !selectedBranchIdChanged && chatOpened && currentSelectedBranchId === targetBranchId) {
+      return;
+    }
+    
+    // Обновляем refs
+    prevTargetBranchIdRef.current = targetBranchId || undefined;
+    prevSelectedBranchIdRef.current = currentSelectedBranchId;
+    
+    // ОПТИМИЗАЦИЯ: Используем ref для branches, чтобы избежать зависимости от всего массива
+    const currentBranches = branchesRef.current;
+    if (targetBranchId && currentBranches.length > 0) {
+      const branch = currentBranches.find(b => b.branch_id === targetBranchId);
       if (branch) {
         // Проверяем, нужно ли обновить чат (если branchId изменился или чат не открыт)
-        const currentBranchId = selectedJournal?.branch_id;
-        const branchIdChanged = currentBranchId && currentBranchId !== targetBranchId;
+        const branchIdChanged = currentSelectedBranchId && currentSelectedBranchId !== targetBranchId;
         
         if (!chatOpened || branchIdChanged) {
           const firstJournal = branch.journals?.[0];
@@ -245,8 +279,9 @@ export default function SafetyJournal() {
           if (chatOpened && branchIdChanged) {
             closeChat();
             // Используем setTimeout, чтобы дать время чату закрыться перед открытием
-            setTimeout(() => {
+            urlParamsTimeoutRef.current = setTimeout(() => {
               openChat();
+              urlParamsTimeoutRef.current = null;
             }, 50);
           } else if (!chatOpened) {
             // Если чат не открыт - просто открываем
@@ -255,15 +290,24 @@ export default function SafetyJournal() {
           
           // Очищаем параметры URL после открытия чата (кроме messageId, он нужен для прокрутки)
           // Используем setTimeout, чтобы дать время чату открыться
-          setTimeout(() => {
+          urlParamsTimeoutRef.current = setTimeout(() => {
             if (!targetMessageId) {
               setSearchParams({});
             }
+            urlParamsTimeoutRef.current = null;
           }, 100);
         }
       }
     }
-  }, [targetBranchId, targetMessageId, branches, chatOpened, openChat, closeChat, setSearchParams, selectedJournal?.branch_id]);
+    
+    // ИСПРАВЛЕНО: Один cleanup для всех таймаутов
+    return () => {
+      if (urlParamsTimeoutRef.current) {
+        clearTimeout(urlParamsTimeoutRef.current);
+        urlParamsTimeoutRef.current = null;
+      }
+    };
+  }, [targetBranchId, targetMessageId, chatOpened, openChat, closeChat, setSearchParams, selectedJournal?.branch_id]);
   
   // Пагинация для филиалов
   const [branchPagination, setBranchPagination] = useState(() => {
@@ -286,6 +330,8 @@ export default function SafetyJournal() {
   // Состояние для последних оповещений
   const [lastNotifications, setLastNotifications] = useState<Record<string, any>>({});
   const [notifying, setNotifying] = useState(false);
+  // ИСПРАВЛЕНО: Кэш для ответственных по филиалам, чтобы избежать множественных запросов
+  const [responsiblesCache, setResponsiblesCache] = useState<Record<string, any>>({});
 
   // Состояние для режима отображения (список/карточки)
   const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => {
@@ -329,8 +375,17 @@ export default function SafetyJournal() {
     loadViewMode();
   }, [user?.id, token]);
 
+  // ОПТИМИЗАЦИЯ: Ref для отслеживания предыдущего viewMode, чтобы не сохранять без изменений
+  const prevViewModeRef = useRef<'list' | 'grid'>(viewMode);
+  
   // Сохраняем предпочтение пользователя в UserSettings
   useEffect(() => {
+    // ОПТИМИЗАЦИЯ: Не сохраняем, если viewMode не изменился или это первая загрузка
+    if (prevViewModeRef.current === viewMode || !viewModeLoadedRef.current) {
+      prevViewModeRef.current = viewMode;
+      return;
+    }
+    
     const saveViewMode = async () => {
       if (!user?.id || !token) return;
       
@@ -358,6 +413,7 @@ export default function SafetyJournal() {
 
     // Сохраняем только если пользователь загружен и это не первая инициализация
     if (user?.id && token) {
+      prevViewModeRef.current = viewMode;
       saveViewMode();
     }
   }, [viewMode, user?.id, token]);
@@ -380,46 +436,88 @@ export default function SafetyJournal() {
 
   // Функция для выполнения запросов с автоматическим обновлением токена
   const fetchWithAuth = useCallback(async (url: string, options: RequestInit = {}): Promise<Response> => {
-    let response = await fetch(url, {
-      ...options,
-      headers: {
-        ...getAuthHeaders(!options.body || !(options.body instanceof FormData)),
-        ...options.headers,
-      },
-    });
+    let response: Response;
+    
+    try {
+      response = await fetch(url, {
+        ...options,
+        headers: {
+          ...getAuthHeaders(!options.body || !(options.body instanceof FormData)),
+          ...options.headers,
+        },
+      });
+    } catch (networkError: any) {
+      // Обрабатываем ошибки сети (ERR_CONNECTION_REFUSED, ERR_NETWORK_CHANGED и т.д.)
+      console.error('[SafetyJournal] fetchWithAuth network error:', networkError);
+      
+      // Если запрос был прерван через AbortController, пробрасываем AbortError как есть
+      if (networkError?.name === 'AbortError') {
+        throw networkError;
+      }
+      
+      throw new Error(
+        networkError?.message?.includes('Failed to fetch') || networkError?.message?.includes('ERR_CONNECTION_REFUSED')
+          ? 'Сервер недоступен. Проверьте подключение к сети и убедитесь, что сервер запущен.'
+          : networkError?.message || 'Ошибка соединения с сервером'
+      );
+    }
 
     if (response.status === 401) {
-      console.warn('Unauthorized access, attempting to refresh token');
+      // Unauthorized access, attempting to refresh token
       
-      // Попытка обновить токен
-      const refreshResponse = await fetch(`${API}/refresh-token`, {
-        method: 'POST',
-        credentials: 'include'
-      });
-      
-      console.log('Refresh token response status:', refreshResponse.status);
+      try {
+        // Попытка обновить токен
+        const refreshResponse = await fetch(`${API}/refresh-token`, {
+          method: 'POST',
+          credentials: 'include'
+        });
+        
+        console.log('Refresh token response status:', refreshResponse.status);
 
-      if (refreshResponse.ok) {
-        const newToken = await refreshResponse.json();
-        localStorage.setItem('token', newToken);
-        console.log('Token refreshed successfully');
-        
-        // Обновляем токен в контексте
-        // Примечание: useUserContext должен автоматически обновить токен из localStorage
-        
+        if (refreshResponse.ok) {
+          const newToken = await refreshResponse.json();
+          localStorage.setItem('token', newToken);
+          // Token refreshed successfully
+          
+          // Обновляем токен в контексте
+          // Примечание: useUserContext должен автоматически обновить токен из localStorage
+          
           // Повторяем запрос с новым токеном
-          response = await fetch(url, {
-            ...options,
-            headers: {
-            ...getAuthHeaders(!options.body || !(options.body instanceof FormData)),
-              'Authorization': `Bearer ${newToken}`,
-              ...options.headers,
-            },
-          });
+          try {
+            response = await fetch(url, {
+              ...options,
+              headers: {
+                ...getAuthHeaders(!options.body || !(options.body instanceof FormData)),
+                'Authorization': `Bearer ${newToken}`,
+                ...options.headers,
+              },
+            });
+          } catch (retryError: any) {
+            console.error('[SafetyJournal] fetchWithAuth retry network error:', retryError);
+            
+            // Если запрос был прерван через AbortController, пробрасываем AbortError как есть
+            if (retryError?.name === 'AbortError') {
+              throw retryError;
+            }
+            
+            throw new Error(
+              retryError?.message?.includes('Failed to fetch') || retryError?.message?.includes('ERR_CONNECTION_REFUSED')
+                ? 'Сервер недоступен. Проверьте подключение к сети и убедитесь, что сервер запущен.'
+                : retryError?.message || 'Ошибка соединения с сервером'
+            );
+          }
         } else {
-        console.warn('Token refresh failed, logging out user');
-        logout();
-        window.location.href = '/login';
+          // Token refresh failed, logging out user
+          logout();
+          window.location.href = '/login';
+          throw new Error('Сессия истекла. Пожалуйста, войдите в систему заново.');
+        }
+      } catch (refreshError: any) {
+        // Если ошибка при обновлении токена - это тоже сетевая ошибка
+        if (refreshError?.message?.includes('Failed to fetch') || refreshError?.message?.includes('ERR_CONNECTION_REFUSED')) {
+          throw new Error('Сервер недоступен. Проверьте подключение к сети и убедитесь, что сервер запущен.');
+        }
+        throw refreshError;
       }
     }
 
@@ -427,8 +525,8 @@ export default function SafetyJournal() {
   }, [token, logout]);
 
   // Смена статуса журнала (по правам FULL)
+  // ИСПРАВЛЕНО: Убрали console.log и state.forceUpdate
   const handleChangeStatus = useCallback(async (journal: SafetyJournal, status: 'approved' | 'rejected' | 'under_review', rejectMessage? : string) => {
-    console.log('handleChangeStatus called with:', { journalId: journal.id, status });
     try {
       const journalId = journal.branch_journal_id || journal.id;
       const response = await fetchWithAuth(`${API}/jurists/safety/branch_journals/${journalId}/decision`, {
@@ -440,34 +538,23 @@ export default function SafetyJournal() {
       });
 
       if (response.ok) {
-        console.log('API response OK, updating state...');
-        // Обновляем локальное состояние вместо полной перезагрузки
-        setState(prevState => {
-          console.log('setState called, prevState:', prevState);
-          const newState = {
-            ...prevState,
-            lastUpdate: Date.now(), // Принудительное обновление
-            forceUpdate: Date.now(), // Принудительное обновление компонента
-            branches: prevState.branches.map(branch => ({
-              ...branch,
-              journals: branch.journals.map(j => 
-                j.id === journal.id ? { 
-                  ...j, 
-                  status,
-                  // Обновляем время одобрения для одобренных журналов
-                  approved_at: status === 'approved' ? new Date().toISOString() : j.approved_at
-                } : j
-              )
-            }))
-          };
-          console.log('Status updated in state:', newState.branches.find(b => 
-            b.journals.some(j => j.id === journal.id)
-          )?.journals.find(j => j.id === journal.id)?.status);
-          console.log('Force update triggered:', newState.forceUpdate);
-          console.log('New state:', newState);
-          
-          return newState;
-        });
+        // ИСПРАВЛЕНО: Обновляем локальное состояние без forceUpdate
+        // Компоненты автоматически обновятся при изменении branches
+        setState(prevState => ({
+          ...prevState,
+          lastUpdate: Date.now(),
+          branches: prevState.branches.map(branch => ({
+            ...branch,
+            journals: branch.journals.map(j => 
+              j.id === journal.id ? { 
+                ...j, 
+                status,
+                // Обновляем время одобрения для одобренных журналов
+                approved_at: status === 'approved' ? new Date().toISOString() : j.approved_at
+              } : j
+            )
+          }))
+        }));
         
         notificationSystem.addNotification('Успех', 'Статус обновлен', 'success');
       } else {
@@ -478,6 +565,50 @@ export default function SafetyJournal() {
       notificationSystem.addNotification('Ошибка', 'Ошибка соединения с сервером', 'error');
     }
   }, [fetchWithAuth, setState]);
+
+  // ИСПРАВЛЕНО: Загрузка ответственных для всех филиалов батчами для оптимизации
+  // Перемещено перед loadBranchesWithJournals, чтобы избежать ошибки инициализации
+  const loadResponsiblesBatch = useCallback(async (branchIds: string[]) => {
+    if (!branchIds.length) return;
+    
+    try {
+      // Загружаем ответственных параллельно, но с ограничением (по 5 одновременно)
+      const batchSize = 5;
+      const batches: string[][] = [];
+      for (let i = 0; i < branchIds.length; i += batchSize) {
+        batches.push(branchIds.slice(i, i + batchSize));
+      }
+      
+      const cache: Record<string, any> = {};
+      
+      for (const batch of batches) {
+        const promises = batch.map(async (branchId) => {
+          try {
+            const response = await fetchWithAuth(`${API}/jurists/safety/branch/responsible?branchId=${branchId}`);
+            if (response.ok) {
+              const json = await response.json();
+              // API возвращает массив [{ branch_id, branch_name, responsibles: [...] }]
+              if (Array.isArray(json) && json.length > 0) {
+                const branchData = json.find((item: any) => item.branch_id === branchId) || json[0];
+                cache[branchId] = branchData;
+              } else if (json && typeof json === 'object') {
+                cache[branchId] = json;
+              }
+            }
+          } catch (error) {
+            console.error(`[SafetyJournal] Error loading responsibles for branch ${branchId}:`, error);
+          }
+        });
+        
+        await Promise.all(promises);
+      }
+      
+      // Обновляем кэш
+      setResponsiblesCache(prev => ({ ...prev, ...cache }));
+    } catch (error) {
+      console.error('[SafetyJournal] Error loading responsibles batch:', error);
+    }
+  }, [fetchWithAuth]);
 
   // Объединенная загрузка данных (филиалы + уведомления)
   const loadBranchesWithJournals = useCallback(async () => {
@@ -505,13 +636,12 @@ export default function SafetyJournal() {
         isManager: false
       };
       
-      // Параллельная загрузка филиалов и уведомлений
-      const [branchesResponse, notificationsResponse] = await Promise.all([
-        fetchWithAuth(`${API}/jurists/safety/me/branches_with_journals`, {
+      // Загружаем только филиалы с журналами
+      // Уведомления загружаются отдельно при монтировании и автоматически обновляются
+      // после отправки уведомлений через handleNotifyUnfilled/handleNotifyBranch
+      const branchesResponse = await fetchWithAuth(`${API}/jurists/safety/me/branches_with_journals`, {
         method: 'GET',
-        }),
-        fetchWithAuth(`${API}/jurists/safety/last-notifications`)
-      ]);
+      });
 
       // Обработка ответа филиалов
       if (branchesResponse.ok) {
@@ -539,6 +669,12 @@ export default function SafetyJournal() {
             userInfo, 
             loading: false 
           });
+          
+          // ИСПРАВЛЕНО: Загружаем ответственных для всех филиалов батчами после загрузки филиалов
+          const branchIds = sortedBranches.map((b: any) => b.branch_id).filter(Boolean);
+          if (branchIds.length > 0) {
+            loadResponsiblesBatch(branchIds);
+          }
         }
       } else {
         let errorMessage = 'Ошибка загрузки филиалов с журналами';
@@ -560,26 +696,67 @@ export default function SafetyJournal() {
         }
         updateState({ error: errorMessage, loading: false });
       }
-
-      // Обработка ответа уведомлений
-      if (notificationsResponse.ok) {
-        const data = await notificationsResponse.json();
-        const notificationsMap: Record<string, any> = {};
-        data.forEach((n: any) => {
-          notificationsMap[n.branchId] = n;
-        });
-        setLastNotifications(notificationsMap);
-      }
     } catch (err) {
       console.error('Error loading branches with journals:', err);
       updateState({ error: 'Ошибка соединения с сервером', loading: false });
     }
-  }, [user, token, fetchWithAuth, updateState, logout]);
+  }, [user, token, fetchWithAuth, updateState, logout, loadResponsiblesBatch]);
 
-  // Загрузка информации о последних оповещениях (оставлена для совместимости, но теперь вызывается внутри loadBranchesWithJournals)
+  // ИСПРАВЛЕНО: Тихая перезагрузка данных без показа лоадера (для обновления ответственных)
+  const refreshBranchesSilently = useCallback(async () => {
+    try {
+      // Проверяем, что пользователь авторизован
+      if (!user || !token) {
+        return;
+      }
+      
+      // Загружаем филиалы без установки loading: true
+      const branchesResponse = await fetchWithAuth(`${API}/jurists/safety/me/branches_with_journals`, {
+        method: 'GET',
+      });
+
+      if (branchesResponse.ok) {
+        const data = await branchesResponse.json();
+        
+        if (!data.apiUnavailable) {
+          // Простая сортировка журналов по алфавиту на frontend
+          const sortedBranches = (data.branches || []).map((branch: any) => ({
+            ...branch,
+            journals: [...(branch.journals || [])].sort((a: any, b: any) => {
+              return a.journal_title.localeCompare(b.journal_title, 'ru');
+            })
+          }));
+          
+          // ИСПРАВЛЕНО: Обновляем только branches без установки loading
+          updateState({ 
+            branches: sortedBranches,
+            lastUpdate: Date.now() // Обновляем timestamp для отслеживания изменений
+          });
+          
+          // ИСПРАВЛЕНО: Обновляем кэш ответственных после обновления филиалов
+          const branchIds = sortedBranches.map((b: any) => b.branch_id).filter(Boolean);
+          if (branchIds.length > 0) {
+            loadResponsiblesBatch(branchIds);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error refreshing branches silently:', err);
+      // Не показываем ошибку пользователю при тихом обновлении
+    }
+  }, [user, token, fetchWithAuth, updateState, loadResponsiblesBatch]);
+
+  // Загрузка информации о последних оповещениях
+  // Вызывается при монтировании компонента и автоматически после отправки уведомлений
+  // через handleNotifyUnfilled/handleNotifyBranch
   const loadLastNotifications = useCallback(async () => {
     try {
       const response = await fetchWithAuth(`${API}/jurists/safety/last-notifications`);
+      // Проверяем, что response не null (может быть null при ошибке сети)
+      if (!response) {
+        console.warn('[SafetyJournal] loadLastNotifications: Server unavailable, skipping');
+        return;
+      }
       if (response.ok) {
         const data = await response.json();
         const notificationsMap: Record<string, any> = {};
@@ -588,8 +765,9 @@ export default function SafetyJournal() {
         });
         setLastNotifications(notificationsMap);
       }
-    } catch (error) {
-      console.error('Error loading last notifications:', error);
+    } catch (error: any) {
+      // Не показываем ошибку пользователю - это фоновое обновление
+      console.error('[SafetyJournal] Error loading last notifications:', error);
     }
   }, [fetchWithAuth]);
 
@@ -597,6 +775,7 @@ export default function SafetyJournal() {
   const handleNotifyUnfilled = useCallback(async () => {
     setNotifying(true);
     try {
+      console.log('[SafetyJournal] Sending notifications for all unfilled branches');
       const response = await fetchWithAuth(`${API}/jurists/safety/notify-unfilled`, {
         method: 'POST',
         headers: {
@@ -604,65 +783,177 @@ export default function SafetyJournal() {
         },
       });
 
+      // Проверяем, что response не null (может быть null при ошибке сети в useAuthFetch)
+      if (!response) {
+        notificationSystem.addNotification(
+          'Ошибка',
+          'Сервер недоступен. Проверьте подключение к сети и убедитесь, что сервер запущен.',
+          'error'
+        );
+        return;
+      }
+
+      console.log('[SafetyJournal] Notifications response status:', response.status);
+
       if (response.ok) {
         const data = await response.json();
+        console.log('[SafetyJournal] Notifications sent successfully:', data);
         notificationSystem.addNotification('Успех', data.message || 'Оповещения отправлены', 'success');
-        // Обновляем информацию о последних оповещениях
-        await loadLastNotifications();
-        // Обновляем данные филиалов
-        await loadBranchesWithJournals();
+        // ИСПРАВЛЕНО: Обновляем только информацию о последних оповещениях без полной перезагрузки данных
+        // Это предотвращает ненужные ререндеры всех компонентов
+        // Оборачиваем в try-catch, чтобы ошибка загрузки уведомлений не блокировала выполнение
+        try {
+          await loadLastNotifications();
+        } catch (notifError) {
+          console.error('[SafetyJournal] Error loading last notifications after sending:', notifError);
+          // Не показываем ошибку пользователю - основная операция выполнена успешно
+        }
+        // Не перезагружаем все данные филиалов - они не изменились после отправки уведомления
       } else {
-        const errorData = await response.json();
-        notificationSystem.addNotification('Ошибка', errorData.message || 'Не удалось отправить оповещения', 'error');
+        let errorMessage = 'Не удалось отправить оповещения';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+          console.error('[SafetyJournal] Notifications error:', errorData);
+        } catch (jsonError) {
+          // Если ответ не является JSON, используем статус
+          errorMessage = `Ошибка ${response.status}: ${response.statusText}`;
+          console.error('[SafetyJournal] Notifications error (non-JSON response):', {
+            status: response.status,
+            statusText: response.statusText
+          });
+        }
+        notificationSystem.addNotification('Ошибка', errorMessage, 'error');
       }
-    } catch (error) {
-      notificationSystem.addNotification('Ошибка', 'Ошибка соединения с сервером', 'error');
+    } catch (error: any) {
+      console.error('[SafetyJournal] Notifications request failed:', error);
+      // Проверяем тип ошибки для более информативного сообщения
+      const errorMessage = error?.message || 
+        (error?.name === 'TypeError' && error?.message?.includes('Failed to fetch')
+          ? 'Сервер недоступен. Проверьте подключение к сети и убедитесь, что сервер запущен.'
+          : 'Ошибка соединения с сервером');
+      
+      notificationSystem.addNotification('Ошибка', errorMessage, 'error');
     } finally {
       setNotifying(false);
     }
-  }, [fetchWithAuth, loadLastNotifications, loadBranchesWithJournals]);
+  }, [fetchWithAuth, loadLastNotifications]);
 
   // Оповещение одного филиала с не заполненными журналами
   const handleNotifyBranch = useCallback(async (branchId: string) => {
     try {
-      const response = await fetchWithAuth(`${API}/jurists/safety/notify-unfilled/${branchId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      console.log('[SafetyJournal] Sending notification for branch:', branchId);
+      
+      // Добавляем таймаут для предотвращения зависания запроса
+      // Используем более короткий таймаут (10 секунд) для быстрого отклика при недоступном сервере
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        console.warn('[SafetyJournal] Request timeout, aborting...');
+        controller.abort();
+      }, 10000); // 10 секунд таймаут
+      
+      let response: Response | null = null;
+      try {
+        response = await fetchWithAuth(`${API}/jurists/safety/notify-unfilled/${branchId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        if (fetchError?.name === 'AbortError') {
+          throw new Error('Превышено время ожидания ответа от сервера');
+        }
+        throw fetchError;
+      }
+
+      // Проверяем, что response не null (может быть null при ошибке сети в useAuthFetch)
+      if (!response) {
+        notificationSystem.addNotification(
+          'Ошибка',
+          'Сервер недоступен. Проверьте подключение к сети и убедитесь, что сервер запущен.',
+          'error'
+        );
+        return;
+      }
+
+      console.log('[SafetyJournal] Notification response status:', response.status);
 
       if (response.ok) {
         const data = await response.json();
+        console.log('[SafetyJournal] Notification sent successfully:', data);
         notificationSystem.addNotification('Успех', data.message || 'Оповещение отправлено', 'success');
-        // Обновляем информацию о последних оповещениях
-        await loadLastNotifications();
-        // Обновляем данные филиалов
-        await loadBranchesWithJournals();
+        // ИСПРАВЛЕНО: Обновляем только информацию о последних оповещениях без полной перезагрузки данных
+        // Это предотвращает ненужные ререндеры всех компонентов
+        // Оборачиваем в try-catch, чтобы ошибка загрузки уведомлений не блокировала выполнение
+        try {
+          await loadLastNotifications();
+        } catch (notifError) {
+          console.error('[SafetyJournal] Error loading last notifications after sending:', notifError);
+          // Не показываем ошибку пользователю - основная операция выполнена успешно
+        }
+        // Не перезагружаем все данные филиалов - они не изменились после отправки уведомления
       } else {
-        const errorData = await response.json();
-        notificationSystem.addNotification('Ошибка', errorData.message || 'Не удалось отправить оповещение', 'error');
+        let errorMessage = 'Не удалось отправить оповещение';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+          console.error('[SafetyJournal] Notification error:', errorData);
+        } catch (jsonError) {
+          // Если ответ не является JSON, используем статус
+          errorMessage = `Ошибка ${response.status}: ${response.statusText}`;
+          console.error('[SafetyJournal] Notification error (non-JSON response):', {
+            status: response.status,
+            statusText: response.statusText
+          });
+        }
+        notificationSystem.addNotification('Ошибка', errorMessage, 'error');
       }
-    } catch (error) {
-      notificationSystem.addNotification('Ошибка', 'Ошибка соединения с сервером', 'error');
+    } catch (error: any) {
+      console.error('[SafetyJournal] Notification request failed:', error);
+      // Проверяем тип ошибки для более информативного сообщения
+      const errorMessage = error?.message || 
+        (error?.name === 'TypeError' && error?.message?.includes('Failed to fetch')
+          ? 'Сервер недоступен. Проверьте подключение к сети и убедитесь, что сервер запущен.'
+          : 'Ошибка соединения с сервером');
+      
+      notificationSystem.addNotification('Ошибка', errorMessage, 'error');
     }
-  }, [fetchWithAuth, loadLastNotifications, loadBranchesWithJournals]);
+  }, [fetchWithAuth, loadLastNotifications]);
 
+  // ОПТИМИЗАЦИЯ: Ref для отслеживания, была ли выполнена начальная загрузка
+  const initialLoadDoneRef = useRef(false);
+  
   // Загружаем данные только при монтировании компонента
   useEffect(() => {
-    loadBranchesWithJournals();
-    loadLastNotifications();
-  }, []); // Убираем зависимости, чтобы избежать самопроизвольных перезагрузок
+    // ОПТИМИЗАЦИЯ: Загружаем только один раз при монтировании
+    if (initialLoadDoneRef.current) return;
+    
+    if (user && token) {
+      loadBranchesWithJournals();
+      loadLastNotifications();
+      initialLoadDoneRef.current = true;
+    }
+  }, [user, token, loadBranchesWithJournals, loadLastNotifications]);
 
+  // ОПТИМИЗАЦИЯ: Ref для отслеживания предыдущего состояния loading
+  const prevLoadingRef = useRef<boolean>(false);
+  
   // Предотвращаем сброс позиции скролла при загрузке
   useEffect(() => {
-    if (loading) {
+    // ОПТИМИЗАЦИЯ: Сохраняем позицию только при переходе loading: false -> true
+    if (loading && !prevLoadingRef.current) {
       // Сохраняем текущую позицию при начале загрузки
       const currentScrollPosition = window.pageYOffset || document.documentElement.scrollTop;
       if (currentScrollPosition > 0) {
         setScrollPosition(currentScrollPosition);
       }
     }
+    
+    prevLoadingRef.current = loading;
   }, [loading]);
 
 
@@ -784,7 +1075,7 @@ export default function SafetyJournal() {
       const uploadedFiles = await Promise.all(uploadPromises);
 
       // Обновляем локальное состояние - добавляем информацию о загруженных файлах и меняем статус
-      console.log('Updating local state with uploaded files:', uploadedFiles);
+      // Updating local state with uploaded files
       setState(prevState => {
         const newState = {
           ...prevState,
@@ -813,7 +1104,7 @@ export default function SafetyJournal() {
             )
           }))
         };
-        console.log('New state after file upload:', newState);
+        // New state after file upload
         return newState;
       });
       
@@ -841,7 +1132,7 @@ export default function SafetyJournal() {
         });
         
         if (statusResponse.ok) {
-          console.log('Status updated to under_review successfully');
+          // Status updated to under_review successfully
         } else {
           console.error('Failed to update status:', statusResponse.status);
         }
@@ -861,11 +1152,11 @@ export default function SafetyJournal() {
 
   // Функция для просмотра файлов журнала
   const handleViewFiles = useCallback(async (journal: SafetyJournal) => {
-    console.log('Opening files for journal:', journal.journal_title, journal.files);
+    // Opening files for journal
     setSelectedJournal(journal);
     
     if (!journal.filled_at) {
-      console.log('No filled_at date for journal');
+      // No filled_at date for journal
       notificationSystem.addNotification('Информация', 'Для этого журнала пока нет загруженных файлов', 'info');
       return;
     }
@@ -874,7 +1165,7 @@ export default function SafetyJournal() {
     if (journal.files && journal.files.length > 0) {
       // Фильтруем только неудаленные файлы
       const activeFiles = journal.files.filter(file => !file.is_deleted);
-      console.log('Active files:', activeFiles);
+      // Active files found
       
       if (activeFiles.length > 0) {
         // Подготавливаем файлы для FilePreviewModal
@@ -887,7 +1178,7 @@ export default function SafetyJournal() {
           source: `jurists/safety/files/${file.file_id}/view`
         }));
         
-        console.log('Setting journal files:', files);
+        // Setting journal files
         setJournalFiles(files);
         openFileView();
         return;
@@ -895,7 +1186,7 @@ export default function SafetyJournal() {
     }
     
     // Если файлов нет в данных журнала, показываем информационное сообщение
-    console.log('No files found in journal data');
+    // No files found in journal data
     notificationSystem.addNotification(
       'Информация', 
       'Для этого журнала пока нет загруженных файлов', 
@@ -1038,12 +1329,20 @@ export default function SafetyJournal() {
   const handleBranchFilterChange = useCallback((value: string | null) => {
     setBranchFilters(prev => ({
       ...prev,
-      branch: value || ''
+      branch: value ?? '' // Используем ?? вместо || для правильной обработки пустой строки
     }));
     setBranchPagination(prev => ({ ...prev, page: 1 })); // Сбрасываем на первую страницу
   }, []);
 
+  // ИСПРАВЛЕНО: Ref для хранения таймаута прокрутки
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
   const handleBranchPageChange = useCallback((page: number) => {
+    // Очищаем предыдущий таймаут, если он существует
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+    
     // Сохраняем текущую позицию скролла при смене страницы
     const currentScrollPosition = window.pageYOffset || document.documentElement.scrollTop;
     setScrollPosition(currentScrollPosition);
@@ -1051,7 +1350,7 @@ export default function SafetyJournal() {
     setBranchPagination(prev => ({ ...prev, page }));
     
     // Плавно прокручиваем к началу списка филиалов
-    setTimeout(() => {
+    scrollTimeoutRef.current = setTimeout(() => {
       const filtersElement = document.querySelector('[data-sticky-filters]');
       if (filtersElement) {
         filtersElement.scrollIntoView({ 
@@ -1059,6 +1358,7 @@ export default function SafetyJournal() {
           block: 'start' 
         });
       }
+      scrollTimeoutRef.current = null;
     }, 100);
   }, []);
 
@@ -1131,7 +1431,7 @@ export default function SafetyJournal() {
     // Сортировка журналов теперь происходит на backend
     
     return result;
-  }, [branches, activeTab, debouncedFilters, state.forceUpdate]);
+  }, [branches, activeTab, debouncedFilters]);
 
   // Пагинация филиалов
   const paginatedBranches = useMemo(() => {
@@ -1150,15 +1450,27 @@ export default function SafetyJournal() {
   }, [filteredBranches.length, branchPagination.pageSize]);
 
   // Функция для обновления данных с сохранением состояния текущей страницы
+  // ИСПРАВЛЕНО: Используем refs для paginatedBranches и expandedBranches, чтобы избежать зависимости
+  const paginatedBranchesRef = useRef<BranchWithJournals[]>([]);
+  const expandedBranchesRef = useRef<Set<string>>(new Set());
+  
+  useEffect(() => {
+    paginatedBranchesRef.current = paginatedBranches;
+  }, [paginatedBranches]);
+  
+  useEffect(() => {
+    expandedBranchesRef.current = expandedBranches;
+  }, [expandedBranches]);
+  
   const handleRefreshData = useCallback(async () => {
     // Сохраняем текущую позицию скролла
     const currentScrollPosition = window.pageYOffset || document.documentElement.scrollTop;
     setScrollPosition(currentScrollPosition);
     
-    // Сохраняем состояние только для филиалов на текущей странице
-    const currentPageBranches = paginatedBranches.map(branch => branch.branch_id);
+    // ИСПРАВЛЕНО: Используем refs вместо прямых зависимостей
+    const currentPageBranches = paginatedBranchesRef.current.map(branch => branch.branch_id);
     const currentPageExpanded = new Set(
-      Array.from(expandedBranches).filter(branchId => 
+      Array.from(expandedBranchesRef.current).filter(branchId => 
         currentPageBranches.includes(branchId)
       )
     );
@@ -1177,7 +1489,7 @@ export default function SafetyJournal() {
         behavior: 'instant'
       });
     });
-  }, [paginatedBranches, expandedBranches, loadBranchesWithJournals]);
+  }, [loadBranchesWithJournals, loadResponsiblesBatch]);
 
   // Устанавливаем заголовок страницы
   // ИСПРАВЛЕНО: Убраны лишние зависимости и мемоизирован icon, чтобы избежать ререндеров
@@ -1193,26 +1505,40 @@ export default function SafetyJournal() {
     return () => clearHeader();
   }, [setHeader, clearHeader, headerIcon]);
 
+  // ОПТИМИЗАЦИЯ: Ref для отслеживания предыдущей позиции скролла
+  const prevScrollPositionRef = useRef<number>(0);
+  const scrollRestoreTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
   // Восстанавливаем позицию скролла после обновления данных
   useEffect(() => {
+    // ОПТИМИЗАЦИЯ: Не восстанавливаем, если позиция не изменилась или идет загрузка
+    if (scrollPosition === prevScrollPositionRef.current || loading) {
+      return;
+    }
+    
     if (scrollPosition > 0 && !loading) {
+      // Очищаем предыдущий таймаут, если он есть
+      if (scrollRestoreTimeoutRef.current) {
+        clearTimeout(scrollRestoreTimeoutRef.current);
+      }
+      
       // Простая и надежная логика восстановления
       const restoreScroll = () => {
         window.scrollTo({
           top: scrollPosition,
           behavior: 'instant'
         });
+        prevScrollPositionRef.current = scrollPosition;
       };
 
-      // Пробуем восстановить позицию несколько раз с разными задержками
-      const timeouts = [
-        setTimeout(restoreScroll, 50),
-        setTimeout(restoreScroll, 150),
-        setTimeout(restoreScroll, 300)
-      ];
+      // ОПТИМИЗАЦИЯ: Используем один таймаут вместо трех
+      scrollRestoreTimeoutRef.current = setTimeout(restoreScroll, 100);
 
       return () => {
-        timeouts.forEach(clearTimeout);
+        if (scrollRestoreTimeoutRef.current) {
+          clearTimeout(scrollRestoreTimeoutRef.current);
+          scrollRestoreTimeoutRef.current = null;
+        }
       };
     }
   }, [scrollPosition, loading]);
@@ -1270,6 +1596,7 @@ export default function SafetyJournal() {
   }, [branches]);
   
   const stats = useMemo(() => {
+    // ИСПРАВЛЕНО: Убрали зависимость от state.forceUpdate - используем только данные из branches
     // Вычисляем простой хеш для отслеживания изменений без создания новых массивов
     // Используем цикл вместо map для оптимизации
     let hashParts: string[] = [];
@@ -1281,7 +1608,7 @@ export default function SafetyJournal() {
       }
       hashParts.push(`${b.branch_id}:${b.journals.length}:${journalStatuses.join(',')}`);
     }
-    const hash = `${hashParts.join('|')}:${state.forceUpdate}`;
+    const hash = hashParts.join('|');
     
     // Если хеш не изменился, возвращаем предыдущее значение
     if (prevStatsRef.current && prevStatsRef.current.hash === hash) {
@@ -1292,7 +1619,7 @@ export default function SafetyJournal() {
     const newStats = calculateStats();
     prevStatsRef.current = { hash, stats: newStats };
     return newStats;
-  }, [branches, state.forceUpdate, calculateStats]);
+  }, [branches, calculateStats]);
 
   if (loading) {
     return (
@@ -1380,7 +1707,7 @@ export default function SafetyJournal() {
             <Select
               placeholder="РРС"
               data={rrsOptions.sort((a, b) => a.label.localeCompare(b.label))}
-              value={branchFilters.rrs}
+              value={branchFilters.rrs || null}
               onChange={handleRrsFilterChange}
               searchable
               clearable
@@ -1390,7 +1717,7 @@ export default function SafetyJournal() {
             <Select
               placeholder="Филиал"
               data={branchOptions.sort((a, b) => a.label.localeCompare(b.label))}
-              value={branchFilters.branch}
+              value={branchFilters.branch || null}
               onChange={handleBranchFilterChange}
               searchable
               clearable
@@ -1484,7 +1811,7 @@ export default function SafetyJournal() {
                   onUploadFiles={handleUploadFiles}
                   onOpenChat={(branchId: string, branchName: string) => handleOpenChat(branchId, branchName)}
                   onNotifyBranch={handleNotifyBranch}
-                  forceUpdate={state.forceUpdate}
+                  onResponsibleChange={refreshBranchesSilently}
                   canManageStatuses={canManageStatuses}
                   expandedBranches={expandedBranches}
                   setExpandedBranches={setExpandedBranches}
@@ -1505,12 +1832,16 @@ export default function SafetyJournal() {
                     onUploadFiles={handleUploadFiles}
                     onOpenChat={(branchId: string, branchName: string) => handleOpenChat(branchId, branchName)}
                     onNotifyBranch={handleNotifyBranch}
-                    forceUpdate={state.forceUpdate}
+                    onResponsibleChange={refreshBranchesSilently}
                     canManageStatuses={canManageStatuses}
                     expandedBranches={expandedBranches}
                     setExpandedBranches={setExpandedBranches}
                     lastNotification={lastNotifications[branch.branch_id]}
                     viewMode={viewMode}
+                    responsibleData={responsiblesCache[branch.branch_id]}
+                    onResponsibleDataChange={(branchId, data) => {
+                      setResponsiblesCache(prev => ({ ...prev, [branchId]: data }));
+                    }}
                   />
                 </Grid.Col>
               ))}

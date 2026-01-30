@@ -26,7 +26,19 @@ const useAuthFetch = () => {
     }
     options.headers = headers
 
-    let response = await fetch(url, options)
+    let response: Response | null = null;
+    try {
+      response = await fetch(url, options)
+    } catch (networkError: any) {
+      // Обрабатываем ошибки сети (ERR_CONNECTION_REFUSED, ERR_NETWORK_CHANGED и т.д.)
+      console.error('[useAuthFetch] Network error:', networkError);
+      // Создаем объект Response с ошибкой для единообразной обработки
+      throw new Error(
+        networkError?.message?.includes('Failed to fetch') || networkError?.message?.includes('ERR_CONNECTION_REFUSED')
+          ? 'Сервер недоступен. Проверьте подключение к сети и убедитесь, что сервер запущен.'
+          : networkError?.message || 'Ошибка соединения с сервером'
+      );
+    }
 
     if (response.status === 401) {
       // Пытаемся обновить токен через контекст

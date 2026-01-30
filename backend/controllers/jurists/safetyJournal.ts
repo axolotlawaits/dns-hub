@@ -4,6 +4,7 @@ import FormData from 'form-data';
 import { prisma } from '../../server.js';
 import { decodeRussianFileName } from '../../utils/format.js';
 import { findUsersByResponsiblesBatch } from '../../utils/findUserByResponsible.js';
+import { withDbRetry, isP1001 } from '../../utils/dbRetry.js';
 
 const JOURNALS_API_URL = process.env.JOURNALS_API_URL
 
@@ -223,20 +224,51 @@ export const getBranchesWithJournals = async (req: Request, res: Response) => {
       branches: branchesWithJournals,
       hasFullAccess: hasFullAccess // Добавляем информацию о доступе
     });
-  } catch (error) {
-    console.error('[SafetyJournal] Error getting branches with journals:', error);
+  } catch (error: any) {
+    console.error('[SafetyJournal] Error getting branches with journals:', {
+      message: error.message,
+      code: error.code,
+      response: error.response ? {
+        status: error.response.status,
+        data: error.response.data
+      } : null
+    });
     
-    // Если внешний API недоступен, возвращаем пустой список с информацией об ошибке
-    if ((error as any).code === 'ECONNREFUSED' || (error as any).message?.includes('ECONNREFUSED')) {
-      res.json({ 
+    // Обработка различных типов ошибок подключения
+    const isConnectionError = 
+      error.code === 'ECONNREFUSED' || 
+      error.code === 'ETIMEDOUT' ||
+      error.code === 'ENOTFOUND' ||
+      error.code === 'ECONNRESET' ||
+      error.message?.includes('ECONNREFUSED') ||
+      error.message?.includes('ETIMEDOUT') ||
+      error.message?.includes('timeout') ||
+      (error.response?.status >= 500 && error.response?.status < 600);
+    
+    if (isConnectionError) {
+      return res.json({ 
         branches: [],
         hasFullAccess: false,
-        error: 'Внешний API недоступен. Данные не могут быть загружены.',
-        apiUnavailable: true
+        error: 'Внешний API недоступен или не отвечает. Попробуйте позже.',
+        apiUnavailable: true,
+        errorCode: error.code || 'CONNECTION_ERROR'
       });
-    } else {
-      res.status(500).json({ message: 'Ошибка получения филиалов с журналами' });
     }
+    
+    // Ошибки авторизации
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      return res.status(error.response.status).json({ 
+        message: 'Ошибка авторизации при обращении к внешнему API',
+        error: error.response.data
+      });
+    }
+    
+    // Другие ошибки
+    res.status(500).json({ 
+      message: 'Ошибка получения филиалов с журналами',
+      error: error.message,
+      errorCode: error.code
+    });
   }
 };
 
@@ -426,7 +458,7 @@ export const uploadFile = async (req: Request, res: Response) => {
         ...formData.getHeaders(),
         'Authorization': `Bearer ${token.substring(0, 20)}...` // Скрываем полный токен
       },
-      timeout: 30000,
+      timeout: 90000, // 90 секунд таймаут для больших файлов
       maxContentLength: 50 * 1024 * 1024,
       maxBodyLength: 50 * 1024 * 1024
     });
@@ -436,7 +468,7 @@ export const uploadFile = async (req: Request, res: Response) => {
         ...formData.getHeaders(),
         'Authorization': `Bearer ${token}`
       },
-      timeout: 30000, // 30 секунд таймаут
+      timeout: 90000, // 90 секунд таймаут для больших файлов // 30 секунд таймаут
       maxContentLength: 50 * 1024 * 1024, // 50MB
       maxBodyLength: 50 * 1024 * 1024 // 50MB
     });
@@ -498,7 +530,8 @@ export const getFileMetadata = async (req: Request, res: Response) => {
     }
 
     const response = await axios.get(`${JOURNALS_API_URL}/files/${fileId}`, {
-      headers: createAuthHeaders(token)
+      headers: createAuthHeaders(token),
+      timeout: 10000 // 10 секунд таймаут
     });
 
     res.json(response.data);
@@ -563,7 +596,8 @@ export const testExternalApi = async (req: Request, res: Response) => {
     
     // Получаем данные от внешнего API
     const branchesResponse = await axios.get(`${JOURNALS_API_URL}/me/branches_with_journals`, {
-      headers: createAuthHeaders(token)
+      headers: createAuthHeaders(token),
+      timeout: 10000 // 10 секунд таймаут
     });
     
     // Возвращаем первые несколько журналов для анализа
@@ -642,23 +676,14 @@ export const viewFile = async (req: Request, res: Response) => {
     
     const fileUrl = `${JOURNALS_API_URL}/files/${fileId}/view`;
     
-    // Сначала проверим, доступен ли файл (без stream)
-    try {
-      const testResponse = await axios.get(fileUrl, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-    } catch (testError: any) {
-      throw testError;
-    }
-    
-    // Если тест прошел, получаем файл как stream
+    // ИСПРАВЛЕНО: Убран лишний тестовый запрос - сразу получаем файл как stream
+    // Это ускоряет загрузку файлов в 2 раза
     const response = await axios.get(fileUrl, {
       headers: {
         'Authorization': `Bearer ${token}`
       },
-      responseType: 'stream'
+      responseType: 'stream',
+      timeout: 90000 // 90 секунд таймаут для больших файлов и медленных соединений
     });
     
     // Устанавливаем заголовки для просмотра файла
@@ -1132,70 +1157,106 @@ export const makeBranchJournalDecision = async (req: Request, res: Response) => 
                   
                   // Отправляем push-уведомления только тем, кто отвечает за соответствующий тип журнала
                   const { NotificationController } = await import('../app/notification.js');
-                  let notificationCount = 0;
-                  for (const resp of responsibles) {
-                    // Фильтруем по типу ответственности только для уведомлений
-                    if (resp.employee_id && resp.responsibility_type === journalType) {
-                      const responsibleUser = await prisma.user.findUnique({
-                        where: { id: resp.employee_id },
-                        select: { id: true }
+                  
+                  // ОПТИМИЗАЦИЯ: Получаем все данные заранее, вне цикла
+                  const [sender, localBranch] = await Promise.all([
+                    prisma.user.findUnique({
+                      where: { id: userId },
+                      select: { name: true }
+                    }),
+                    prisma.branch.findUnique({
+                      where: { uuid: branchId },
+                      select: { name: true }
+                    }).catch(() => null)
+                  ]);
+                  
+                  const senderName = sender?.name || 'Пользователь';
+                  const branchName = branchData.branch_name || localBranch?.name || 'филиал';
+                  const notificationBranchName = branchName && branchName !== 'филиала' ? branchName : 'филиал';
+                  
+                  // Фильтруем ответственных по типу журнала
+                  const filteredResponsibles = responsibles.filter(
+                    (resp: any) => resp.employee_id && resp.responsibility_type === journalType
+                  );
+                  
+                  // Получаем всех пользователей одним батч-запросом
+                  const responsibleUserIds = filteredResponsibles
+                    .map((r: any) => r.employee_id)
+                    .filter((id: any): id is string => !!id && id !== userId && id !== checkerId);
+                  
+                  const responsibleUsers = responsibleUserIds.length > 0
+                    ? await prisma.user.findMany({
+                        where: { id: { in: responsibleUserIds } },
+                        select: { id: true, name: true, email: true }
+                      })
+                    : [];
+                  
+                  const responsibleUsersSet = new Set(responsibleUsers.map((u: any) => u.id));
+                  const responsibleUsersMap = new Map(responsibleUsers.map((u: any) => [u.id, u]));
+                  
+                  // КРИТИЧНО: Логируем email адреса тех, кому отправляются уведомления
+                  const recipientsEmails = filteredResponsibles
+                    .filter((resp: any) => resp.employee_id && responsibleUsersSet.has(resp.employee_id))
+                    .map((resp: any) => {
+                      const user = responsibleUsersMap.get(resp.employee_id!);
+                      return {
+                        userId: user?.id,
+                        name: user?.name,
+                        email: user?.email || 'нет email',
+                        responsibilityType: resp.responsibility_type
+                      };
+                    });
+                  
+                  console.log('[SafetyJournal] makeBranchJournalDecision - sending notifications to responsibles:', {
+                    branchId: branchId,
+                    journalType: journalType,
+                    recipients: recipientsEmails,
+                    recipientsCount: recipientsEmails.length
+                  });
+                  
+                  // ОПТИМИЗАЦИЯ: Отправляем уведомления асинхронно, не блокируя ответ
+                  const notificationPromises = filteredResponsibles
+                    .filter((resp: any) => resp.employee_id && responsibleUsersSet.has(resp.employee_id))
+                    .map((resp: any) => {
+                      const receiverId = resp.employee_id!;
+                      
+                      // Отправляем асинхронно, не ждем завершения
+                      return NotificationController.create({
+                        type: 'INFO',
+                        channels: ['IN_APP', 'TELEGRAM', 'EMAIL'],
+                        title: senderName,
+                        message: messageText.substring(0, 100),
+                        senderId: userId,
+                        receiverId: receiverId,
+                        priority: 'MEDIUM',
+                        ignoreEmailSettings: true, // Игнорируем настройку отключения почты для safety journal
+                        action: {
+                          type: 'NAVIGATE',
+                          url: `/jurists/safety?branchId=${branchId}`,
+                          branchName: notificationBranchName,
+                        },
+                      }).catch((error) => {
+                        console.error(`[SafetyJournal] Error creating notification for ${receiverId}:`, error);
+                        return null;
                       });
-
-                      if (responsibleUser && responsibleUser.id !== userId && responsibleUser.id !== checkerId) {
-                        // Получаем ФИО отправителя
-                        const sender = await prisma.user.findUnique({
-                          where: { id: userId },
-                          select: { name: true }
-                        });
-                        const senderName = sender?.name || 'Пользователь';
-                        
-                        // Получаем название филиала
-                        let branchName = 'филиал';
-                        try {
-                          const localBranch = await prisma.branch.findUnique({
-                            where: { uuid: branchId },
-                            select: { name: true }
-                          });
-                          if (localBranch?.name) {
-                            branchName = localBranch.name;
-                          }
-                        } catch (error) {
-                          // Игнорируем ошибку
-                        }
-                        
-                        // Обновляем branchName из API, если он есть
-                        if (branchData.branch_name) {
-                          branchName = branchData.branch_name;
-                        }
-                        
-                        const notificationBranchName = branchName && branchName !== 'филиала' ? branchName : 'филиал';
-                        
-                        // Проверяем, находится ли пользователь в любом активном чате
-                        // Если пользователь в модалке чата (любого), не отправляем уведомление
-                        const isInAnyActiveChat = socketService.isUserInAnyActiveChat(responsibleUser.id);
-                        
-                        // Отправляем уведомление только если пользователь не в активном чате (любом)
-                        if (!isInAnyActiveChat) {
-                          await NotificationController.create({
-                            type: 'INFO',
-                            channels: ['IN_APP', 'TELEGRAM', 'EMAIL'],
-                            title: senderName,
-                            message: messageText.substring(0, 100),
-                            senderId: userId,
-                            receiverId: responsibleUser.id,
-                            priority: 'MEDIUM',
-                            action: {
-                              type: 'NAVIGATE',
-                              url: `/jurists/safety?branchId=${branchId}`,
-                              branchName: notificationBranchName,
-                            },
-                          });
-                          notificationCount++;
-                        }
-                      }
-                    }
-                  }
-                  console.log('[SafetyJournal] Sent notifications to filtered responsibles:', { notificationCount, journalType, branchId });
+                    });
+                  
+                  // Не ждем завершения отправки уведомлений - они отправятся асинхронно
+                  Promise.all(notificationPromises).then(() => {
+                    console.log('[SafetyJournal] All notifications sent to filtered responsibles:', {
+                      count: notificationPromises.length,
+                      journalType,
+                      branchId
+                    });
+                  }).catch((error) => {
+                    console.error('[SafetyJournal] Error sending some notifications:', error);
+                  });
+                  
+                  console.log('[SafetyJournal] Queued notifications for filtered responsibles:', {
+                    count: notificationPromises.length,
+                    journalType,
+                    branchId
+                  });
                   break; // Нашли нужный филиал, выходим из цикла
                 }
               }
@@ -1270,7 +1331,7 @@ export const proxyFile = async (req: Request, res: Response) => {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       },
       responseType: 'stream',
-      timeout: 30000
+      timeout: 90000 // 90 секунд таймаут для больших файлов
     });
 
     // Устанавливаем заголовки для просмотра файла
@@ -1317,20 +1378,150 @@ export const proxyFile = async (req: Request, res: Response) => {
 
 /* temporary functions before https on JOURNAL_API */
 
+// Получение журналов филиала (прокси для внешнего API)
+export const getBranchJournals = async (req: Request, res: Response) => {
+  try {
+    const { branchId } = req.query;
+    
+    if (!branchId || typeof branchId !== 'string') {
+      return res.status(400).json({ message: 'branchId обязателен' });
+    }
+    
+    if (!JOURNALS_API_URL) {
+      return res.status(500).json({ message: 'Внешний API не настроен' });
+    }
+
+    const token = getAuthToken(req);
+    if (!token) {
+      return res.status(401).json({ message: 'Токен авторизации не найден' });
+    }
+
+    // ИСПРАВЛЕНО: Убрали /v1 из пути, так как JOURNALS_API_URL уже содержит /api/v1
+    const response = await axios.get(`${JOURNALS_API_URL}/branch_journals/?branchId=${branchId}`, {
+      headers: createAuthHeaders(token),
+      timeout: 20000 // 20 секунд — внешний API может отвечать медленно
+    });
+    
+    // ИСПРАВЛЕНО: Правильная обработка ответа - внешний API возвращает массив журналов
+    const journals = Array.isArray(response.data) ? response.data : (response.data?.data || []);
+    
+    console.log('[SafetyJournal] Branch journals loaded:', journals.length, 'for branchId:', branchId);
+    
+    res.json(journals);
+  } catch (error: any) {
+    console.error('[SafetyJournal] Error getting branch journals:', {
+      message: error.message,
+      code: error.code,
+      branchId: req.query.branchId
+    });
+    
+    // Обработка ошибок подключения и таймаута (ECONNABORTED = axios timeout)
+    const isConnectionError = 
+      error.code === 'ECONNREFUSED' || 
+      error.code === 'ETIMEDOUT' ||
+      error.code === 'ECONNABORTED' ||
+      error.code === 'ENOTFOUND' ||
+      error.code === 'ECONNRESET' ||
+      error.message?.includes('timeout');
+    
+    if (isConnectionError) {
+      console.warn('[SafetyJournal] Branch journals unavailable (timeout/connection), returning empty array for branchId:', req.query.branchId);
+      // 200 + [] — филиал загружается, журналы пустые (не блокируем UI)
+      return res.json([]);
+    }
+    
+    // Ошибки валидации (400) - возвращаем пустой массив, чтобы не блокировать работу чата
+    if (error.response?.status === 400) {
+      console.warn('[SafetyJournal] Branch journals API returned 400, returning empty array');
+      return res.json([]);
+    }
+    
+    if (error.response) {
+      res.status(error.response.status).json(error.response.data);
+    } else {
+      // При других ошибках возвращаем пустой массив, чтобы не блокировать работу чата
+      res.json([]);
+    }
+  }
+};
+
+// КРИТИЧНО: Кэш для ответственных по филиалам (TTL: 2 минуты)
+const responsibleCacheForEndpoint = new Map<string, { data: any; timestamp: number }>();
+const RESPONSIBLE_CACHE_TTL = 2 * 60 * 1000; // 2 минуты
+
+// КРИТИЧНО: Сбрасываем кэш ответственных при изменениях (POST/DELETE)
+export const clearResponsibleCacheForBranch = (branchId: string) => {
+  if (!branchId) return;
+  responsibleCacheForEndpoint.delete(`responsible_${branchId}`);
+};
+
 export const getResponsible = async (req: Request, res: Response) => {
   try {
     const { branchId } = req.query
+    
+    if (!branchId || typeof branchId !== 'string') {
+      return res.status(400).json({ message: 'branchId обязателен' });
+    }
+    
+    if (!JOURNALS_API_URL) {
+      return res.status(500).json({ message: 'Внешний API не настроен' });
+    }
 
-    const response = await axios.get(`${JOURNALS_API_URL}/branch_responsibles/?branchId=${branchId}`, {
-      headers: createAuthHeaders(getAuthToken(req))
-    });
+    // КРИТИЧНО: Проверяем кэш перед запросом к внешнему API
+    const cacheKey = `responsible_${branchId}`;
+    const cached = responsibleCacheForEndpoint.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < RESPONSIBLE_CACHE_TTL) {
+      return res.json(cached.data);
+    }
 
-    res.json(response.data);
+    // КРИТИЧНО: Используем короткий таймаут и Promise.race для быстрого ответа
+    // ВАЖНО: НЕ кэшируем fallback-пустой ответ, иначе после назначения ответственного
+    // пользователь будет 2 минуты видеть пустой/старый список.
+    const authToken = getAuthToken(req);
+    const response = await Promise.race([
+      axios.get(`${JOURNALS_API_URL}/branch_responsibles/?branchId=${branchId}`, {
+        headers: createAuthHeaders(authToken),
+        timeout: 3000 // 3 секунды таймаут
+      }),
+      new Promise((resolve) => setTimeout(() => resolve({ __fallback: true, data: [] }), 3000))
+    ]) as any;
+
+    // Сохраняем в кэш только реальный ответ API (не fallback)
+    if (response?.data && !response?.__fallback) {
+      responsibleCacheForEndpoint.set(cacheKey, { data: response.data, timestamp: Date.now() });
+      
+      // Очищаем старые записи из кэша периодически
+      if (responsibleCacheForEndpoint.size > 200) {
+        const now = Date.now();
+        for (const [key, value] of responsibleCacheForEndpoint.entries()) {
+          if (now - value.timestamp > RESPONSIBLE_CACHE_TTL) {
+            responsibleCacheForEndpoint.delete(key);
+          }
+        }
+      }
+    }
+
+    res.json(response.data || []);
   } catch (error: any) {
-    console.error('[SafetyJournal] Error getting responsible:', error);
+    console.error('[SafetyJournal] Error getting responsible:', {
+      message: error.message,
+      code: error.code,
+      status: error.response?.status,
+      branchId: req.query.branchId
+    });
+    
+    // КРИТИЧНО: При любых ошибках возвращаем пустой массив, чтобы не блокировать UI
+    if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT' || error.code === 'ENOTFOUND' || error.code === 'ECONNRESET') {
+      return res.json([]); // Возвращаем пустой массив вместо 503
+    }
+    
     if (error.response) {
-      res.status(error.response.status).json(error.response.data);
-    } 
+      // При ошибках от внешнего API возвращаем пустой массив
+      return res.json([]);
+    } else {
+      // При любых других ошибках тоже возвращаем пустой массив
+      return res.json([]);
+    }
   }
 };
 
@@ -1338,23 +1529,102 @@ export const addResponsible = async (req: Request, res: Response) => {
   try {
     const { branchId, employeeId, responsibilityType } = req.body
 
-    const response = await fetch(`${JOURNALS_API_URL}/branch_responsibles`, {
-      method: 'POST',
-      headers: createAuthHeaders(getAuthToken(req)),
-      body: JSON.stringify({
-        branchId,
-        employeeId,
-        responsibilityType 
-      }),
-    });
-    const json = await response.json()
-    res.status(response.status).json(json)
+    // ИСПРАВЛЕНО: Валидация входных данных
+    if (!branchId || !employeeId || !responsibilityType) {
+      return res.status(400).json({ 
+        message: 'Не все обязательные поля заполнены',
+        details: { branchId: !!branchId, employeeId: !!employeeId, responsibilityType: !!responsibilityType }
+      });
+    }
+
+    if (responsibilityType !== 'ОТ' && responsibilityType !== 'ПБ') {
+      return res.status(400).json({ 
+        message: 'responsibilityType должен быть "ОТ" или "ПБ"',
+        received: responsibilityType
+      });
+    }
+
+    if (!JOURNALS_API_URL) {
+      return res.status(500).json({ message: 'Внешний API не настроен' });
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 секунд таймаут
+
+    try {
+      const response = await fetch(`${JOURNALS_API_URL}/branch_responsibles`, {
+        method: 'POST',
+        headers: createAuthHeaders(getAuthToken(req)),
+        body: JSON.stringify({
+          branchId,
+          employeeId,
+          responsibilityType 
+        }),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      // ИСПРАВЛЕНО: Обрабатываем ответ от внешнего API
+      let json;
+      try {
+        const text = await response.text();
+        json = text ? JSON.parse(text) : {};
+      } catch (parseError) {
+        console.error('[SafetyJournal] Error parsing response:', parseError);
+        json = { message: 'Ошибка парсинга ответа от внешнего API' };
+      }
+      
+      // КРИТИЧНО: Сбрасываем кэш списка ответственных (даже при 409/422),
+      // т.к. запись уже существует и нужно обновить список.
+      if (branchId && (response.ok || response.status === 409 || response.status === 422)) {
+        clearResponsibleCacheForBranch(branchId);
+      }
+      
+      // ИСПРАВЛЕНО: Обработка ошибки дубликата
+      if (response.status === 409 || response.status === 422) {
+        const errorMessage = json.message || json.detail || 'Ответственный уже назначен на этот филиал';
+        return res.status(response.status).json({
+          message: errorMessage,
+          code: 'DUPLICATE',
+          details: json
+        });
+      }
+      
+      res.status(response.status).json(json);
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      throw fetchError;
+    }
 
   } catch (error: any) {
-    console.error('[SafetyJournal] Error adding responsible:', error);
-    if (error.response) {
-      res.status(error.response.status).json(error.response.data);
-    } 
+    console.error('[SafetyJournal] Error adding responsible:', {
+      message: error.message,
+      code: error.code,
+      name: error.name
+    });
+    
+    // Обработка ошибок подключения и таймаутов
+    if (error.name === 'AbortError' || error.message === 'TIMEOUT' || error.code === 'ETIMEDOUT' || error.message?.includes('timeout')) {
+      return res.status(503).json({ 
+        message: 'Превышено время ожидания ответа от внешнего API',
+        errorCode: 'TIMEOUT'
+      });
+    }
+    
+    if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND' || error.code === 'ECONNRESET') {
+      return res.status(503).json({ 
+        message: 'Внешний API недоступен',
+        errorCode: error.code || 'CONNECTION_ERROR'
+      });
+    }
+    
+    // Общая ошибка
+    res.status(500).json({ 
+      message: 'Ошибка добавления ответственного',
+      error: error.message,
+      errorCode: error.code || 'UNKNOWN_ERROR'
+    });
   }
 };
 
@@ -1362,22 +1632,69 @@ export const deleteResponsible = async (req: Request, res: Response) => {
   try {
     const { branchId, employeeId, responsibilityType } = req.body
 
-    const response = await fetch(`${JOURNALS_API_URL}/branch_responsibles`, {
-      method: 'DELETE',
-      headers: createAuthHeaders(getAuthToken(req)),
-      body: JSON.stringify({
-        branchId,
-        employeeId,
-        responsibilityType 
-      }),
-    });
-    const json = await response.json()
-    res.status(response.status).json(json)
+    if (!JOURNALS_API_URL) {
+      return res.status(500).json({ message: 'Внешний API не настроен' });
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 секунд таймаут
+
+    try {
+      const response = await fetch(`${JOURNALS_API_URL}/branch_responsibles`, {
+        method: 'DELETE',
+        headers: createAuthHeaders(getAuthToken(req)),
+        body: JSON.stringify({
+          branchId,
+          employeeId,
+          responsibilityType 
+        }),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      const json = await response.json()
+      
+      // Очищаем кэш ответственных для этого филиала
+      if (response.ok && branchId) {
+        clearResponsibleCacheForBranch(branchId);
+      }
+      
+      res.status(response.status).json(json);
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      throw fetchError;
+    }
   } catch (error: any) {
-    console.error('[SafetyJournal] Error adding responsible:', error);
+    console.error('[SafetyJournal] Error deleting responsible:', {
+      message: error.message,
+      code: error.code,
+      name: error.name
+    });
+    
+    // Обработка ошибок подключения
+    if (error.name === 'AbortError' || error.code === 'ETIMEDOUT' || error.message?.includes('timeout')) {
+      return res.status(503).json({ 
+        message: 'Превышено время ожидания ответа от внешнего API',
+        errorCode: 'TIMEOUT'
+      });
+    }
+    
+    if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND' || error.code === 'ECONNRESET') {
+      return res.status(503).json({ 
+        message: 'Внешний API недоступен',
+        errorCode: error.code || 'CONNECTION_ERROR'
+      });
+    }
+    
     if (error.response) {
       res.status(error.response.status).json(error.response.data);
-    } 
+    } else {
+      res.status(500).json({ 
+        message: 'Ошибка удаления ответственного',
+        error: error.message,
+        errorCode: error.code
+      });
+    }
   }
 };
 
@@ -1392,9 +1709,43 @@ export const notifyBranchesWithUnfilledJournals = async (req: Request, res: Resp
     }
 
     // Получаем филиалы с журналами
-    const branchesResponse = await axios.get(`${JOURNALS_API_URL}/me/branches_with_journals`, {
-      headers: createAuthHeaders(token)
-    });
+    // ИСПРАВЛЕНО: Добавляем таймаут для предотвращения зависания запроса
+    const branchesStartTime = Date.now();
+    let branchesResponse;
+    try {
+      console.log('[SafetyJournal] Fetching branches from external API (all branches)...');
+      branchesResponse = await axios.get(`${JOURNALS_API_URL}/me/branches_with_journals`, {
+        headers: createAuthHeaders(token),
+        timeout: 10000 // 10 секунд таймаут
+      });
+      console.log('[SafetyJournal] Branches fetched successfully:', {
+        duration: `${Date.now() - branchesStartTime}ms`,
+        branchesCount: branchesResponse.data?.branches?.length || 0
+      });
+    } catch (error: any) {
+      console.error('[SafetyJournal] Error fetching branches:', {
+        duration: `${Date.now() - branchesStartTime}ms`,
+        error: error?.message,
+        code: error?.code,
+        status: error?.response?.status
+      });
+      
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        return res.status(503).json({ 
+          message: 'Превышено время ожидания ответа от внешнего API при получении филиалов',
+          errorCode: 'TIMEOUT'
+        });
+      }
+      
+      if (error.response?.status === 500) {
+        return res.status(503).json({ 
+          message: 'Внешний API вернул ошибку 500 при получении филиалов',
+          errorCode: 'EXTERNAL_API_ERROR'
+        });
+      }
+      
+      throw error;
+    }
 
     const branches = branchesResponse.data.branches || [];
     
@@ -1421,10 +1772,46 @@ export const notifyBranchesWithUnfilledJournals = async (req: Request, res: Resp
     for (const branch of branchesWithUnfilledJournals) {
       try {
         // Получаем ответственных по филиалу
-        const responsiblesResponse = await axios.get(
-          `${JOURNALS_API_URL}/branch_responsibles/?branchId=${branch.branch_id}`,
-          { headers: createAuthHeaders(token) }
-        );
+        // ИСПРАВЛЕНО: Добавляем таймаут и обработку ошибок для предотвращения зависания
+        const responsiblesStartTime = Date.now();
+        let responsiblesResponse;
+        try {
+          console.log('[SafetyJournal] Fetching responsibles for branch:', branch.branch_id);
+          responsiblesResponse = await axios.get(
+            `${JOURNALS_API_URL}/branch_responsibles/?branchId=${branch.branch_id}`,
+            { 
+              headers: createAuthHeaders(token),
+              timeout: 10000 // 10 секунд таймаут
+            }
+          );
+          console.log('[SafetyJournal] Responsibles fetched successfully:', {
+            duration: `${Date.now() - responsiblesStartTime}ms`,
+            branchId: branch.branch_id,
+            responsiblesCount: responsiblesResponse.data?.length || 0
+          });
+        } catch (error: any) {
+          console.error(`[SafetyJournal] Error fetching responsibles for branch ${branch.branch_id}:`, {
+            duration: `${Date.now() - responsiblesStartTime}ms`,
+            error: error?.message,
+            code: error?.code,
+            status: error?.response?.status
+          });
+          
+          // Пропускаем этот филиал и продолжаем с другими
+          if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+            console.warn(`[SafetyJournal] Timeout fetching responsibles for branch ${branch.branch_id}, skipping`);
+            continue;
+          }
+          
+          if (error.response?.status === 500) {
+            console.warn(`[SafetyJournal] External API error 500 for branch ${branch.branch_id}, skipping`);
+            continue;
+          }
+          
+          // Для других ошибок тоже пропускаем филиал, чтобы не блокировать обработку остальных
+          console.warn(`[SafetyJournal] Error fetching responsibles for branch ${branch.branch_id}, skipping:`, error?.message);
+          continue;
+        }
 
         // Структура ответа: массив объектов [{ branch_id, branch_name, responsibles: [...] }]
         let responsibles: any[] = [];
@@ -1444,66 +1831,185 @@ export const notifyBranchesWithUnfilledJournals = async (req: Request, res: Resp
 
         const journalTitles = unfilledJournals.map((j: any) => `${j.journal_title} (${j.journal_type})`).join(', ');
 
-        // Отправляем уведомления каждому ответственному
+        // КРИТИЧНО: Определяем типы журналов, которые требуют заполнения (ОТ или ПБ)
+        const requiredResponsibilityTypes = new Set<string>();
+        unfilledJournals.forEach((journal: any) => {
+          if (journal.journal_type === 'ОТ' || journal.journal_type === 'ПБ') {
+            requiredResponsibilityTypes.add(journal.journal_type);
+          }
+        });
+
+        // КРИТИЧНО: Фильтруем ответственных по типу ответственности (ОТ и ПБ)
+        // и дедуплицируем - если один человек отвечает и за ОТ, и за ПБ, отправляем уведомление только один раз
+        const uniqueResponsibles = new Map<string, any>();
         for (const resp of responsibles) {
-          if (resp.employee_id) {
-            // employee_id из внешнего API должен совпадать с user.id в локальной БД
-            const responsibleUser = await prisma.user.findUnique({
-              where: { id: resp.employee_id },
-              select: { id: true, name: true }
-            });
-
-            if (responsibleUser) {
-              // Получаем ФИО отправителя
-              const sender = await prisma.user.findUnique({
-                where: { id: userId },
-                select: { name: true }
-              });
-              const senderName = sender?.name || 'Пользователь';
-              
-              const notificationBranchName = branch.branch_name && branch.branch_name !== 'филиала' ? branch.branch_name : 'филиал';
-              
-              // Проверяем, находится ли пользователь в любом активном чате
-              // Если пользователь в модалке чата (любого), не отправляем уведомление
-              const isInAnyActiveChat = socketService.isUserInAnyActiveChat(responsibleUser.id);
-              
-              // Отправляем уведомление только если пользователь не в активном чате (любом)
-              if (!isInAnyActiveChat) {
-                // Создаем уведомление
-                await NotificationController.create({
-                  type: 'WARNING',
-                  channels: ['IN_APP', 'TELEGRAM', 'EMAIL'],
-                  title: senderName,
-                  message: `Филиал "${branch.branch_name}" имеет не заполненные журналы: ${journalTitles}`,
-                  senderId: userId,
-                  receiverId: responsibleUser.id,
-                  priority: 'MEDIUM',
-                  action: {
-                    type: 'NAVIGATE',
-                    url: `/jurists/safety?branchId=${branch.branch_id}`,
-                    branchName: notificationBranchName,
-                  },
-                });
+          // Проверяем, что ответственный отвечает за нужный тип журнала (ОТ или ПБ)
+          if (resp.employee_id && 
+              resp.responsibility_type && 
+              requiredResponsibilityTypes.has(resp.responsibility_type)) {
+            // Если ответственный уже есть в мапе, проверяем, нужно ли добавить еще один тип ответственности
+            if (!uniqueResponsibles.has(resp.employee_id)) {
+              uniqueResponsibles.set(resp.employee_id, resp);
+            } else {
+              // Если у ответственного уже есть один тип, но он отвечает и за другой нужный тип - обновляем
+              const existing = uniqueResponsibles.get(resp.employee_id);
+              if (!existing.responsibility_types) {
+                existing.responsibility_types = [existing.responsibility_type];
               }
-
-              // Отправляем через Socket.IO
-              socketService.sendToUser(responsibleUser.id, {
-                type: 'WARNING',
-                title: 'Требуется заполнение журналов',
-                message: `Филиал "${branch.branch_name}" имеет не заполненные журналы: ${journalTitles}`,
-                createdAt: new Date().toISOString(),
-                action: {
-                  type: 'NAVIGATE',
-                  url: `/jurists/safety?branchId=${branch.branch_id}`,
-                },
-              });
+              if (!existing.responsibility_types.includes(resp.responsibility_type)) {
+                existing.responsibility_types.push(resp.responsibility_type);
+              }
             }
           }
         }
+        
+        console.log('[SafetyJournal] notifyBranchesWithUnfilledJournals - filtered responsibles for branch:', {
+          branchId: branch.branch_id,
+          total: responsibles.length,
+          filtered: uniqueResponsibles.size,
+          responsibilityTypes: Array.from(requiredResponsibilityTypes)
+        });
 
-        // Сохраняем информацию о последнем оповещении
-        // Используем простой JSON в UserSettings или создаем отдельную таблицу
-        // Для простоты используем JSON в UserSettings с ключом `safety_journal_notifications`
+        // ОПТИМИЗАЦИЯ: Получаем все данные заранее, вне цикла
+        const sender = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { name: true }
+        });
+        
+        const senderName = sender?.name || 'Пользователь';
+        const notificationBranchName = branch.branch_name && branch.branch_name !== 'филиала' ? branch.branch_name : 'филиал';
+        
+        // КРИТИЧНО: Используем findUsersByResponsiblesBatch для поиска пользователей по employee_id, email и name
+        const responsiblesArray = Array.from(uniqueResponsibles.values());
+        console.log('[SafetyJournal] notifyBranchesWithUnfilledJournals - looking for users in DB:', {
+          branchId: branch.branch_id,
+          employeeIds: responsiblesArray.map(r => ({
+            employee_id: r.employee_id,
+            employee_email: r.employee_email,
+            employee_name: r.employee_name,
+            responsibility_type: r.responsibility_type
+          }))
+        });
+        
+        const userCache = new Map();
+        const responsibleUsersMap = await findUsersByResponsiblesBatch(
+          prisma,
+          responsiblesArray,
+          {
+            select: { id: true, name: true, email: true },
+            cache: userCache
+          }
+        );
+        
+        console.log('[SafetyJournal] notifyBranchesWithUnfilledJournals - found users via UserData:', {
+          branchId: branch.branch_id,
+          searchedResponsibles: responsiblesArray.length,
+          foundUsers: Array.from(responsibleUsersMap.values())
+            .filter((u): u is { id: string; name?: string; email?: string } => u !== null)
+            .map(u => ({ id: u.id, name: u.name, email: u.email })),
+          foundCount: responsibleUsersMap.size
+        });
+        
+        // КРИТИЧНО: Логируем email адреса тех, кому отправляются уведомления
+        const recipientsEmails: any[] = [];
+        const notFoundResponsibles: any[] = [];
+        
+        for (const resp of responsiblesArray) {
+          const key = resp.employee_id || resp.employee_email || resp.employee_name || '';
+          const user = responsibleUsersMap.get(key);
+          
+          if (user) {
+            recipientsEmails.push({
+              userId: user.id,
+              name: user.name,
+              email: user.email || 'нет email',
+              responsibilityType: resp.responsibility_type,
+              searchKey: key
+            });
+          } else {
+            notFoundResponsibles.push({
+              employee_id: resp.employee_id,
+              employee_email: resp.employee_email,
+              employee_name: resp.employee_name,
+              responsibility_type: resp.responsibility_type,
+              searchKey: key
+            });
+          }
+        }
+        
+        if (notFoundResponsibles.length > 0) {
+          console.warn('[SafetyJournal] notifyBranchesWithUnfilledJournals - responsibles NOT found in DB:', {
+            branchId: branch.branch_id,
+            notFound: notFoundResponsibles
+          });
+        }
+        
+        console.log('[SafetyJournal] notifyBranchesWithUnfilledJournals - sending notifications to:', {
+          branchId: branch.branch_id,
+          branchName: branch.branch_name,
+          recipients: recipientsEmails,
+          recipientsCount: recipientsEmails.length
+        });
+        
+        // ОПТИМИЗАЦИЯ: Отправляем уведомления асинхронно, не блокируя ответ
+        const notificationPromises = responsiblesArray
+          .map(resp => {
+            const key = resp.employee_id || resp.employee_email || resp.employee_name || '';
+            const responsibleUser = responsibleUsersMap.get(key);
+            
+            if (!responsibleUser) {
+              return null; // Пропускаем, если пользователь не найден
+            }
+            
+            return responsibleUser;
+          })
+          .filter((user): user is NonNullable<typeof user> => user !== null)
+          .map(responsibleUser => {
+            
+            // Отправляем через Socket.IO сразу (синхронно)
+            socketService.sendToUser(responsibleUser.id, {
+              type: 'WARNING',
+              title: 'Требуется заполнение журналов',
+              message: `Филиал "${branch.branch_name}" имеет не заполненные журналы: ${journalTitles}`,
+              createdAt: new Date().toISOString(),
+              action: {
+                type: 'NAVIGATE',
+                url: `/jurists/safety?branchId=${branch.branch_id}`,
+              },
+            });
+            
+            // Отправляем уведомление асинхронно, не ждем завершения
+            return NotificationController.create({
+              type: 'WARNING',
+              channels: ['IN_APP', 'TELEGRAM', 'EMAIL'],
+              title: senderName,
+              message: `Филиал "${branch.branch_name}" имеет не заполненные журналы: ${journalTitles}`,
+              senderId: userId,
+              receiverId: responsibleUser.id,
+              priority: 'MEDIUM',
+              ignoreEmailSettings: true, // Игнорируем настройку отключения почты для safety journal
+              action: {
+                type: 'NAVIGATE',
+                url: `/jurists/safety?branchId=${branch.branch_id}`,
+                branchName: notificationBranchName,
+              },
+            }).catch((error) => {
+              console.error(`[SafetyJournal] Error creating notification for ${responsibleUser.id}:`, error);
+              return null;
+            });
+          });
+        
+        // Не ждем завершения отправки уведомлений - они отправятся асинхронно
+        Promise.all(notificationPromises).then(() => {
+          console.log('[SafetyJournal] All notifications sent for branch:', {
+            branchId: branch.branch_id,
+            count: notificationPromises.length
+          });
+        }).catch((error) => {
+          console.error('[SafetyJournal] Error sending some notifications:', error);
+        });
+
+        // Сохраняем информацию о последнем оповещении асинхронно (не блокируем ответ)
         const notificationData = {
           branchId: branch.branch_id,
           branchName: branch.branch_name,
@@ -1516,8 +2022,8 @@ export const notifyBranchesWithUnfilledJournals = async (req: Request, res: Resp
           }))
         };
 
-        // Сохраняем в UserSettings (или можно создать отдельную таблицу)
-        await prisma.userSettings.upsert({
+        // Сохраняем в UserSettings асинхронно (не блокируем ответ)
+        prisma.userSettings.upsert({
           where: {
             userId_parameter: {
               userId: userId,
@@ -1533,6 +2039,8 @@ export const notifyBranchesWithUnfilledJournals = async (req: Request, res: Resp
             value: JSON.stringify(notificationData),
             type: 'STRING'
           }
+        }).catch((error) => {
+          console.error(`[SafetyJournal] Error saving notification data for branch ${branch.branch_id}:`, error);
         });
 
         notifiedBranches.push({
@@ -1546,18 +2054,47 @@ export const notifyBranchesWithUnfilledJournals = async (req: Request, res: Resp
       }
     }
 
+    if (notifiedBranches.length === 0) {
+      console.warn('[SafetyJournal] No branches were notified:', {
+        branchesWithUnfilledJournals: branchesWithUnfilledJournals.length
+      });
+      return res.status(400).json({ 
+        message: 'Не удалось отправить оповещения ни для одного филиала',
+        notifiedBranches: []
+      });
+    }
+
     res.json({
       message: `Оповещения отправлены для ${notifiedBranches.length} филиалов`,
       notifiedBranches
     });
   } catch (error: any) {
-    console.error('[SafetyJournal] Error notifying branches:', error);
-    res.status(500).json({ message: 'Ошибка отправки оповещений' });
+    console.error('[SafetyJournal] Error notifying branches:', {
+      error: error,
+      errorMessage: error?.message,
+      errorStack: error?.stack
+    });
+    
+    // Возвращаем более детальную информацию об ошибке
+    const errorMessage = error?.response?.data?.message || error?.message || 'Ошибка отправки оповещений';
+    const statusCode = error?.response?.status || error?.statusCode || 500;
+    
+    res.status(statusCode).json({ 
+      message: errorMessage,
+      error: process.env.NODE_ENV === 'development' ? error?.message : undefined
+    });
   }
 };
 
 // Оповещение одного филиала с не заполненными журналами
 export const notifyBranchWithUnfilledJournals = async (req: Request, res: Response) => {
+  const startTime = Date.now();
+  console.log('[SafetyJournal] notifyBranchWithUnfilledJournals started:', {
+    branchId: req.params.branchId,
+    userId: (req as any).token?.userId,
+    timestamp: new Date().toISOString()
+  });
+  
   try {
     const { userId } = (req as any).token;
     const token = getAuthToken(req);
@@ -1571,12 +2108,52 @@ export const notifyBranchWithUnfilledJournals = async (req: Request, res: Respon
       return res.status(400).json({ message: 'ID филиала не указан' });
     }
 
-    // Получаем филиалы с журналами
-    const branchesResponse = await axios.get(`${JOURNALS_API_URL}/me/branches_with_journals`, {
-      headers: createAuthHeaders(token)
-    });
+    // ОПТИМИЗАЦИЯ: Получаем филиалы и ответственных параллельно для ускорения
+    // ИСПРАВЛЕНО: Уменьшаем таймауты до 5 секунд для более быстрого ответа
+    const [branchesResponse, responsiblesResponse] = await Promise.allSettled([
+      axios.get(`${JOURNALS_API_URL}/me/branches_with_journals`, {
+        headers: createAuthHeaders(token),
+        timeout: 5000 // 5 секунд таймаут (уменьшено с 10)
+      }),
+      axios.get(
+        `${JOURNALS_API_URL}/branch_responsibles/?branchId=${branchId}`,
+        { 
+          headers: createAuthHeaders(token),
+          timeout: 5000 // 5 секунд таймаут (уменьшено с 10)
+        }
+      )
+    ]);
 
-    const branches = branchesResponse.data.branches || [];
+    // Обрабатываем результат получения филиалов
+    if (branchesResponse.status === 'rejected') {
+      const error = branchesResponse.reason;
+      console.error('[SafetyJournal] Error fetching branches:', {
+        error: error?.message,
+        code: error?.code,
+        status: error?.response?.status
+      });
+      
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        return res.status(503).json({ 
+          message: 'Превышено время ожидания ответа от внешнего API при получении филиалов',
+          errorCode: 'TIMEOUT'
+        });
+      }
+      
+      if (error.response?.status === 500) {
+        return res.status(503).json({ 
+          message: 'Внешний API вернул ошибку 500 при получении филиалов',
+          errorCode: 'EXTERNAL_API_ERROR'
+        });
+      }
+      
+      return res.status(503).json({ 
+        message: 'Ошибка получения данных филиалов',
+        errorCode: 'EXTERNAL_API_ERROR'
+      });
+    }
+
+    const branches = branchesResponse.value.data.branches || [];
     
     // Находим нужный филиал
     const branch = branches.find((b: any) => b.branch_id === branchId);
@@ -1597,16 +2174,52 @@ export const notifyBranchWithUnfilledJournals = async (req: Request, res: Respon
       });
     }
 
-    // Получаем ответственных по филиалу
-    const responsiblesResponse = await axios.get(
-      `${JOURNALS_API_URL}/branch_responsibles/?branchId=${branch.branch_id}`,
-      { headers: createAuthHeaders(token) }
-    );
+    // КРИТИЧНО: Определяем типы журналов, которые требуют заполнения (ОТ или ПБ)
+    const requiredResponsibilityTypes = new Set<string>();
+    unfilledJournals.forEach((journal: any) => {
+      if (journal.journal_type === 'ОТ' || journal.journal_type === 'ПБ') {
+        requiredResponsibilityTypes.add(journal.journal_type);
+      }
+    });
+    
+    console.log('[SafetyJournal] notifyBranchWithUnfilledJournals - required responsibility types:', Array.from(requiredResponsibilityTypes));
 
+    // Обрабатываем результат получения ответственных
+    if (responsiblesResponse.status === 'rejected') {
+      const error = responsiblesResponse.reason;
+      console.error('[SafetyJournal] Error fetching responsibles:', {
+        error: error?.message,
+        code: error?.code,
+        status: error?.response?.status,
+        branchId: branch.branch_id
+      });
+      
+      if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
+        return res.status(503).json({ 
+          message: 'Превышено время ожидания ответа от внешнего API при получении ответственных',
+          errorCode: 'TIMEOUT',
+          branchId: branch.branch_id
+        });
+      }
+      
+      if (error?.response?.status === 500) {
+        return res.status(503).json({ 
+          message: 'Внешний API вернул ошибку 500 при получении ответственных',
+          errorCode: 'EXTERNAL_API_ERROR',
+          branchId: branch.branch_id
+        });
+      }
+      
+      return res.status(503).json({ 
+        message: 'Ошибка получения данных ответственных',
+        errorCode: 'EXTERNAL_API_ERROR',
+        branchId: branch.branch_id
+      });
+    }
     // Структура ответа: массив объектов [{ branch_id, branch_name, responsibles: [...] }]
     let responsibles: any[] = [];
-    if (responsiblesResponse.data && Array.isArray(responsiblesResponse.data)) {
-      for (const branchData of responsiblesResponse.data) {
+    if (responsiblesResponse.value.data && Array.isArray(responsiblesResponse.value.data)) {
+      for (const branchData of responsiblesResponse.value.data) {
         if (branchData.branch_id === branch.branch_id && branchData.responsibles && Array.isArray(branchData.responsibles)) {
           responsibles = branchData.responsibles;
           break;
@@ -1628,66 +2241,172 @@ export const notifyBranchWithUnfilledJournals = async (req: Request, res: Respon
     const { SocketIOService } = await import('../../socketio.js');
     const socketService = SocketIOService.getInstance();
 
-    let notifiedCount = 0;
-
-    // Отправляем уведомления каждому ответственному
+    // КРИТИЧНО: Фильтруем ответственных по типу ответственности (ОТ и ПБ)
+    // и дедуплицируем - если один человек отвечает и за ОТ, и за ПБ, отправляем уведомление только один раз
+    const uniqueResponsibles = new Map<string, any>();
     for (const resp of responsibles) {
-      if (resp.employee_id) {
-        // employee_id из внешнего API должен совпадать с user.id в локальной БД
-        const responsibleUser = await prisma.user.findUnique({
-          where: { id: resp.employee_id },
-          select: { id: true, name: true }
-        });
-
-        if (responsibleUser) {
-          // Получаем ФИО отправителя
-          const sender = await prisma.user.findUnique({
-            where: { id: userId },
-            select: { name: true }
-          });
-          const senderName = sender?.name || 'Пользователь';
-          
-          const notificationBranchName = branch.branch_name && branch.branch_name !== 'филиала' ? branch.branch_name : 'филиал';
-          
-          // Проверяем, находится ли пользователь в любом активном чате
-          const isInAnyActiveChat = socketService.isUserInAnyActiveChat(responsibleUser.id);
-          
-          // Отправляем уведомление только если пользователь не в активном чате
-          if (!isInAnyActiveChat) {
-            // Создаем уведомление
-            await NotificationController.create({
-              type: 'WARNING',
-              channels: ['IN_APP', 'TELEGRAM', 'EMAIL'],
-              title: senderName,
-              message: `Филиал "${branch.branch_name}" имеет не заполненные журналы: ${journalTitles}`,
-              senderId: userId,
-              receiverId: responsibleUser.id,
-              priority: 'MEDIUM',
-              action: {
-                type: 'NAVIGATE',
-                url: `/jurists/safety?branchId=${branch.branch_id}`,
-                branchName: notificationBranchName,
-              },
-            });
-            notifiedCount++;
+      // Проверяем, что ответственный отвечает за нужный тип журнала (ОТ или ПБ)
+      if (resp.employee_id && 
+          resp.responsibility_type && 
+          requiredResponsibilityTypes.has(resp.responsibility_type)) {
+        // Если ответственный уже есть в мапе, проверяем, нужно ли добавить еще один тип ответственности
+        if (!uniqueResponsibles.has(resp.employee_id)) {
+          uniqueResponsibles.set(resp.employee_id, resp);
+        } else {
+          // Если у ответственного уже есть один тип, но он отвечает и за другой нужный тип - обновляем
+          const existing = uniqueResponsibles.get(resp.employee_id);
+          if (!existing.responsibility_types) {
+            existing.responsibility_types = [existing.responsibility_type];
           }
-
-          // Отправляем через Socket.IO
-          socketService.sendToUser(responsibleUser.id, {
-            type: 'WARNING',
-            title: 'Требуется заполнение журналов',
-            message: `Филиал "${branch.branch_name}" имеет не заполненные журналы: ${journalTitles}`,
-            createdAt: new Date().toISOString(),
-            action: {
-              type: 'NAVIGATE',
-              url: `/jurists/safety?branchId=${branch.branch_id}`,
-            },
-          });
+          if (!existing.responsibility_types.includes(resp.responsibility_type)) {
+            existing.responsibility_types.push(resp.responsibility_type);
+          }
         }
       }
     }
+    
+    console.log('[SafetyJournal] notifyBranchWithUnfilledJournals - filtered responsibles:', {
+      total: responsibles.length,
+      filtered: uniqueResponsibles.size,
+      responsibilityTypes: Array.from(requiredResponsibilityTypes)
+    });
 
-    // Сохраняем информацию о последнем оповещении
+    // ОПТИМИЗАЦИЯ: Получаем все данные заранее, вне цикла
+    const sender = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true }
+    });
+    
+    const senderName = sender?.name || 'Пользователь';
+    const notificationBranchName = branch.branch_name && branch.branch_name !== 'филиала' ? branch.branch_name : 'филиал';
+    
+    // КРИТИЧНО: Логируем employee_id из внешнего API перед поиском в БД
+    const responsiblesArray = Array.from(uniqueResponsibles.values());
+    console.log('[SafetyJournal] notifyBranchWithUnfilledJournals - looking for users in DB:', {
+      branchId: branch.branch_id,
+      employeeIds: responsiblesArray.map(r => ({
+        employee_id: r.employee_id,
+        employee_email: r.employee_email,
+        employee_name: r.employee_name,
+        responsibility_type: r.responsibility_type
+      }))
+    });
+    
+    // КРИТИЧНО: Используем findUsersByResponsiblesBatch для поиска пользователей по employee_id, email и name
+    // Это та же логика, что используется в getChatParticipants
+    const userCache = new Map();
+    const responsibleUsersMap = await findUsersByResponsiblesBatch(
+      prisma,
+      responsiblesArray,
+      {
+        select: { id: true, name: true, email: true },
+        cache: userCache
+      }
+    );
+    
+    console.log('[SafetyJournal] notifyBranchWithUnfilledJournals - found users via UserData:', {
+      branchId: branch.branch_id,
+      searchedResponsibles: responsiblesArray.length,
+      foundUsers: Array.from(responsibleUsersMap.values())
+        .filter((u): u is { id: string; name?: string; email?: string } => u !== null)
+        .map(u => ({ id: u.id, name: u.name, email: u.email })),
+      foundCount: responsibleUsersMap.size
+    });
+    
+    // КРИТИЧНО: Логируем email адреса тех, кому отправляются уведомления
+    // Используем ключ из responsibleUsersMap (может быть employee_id, email или name)
+    const recipientsEmails: any[] = [];
+    const notFoundResponsibles: any[] = [];
+    
+    for (const resp of responsiblesArray) {
+      const key = resp.employee_id || resp.employee_email || resp.employee_name || '';
+      const user = responsibleUsersMap.get(key);
+      
+      if (user) {
+        recipientsEmails.push({
+          userId: user.id,
+          name: user.name,
+          email: user.email || 'нет email',
+          responsibilityType: resp.responsibility_type,
+          searchKey: key
+        });
+      } else {
+        notFoundResponsibles.push({
+          employee_id: resp.employee_id,
+          employee_email: resp.employee_email,
+          employee_name: resp.employee_name,
+          responsibility_type: resp.responsibility_type,
+          searchKey: key
+        });
+      }
+    }
+    
+    if (notFoundResponsibles.length > 0) {
+      console.warn('[SafetyJournal] notifyBranchWithUnfilledJournals - responsibles NOT found in DB:', {
+        branchId: branch.branch_id,
+        notFound: notFoundResponsibles
+      });
+    }
+    
+    console.log('[SafetyJournal] notifyBranchWithUnfilledJournals - sending notifications to:', {
+      branchId: branch.branch_id,
+      branchName: branch.branch_name,
+      recipients: recipientsEmails,
+      recipientsCount: recipientsEmails.length
+    });
+    
+    // ОПТИМИЗАЦИЯ: Отправляем уведомления асинхронно, не блокируя ответ
+    const notificationPromises = responsiblesArray
+      .map(resp => {
+        const key = resp.employee_id || resp.employee_email || resp.employee_name || '';
+        const responsibleUser = responsibleUsersMap.get(key);
+        
+        if (!responsibleUser) {
+          return null; // Пропускаем, если пользователь не найден
+        }
+        
+        return responsibleUser;
+      })
+      .filter((user): user is NonNullable<typeof user> => user !== null)
+      .map(responsibleUser => {
+        
+        // Отправляем через Socket.IO сразу (синхронно)
+        socketService.sendToUser(responsibleUser.id, {
+          type: 'WARNING',
+          title: 'Требуется заполнение журналов',
+          message: `Филиал "${branch.branch_name}" имеет не заполненные журналы: ${journalTitles}`,
+          createdAt: new Date().toISOString(),
+          action: {
+            type: 'NAVIGATE',
+            url: `/jurists/safety?branchId=${branch.branch_id}`,
+          },
+        });
+        
+        // Отправляем уведомление асинхронно, не ждем завершения
+        return NotificationController.create({
+          type: 'WARNING',
+          channels: ['IN_APP', 'TELEGRAM', 'EMAIL'],
+          title: senderName,
+          message: `Филиал "${branch.branch_name}" имеет не заполненные журналы: ${journalTitles}`,
+          senderId: userId,
+          receiverId: responsibleUser.id,
+          priority: 'MEDIUM',
+          ignoreEmailSettings: true, // Игнорируем настройку отключения почты для safety journal
+          action: {
+            type: 'NAVIGATE',
+            url: `/jurists/safety?branchId=${branch.branch_id}`,
+            branchName: notificationBranchName,
+          },
+        }).catch((error) => {
+          console.error(`[SafetyJournal] Error creating notification for ${responsibleUser.id}:`, error);
+          return null;
+        });
+      })
+      .filter((promise): promise is Promise<any> => promise !== null); // Фильтруем null значения
+    
+    const notifiedCount = notificationPromises.length;
+    
+    // Сохраняем информацию о последнем оповещении асинхронно (не блокируем ответ)
     const notificationData = {
       branchId: branch.branch_id,
       branchName: branch.branch_name,
@@ -1700,8 +2419,8 @@ export const notifyBranchWithUnfilledJournals = async (req: Request, res: Respon
       }))
     };
 
-    // Сохраняем в UserSettings
-    await prisma.userSettings.upsert({
+    // Сохраняем в UserSettings асинхронно (не блокируем ответ)
+    prisma.userSettings.upsert({
       where: {
         userId_parameter: {
           userId: userId,
@@ -1717,8 +2436,31 @@ export const notifyBranchWithUnfilledJournals = async (req: Request, res: Respon
         value: JSON.stringify(notificationData),
         type: 'STRING'
       }
+    }).catch((error) => {
+      console.error('[SafetyJournal] Error saving notification data:', error);
     });
 
+    // Не ждем завершения отправки уведомлений - они отправятся асинхронно
+    Promise.all(notificationPromises).then(() => {
+      console.log('[SafetyJournal] All notifications sent for single branch:', {
+        branchId: branch.branch_id,
+        count: notifiedCount
+      });
+    }).catch((error) => {
+      console.error('[SafetyJournal] Error sending some notifications:', error);
+    });
+
+    // ВОЗВРАЩАЕМ ОТВЕТ СРАЗУ, не дожидаясь отправки уведомлений и сохранения в БД
+    const duration = Date.now() - startTime;
+    console.log('[SafetyJournal] notifyBranchWithUnfilledJournals completed (response sent):', {
+      branchId: branch.branch_id,
+      branchName: branch.branch_name,
+      notifiedCount,
+      duration: `${duration}ms`,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Возвращаем ответ сразу
     res.json({
       message: `Оповещения отправлены для филиала "${branch.branch_name}"`,
       branchId: branch.branch_id,
@@ -1727,8 +2469,29 @@ export const notifyBranchWithUnfilledJournals = async (req: Request, res: Respon
       unfilledJournalsCount: unfilledJournals.length
     });
   } catch (error: any) {
-    console.error('[SafetyJournal] Error notifying branch:', error);
-    res.status(500).json({ message: 'Ошибка отправки оповещения' });
+    const duration = Date.now() - startTime;
+    console.error('[SafetyJournal] notifyBranchWithUnfilledJournals error:', {
+      error: error?.message,
+      code: error?.code,
+      status: error?.response?.status,
+      duration: `${duration}ms`,
+      timestamp: new Date().toISOString()
+    });
+    console.error('[SafetyJournal] Error notifying branch:', {
+      error: error,
+      errorMessage: error?.message,
+      errorStack: error?.stack,
+      branchId: req.params?.branchId
+    });
+    
+    // Возвращаем более детальную информацию об ошибке
+    const errorMessage = error?.response?.data?.message || error?.message || 'Ошибка отправки оповещения';
+    const statusCode = error?.response?.status || error?.statusCode || 500;
+    
+    res.status(statusCode).json({ 
+      message: errorMessage,
+      error: process.env.NODE_ENV === 'development' ? error?.message : undefined
+    });
   }
 };
 
@@ -1738,18 +2501,22 @@ export const getLastNotifications = async (req: Request, res: Response) => {
     const { userId } = (req as any).token;
     
     // Получаем все записи о последних оповещениях для текущего пользователя
-    const notifications = await prisma.userSettings.findMany({
-      where: {
-        userId: userId,
-        parameter: {
-          startsWith: 'safety_journal_notification_'
-        }
-      },
-      select: {
-        parameter: true,
-        value: true
-      }
-    });
+    const notifications = await withDbRetry(
+      () =>
+        prisma.userSettings.findMany({
+          where: {
+            userId: userId,
+            parameter: {
+              startsWith: 'safety_journal_notification_'
+            }
+          },
+          select: {
+            parameter: true,
+            value: true
+          }
+        }),
+      { logPrefix: '[SafetyJournal]' }
+    );
 
     const notificationsData = notifications.map(n => {
       const branchId = n.parameter.replace('safety_journal_notification_', '');
@@ -1768,7 +2535,12 @@ export const getLastNotifications = async (req: Request, res: Response) => {
     });
 
     res.json(notificationsData);
-  } catch (error: any) {
+  } catch (error: unknown) {
+    if (isP1001(error)) {
+      console.error('[SafetyJournal] getLastNotifications: database unreachable (P1001).');
+      res.status(503).json([]);
+      return;
+    }
     console.error('[SafetyJournal] Error getting last notifications:', error);
     res.status(500).json({ message: 'Ошибка получения информации об оповещениях' });
   }

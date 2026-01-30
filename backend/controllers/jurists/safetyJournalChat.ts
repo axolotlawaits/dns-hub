@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../../server.js';
 import { SocketIOService } from '../../socketio.js';
 import axios from 'axios';
-import { findUserByResponsibleData } from '../../utils/findUserByResponsible.js';
+import { findUserByResponsibleData, findUsersByResponsiblesBatch } from '../../utils/findUserByResponsible.js';
 import { NotificationController } from '../app/notification.js';
 
 const JOURNALS_API_URL = process.env.JOURNALS_API_URL || '';
@@ -26,15 +26,27 @@ const createAuthHeaders = (token: string | null) => {
   };
 };
 
-// Функция для проверки, является ли пользователь проверяющим
+// ВЫСОКИЙ ПРИОРИТЕТ: Функция для проверки, является ли пользователь проверяющим (с кэшированием)
 const isChecker = async (userId: string): Promise<boolean> => {
   try {
+    // Проверяем кэш
+    const cached = checkerCache.get(userId);
+    if (cached && Date.now() - cached.timestamp < CHECKER_CACHE_TTL) {
+      return cached.result;
+    }
+
+    // Очищаем устаревшие записи из кэша периодически
+    if (checkerCache.size > 1000) {
+      cleanCheckerCache();
+    }
+
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { role: true }
     });
 
     if (user?.role === 'SUPERVISOR') {
+      checkerCache.set(userId, { result: true, timestamp: Date.now() });
       return true;
     }
 
@@ -43,6 +55,7 @@ const isChecker = async (userId: string): Promise<boolean> => {
     });
 
     if (!safetyTool) {
+      checkerCache.set(userId, { result: false, timestamp: Date.now() });
       return false;
     }
 
@@ -56,6 +69,7 @@ const isChecker = async (userId: string): Promise<boolean> => {
     });
 
     if (userAccess) {
+      checkerCache.set(userId, { result: true, timestamp: Date.now() });
       return true;
     }
 
@@ -81,11 +95,13 @@ const isChecker = async (userId: string): Promise<boolean> => {
         });
 
         if (positionAccess) {
+          checkerCache.set(userId, { result: true, timestamp: Date.now() });
           return true;
         }
       }
     }
 
+    checkerCache.set(userId, { result: false, timestamp: Date.now() });
     return false;
   } catch (error) {
     console.error('[SafetyJournalChat] Error checking if user is checker:', error);
@@ -96,14 +112,61 @@ const isChecker = async (userId: string): Promise<boolean> => {
 // Кэш для результатов проверки ответственных (TTL: 5 минут)
 const responsibleCache = new Map<string, { result: boolean; timestamp: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 минут в миллисекундах
+// После таймаута не дергать API 30 с — чтобы не спамить логами при медленном внешнем API
+const TIMEOUT_COOLDOWN_MS = 30 * 1000;
+const timeoutCooldown = new Map<string, number>();
+
+// СРЕДНИЙ ПРИОРИТЕТ: Кэш для ответов внешнего API (TTL: 1 минута)
+const apiCache = new Map<string, { data: any; timestamp: number }>();
+const API_CACHE_TTL = 1 * 60 * 1000; // 1 минута в миллисекундах
+
+// Функция для очистки устаревших записей из кэша API
+const cleanApiCache = () => {
+  const now = Date.now();
+  for (const [key, value] of apiCache.entries()) {
+    if (now - value.timestamp > API_CACHE_TTL) {
+      apiCache.delete(key);
+    }
+  }
+};
+
+// ВЫСОКИЙ ПРИОРИТЕТ: Кэш для результатов проверки isChecker (TTL: 2 минуты)
+const checkerCache = new Map<string, { result: boolean; timestamp: number }>();
+const CHECKER_CACHE_TTL = 2 * 60 * 1000; // 2 минуты в миллисекундах
+
+// Функция для очистки устаревших записей из кэша проверяющих
+const cleanCheckerCache = () => {
+  const now = Date.now();
+  for (const [key, value] of checkerCache.entries()) {
+    if (now - value.timestamp > CHECKER_CACHE_TTL) {
+      checkerCache.delete(key);
+    }
+  }
+};
+
+// Функция для очистки кэша ответственных по филиалу
+export const clearResponsibleCacheForBranch = (branchId: string) => {
+  const keysToDelete: string[] = [];
+  for (const [key] of responsibleCache.entries()) {
+    if (key.endsWith(`:${branchId}`)) {
+      keysToDelete.push(key);
+    }
+  }
+  keysToDelete.forEach(key => responsibleCache.delete(key));
+  console.log(`[SafetyJournalChat] Cleared cache for branch ${branchId}, removed ${keysToDelete.length} entries`);
+};
 
 // Функция для проверки, является ли пользователь ответственным по филиалу
 const isResponsibleForBranch = async (userId: string, branchId: string, token: string): Promise<boolean> => {
+  const cacheKey = `${userId}:${branchId}`;
   try {
-    // Проверяем кэш
-    const cacheKey = `${userId}:${branchId}`;
+    const now = Date.now();
+    const cooldownUntil = timeoutCooldown.get(cacheKey);
+    if (cooldownUntil != null && now < cooldownUntil) {
+      return false;
+    }
     const cached = responsibleCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    if (cached && now - cached.timestamp < CACHE_TTL) {
       return cached.result;
     }
 
@@ -123,13 +186,34 @@ const isResponsibleForBranch = async (userId: string, branchId: string, token: s
       return false;
     }
 
-    // Получаем ответственных по филиалу из внешнего API
-    const response = await axios.get(`${JOURNALS_API_URL}/branch_responsibles/?branchId=${branchId}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+    // СРЕДНИЙ ПРИОРИТЕТ: Получаем ответственных по филиалу из внешнего API с кэшированием
+    const apiCacheKey = `branch_responsibles_${branchId}_${token?.substring(0, 10) || 'default'}`;
+    let response: any;
+    
+    // Проверяем кэш
+    const cachedApiData = apiCache.get(apiCacheKey);
+    if (cachedApiData && Date.now() - cachedApiData.timestamp < API_CACHE_TTL) {
+      response = { data: cachedApiData.data };
+      console.log('[SafetyJournalChat] isResponsibleForBranch - using cached API data for branch:', branchId);
+    } else {
+      // Очищаем устаревшие записи из кэша периодически
+      if (apiCache.size > 100) {
+        cleanApiCache();
       }
-    });
+      
+      response = await axios.get(`${JOURNALS_API_URL}/branch_responsibles/?branchId=${branchId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 8000 // 8 с — внешний API может отвечать медленно, не спамить таймаутами
+      });
+      
+      // Сохраняем в кэш
+      if (response?.data) {
+        apiCache.set(apiCacheKey, { data: response.data, timestamp: Date.now() });
+      }
+    }
 
     // Структура ответа: массив объектов [{ branch_id, branch_name, responsibles: [...] }]
     let result = false;
@@ -231,8 +315,14 @@ const isResponsibleForBranch = async (userId: string, branchId: string, token: s
     }
 
     return result;
-  } catch (error) {
-    console.error('[SafetyJournalChat] Error checking if user is responsible for branch:', error);
+  } catch (error: any) {
+    const isTimeout = error?.code === 'ECONNABORTED' || error?.message?.includes('timeout');
+    if (isTimeout) {
+      timeoutCooldown.set(cacheKey, Date.now() + TIMEOUT_COOLDOWN_MS);
+      console.warn('[SafetyJournalChat] branch_responsibles timeout for branchId:', branchId, '(cooldown 30s)');
+    } else {
+      console.error('[SafetyJournalChat] isResponsibleForBranch error:', error?.message || error?.code || String(error));
+    }
     return false;
   }
 };
@@ -279,6 +369,7 @@ export const getAllUsers = async (req: Request, res: Response) => {
 
 // Получить все филиалы с чатами (для проверяющего)
 export const getBranchesWithChats = async (req: Request, res: Response) => {
+  const startTime = Date.now(); // ВЫСОКИЙ ПРИОРИТЕТ: Мониторинг производительности
   try {
     const token = (req as any).token;
     if (!token?.userId) {
@@ -297,49 +388,14 @@ export const getBranchesWithChats = async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Токен авторизации не найден' });
     }
 
-    // Получаем все филиалы из внешнего API (чтобы показать все филиалы, даже без чатов)
-    let allBranches: any[] = [];
-    try {
-      const branchesResponse = await axios.get(`${JOURNALS_API_URL}/me/branches_with_journals`, {
-        headers: createAuthHeaders(authToken)
-      });
-      
-      if (branchesResponse.data && branchesResponse.data.branches) {
-        allBranches = branchesResponse.data.branches;
-        console.log('[SafetyJournalChat] getBranchesWithChats - received branches from external API:', allBranches.length);
-      }
-    } catch (apiError) {
-      console.error('[SafetyJournalChat] getBranchesWithChats - Error fetching branches from external API:', apiError);
-      // Продолжаем работу даже если внешний API недоступен
-    }
-
-    // Получаем все чаты из локальной БД
+    // ОПТИМИЗАЦИЯ: Сначала загружаем чаты из БД (быстро), затем внешний API (может быть медленным)
+    // ОПТИМИЗАЦИЯ: Упрощаем запрос чатов - загружаем только необходимые данные
     const chats = await prisma.safetyJournalChat.findMany({
-      include: {
-        checker: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
-            position: true,
-            branch: true
-          }
-        },
-        messages: {
-          include: {
-            sender: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                image: true
-              }
-            }
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 1 // Последнее сообщение для превью
-        },
+      select: {
+        id: true,
+        branchId: true,
+        checkerId: true,
+        updatedAt: true,
         _count: {
           select: {
             messages: true
@@ -349,7 +405,152 @@ export const getBranchesWithChats = async (req: Request, res: Response) => {
       orderBy: { updatedAt: 'desc' }
     });
 
+    // КРИТИЧНО: Оптимизация - загружаем последние сообщения одним запросом с группировкой
+    // Используем один запрос для всех чатов вместо N параллельных запросов
+    const chatIds = chats.map(chat => chat.id);
+    let chatsWithMessages: any[] = [];
+    
+    if (chatIds.length > 0) {
+      // Загружаем последние 5 сообщений для каждого чата одним запросом
+      // Затем фильтруем на стороне сервера, чтобы найти последнее не-статусное сообщение
+      const allRecentMessages = await prisma.safetyJournalChatMessage.findMany({
+        where: {
+          chatId: { in: chatIds }
+        },
+        select: {
+          id: true,
+          chatId: true,
+          message: true,
+          createdAt: true,
+          sender: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              image: true
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        take: chatIds.length * 5 // Берем по 5 последних сообщений для каждого чата
+      });
+      
+      // Группируем по chatId и берем последнее не-статусное сообщение для каждого чата
+      const messagesByChatId = new Map<string, any[]>();
+      for (const msg of allRecentMessages) {
+        if (!messagesByChatId.has(msg.chatId)) {
+          messagesByChatId.set(msg.chatId, []);
+        }
+        messagesByChatId.get(msg.chatId)!.push(msg);
+      }
+      
+      // Для каждого чата находим последнее не-статусное сообщение
+      const isStatusMessage = (message: string | null): boolean => {
+        if (!message) return false;
+        const lowerMessage = message.toLowerCase();
+        return lowerMessage.includes('одобрен') ||
+               lowerMessage.includes('отклонен') ||
+               lowerMessage.includes('отправлен на проверку') ||
+               lowerMessage.includes('ожидает загрузки файлов') ||
+               lowerMessage.includes('возвращен на рассмотрение');
+      };
+      
+      for (const [chatId, messages] of messagesByChatId.entries()) {
+        // Сообщения уже отсортированы по createdAt desc
+        for (const msg of messages) {
+          if (!isStatusMessage(msg.message)) {
+            chatsWithMessages.push(msg);
+            break; // Нашли последнее не-статусное сообщение
+          }
+        }
+        // Если все сообщения статусные, берем последнее
+        if (!chatsWithMessages.find(m => m.chatId === chatId) && messages.length > 0) {
+          chatsWithMessages.push(messages[0]);
+        }
+      }
+    }
+
+    // СРЕДНИЙ ПРИОРИТЕТ: Загружаем филиалы из внешнего API с кэшированием
+    let allBranches: any[] = [];
+    const apiCacheKey = `branches_with_journals_${authToken?.substring(0, 10) || 'default'}`;
+    
+    // Проверяем кэш
+    const cachedApiData = apiCache.get(apiCacheKey);
+    if (cachedApiData && Date.now() - cachedApiData.timestamp < API_CACHE_TTL) {
+      allBranches = cachedApiData.data?.branches || [];
+      console.log('[SafetyJournalChat] getBranchesWithChats - using cached API data:', allBranches.length);
+    } else {
+      // Очищаем устаревшие записи из кэша периодически
+      if (apiCache.size > 100) {
+        cleanApiCache();
+      }
+      
+      try {
+        // КРИТИЧНО: Увеличиваем таймаут до 5 секунд, чтобы API успел вернуть все филиалы
+        const branchesResponse = await Promise.race([
+          axios.get(`${JOURNALS_API_URL}/me/branches_with_journals`, {
+            headers: createAuthHeaders(authToken),
+            timeout: 5000 // 5 секунд таймаут для загрузки всех филиалов
+          }),
+          // Fallback: если API не ответил за 5 секунд, продолжаем без него
+          new Promise((resolve) => setTimeout(() => resolve({ data: null }), 5000))
+        ]) as any;
+        
+        if (branchesResponse?.data && branchesResponse.data.branches) {
+          allBranches = branchesResponse.data.branches;
+          // Сохраняем в кэш
+          apiCache.set(apiCacheKey, { data: branchesResponse.data, timestamp: Date.now() });
+          console.log('[SafetyJournalChat] getBranchesWithChats - received branches from external API:', allBranches.length);
+        } else {
+          console.warn('[SafetyJournalChat] getBranchesWithChats - No branches data in API response');
+        }
+      } catch (apiError: any) {
+        console.error('[SafetyJournalChat] getBranchesWithChats - Error fetching branches from external API:', {
+          message: apiError?.message,
+          code: apiError?.code,
+          response: apiError?.response?.data,
+          status: apiError?.response?.status
+        });
+        // Продолжаем работу без данных из внешнего API
+      }
+    }
+
     console.log('[SafetyJournalChat] getBranchesWithChats - found chats in DB:', chats.length);
+    console.log('[SafetyJournalChat] getBranchesWithChats - branches from API:', allBranches.length);
+    console.log('[SafetyJournalChat] getBranchesWithChats - unique branchIds from chats:', Array.from(new Set(chats.map(c => c.branchId))).length);
+
+    // КРИТИЧНО: Создаем мапу последних НЕ-СТАТУСНЫХ сообщений по chatId для превью
+    // Функция для проверки, является ли сообщение статусным
+    const isStatusMessage = (message: string | null): boolean => {
+      if (!message) return false;
+      const lowerMessage = message.toLowerCase();
+      return lowerMessage.includes('одобрен') ||
+             lowerMessage.includes('отклонен') ||
+             lowerMessage.includes('отправлен на проверку') ||
+             lowerMessage.includes('ожидает загрузки файлов') ||
+             lowerMessage.includes('возвращен на рассмотрение');
+    };
+    
+    // КРИТИЧНО: Используем уже загруженные сообщения из chatsWithMessages
+    // Они уже отфильтрованы и содержат последнее не-статусное сообщение для каждого чата
+    const lastMessagesByChatId = new Map<string, any>();
+    for (const msg of chatsWithMessages) {
+      // Если для этого чата еще нет сообщения или это более новое сообщение
+      if (!lastMessagesByChatId.has(msg.chatId)) {
+        lastMessagesByChatId.set(msg.chatId, msg);
+      } else {
+        const existing = lastMessagesByChatId.get(msg.chatId);
+        const existingDate = new Date(existing.createdAt).getTime();
+        const msgDate = new Date(msg.createdAt).getTime();
+        // Берем более новое сообщение, если оно не статусное
+        if (msgDate > existingDate && !isStatusMessage(msg.message)) {
+          lastMessagesByChatId.set(msg.chatId, msg);
+        } else if (isStatusMessage(existing.message) && !isStatusMessage(msg.message)) {
+          // Если существующее статусное, а новое нет - заменяем
+          lastMessagesByChatId.set(msg.chatId, msg);
+        }
+      }
+    }
 
     // Группируем чаты по филиалам
     const chatsByBranch = new Map();
@@ -358,43 +559,78 @@ export const getBranchesWithChats = async (req: Request, res: Response) => {
       if (!chatsByBranch.has(chat.branchId)) {
         chatsByBranch.set(chat.branchId, []);
       }
+      // ОПТИМИЗАЦИЯ: Добавляем последнее сообщение из мапы
+      const lastMessage = lastMessagesByChatId.get(chat.id);
       chatsByBranch.get(chat.branchId).push({
         ...chat,
+        lastMessage: lastMessage || null,
         branch: null // Будет заполнено позже
       });
     }
 
-    // Создаем массив филиалов (сам филиал и есть чат)
-    const branchesMap = new Map();
-    
-    // Сначала добавляем филиалы из внешнего API
-    for (const apiBranch of allBranches) {
-      const branchId = apiBranch.branch_id;
-      const localBranch = await prisma.branch.findUnique({
-        where: { uuid: branchId },
-        select: {
-          uuid: true,
-          name: true,
-          address: true
+    // ОПТИМИЗАЦИЯ: Собираем все уникальные branchId для батч-запроса
+    const allBranchIds = new Set<string>();
+    // ИСПРАВЛЕНО: Безопасная обработка данных из внешнего API
+    if (Array.isArray(allBranches)) {
+      allBranches.forEach((b: any) => {
+        if (b && typeof b === 'object' && b.branch_id) {
+          allBranchIds.add(String(b.branch_id));
         }
       });
+    }
+    chatsByBranch.forEach((_, branchId) => allBranchIds.add(String(branchId)));
 
-      // Находим последнее сообщение из всех чатов этого филиала для превью
-      const branchChats = chatsByBranch.get(branchId) || [];
-      let lastMessage = null;
-      let unreadCount = 0;
-      
-      if (branchChats.length > 0) {
-        // Берем последнее сообщение из самого свежего чата
-        const sortedChats = branchChats.sort((a: any, b: any) => 
-          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-        );
-        const latestChat = sortedChats[0];
-        if (latestChat.messages && latestChat.messages.length > 0) {
-          lastMessage = latestChat.messages[0];
+    // ОПТИМИЗАЦИЯ: Загружаем все филиалы одним запросом вместо N запросов
+    // ИСПРАВЛЕНО: Проверяем, что есть branchId для запроса
+    const localBranches = allBranchIds.size > 0
+      ? await prisma.branch.findMany({
+          where: {
+            uuid: { in: Array.from(allBranchIds) }
+          },
+          select: {
+            uuid: true,
+            name: true,
+            address: true
+          }
+        })
+      : [];
+
+    // Создаем мапу для быстрого поиска филиалов
+    const localBranchesMap = new Map(localBranches.map(b => [b.uuid, b]));
+
+    // КРИТИЧНО: Создаем массив филиалов (сам филиал и есть чат)
+    const branchesMap = new Map();
+    
+    // КРИТИЧНО: Сначала добавляем ВСЕ филиалы из внешнего API (даже без чатов)
+    // ИСПРАВЛЕНО: Безопасная обработка данных из внешнего API
+    if (Array.isArray(allBranches)) {
+      console.log('[SafetyJournalChat] getBranchesWithChats - processing branches from API:', allBranches.length);
+      for (const apiBranch of allBranches) {
+        if (!apiBranch || typeof apiBranch !== 'object' || !apiBranch.branch_id) {
+          continue; // Пропускаем некорректные данные
         }
-        // Подсчитываем непрочитанные сообщения (упрощенно - берем из первого чата)
-        unreadCount = latestChat._count?.messages || 0;
+        const branchId = String(apiBranch.branch_id);
+        const localBranch = localBranchesMap.get(branchId);
+
+        // ОПТИМИЗАЦИЯ: Находим последнее сообщение из всех чатов этого филиала для превью
+        const branchChats = chatsByBranch.get(branchId) || [];
+        let lastMessage = null;
+        let unreadCount = 0;
+        let latestUpdatedAt: Date | null = null;
+        
+        if (branchChats.length > 0) {
+          // ОПТИМИЗАЦИЯ: Сортируем один раз и используем результат
+          const sortedChats = [...branchChats].sort((a: any, b: any) => 
+            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+          );
+          const latestChat = sortedChats[0];
+          
+          // Используем последнее сообщение из чата (уже загружено)
+          lastMessage = latestChat.lastMessage || null;
+          
+          // Подсчитываем непрочитанные сообщения (суммируем из всех чатов филиала)
+        unreadCount = branchChats.reduce((sum: number, chat: any) => sum + (chat._count?.messages || 0), 0);
+        latestUpdatedAt = latestChat.updatedAt;
       }
       
       // Добавляем информацию о филиале из локальной БД, если есть
@@ -404,55 +640,77 @@ export const getBranchesWithChats = async (req: Request, res: Response) => {
         branchAddress: localBranch?.address || apiBranch.branch_address || '',
         lastMessage: lastMessage,
         unreadCount: unreadCount,
-        updatedAt: branchChats.length > 0 
-          ? branchChats.sort((a: any, b: any) => 
-              new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-            )[0].updatedAt
-          : null
+        updatedAt: latestUpdatedAt
       });
+      }
     }
 
-    // Также добавляем филиалы, у которых есть чаты, но которых нет в списке из внешнего API
+    // КРИТИЧНО: Также добавляем филиалы, у которых есть чаты, но которых нет в списке из внешнего API
+    let addedFromDB = 0;
     for (const [branchId, branchChats] of chatsByBranch.entries()) {
       if (!branchesMap.has(branchId)) {
-        const localBranch = await prisma.branch.findUnique({
-          where: { uuid: branchId },
-          select: {
-            uuid: true,
-            name: true,
-            address: true
-          }
-        });
+        const localBranch = localBranchesMap.get(branchId);
 
         if (localBranch) {
-          const sortedChats = branchChats.sort((a: any, b: any) => 
+          // ОПТИМИЗАЦИЯ: Сортируем один раз и используем результат
+          const sortedChats = [...branchChats].sort((a: any, b: any) => 
             new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
           );
           const latestChat = sortedChats[0];
-          const lastMessage = latestChat.messages && latestChat.messages.length > 0 
-            ? latestChat.messages[0] 
-            : null;
+          
+          // Используем последнее сообщение из чата (уже загружено)
+          const lastMessage = latestChat.lastMessage || null;
+          
+          // Подсчитываем непрочитанные сообщения (суммируем из всех чатов филиала)
+          const unreadCount = branchChats.reduce((sum: number, chat: any) => sum + (chat._count?.messages || 0), 0);
           
           branchesMap.set(branchId, {
             branchId: branchId,
             branchName: localBranch.name,
             branchAddress: localBranch.address,
             lastMessage: lastMessage,
-            unreadCount: latestChat._count?.messages || 0,
+            unreadCount: unreadCount,
             updatedAt: latestChat.updatedAt
           });
+          addedFromDB++;
+        } else {
+          console.warn('[SafetyJournalChat] getBranchesWithChats - Branch not found in local DB:', branchId);
         }
       }
     }
+    console.log('[SafetyJournalChat] getBranchesWithChats - added branches from DB (not in API):', addedFromDB);
 
-    const branchesWithChats = Array.from(branchesMap.values());
+    // КРИТИЧНО: Преобразуем Map в массив и сортируем по дате обновления (самые свежие сверху)
+    const branchesWithChats = Array.from(branchesMap.values()).sort((a: any, b: any) => {
+      const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+      const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+      return dateB - dateA; // Сортируем по убыванию (самые свежие сверху)
+    });
     
-    console.log('[SafetyJournalChat] getBranchesWithChats - returning branches:', branchesWithChats.length);
+    const duration = Date.now() - startTime; // ВЫСОКИЙ ПРИОРИТЕТ: Мониторинг производительности
+    console.log('[SafetyJournalChat] getBranchesWithChats - returning branches:', branchesWithChats.length, `(${duration}ms)`);
+    console.log('[SafetyJournalChat] getBranchesWithChats - branch IDs:', branchesWithChats.map((b: any) => b.branchId).slice(0, 20));
+    
+    // ВЫСОКИЙ ПРИОРИТЕТ: Логирование медленных запросов
+    if (duration > 2000) {
+      console.warn(`[SafetyJournalChat] SLOW QUERY: getBranchesWithChats took ${duration}ms`);
+    }
 
     res.json(branchesWithChats);
-  } catch (error) {
+  } catch (error: any) {
+    const duration = Date.now() - startTime;
     console.error('[SafetyJournalChat] Error getting branches with chats:', error);
-    res.status(500).json({ error: 'Failed to get branches with chats' });
+    console.error('[SafetyJournalChat] Error details:', {
+      message: error?.message,
+      stack: error?.stack,
+      name: error?.name,
+      code: error?.code,
+      duration: `${duration}ms`
+    });
+    res.status(500).json({ 
+      error: 'Failed to get branches with chats',
+      details: process.env.NODE_ENV === 'development' ? error?.message : undefined
+    });
   }
 };
 
@@ -746,9 +1004,18 @@ export const getCheckers = async (req: Request, res: Response) => {
     });
 
     res.json(checkers);
-  } catch (error) {
+  } catch (error: any) {
+    // СРЕДНИЙ ПРИОРИТЕТ: Улучшенная обработка ошибок
     console.error('[SafetyJournalChat] Error getting checkers:', error);
-    res.status(500).json({ error: 'Failed to get checkers' });
+    console.error('[SafetyJournalChat] Error details:', {
+      message: error?.message,
+      stack: error?.stack?.substring(0, 200),
+      name: error?.name
+    });
+    res.status(500).json({ 
+      error: 'Failed to get checkers',
+      details: process.env.NODE_ENV === 'development' ? error?.message : undefined
+    });
   }
 };
 
@@ -863,91 +1130,8 @@ export const getChatParticipants = async (req: Request, res: Response) => {
       }
     }
 
-    // Получаем ответственных за филиал из внешнего API
-    try {
-      // Получаем токен из заголовков
-      const authToken = getAuthToken(req);
-
-      if (!authToken) {
-        console.error('[SafetyJournalChat] No authorization token found');
-      } else {
-        // Получаем ответственных из внешнего API
-        const responsiblesResponse = await axios.get(
-          `${JOURNALS_API_URL}/branch_responsibles/?branchId=${branchId}`,
-          {
-            headers: createAuthHeaders(authToken)
-          }
-        );
-
-        // Структура ответа: массив объектов [{ branch_id, branch_name, responsibles: [...] }]
-        console.log('[SafetyJournalChat] getChatParticipants - responsiblesResponse.data:', JSON.stringify(responsiblesResponse.data, null, 2));
-        
-        if (responsiblesResponse.data && Array.isArray(responsiblesResponse.data)) {
-          for (const branchData of responsiblesResponse.data) {
-            console.log('[SafetyJournalChat] getChatParticipants - branchData:', JSON.stringify(branchData, null, 2));
-            console.log('[SafetyJournalChat] getChatParticipants - comparing branchData.branch_id:', branchData.branch_id, 'with branchId:', branchId);
-            
-            if (branchData.branch_id === branchId && branchData.responsibles && Array.isArray(branchData.responsibles)) {
-              const responsibles = branchData.responsibles;
-              console.log('[SafetyJournalChat] getChatParticipants - found responsibles:', responsibles.length);
-              
-              // Для каждого ответственного находим пользователя в локальной БД
-              for (const resp of responsibles) {
-                console.log('[SafetyJournalChat] getChatParticipants - processing responsible:', JSON.stringify(resp, null, 2));
-                
-                // Используем общую утилиту для поиска пользователя
-                const responsibleUser = await findUserByResponsibleData(
-                  prisma,
-                  {
-                    employee_id: resp.employee_id,
-                    employee_email: resp.employee_email,
-                    employee_name: resp.employee_name
-                  },
-                  {
-                    select: { id: true, name: true, email: true }
-                  }
-                );
-                
-                if (process.env.NODE_ENV === 'development') {
-                  console.log('[SafetyJournalChat] getChatParticipants - found user:', responsibleUser ? responsibleUser.id : 'NOT FOUND', {
-                    employee_id: resp.employee_id,
-                    employee_name: resp.employee_name
-                  });
-                }
-                
-                if (resp.employee_id || resp.employee_email || resp.employee_name) {
-
-                  if (responsibleUser) {
-                    participantIds.add(responsibleUser.id);
-                    console.log('[SafetyJournalChat] getChatParticipants - added participant:', responsibleUser.id);
-                  } else {
-                    console.warn('[SafetyJournalChat] getChatParticipants - user not found for responsible:', {
-                      employee_id: resp.employee_id,
-                      employee_email: resp.employee_email,
-                      employee_name: resp.employee_name
-                    });
-                  }
-                } else {
-                  console.warn('[SafetyJournalChat] getChatParticipants - responsible has no identifying fields:', JSON.stringify(resp, null, 2));
-                }
-              }
-              break; // Нашли нужный филиал, выходим из цикла
-            } else {
-              console.log('[SafetyJournalChat] getChatParticipants - branch_id mismatch or no responsibles');
-            }
-          }
-        } else {
-          console.warn('[SafetyJournalChat] getChatParticipants - responsiblesResponse.data is not an array:', typeof responsiblesResponse.data);
-        }
-      }
-    } catch (apiError) {
-      console.error('[SafetyJournalChat] Error fetching responsibles from external API:', apiError);
-      // Продолжаем работу даже если внешний API недоступен
-    }
-
-    // ИЗМЕНЕНО: Сохраняем типы ответственности для каждого участника
-    // Мапа: userId -> массив типов ответственности ['ОТ', 'ПБ']
-    // Также сохраняем ответственных, которых нет в локальной БД
+    // ОПТИМИЗАЦИЯ: Получаем ответственных за филиал из внешнего API ОДИН РАЗ
+    // И сохраняем типы ответственности одновременно
     const responsibilityTypesMap = new Map<string, string[]>();
     const externalResponsibles: Array<{
       employee_id?: string;
@@ -956,57 +1140,90 @@ export const getChatParticipants = async (req: Request, res: Response) => {
       responsibility_type?: string;
     }> = [];
     
-    // Получаем типы ответственности из внешнего API
     try {
       const authToken = getAuthToken(req);
       if (authToken) {
-        const responsiblesResponse = await axios.get(
-          `${JOURNALS_API_URL}/branch_responsibles/?branchId=${branchId}`,
-          {
-            headers: createAuthHeaders(authToken)
-          }
-        );
+        // СРЕДНИЙ ПРИОРИТЕТ: ОДИН запрос к внешнему API вместо двух с кэшированием
+        const apiCacheKey = `branch_responsibles_${branchId}_${authToken?.substring(0, 10) || 'default'}`;
+        let responsiblesResponse: any;
         
+        // Проверяем кэш
+        const cachedApiData = apiCache.get(apiCacheKey);
+        if (cachedApiData && Date.now() - cachedApiData.timestamp < API_CACHE_TTL) {
+          responsiblesResponse = { data: cachedApiData.data };
+          console.log('[SafetyJournalChat] getChatParticipants - using cached API data for branch:', branchId);
+        } else {
+          // Очищаем устаревшие записи из кэша периодически
+          if (apiCache.size > 100) {
+            cleanApiCache();
+          }
+          
+          responsiblesResponse = await axios.get(
+            `${JOURNALS_API_URL}/branch_responsibles/?branchId=${branchId}`,
+            {
+              headers: createAuthHeaders(authToken),
+              timeout: 5000 // 5 секунд таймаут
+            }
+          );
+          
+          // Сохраняем в кэш
+          if (responsiblesResponse?.data) {
+            apiCache.set(apiCacheKey, { data: responsiblesResponse.data, timestamp: Date.now() });
+          }
+        }
+
         if (responsiblesResponse.data && Array.isArray(responsiblesResponse.data)) {
           for (const branchData of responsiblesResponse.data) {
             if (branchData.branch_id === branchId && branchData.responsibles && Array.isArray(branchData.responsibles)) {
-              for (const resp of branchData.responsibles) {
-                // Используем общую утилиту для поиска пользователя
-                const responsibleUser = await findUserByResponsibleData(
-                  prisma,
-                  {
-                    employee_id: resp.employee_id,
-                    employee_email: resp.employee_email,
-                    employee_name: resp.employee_name
-                  },
-                  {
-                    select: { id: true }
+              const responsibles = branchData.responsibles;
+              
+              // ОПТИМИЗАЦИЯ: Используем батчинг для поиска всех пользователей сразу
+              const userCache = new Map();
+              const usersMap = await findUsersByResponsiblesBatch(
+                prisma,
+                responsibles,
+                {
+                  select: { id: true, name: true, email: true },
+                  cache: userCache
+                }
+              );
+              
+              // Обрабатываем ответственных: добавляем в участники и сохраняем типы ответственности
+              for (const resp of responsibles) {
+                if (resp.employee_id || resp.employee_email || resp.employee_name) {
+                  const key = resp.employee_id || resp.employee_email || resp.employee_name || '';
+                  const responsibleUser = usersMap.get(key);
+                  
+                  if (responsibleUser) {
+                    participantIds.add(responsibleUser.id);
+                    
+                    // Сохраняем тип ответственности
+                    if (resp.responsibility_type) {
+                      const types = responsibilityTypesMap.get(responsibleUser.id) || [];
+                      if (!types.includes(resp.responsibility_type)) {
+                        types.push(resp.responsibility_type);
+                        responsibilityTypesMap.set(responsibleUser.id, types);
+                      }
+                    }
+                  } else {
+                    // Сохраняем ответственных, которых нет в локальной БД
+                    externalResponsibles.push({
+                      employee_id: resp.employee_id,
+                      employee_email: resp.employee_email,
+                      employee_name: resp.employee_name,
+                      responsibility_type: resp.responsibility_type
+                    });
                   }
-                );
-                
-                // Сохраняем тип ответственности для найденных пользователей
-                if (responsibleUser && resp.responsibility_type) {
-                  const types = responsibilityTypesMap.get(responsibleUser.id) || [];
-                  if (!types.includes(resp.responsibility_type)) {
-                    types.push(resp.responsibility_type);
-                    responsibilityTypesMap.set(responsibleUser.id, types);
-                  }
-                } else if (!responsibleUser) {
-                  // Сохраняем ответственных, которых нет в локальной БД
-                  externalResponsibles.push({
-                    employee_id: resp.employee_id,
-                    employee_email: resp.employee_email,
-                    employee_name: resp.employee_name,
-                    responsibility_type: resp.responsibility_type
-                  });
                 }
               }
+              break; // Нашли нужный филиал, выходим из цикла
             }
           }
         }
       }
-    } catch (error) {
-      console.error('[SafetyJournalChat] Error getting responsibility types:', error);
+    } catch (apiError) {
+      console.error('[SafetyJournalChat] Error fetching responsibles from external API:', apiError);
+      // Продолжаем работу даже если внешний API недоступен
     }
     
     // Получаем информацию о всех участниках из локальной БД
@@ -1338,7 +1555,14 @@ export const getOrCreateChat = async (req: Request, res: Response) => {
 
     res.json(chat);
   } catch (error: any) {
+    // СРЕДНИЙ ПРИОРИТЕТ: Улучшенная обработка ошибок
     console.error('[SafetyJournalChat] Error getting or creating chat:', error);
+    console.error('[SafetyJournalChat] Error details:', {
+      message: error?.message,
+      stack: error?.stack?.substring(0, 200),
+      name: error?.name,
+      code: error?.code
+    });
     
     // Более детальная обработка ошибок Prisma
     if (error.code === 'P2003') {
@@ -1363,6 +1587,7 @@ export const getOrCreateChat = async (req: Request, res: Response) => {
 
 // Получить сообщения чата
 export const getMessages = async (req: Request, res: Response) => {
+  const startTime = Date.now(); // ВЫСОКИЙ ПРИОРИТЕТ: Мониторинг производительности
   try {
     const token = (req as any).token;
     if (!token?.userId) {
@@ -1370,86 +1595,145 @@ export const getMessages = async (req: Request, res: Response) => {
     }
 
     const { chatId } = req.params;
-    const { page = '1', limit = '50' } = req.query;
+    const { page = '1', limit = '20', cursor } = req.query; // КРИТИЧНО: Изменен дефолтный лимит на 20 сообщений
 
     const pageNum = parseInt(page as string);
     const limitNum = parseInt(limit as string);
-    const skip = (pageNum - 1) * limitNum;
-
-    // Проверяем доступ к чату
-    const chat = await prisma.safetyJournalChat.findUnique({
-      where: { id: chatId },
-      select: { 
-        checkerId: true,
-        branchId: true
-      }
-    });
+    
+    // КРИТИЧНО: Ограничиваем лимит максимум 20 для первой страницы, чтобы всегда показывать последние 20 сообщений
+    const effectiveLimit = pageNum === 1 ? Math.min(limitNum, 20) : limitNum;
+    
+    // ОПТИМИЗАЦИЯ: Сначала проверяем доступ к чату, затем загружаем сообщения
+    const [chat, userIsChecker, user] = await Promise.all([
+      prisma.safetyJournalChat.findUnique({
+        where: { id: chatId },
+        select: { 
+          checkerId: true,
+          branchId: true
+        }
+      }),
+      isChecker(token.userId),
+      prisma.user.findUnique({
+        where: { id: token.userId },
+        select: { branch: true }
+      })
+    ]);
 
     if (!chat) {
       return res.status(404).json({ error: 'Чат не найден' });
     }
 
-    // Проверяем, является ли пользователь проверяющим (любой проверяющий имеет доступ ко всем чатам)
-    const userIsChecker = await isChecker(token.userId);
-    
-    // Если пользователь не проверяющий, проверяем другие условия доступа
-    let isUserChecker = false;
-    let isBranchEmployee = false;
-    let isResponsible = false;
-    
+    // Если пользователь проверяющий, сразу разрешаем доступ
     if (!userIsChecker) {
-      // Проверяем, является ли пользователь конкретным проверяющим этого чата
-      isUserChecker = chat.checkerId === token.userId;
+      // Проверяем другие условия доступа параллельно
+      const isUserChecker = chat.checkerId === token.userId;
+      const isBranchEmployee = user?.branch === chat.branchId;
       
-      // Проверяем, является ли пользователь сотрудником филиала
-    if (!isUserChecker) {
-      const user = await prisma.user.findUnique({
-        where: { id: token.userId },
-        select: { branch: true }
-      });
-      isBranchEmployee = user?.branch === chat.branchId;
-    }
-
-      // Проверяем, является ли пользователь ответственным по филиалу
-    if (!isUserChecker && !isBranchEmployee) {
+      // Проверяем ответственного только если другие проверки не прошли
+      let isResponsible = false;
+      if (!isUserChecker && !isBranchEmployee) {
         const authToken = getAuthToken(req);
         if (authToken) {
           isResponsible = await isResponsibleForBranch(token.userId, chat.branchId, authToken);
         }
       }
-    }
 
-    // Если пользователь не проверяющий и не соответствует другим условиям доступа
-    if (!userIsChecker && !isUserChecker && !isBranchEmployee && !isResponsible) {
-      return res.status(403).json({ error: 'Доступ запрещен' });
+      // Если пользователь не соответствует ни одному условию доступа
+      if (!isUserChecker && !isBranchEmployee && !isResponsible) {
+        return res.status(403).json({ error: 'Доступ запрещен' });
+      }
     }
-
-    // ИЗМЕНЕНО: Один филиал = один чат, поэтому загружаем сообщения из этого чата
-    // Но на всякий случай проверяем, что чат принадлежит правильному филиалу
-    const [messages, total] = await Promise.all([
-      prisma.safetyJournalChatMessage.findMany({
-        where: { chatId },
-        skip,
-        take: limitNum,
-        include: {
-          sender: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              image: true
+    
+    // НИЗКИЙ ПРИОРИТЕТ: Cursor-based пагинация (более эффективна для больших наборов данных)
+    // Если передан cursor, используем cursor-based пагинацию
+    let messages: any[];
+    let total: number;
+    let hasNextPage = false;
+    let nextCursor: string | null = null;
+    
+    if (cursor && typeof cursor === 'string') {
+      // Cursor-based пагинация: загружаем сообщения до указанного cursor (более старые)
+      const cursorDate = new Date(cursor);
+      
+      [messages, total] = await Promise.all([
+        prisma.safetyJournalChatMessage.findMany({
+          where: {
+            chatId,
+            createdAt: { lt: cursorDate } // Сообщения старше cursor
+          },
+          skip: 0,
+          take: effectiveLimit + 1, // Загружаем на 1 больше, чтобы проверить наличие следующей страницы
+          include: {
+            sender: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                image: true
+              }
+            },
+            attachments: {
+              select: {
+                id: true,
+                fileName: true,
+                fileUrl: true,
+                fileSize: true,
+                mimeType: true
+              }
+            },
+            quotedMessage: {
+              include: {
+                sender: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    image: true
+                  }
+                },
+                attachments: {
+                  select: {
+                    id: true,
+                    fileName: true,
+                    fileUrl: true,
+                    fileSize: true,
+                    mimeType: true
+                  }
+                }
+              }
             }
           },
-          attachments: {
-            select: {
-              id: true,
-              fileName: true,
-              fileUrl: true,
-              fileSize: true,
-              mimeType: true
-            }
-          },
-          quotedMessage: {
+          orderBy: { createdAt: 'desc' } // Сортируем по убыванию для получения старых сообщений
+        }),
+        prisma.safetyJournalChatMessage.count({
+          where: { chatId }
+        })
+      ]);
+      
+      // Проверяем, есть ли еще сообщения
+      if (messages.length > effectiveLimit) {
+        hasNextPage = true;
+        messages = messages.slice(0, effectiveLimit); // Убираем лишний элемент
+        nextCursor = messages[messages.length - 1]?.createdAt?.toISOString() || null;
+      } else if (messages.length > 0) {
+        nextCursor = messages[messages.length - 1]?.createdAt?.toISOString() || null;
+      }
+      
+      // Переворачиваем порядок для правильного отображения (старые сверху, новые снизу)
+      messages = messages.reverse();
+    } else {
+      // КРИТИЧНО: При первой загрузке (page=1) всегда загружаем последние сообщения по дате (самые новые)
+      total = await prisma.safetyJournalChatMessage.count({
+        where: { chatId }
+      });
+      
+      if (pageNum === 1) {
+        // КРИТИЧНО: При первой загрузке берем последние N сообщений (самые новые по дате)
+        // Используем orderBy desc и берем первые N, затем переворачиваем для отображения
+        [messages, total] = await Promise.all([
+          prisma.safetyJournalChatMessage.findMany({
+            where: { chatId },
+            take: effectiveLimit, // Берем последние N сообщений
             include: {
               sender: {
                 select: {
@@ -1467,16 +1751,106 @@ export const getMessages = async (req: Request, res: Response) => {
                   fileSize: true,
                   mimeType: true
                 }
+              },
+              quotedMessage: {
+                include: {
+                  sender: {
+                    select: {
+                      id: true,
+                      name: true,
+                      email: true,
+                      image: true
+                    }
+                  },
+                  attachments: {
+                    select: {
+                      id: true,
+                      fileName: true,
+                      fileUrl: true,
+                      fileSize: true,
+                      mimeType: true
+                    }
+                  }
+                }
               }
-            }
-          }
-        },
-        orderBy: { createdAt: 'desc' }
-      }),
-      prisma.safetyJournalChatMessage.count({
-        where: { chatId }
-      })
-    ]);
+            },
+            orderBy: { createdAt: 'desc' } // Сортируем по убыванию - получаем самые новые первыми
+          }),
+          Promise.resolve(total)
+        ]);
+        
+        // КРИТИЧНО: Переворачиваем массив для правильного отображения (старые сверху, новые снизу)
+        messages = messages.reverse();
+        
+        // Вычисляем cursor для следующей страницы (самое старое сообщение в текущей выборке)
+        if (messages.length > 0 && messages.length === effectiveLimit && total > effectiveLimit) {
+          hasNextPage = true;
+          nextCursor = messages[0]?.createdAt?.toISOString() || null; // Cursor первого (самого старого) сообщения
+        }
+      } else {
+        // Последующие страницы: используем cursor-based пагинацию для загрузки более старых сообщений
+        // Это должно было быть обработано в блоке выше с cursor, но на случай если cursor не передан
+        // используем offset-based пагинацию как fallback
+        const skip = Math.max(0, total - (pageNum * effectiveLimit));
+        const take = Math.min(effectiveLimit, total - skip);
+        
+        [messages, total] = await Promise.all([
+          prisma.safetyJournalChatMessage.findMany({
+            where: { chatId },
+            skip,
+            take: take > 0 ? take : effectiveLimit,
+            include: {
+              sender: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  image: true
+                }
+              },
+              attachments: {
+                select: {
+                  id: true,
+                  fileName: true,
+                  fileUrl: true,
+                  fileSize: true,
+                  mimeType: true
+                }
+              },
+              quotedMessage: {
+                include: {
+                  sender: {
+                    select: {
+                      id: true,
+                      name: true,
+                      email: true,
+                      image: true
+                    }
+                  },
+                  attachments: {
+                    select: {
+                      id: true,
+                      fileName: true,
+                      fileUrl: true,
+                      fileSize: true,
+                      mimeType: true
+                    }
+                  }
+                }
+              }
+            },
+            orderBy: { createdAt: 'asc' } // Для последующих страниц сортируем по возрастанию
+          }),
+          Promise.resolve(total)
+        ]);
+        
+        // Для последующих страниц вычисляем cursor для следующей страницы
+        if (messages.length > 0 && pageNum * effectiveLimit < total) {
+          hasNextPage = true;
+          nextCursor = messages[messages.length - 1]?.createdAt?.toISOString() || null;
+        }
+      }
+    }
 
     console.log('[SafetyJournalChat] getMessages - returning messages:', {
       chatId,
@@ -1508,23 +1882,43 @@ export const getMessages = async (req: Request, res: Response) => {
          new Date(msg.updatedAt).getTime() > new Date(msg.createdAt).getTime() + 1000) // Разница больше 1 секунды (учитываем возможные задержки)
     }));
 
+    const duration = Date.now() - startTime; // ВЫСОКИЙ ПРИОРИТЕТ: Мониторинг производительности
+    console.log('[SafetyJournalChat] getMessages - completed:', {
+      chatId,
+      messagesCount: messagesWithEditedFlag.length,
+      page: pageNum,
+      duration: `${duration}ms`
+    });
+    
+    // ВЫСОКИЙ ПРИОРИТЕТ: Логирование медленных запросов
+    if (duration > 1000) {
+      console.warn(`[SafetyJournalChat] SLOW QUERY: getMessages took ${duration}ms for chatId ${chatId}`);
+    }
+
     res.json({
       messages: messagesWithEditedFlag,
       pagination: {
         page: pageNum,
-        limit: limitNum,
+        limit: effectiveLimit,
         total,
-        totalPages: Math.ceil(total / limitNum)
+        totalPages: Math.ceil(total / effectiveLimit),
+        // НИЗКИЙ ПРИОРИТЕТ: Cursor-based пагинация
+        hasNextPage,
+        nextCursor, // Cursor для следующей страницы (для загрузки более старых сообщений)
+        // Для первой загрузки cursor будет указывать на самое старое сообщение в текущей выборке
+        // Для последующих загрузок используем этот cursor для получения более старых сообщений
       }
     });
   } catch (error) {
-    console.error('[SafetyJournalChat] Error getting messages:', error);
+    const duration = Date.now() - startTime;
+    console.error('[SafetyJournalChat] Error getting messages:', error, `(${duration}ms)`);
     res.status(500).json({ error: 'Failed to get messages' });
   }
 };
 
 // Отправить сообщение
 export const sendMessage = async (req: Request, res: Response) => {
+  const startTime = Date.now(); // ВЫСОКИЙ ПРИОРИТЕТ: Мониторинг производительности
   try {
     const token = (req as any).token;
     if (!token?.userId) {
@@ -1560,8 +1954,8 @@ export const sendMessage = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Сообщение или файлы обязательны' });
     }
 
-    // Проверяем доступ к чату
-    const chat = await prisma.safetyJournalChat.findUnique({
+    // ОПТИМИЗАЦИЯ: Параллельно получаем чат и проверяем доступ
+    const chatPromise = prisma.safetyJournalChat.findUnique({
       where: { id: chatId },
       include: {
         checker: {
@@ -1573,13 +1967,14 @@ export const sendMessage = async (req: Request, res: Response) => {
         }
       }
     });
+    
+    const userIsCheckerPromise = isChecker(token.userId);
+    
+    const [chat, userIsChecker] = await Promise.all([chatPromise, userIsCheckerPromise]);
 
     if (!chat) {
       return res.status(404).json({ error: 'Чат не найден' });
     }
-
-    // Проверяем, является ли пользователь проверяющим
-    const userIsChecker = await isChecker(token.userId);
 
     // Если пользователь не проверяющий, проверяем, является ли он ответственным по филиалу
     if (!userIsChecker) {
@@ -1625,7 +2020,28 @@ export const sendMessage = async (req: Request, res: Response) => {
             image: true
           }
         },
-        attachments: true
+        attachments: true,
+        quotedMessage: {
+          include: {
+            sender: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                image: true
+              }
+            },
+            attachments: {
+              select: {
+                id: true,
+                fileName: true,
+                fileUrl: true,
+                fileSize: true,
+                mimeType: true
+              }
+            }
+          }
+        }
       }
     });
     
@@ -1725,29 +2141,63 @@ export const sendMessage = async (req: Request, res: Response) => {
       }
     }
 
-    // Обновляем updatedAt чата
-    await prisma.safetyJournalChat.update({
+    // КРИТИЧНО: Обновляем updatedAt чата в фоне (не блокируем ответ)
+    prisma.safetyJournalChat.update({
       where: { id: chatId },
       data: { updatedAt: new Date() }
+    }).catch(() => {
+      // Игнорируем ошибки обновления
     });
-
-    // Отправляем через Socket.IO
+    
+    // КРИТИЧНО: Используем уже загруженное сообщение вместо повторного запроса
+    // Формируем данные для Socket.IO из уже имеющегося сообщения
+    const messageData = {
+      type: 'SAFETY_JOURNAL_MESSAGE',
+      chatId,
+      branchId: chat.branchId,
+      message: {
+        id: message.id,
+        message: message.message,
+        sender: message.sender,
+        createdAt: message.createdAt,
+        attachments: message.attachments || [],
+        quotedMessage: (message as any).quotedMessage || null
+      }
+    };
+    
+    // Отправляем через Socket.IO СРАЗУ (не блокируем ответ)
     const socketService = SocketIOService.getInstance();
     
-    // Получаем финальное сообщение с вложениями и цитируемым сообщением
-    const finalMessage = await prisma.safetyJournalChatMessage.findUnique({
-      where: { id: message.id },
-      include: {
-        sender: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            image: true
-          }
-        },
-        attachments: true,
-        quotedMessage: {
+    // КРИТИЧНО: Отправляем Socket.IO сообщение сразу основным участникам чата
+    // Используем простой список участников из чата (checkerId + отправитель)
+    const quickParticipants = new Set<string>();
+    quickParticipants.add(token.userId); // Отправитель
+    if (chat.checkerId) {
+      quickParticipants.add(chat.checkerId); // Проверяющий
+    }
+    
+    // Отправляем Socket.IO сообщения сразу
+    for (const participantId of quickParticipants) {
+      socketService.sendChatMessage(participantId, messageData);
+    }
+    
+    // КРИТИЧНО: Возвращаем ответ СРАЗУ после Socket.IO
+    const duration = Date.now() - startTime;
+    console.log('[SafetyJournalChat] sendMessage - quick response:', {
+      chatId,
+      messageId: message.id,
+      duration: `${duration}ms`
+    });
+    
+    res.status(201).json(message);
+    
+    // ВСЕ ОСТАЛЬНОЕ ДЕЛАЕМ В ФОНЕ (не блокируем ответ)
+    // Асинхронно получаем всех участников и отправляем уведомления
+    (async () => {
+      try {
+        // Получаем финальное сообщение с вложениями
+        const finalMessage = await prisma.safetyJournalChatMessage.findUnique({
+          where: { id: message.id },
           include: {
             sender: {
               select: {
@@ -1757,301 +2207,202 @@ export const sendMessage = async (req: Request, res: Response) => {
                 image: true
               }
             },
-            attachments: {
-              select: {
-                id: true,
-                fileName: true,
-                fileUrl: true,
-                fileSize: true,
-                mimeType: true
+            attachments: true,
+            quotedMessage: {
+              include: {
+                sender: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    image: true
+                  }
+                },
+                attachments: {
+                  select: {
+                    id: true,
+                    fileName: true,
+                    fileUrl: true,
+                    fileSize: true,
+                    mimeType: true
+                  }
+                }
               }
             }
           }
+        });
+        
+        // Обновляем данные для Socket.IO с полной информацией
+        const fullMessageData = {
+          ...messageData,
+        message: {
+          ...messageData.message,
+          attachments: finalMessage?.attachments || message.attachments || [],
+          quotedMessage: (finalMessage as any)?.quotedMessage || null
         }
-      }
-    });
-    
-    const messageData = {
-      type: 'SAFETY_JOURNAL_MESSAGE',
-      chatId,
-      branchId: chat.branchId,
-      message: {
-        id: finalMessage?.id || message.id,
-        message: finalMessage?.message || message.message,
-        sender: finalMessage?.sender || message.sender,
-        createdAt: finalMessage?.createdAt || message.createdAt,
-        attachments: finalMessage?.attachments || [],
-        quotedMessage: finalMessage?.quotedMessage || null
-      }
-    };
-    
-    // Собираем ID пользователей, которым уже отправили уведомления (чтобы не дублировать)
-    const notifiedUserIds = new Set<string>();
-    
-    // ЕДИНАЯ ФУНКЦИЯ: Отправка уведомлений для проверяющих и ответственных
-    const sendNotificationToUser = async (
-      userId: string,
-      senderName: string,
-      messagePreview: string,
-      branchName: string,
-      chatId: string,
-      messageId: string,
-      branchId: string
-    ) => {
-      // Проверяем, находится ли пользователь в конкретном активном чате (этого чата)
-      // Сначала проверяем конкретный чат, затем любой активный чат
-      const isInThisChat = socketService.isUserInActiveChat(userId, chatId);
-      const isInAnyActiveChat = socketService.isUserInAnyActiveChat(userId);
-      
-      console.log('[SafetyJournalChat] sendNotificationToUser:', {
-        userId,
-        senderName,
-        messagePreview,
-        branchName,
-        chatId,
-        messageId,
-        isInThisChat,
-        isInAnyActiveChat
-      });
-      
-      // Отправляем уведомление только если пользователь НЕ в этом конкретном чате
-      // Если пользователь в другом чате, все равно отправляем уведомление
-      if (!isInThisChat) {
-        const notificationBranchName = branchName && branchName !== 'филиала' ? branchName : 'филиал';
+        };
         
-        console.log('[SafetyJournalChat] Creating notification for user:', userId);
+        // Отправляем полное сообщение через Socket.IO остальным участникам
+        const authToken = getAuthToken(req);
+        const participantIds = new Set<string>();
         
-        await NotificationController.create({
-          type: 'INFO',
-          channels: ['IN_APP', 'TELEGRAM', 'EMAIL'],
-          title: senderName,
-          message: messagePreview,
-          senderId: token.userId,
-          receiverId: userId,
-          priority: 'MEDIUM',
-          action: {
-            type: 'NAVIGATE',
-            url: `/jurists/safety?branchId=${branchId}&chatId=${chatId}&messageId=${messageId}`,
-            chatId: chatId,
-            messageId: messageId,
-            branchName: notificationBranchName,
-          },
+        // Получаем всех проверяющих
+        const safetyTool = await prisma.tool.findFirst({
+          where: { link: 'jurists/safety' }
         });
         
-        console.log('[SafetyJournalChat] Notification created successfully for user:', userId);
-      } else {
-        console.log('[SafetyJournalChat] User is in active chat, skipping notification:', userId);
-      }
-    };
-
-    // Получаем данные для уведомления (общие для всех)
-    const senderName = finalMessage?.sender?.name || message?.sender?.name || 'Пользователь';
-    const notificationMessageText = finalMessage?.message || message?.message || '';
-    const attachments = finalMessage?.attachments || message?.attachments || [];
-    
-    // Формируем превью сообщения
-    let messagePreview = '';
-    if (typeof notificationMessageText === 'string' && notificationMessageText.trim()) {
-      messagePreview = notificationMessageText.length > 50 ? notificationMessageText.substring(0, 50) + '...' : notificationMessageText;
-    } else if (attachments.length > 0) {
-      const fileCount = attachments.length;
-      const fileTypes = attachments.map((a: any) => {
-        const mimeType = a.mimeType || '';
-        if (mimeType.startsWith('image/')) return 'изображение';
-        if (mimeType.startsWith('video/')) return 'видео';
-        if (mimeType.includes('pdf')) return 'PDF';
-        if (mimeType.includes('word') || mimeType.includes('document')) return 'документ';
-        if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) return 'таблица';
-        return 'файл';
-      });
-      messagePreview = fileCount === 1 ? `📎 ${fileTypes[0]}` : `📎 ${fileCount} файлов`;
-    } else {
-      messagePreview = 'Сообщение';
-    }
-
-    // Получаем название филиала
-    let branchName = 'филиала';
-    try {
-      const localBranch = await prisma.branch.findUnique({
-        where: { uuid: chat.branchId },
-        select: { name: true }
-      });
-      if (localBranch?.name) {
-        branchName = localBranch.name;
-      }
-    } catch (error) {
-      // Игнорируем ошибку
-    }
-
-    // Отправляем уведомления ВСЕМ участникам чата через NotificationController
-    try {
-      const authToken = getAuthToken(req);
-      
-      // Получаем всех участников чата (используем ту же логику, что и в getChatParticipants)
-      const participantIds = new Set<string>();
-      
-      // ВАЖНО: Получаем ВСЕХ проверяющих (может быть несколько проверяющих в чате)
-      // Это включает:
-      // 1. Проверяющего, указанного в чате (chat.checkerId)
-      // 2. Всех пользователей с FULL доступом к Safety Journal
-      // 3. Всех SUPERVISOR
-      const safetyTool = await prisma.tool.findFirst({
-        where: { link: 'jurists/safety' }
-      });
-      
-      if (safetyTool) {
-        // Пользователи с FULL доступом на уровне пользователя
-        const userAccesses = await prisma.userToolAccess.findMany({
-          where: {
-            toolId: safetyTool.id,
-            accessLevel: 'FULL'
-          },
-          select: { userId: true }
-        });
-        
-        userAccesses.forEach(access => {
-          participantIds.add(access.userId);
-        });
-        
-        // SUPERVISOR всегда имеет доступ
-        const supervisors = await prisma.user.findMany({
-          where: { role: 'SUPERVISOR' },
-          select: { id: true }
-        });
-        
-        supervisors.forEach(s => {
-          participantIds.add(s.id);
-        });
-      }
-      
-      // Также добавляем проверяющего из чата (если он еще не добавлен выше)
-      // Это важно, если checkerId не имеет FULL доступа, но указан в чате
-      if (chat.checkerId) {
-        participantIds.add(chat.checkerId);
-      }
-      
-      console.log('[SafetyJournalChat] All checkers (participants with FULL access):', {
-        totalCheckers: participantIds.size,
-        checkerIds: Array.from(participantIds),
-        chatCheckerId: chat.checkerId
-      });
-      
-      // Получаем ответственных по филиалу из внешнего API
-      if (authToken) {
-        try {
-          const responsiblesResponse = await axios.get(
-            `${JOURNALS_API_URL}/branch_responsibles/?branchId=${chat.branchId}`,
-            {
-              headers: createAuthHeaders(authToken)
-            }
-          );
+        if (safetyTool) {
+          const [userAccesses, supervisors] = await Promise.all([
+            prisma.userToolAccess.findMany({
+              where: {
+                toolId: safetyTool.id,
+                accessLevel: 'FULL'
+              },
+              select: { userId: true }
+            }),
+            prisma.user.findMany({
+              where: { role: 'SUPERVISOR' },
+              select: { id: true }
+            })
+          ]);
           
-          if (responsiblesResponse.data && Array.isArray(responsiblesResponse.data)) {
-            // Обновляем branchName из API, если он есть
-            for (const branchData of responsiblesResponse.data) {
-              if (branchData.branch_id === chat.branchId && branchData.branch_name) {
-                branchName = branchData.branch_name;
-                break;
+          userAccesses.forEach(access => participantIds.add(access.userId));
+          supervisors.forEach(s => participantIds.add(s.id));
+        }
+        
+        if (chat.checkerId) {
+          participantIds.add(chat.checkerId);
+        }
+        
+        // Получаем ответственных из внешнего API (с кэшированием)
+        if (authToken) {
+          try {
+            const apiCacheKey = `branch_responsibles_${chat.branchId}_${authToken?.substring(0, 10) || 'default'}`;
+            let responsiblesResponse: any;
+            
+            const cachedApiData = apiCache.get(apiCacheKey);
+            if (cachedApiData && Date.now() - cachedApiData.timestamp < API_CACHE_TTL) {
+              responsiblesResponse = { data: cachedApiData.data };
+            } else {
+              if (apiCache.size > 100) {
+                cleanApiCache();
+              }
+              
+              responsiblesResponse = await axios.get(
+                `${JOURNALS_API_URL}/branch_responsibles/?branchId=${chat.branchId}`,
+                {
+                  headers: createAuthHeaders(authToken),
+                  timeout: 5000
+                }
+              );
+              
+              if (responsiblesResponse?.data) {
+                apiCache.set(apiCacheKey, { data: responsiblesResponse.data, timestamp: Date.now() });
               }
             }
             
-            for (const branchData of responsiblesResponse.data) {
-              if (branchData.branch_id === chat.branchId) {
-                if (branchData.responsibles && Array.isArray(branchData.responsibles)) {
+            if (responsiblesResponse?.data && Array.isArray(responsiblesResponse.data)) {
+              for (const branchData of responsiblesResponse.data) {
+                if (branchData.branch_id === chat.branchId && branchData.responsibles) {
+                  const usersMap = await findUsersByResponsiblesBatch(
+                    prisma,
+                    branchData.responsibles,
+                    { select: { id: true }, cache: new Map() }
+                  );
+                  
                   for (const resp of branchData.responsibles) {
-                    // Используем общую утилиту для поиска пользователя
-                    const responsibleUser = await findUserByResponsibleData(
-                      prisma,
-                      {
-                        employee_id: resp.employee_id,
-                        employee_email: resp.employee_email,
-                        employee_name: resp.employee_name
-                      },
-                      {
-                        select: { id: true }
-                      }
-                    );
-                    
+                    const key = resp.employee_id || resp.employee_email || resp.employee_name || '';
+                    const responsibleUser = usersMap.get(key);
                     if (responsibleUser) {
                       participantIds.add(responsibleUser.id);
                     }
                   }
+                  break;
                 }
-                break; // Нашли нужный филиал, выходим из цикла
               }
             }
+          } catch (apiError) {
+            console.error('[SafetyJournalChat] Error fetching responsibles in background:', apiError);
           }
-        } catch (apiError) {
-          console.error('[SafetyJournalChat] Error fetching responsibles for participants:', apiError);
-          // Продолжаем работу даже если не удалось получить ответственных
         }
-      }
-      
-      // Отправляем уведомления всем участникам чата (кроме отправителя)
-      console.log('[SafetyJournalChat] Sending notifications to all chat participants:', {
-        totalParticipants: participantIds.size,
-        chatId: chat.id,
-        branchId: chat.branchId
-      });
-      
-      // ВАЖНО: Убеждаемся, что отправитель тоже в списке участников
-      // Это гарантирует, что сообщение отображается в real-time у всех, включая отправителя
-      participantIds.add(token.userId);
-      
-      // Отправляем сообщение через Socket.IO ВСЕМ участникам чата (включая отправителя)
-      // Это гарантирует, что сообщение отображается в real-time у всех пользователей
-      // Учитываем, что участников может быть более 2 (проверяющий + несколько ответственных)
-      console.log('[SafetyJournalChat] Sending message to all participants:', {
-        totalParticipants: participantIds.size,
-        participantIds: Array.from(participantIds),
-        chatId: chat.id,
-        branchId: chat.branchId,
-        senderId: token.userId
-      });
-      
-      for (const participantId of participantIds) {
-        if (!notifiedUserIds.has(participantId)) {
-          // Отправляем сообщение через Socket.IO для отображения в чате ВСЕМ участникам
-          const sent = socketService.sendChatMessage(participantId, messageData);
-          
-          if (sent) {
-            console.log(`[SafetyJournalChat] Message sent via Socket.IO to participant: ${participantId}`);
-          } else {
-            console.warn(`[SafetyJournalChat] Failed to send message via Socket.IO to participant: ${participantId} (user may be offline)`);
+        
+        // Отправляем Socket.IO сообщения всем участникам
+        participantIds.add(token.userId);
+        for (const participantId of participantIds) {
+          if (!quickParticipants.has(participantId)) {
+            socketService.sendChatMessage(participantId, fullMessageData);
           }
-          
-          // Отправляем уведомление только другим участникам (не отправителю)
+        }
+        
+        // Отправляем уведомления в фоне
+        const senderName = finalMessage?.sender?.name || message?.sender?.name || 'Пользователь';
+        const notificationMessageText = finalMessage?.message || message?.message || '';
+        const attachments = finalMessage?.attachments || message?.attachments || [];
+        
+        let messagePreview = '';
+        if (typeof notificationMessageText === 'string' && notificationMessageText.trim()) {
+          messagePreview = notificationMessageText.length > 50 ? notificationMessageText.substring(0, 50) + '...' : notificationMessageText;
+        } else if (attachments.length > 0) {
+          messagePreview = attachments.length === 1 ? '📎 файл' : `📎 ${attachments.length} файлов`;
+        } else {
+          messagePreview = 'Сообщение';
+        }
+        
+        let branchName = 'филиала';
+        try {
+          const localBranch = await prisma.branch.findUnique({
+            where: { uuid: chat.branchId },
+            select: { name: true }
+          });
+          if (localBranch?.name) {
+            branchName = localBranch.name;
+          }
+        } catch (error) {
+          // Игнорируем ошибку
+        }
+        
+        // Отправляем уведомления асинхронно
+        const notificationPromises: Promise<void>[] = [];
+        for (const participantId of participantIds) {
           if (participantId !== token.userId) {
-            await sendNotificationToUser(
-              participantId,
-              senderName,
-              messagePreview,
-              branchName,
-              chat.id,
-              finalMessage?.id || message.id,
-              chat.branchId
-            );
+            const isInThisChat = socketService.isUserInActiveChat(participantId, chatId);
+            if (!isInThisChat) {
+              notificationPromises.push(
+                NotificationController.create({
+                  type: 'INFO',
+                  channels: ['IN_APP', 'TELEGRAM', 'EMAIL'],
+                  title: senderName,
+                  message: messagePreview,
+                  senderId: token.userId,
+                  receiverId: participantId,
+                  priority: 'MEDIUM',
+                  action: {
+                    type: 'NAVIGATE',
+                    url: `/jurists/safety?branchId=${chat.branchId}&chatId=${chatId}&messageId=${message.id}`,
+                    chatId: chatId,
+                    messageId: message.id,
+                    branchName: branchName,
+                  },
+                }).then(() => {
+                  // Преобразуем в void
+                }).catch((error) => {
+                  console.error(`[SafetyJournalChat] Error sending notification to ${participantId}:`, error);
+                }) as Promise<void>
+              );
+            }
           }
-          
-          notifiedUserIds.add(participantId);
         }
+        
+        await Promise.allSettled(notificationPromises);
+        console.log('[SafetyJournalChat] Background notifications sent');
+      } catch (bgError) {
+        console.error('[SafetyJournalChat] Error in background processing:', bgError);
       }
-      
-      console.log('[SafetyJournalChat] Message sent to all participants via Socket.IO:', {
-        totalSent: notifiedUserIds.size,
-        participantIds: Array.from(notifiedUserIds)
-      });
-      
-      console.log('[SafetyJournalChat] Notifications sent to participants:', notifiedUserIds.size);
-    } catch (notifError) {
-      console.error('[SafetyJournalChat] Error sending notification:', notifError);
-      // Продолжаем работу даже если не удалось отправить уведомления
-    }
-
-    // Возвращаем финальное сообщение с вложениями
-    const responseMessage = finalMessage || message;
-    res.status(201).json(responseMessage);
+    })();
+    
   } catch (error: any) {
+    const duration = Date.now() - startTime;
+    console.error('[SafetyJournalChat] Error sending message:', error, `(${duration}ms)`);
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.issues });
     }
@@ -2246,9 +2597,18 @@ export const markMessagesAsRead = async (req: Request, res: Response) => {
     }
 
     res.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
+    // СРЕДНИЙ ПРИОРИТЕТ: Улучшенная обработка ошибок
     console.error('[SafetyJournalChat] Error marking messages as read:', error);
-    res.status(500).json({ error: 'Failed to mark messages as read' });
+    console.error('[SafetyJournalChat] Error details:', {
+      message: error?.message,
+      stack: error?.stack?.substring(0, 200),
+      name: error?.name
+    });
+    res.status(500).json({ 
+      error: 'Failed to mark messages as read',
+      details: process.env.NODE_ENV === 'development' ? error?.message : undefined
+    });
   }
 };
 
@@ -2383,9 +2743,18 @@ export const deleteMessage = async (req: Request, res: Response) => {
     }
 
     res.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
+    // СРЕДНИЙ ПРИОРИТЕТ: Улучшенная обработка ошибок
     console.error('[SafetyJournalChat] Error deleting message:', error);
-    res.status(500).json({ error: 'Failed to delete message' });
+    console.error('[SafetyJournalChat] Error details:', {
+      message: error?.message,
+      stack: error?.stack?.substring(0, 200),
+      name: error?.name
+    });
+    res.status(500).json({ 
+      error: 'Failed to delete message',
+      details: process.env.NODE_ENV === 'development' ? error?.message : undefined
+    });
   }
 };
 
@@ -2457,9 +2826,18 @@ export const updateMessage = async (req: Request, res: Response) => {
       ...updatedMessage,
       isEdited: true,
     });
-  } catch (error) {
+  } catch (error: any) {
+    // СРЕДНИЙ ПРИОРИТЕТ: Улучшенная обработка ошибок
     console.error('[SafetyJournalChat] Error updating message:', error);
-    res.status(500).json({ error: 'Failed to update message' });
+    console.error('[SafetyJournalChat] Error details:', {
+      message: error?.message,
+      stack: error?.stack?.substring(0, 200),
+      name: error?.name
+    });
+    res.status(500).json({ 
+      error: 'Failed to update message',
+      details: process.env.NODE_ENV === 'development' ? error?.message : undefined
+    });
   }
 };
 
