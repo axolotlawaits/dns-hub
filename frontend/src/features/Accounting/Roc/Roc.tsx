@@ -99,6 +99,7 @@ const DEFAULT_FORM: any = {
   statusContractId: '',
   dateContract: dayjs().format('YYYY-MM-DD'),
   agreedTo: '',
+  indefinite: false,
   shelfLife: 0,
   terminationLetter: false,
   terminationСonditions: '',
@@ -440,12 +441,19 @@ export default function RocList() {
           required: true
         },
         { 
+          name: 'indefinite', 
+          label: 'Без срока', 
+          type: 'boolean',
+          groupWith: ['contractNumber', 'dateContract'],
+          groupSize: 3
+        },
+        { 
           name: 'agreedTo', 
           label: 'Срок действия до', 
           type: 'date',
           groupWith: ['contractNumber', 'dateContract'],
           groupSize: 3,
-          required: true
+          required: !formValues.indefinite
         },
         { 
           name: 'shelfLife', 
@@ -622,6 +630,7 @@ export default function RocList() {
       ...row,
       dateContract: row.dateContract ? dayjs(row.dateContract).format('YYYY-MM-DD') : '',
       agreedTo: row.agreedTo ? dayjs(row.agreedTo).format('YYYY-MM-DD') : '',
+      indefinite: !row.agreedTo,
       userAddId: user?.id || DEFAULT_FORM.userAddId,
       userUpdatedId: user?.id || DEFAULT_FORM.userUpdatedId,
       roc: { selectedByName: '', selectedByInn: '' }
@@ -826,12 +835,12 @@ export default function RocList() {
                       cell: info => (
                         <Text 
                           style={{ 
-                            color: 'var(--theme-text-primary)',
+                            color: info.row.original.agreedTo ? 'var(--theme-text-primary)' : 'var(--theme-text-secondary)',
                             fontSize: '14px',
                             fontWeight: '500'
                           }}
                         >
-                          {info.row.original.agreedTo ? dayjs(info.row.original.agreedTo).format('DD.MM.YYYY') : '-'}
+                          {info.row.original.agreedTo ? dayjs(info.row.original.agreedTo).format('DD.MM.YYYY') : 'Без срока'}
                         </Text>
                       ) 
                     },
@@ -1124,7 +1133,7 @@ export default function RocList() {
                                       color: 'var(--theme-text-secondary)'
                                     }}
                                   >
-                                    до {row.agreedTo ? dayjs(row.agreedTo).format('DD.MM.YYYY') : '-'}
+                                    до {row.agreedTo ? dayjs(row.agreedTo).format('DD.MM.YYYY') : 'Без срока'}
                                   </Text>
                                 </Group>
                               </Box>
@@ -1187,12 +1196,19 @@ export default function RocList() {
           const chosenId = vals?.roc?.selectedByInn || vals?.roc?.selectedByName || selectedPartyId;
           const doc = chosenId ? idToParty[chosenId] : undefined;
           const payloadBase = doc ? { ...vals, doc } : vals;
-          const payload = {
+          const indefinite = !!payloadBase.indefinite;
+          const payload: any = {
             ...payloadBase,
             userAddId: payloadBase.userAddId || user?.id || '',
             userUpdatedId: payloadBase.userUpdatedId || user?.id || '',
             name: payloadBase.name || (doc?.name ?? ''),
           };
+          if (indefinite) {
+            payload.agreedTo = undefined;
+          } else {
+            payload.agreedTo = payloadBase.agreedTo || undefined;
+          }
+          delete payload.indefinite;
           const saved = selected ? await handleUpdate(payload) : await handleCreate(payload);
           const targetId = selected?.id || saved?.id;
           if (targetId) {
@@ -1731,7 +1747,7 @@ export default function RocList() {
           },
           { 
             label: 'Действует до', 
-            value: (it) => it?.agreedTo ? dayjs(it.agreedTo).format('DD.MM.YYYY') : '-',
+            value: (it) => it?.agreedTo ? dayjs(it.agreedTo).format('DD.MM.YYYY') : 'Без срока',
             groupWith: ['Номер договора', 'Дата договора'],
             groupSize: 3
           },

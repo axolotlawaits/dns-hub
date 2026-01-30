@@ -106,7 +106,7 @@ model Branch {
   userData      UserData[]
   shops         Shop[]
   shopReserves  ShopReserve[] @relation("ShopReserveBranch")
-  cleaningBranches CleaningBranch[] @relation("CleaningBranch")
+  cleaningDocuments CleaningDocument[] @relation("CleaningBranch")
 }
 
 model Group {
@@ -1324,42 +1324,19 @@ model HomeworkStatus {
   @@index([statusId])
 }
 
-model CleaningBranch {
-  id                    String              @id @default(uuid())
-  branchId              String
-  branch                Branch               @relation("CleaningBranch", fields: [branchId], references: [uuid], onDelete: Cascade)
-  folder                String               @default("Рабочий") // "Архив" | "Рабочий"
-  organizationName      String?
-  wetCleaningTime       String?
-  wetCleaningCost       String?
-  territoryCleaningTime String?
-  territoryCleaningCost String?
-  documentsReceived     Boolean              @default(false)
-  documentsReceivedAt   DateTime?
-  createdAt             DateTime            @default(now())
-  updatedAt             DateTime            @updatedAt
-  documents             CleaningDocument[]
-  
-  @@unique([branchId])
-  @@index([branchId])
-  @@index([folder])
-  @@index([documentsReceived])
-  @@index([updatedAt])
-}
-
 model CleaningDocument {
   id            String          @id @default(uuid())
-  cleaningBranchId String
-  cleaningBranch CleaningBranch @relation(fields: [cleaningBranchId], references: [id], onDelete: Cascade)
-  fileName      String
-  fileUrl       String
-  fileSize      Int
-  mimeType      String
+  branchId     String
+  branch       Branch           @relation("CleaningBranch", fields: [branchId], references: [uuid], onDelete: Cascade)
+  fileName     String
+  fileUrl      String
+  fileSize     Int
+  mimeType     String
   uploadedById String
-  uploadedBy    User             @relation("CleaningDocumentUploader", fields: [uploadedById], references: [id])
-  uploadedAt    DateTime         @default(now())
+  uploadedBy   User             @relation("CleaningDocumentUploader", fields: [uploadedById], references: [id])
+  uploadedAt   DateTime         @default(now())
   
-  @@index([cleaningBranchId])
+  @@index([branchId])
   @@index([uploadedById])
   @@index([uploadedAt])
 }

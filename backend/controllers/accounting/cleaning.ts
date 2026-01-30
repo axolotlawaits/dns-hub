@@ -5,69 +5,15 @@ import { authenticateToken } from '../../middleware/auth.js';
 import { NotificationController } from '../app/notification.js';
 import { getCleaningTool } from './cleaningUtils.js';
 
-// Временные типы до генерации Prisma Client
-// После запуска `npx prisma generate` эти типы будут доступны из @prisma/client
-type PrismaCleaningBranch = any;
-type PrismaCleaningDocument = any;
-
 // Validation schemas
-const CleaningBranchSchema = z.object({
-  branchId: z.string().uuid(),
-  folder: z.enum(['Архив', 'Рабочий']).default('Рабочий'),
-  organizationName: z.string().optional(),
-  wetCleaningTime: z.string().optional(),
-  wetCleaningCost: z.string().optional(),
-  territoryCleaningTime: z.string().optional(),
-  territoryCleaningCost: z.string().optional(),
-  documentsReceived: z.boolean().default(false),
-  documentsReceivedAt: z.string().datetime().optional().nullable(),
-});
-
 const CleaningDocumentSchema = z.object({
-  cleaningBranchId: z.string().uuid(),
+  branchId: z.string().uuid(),
   fileName: z.string(),
   fileUrl: z.string(),
   fileSize: z.number(),
   mimeType: z.string(),
   uploadedById: z.string(),
 });
-
-// Интерфейсы
-interface CleaningBranchWithBranch {
-  id: string;
-  branchId: string;
-  folder: 'Архив' | 'Рабочий';
-  organizationName: string | null;
-  wetCleaningTime: string | null;
-  wetCleaningCost: string | null;
-  territoryCleaningTime: string | null;
-  territoryCleaningCost: string | null;
-  documentsReceived: boolean;
-  documentsReceivedAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-  branch: {
-    uuid: string;
-    name: string;
-    code: string;
-    address: string;
-    city: string;
-    division: string;
-    status: number;
-  };
-  documents: Array<{
-    id: string;
-    fileName: string;
-    fileUrl: string;
-    fileSize: number;
-    mimeType: string;
-    uploadedAt: Date;
-    uploadedBy: {
-      id: string;
-      name: string;
-    };
-  }>;
-}
 
 // Константы для расчета статуса
 const ACTIVE_BRANCH_STATUS = 1; // Статус активного филиала
@@ -100,29 +46,16 @@ function getCurrentPeriod(): { start: Date; end: Date } {
   return { start: periodStart, end: periodEnd };
 }
 
-// Функция для определения статуса и необходимости загрузки документов
-// Логика основана на периодах с 15 по 15 число каждого месяца
-function calculateCleaningStatus(cleaningBranch: any): {
+// Функция для определения статуса по филиалу и документам (период с 15 по 15)
+function calculateCleaningStatus(branch: { status: number }, documents: Array<{ uploadedAt: Date }>): {
   status: string;
   needsDocuments: boolean;
   nextDocumentDate: Date | null;
   daysUntilNext: number | null;
 } {
   const now = new Date();
-  const folder = cleaningBranch.folder || 'Рабочий';
-  const isActive = cleaningBranch.branch?.status === ACTIVE_BRANCH_STATUS;
-  
-  // Если в архиве, статус "Архив"
-  if (folder === 'Архив') {
-    return {
-      status: 'Архив',
-      needsDocuments: false,
-      nextDocumentDate: null,
-      daysUntilNext: null,
-    };
-  }
-  
-  // Если филиал неактивен
+  const isActive = branch?.status === ACTIVE_BRANCH_STATUS;
+
   if (!isActive) {
     return {
       status: 'Неактивен',
@@ -131,20 +64,15 @@ function calculateCleaningStatus(cleaningBranch: any): {
       daysUntilNext: null,
     };
   }
-  
-  // Получаем текущий период (с 15 по 15)
+
   const currentPeriod = getCurrentPeriod();
-  
-  // Проверяем, есть ли документы за текущий период
-  const documentsInCurrentPeriod = cleaningBranch.documents?.filter((doc: any) => {
+  const documentsInCurrentPeriod = documents?.filter((doc) => {
     const docDate = new Date(doc.uploadedAt);
     return docDate >= currentPeriod.start && docDate < currentPeriod.end;
   }) || [];
-  
-  // Если есть документы за текущий период
+
   if (documentsInCurrentPeriod.length > 0) {
     const daysUntilPeriodEnd = Math.ceil((currentPeriod.end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    
     return {
       status: 'В порядке',
       needsDocuments: false,
@@ -152,12 +80,9 @@ function calculateCleaningStatus(cleaningBranch: any): {
       daysUntilNext: daysUntilPeriodEnd,
     };
   }
-  
-  // Если документов за текущий период нет, проверяем, просрочен ли период
-  // ИСПРАВЛЕНО: Нормализуем now для корректного сравнения (убираем время, оставляем только дату)
+
   const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   if (nowDate >= currentPeriod.end) {
-    // Период уже закончился, документы просрочены
     const daysOverdue = Math.floor((nowDate.getTime() - currentPeriod.end.getTime()) / (1000 * 60 * 60 * 24));
     return {
       status: 'Просрочено',
@@ -166,8 +91,7 @@ function calculateCleaningStatus(cleaningBranch: any): {
       daysUntilNext: -daysOverdue,
     };
   }
-  
-  // Период еще не закончился, но документов нет
+
   const daysUntilPeriodEnd = Math.ceil((currentPeriod.end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
   return {
     status: 'Требуется загрузка',
@@ -232,7 +156,7 @@ async function checkBranchAccess(
   };
 }
 
-// Получить список филиалов с данными клининга
+// Получить список филиалов с документами клининга (из Branch + CleaningDocument)
 export const getCleaningBranches = async (
   req: Request,
   res: Response,
@@ -244,24 +168,20 @@ export const getCleaningBranches = async (
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
-    
+
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
     const skip = (page - 1) * limit;
-    
-    // Фильтры
-    const folder = req.query.folder as string | undefined;
+
     const search = req.query.search as string | undefined;
     const status = req.query.status as string | undefined;
     const branchId = req.query.branchId as string | undefined;
-    
-    // Проверяем, является ли пользователь проверяющим
+
     const user = await prisma.user.findUnique({
       where: { id: token.userId },
       select: { email: true, role: true },
     });
-    
-    // Получаем UUID филиала пользователя из UserData
+
     let userBranchUuid: string | null = null;
     if (user?.email) {
       const userData = await prisma.userData.findUnique({
@@ -270,111 +190,67 @@ export const getCleaningBranches = async (
       });
       userBranchUuid = userData?.branch_uuid || null;
     }
-    
-    // Проверяем доступ через централизованную функцию
+
     const accessCheck = await checkBranchAccess(token.userId, userBranchUuid || '', true);
     const isChecker = accessCheck.isChecker;
-    
-    // Строим условия фильтрации
+
     const where: any = {};
-    
-    // Если не проверяющий, показываем только свой филиал
     if (!isChecker && userBranchUuid) {
-      where.branchId = userBranchUuid;
+      where.uuid = userBranchUuid;
     } else if (branchId) {
-      // Проверяющие могут фильтровать по branchId
-      where.branchId = branchId;
-    }
-    
-    if (folder) {
-      where.folder = folder;
+      where.uuid = branchId;
     }
     if (search) {
       where.OR = [
-        { branch: { name: { contains: search, mode: 'insensitive' } } },
-        { branch: { code: { contains: search, mode: 'insensitive' } } },
-        { branch: { address: { contains: search, mode: 'insensitive' } } },
-        { organizationName: { contains: search, mode: 'insensitive' } },
+        { name: { contains: search, mode: 'insensitive' } },
+        { code: { contains: search, mode: 'insensitive' } },
+        { address: { contains: search, mode: 'insensitive' } },
       ];
     }
-    
-    // Получаем общее количество
-    const total = await (prisma as any).cleaningBranch.count({ where });
-    
-    // Получаем данные с пагинацией
-    const cleaningBranches = await (prisma as any).cleaningBranch.findMany({
+
+    const total = await prisma.branch.count({ where });
+
+    const branches = await prisma.branch.findMany({
       where,
       include: {
-        branch: {
-          select: {
-            uuid: true,
-            name: true,
-            code: true,
-            address: true,
-            city: true,
-            division: true,
-            status: true,
-          },
-        },
-        documents: {
+        cleaningDocuments: {
           include: {
-            uploadedBy: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
+            uploadedBy: { select: { id: true, name: true } },
           },
-          orderBy: {
-            uploadedAt: 'desc',
-          },
+          orderBy: { uploadedAt: 'desc' },
         },
       },
-      orderBy: {
-        updatedAt: 'desc',
-      },
+      orderBy: { name: 'asc' },
       skip,
       take: limit,
     });
-    
-    // Форматируем данные и добавляем вычисляемые статусы
-    const formatted = cleaningBranches.map((cb: any) => {
-      const statusInfo = calculateCleaningStatus(cb);
+
+    const formatted = branches.map((b) => {
+      const statusInfo = calculateCleaningStatus(b, b.cleaningDocuments);
       return {
-        id: cb.id,
-        branchId: cb.branchId,
+        id: b.uuid,
+        branchId: b.uuid,
         branch: {
-          id: cb.branch.uuid,
-          name: cb.branch.name,
-          code: cb.branch.code,
-          address: `${cb.branch.city}, ${cb.branch.address}`,
-          division: cb.branch.division,
-          status: cb.branch.status,
+          id: b.uuid,
+          name: b.name,
+          code: b.code,
+          address: `${b.city}, ${b.address}`,
+          division: b.division,
+          status: b.status,
         },
-        folder: cb.folder,
-        organizationName: cb.organizationName,
-        wetCleaningTime: cb.wetCleaningTime,
-        wetCleaningCost: cb.wetCleaningCost,
-        territoryCleaningTime: cb.territoryCleaningTime,
-        territoryCleaningCost: cb.territoryCleaningCost,
-        documentsReceived: cb.documentsReceived,
-        documentsReceivedAt: cb.documentsReceivedAt,
         status: statusInfo.status,
         needsDocuments: statusInfo.needsDocuments,
         nextDocumentDate: statusInfo.nextDocumentDate,
         daysUntilNext: statusInfo.daysUntilNext,
-        documentsCount: cb.documents.length,
-        createdAt: cb.createdAt,
-        updatedAt: cb.updatedAt,
+        documentsCount: b.cleaningDocuments.length,
       };
     });
-    
-    // Фильтрация по вычисляемому статусу (если указан)
+
     let filtered = formatted;
     if (status) {
       filtered = formatted.filter((item: any) => item.status === status);
     }
-    
+
     res.json({
       success: true,
       data: filtered,
@@ -391,7 +267,7 @@ export const getCleaningBranches = async (
   }
 };
 
-// Получить филиал по ID
+// Получить филиал по ID (uuid филиала) с документами клининга
 export const getCleaningBranchById = async (
   req: Request<{ id: string }>,
   res: Response,
@@ -399,52 +275,45 @@ export const getCleaningBranchById = async (
 ): Promise<void> => {
   try {
     const { id } = req.params;
-    
-    const cleaningBranch = await (prisma as any).cleaningBranch.findUnique({
-      where: { id },
+
+    const branch = await prisma.branch.findUnique({
+      where: { uuid: id },
       include: {
-        branch: {
-          select: {
-            uuid: true,
-            name: true,
-            code: true,
-            address: true,
-            city: true,
-            division: true,
-            status: true,
-          },
-        },
-        documents: {
+        cleaningDocuments: {
           include: {
-            uploadedBy: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
+            uploadedBy: { select: { id: true, name: true } },
           },
-          orderBy: {
-            uploadedAt: 'desc',
-          },
+          orderBy: { uploadedAt: 'desc' },
         },
       },
     });
-    
-    if (!cleaningBranch) {
-      res.status(404).json({ error: 'Cleaning branch not found' });
+
+    if (!branch) {
+      res.status(404).json({ error: 'Branch not found' });
       return;
     }
-    
-    const statusInfo = calculateCleaningStatus(cleaningBranch);
-    
+
+    const statusInfo = calculateCleaningStatus(branch, branch.cleaningDocuments);
+
     res.json({
       success: true,
       data: {
-        ...cleaningBranch,
+        id: branch.uuid,
+        branchId: branch.uuid,
+        branch: {
+          id: branch.uuid,
+          name: branch.name,
+          code: branch.code,
+          address: `${branch.city}, ${branch.address}`,
+          division: branch.division,
+          status: branch.status,
+        },
+        documents: branch.cleaningDocuments,
         status: statusInfo.status,
         needsDocuments: statusInfo.needsDocuments,
         nextDocumentDate: statusInfo.nextDocumentDate,
         daysUntilNext: statusInfo.daysUntilNext,
+        documentsCount: branch.cleaningDocuments.length,
       },
     });
   } catch (error) {
@@ -453,143 +322,7 @@ export const getCleaningBranchById = async (
   }
 };
 
-// Создать или обновить запись клининга для филиала
-export const upsertCleaningBranch = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    const token = (req as any).token;
-    if (!token || !token.userId) {
-      res.status(401).json({ error: 'Unauthorized' });
-      return;
-    }
-    
-    const validatedData = CleaningBranchSchema.parse(req.body);
-    
-    // Проверяем существование филиала
-    const branch = await prisma.branch.findUnique({
-      where: { uuid: validatedData.branchId },
-    });
-    
-    if (!branch) {
-      res.status(404).json({ error: 'Branch not found' });
-      return;
-    }
-    
-    // Ищем существующую запись
-    const existing = await (prisma as any).cleaningBranch.findFirst({
-      where: { branchId: validatedData.branchId },
-    });
-    
-    let cleaningBranch;
-    if (existing) {
-      // Обновляем существующую
-      cleaningBranch = await (prisma as any).cleaningBranch.update({
-        where: { id: existing.id },
-        data: {
-          folder: validatedData.folder,
-          organizationName: validatedData.organizationName,
-          wetCleaningTime: validatedData.wetCleaningTime,
-          wetCleaningCost: validatedData.wetCleaningCost,
-          territoryCleaningTime: validatedData.territoryCleaningTime,
-          territoryCleaningCost: validatedData.territoryCleaningCost,
-          documentsReceived: validatedData.documentsReceived,
-          documentsReceivedAt: validatedData.documentsReceivedAt 
-            ? new Date(validatedData.documentsReceivedAt) 
-            : validatedData.documentsReceived 
-              ? new Date() 
-              : null,
-        },
-        include: {
-          branch: true,
-          documents: true,
-        },
-      });
-    } else {
-      // Создаем новую
-      cleaningBranch = await (prisma as any).cleaningBranch.create({
-        data: {
-          branchId: validatedData.branchId,
-          folder: validatedData.folder,
-          organizationName: validatedData.organizationName,
-          wetCleaningTime: validatedData.wetCleaningTime,
-          wetCleaningCost: validatedData.wetCleaningCost,
-          territoryCleaningTime: validatedData.territoryCleaningTime,
-          territoryCleaningCost: validatedData.territoryCleaningCost,
-          documentsReceived: validatedData.documentsReceived,
-          documentsReceivedAt: validatedData.documentsReceivedAt 
-            ? new Date(validatedData.documentsReceivedAt) 
-            : validatedData.documentsReceived 
-              ? new Date() 
-              : null,
-        },
-        include: {
-          branch: true,
-          documents: true,
-        },
-      });
-    }
-    
-    // Проверяем, нужно ли отправить уведомление
-    const statusInfo = calculateCleaningStatus(cleaningBranch);
-    if (statusInfo.needsDocuments) {
-      await sendCleaningNotification(cleaningBranch, token.userId);
-    }
-    
-    res.json({
-      success: true,
-      data: cleaningBranch,
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Validation error', details: error.issues });
-      return;
-    }
-    console.error('[Cleaning] Error upserting branch:', error);
-    next(error);
-  }
-};
-
-// Отметить документы как полученные
-export const markDocumentsReceived = async (
-  req: Request<{ id: string }>,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    const token = (req as any).token;
-    if (!token || !token.userId) {
-      res.status(401).json({ error: 'Unauthorized' });
-      return;
-    }
-    
-    const { id } = req.params;
-    
-    const cleaningBranch = await (prisma as any).cleaningBranch.update({
-      where: { id },
-      data: {
-        documentsReceived: true,
-        documentsReceivedAt: new Date(),
-      },
-      include: {
-        branch: true,
-        documents: true,
-      },
-    });
-    
-    res.json({
-      success: true,
-      data: cleaningBranch,
-    });
-  } catch (error) {
-    console.error('[Cleaning] Error marking documents received:', error);
-    next(error);
-  }
-};
-
-// Получить или создать cleaning branch для текущего пользователя
+// Получить филиал текущего пользователя с документами клининга
 export const getOrCreateUserCleaningBranch = async (
   req: Request,
   res: Response,
@@ -601,117 +334,58 @@ export const getOrCreateUserCleaningBranch = async (
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
-    
+
     const user = await prisma.user.findUnique({
       where: { id: token.userId },
       select: { email: true },
     });
-    
+
     if (!user || !user.email) {
       res.status(404).json({ error: 'User not found' });
       return;
     }
-    
-    // Получаем UUID филиала из UserData
+
     const userData = await prisma.userData.findUnique({
       where: { email: user.email },
-      select: { branch_uuid: true, branch: { select: { uuid: true, name: true, code: true } } },
+      select: { branch_uuid: true, branch: { select: { uuid: true, name: true, code: true, city: true, address: true } } },
     });
-    
+
     if (!userData || !userData.branch_uuid) {
       res.status(404).json({ error: 'User branch not found in UserData' });
       return;
     }
-    
-    const branchUuid = userData.branch_uuid;
-    
-    // Ищем существующую запись или создаем новую
-    let cleaningBranch = await (prisma as any).cleaningBranch.findFirst({
-      where: { branchId: branchUuid },
+
+    const branch = await prisma.branch.findUnique({
+      where: { uuid: userData.branch_uuid },
       include: {
-        branch: {
-          select: {
-            uuid: true,
-            name: true,
-            code: true,
-            address: true,
-            city: true,
-            division: true,
-            status: true,
-          },
-        },
-        documents: {
-          include: {
-            uploadedBy: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-          orderBy: {
-            uploadedAt: 'desc',
-          },
+        cleaningDocuments: {
+          include: { uploadedBy: { select: { id: true, name: true } } },
+          orderBy: { uploadedAt: 'desc' },
         },
       },
     });
-    
-    // Если записи нет, создаем новую
-    if (!cleaningBranch) {
-      cleaningBranch = await (prisma as any).cleaningBranch.create({
-        data: {
-          branchId: branchUuid,
-          folder: 'Рабочий',
-          documentsReceived: false,
-        },
-        include: {
-          branch: {
-            select: {
-              uuid: true,
-              name: true,
-              code: true,
-              address: true,
-              city: true,
-              division: true,
-              status: true,
-            },
-          },
-          documents: {
-            include: {
-              uploadedBy: {
-                select: {
-                  id: true,
-                  name: true,
-                },
-              },
-            },
-            orderBy: {
-              uploadedAt: 'desc',
-            },
-          },
-        },
-      });
+
+    if (!branch) {
+      res.status(404).json({ error: 'Branch not found' });
+      return;
     }
-    
-    const statusInfo = calculateCleaningStatus(cleaningBranch);
-    
+
+    const statusInfo = calculateCleaningStatus(branch, branch.cleaningDocuments);
+
     res.json({
       success: true,
       data: {
-        id: cleaningBranch.id,
-        branchId: cleaningBranch.branchId,
+        id: branch.uuid,
+        branchId: branch.uuid,
         branch: {
-          id: cleaningBranch.branch.uuid,
-          name: cleaningBranch.branch.name,
-          code: cleaningBranch.branch.code,
-          address: `${cleaningBranch.branch.city}, ${cleaningBranch.branch.address}`,
+          id: branch.uuid,
+          name: branch.name,
+          code: branch.code,
+          address: `${branch.city}, ${branch.address}`,
         },
-        folder: cleaningBranch.folder,
-        documentsReceived: cleaningBranch.documentsReceived,
-        documentsReceivedAt: cleaningBranch.documentsReceivedAt,
         status: statusInfo.status,
         needsDocuments: statusInfo.needsDocuments,
-        documentsCount: cleaningBranch.documents.length,
+        documentsCount: branch.cleaningDocuments.length,
       },
     });
   } catch (error) {
@@ -720,7 +394,7 @@ export const getOrCreateUserCleaningBranch = async (
   }
 };
 
-// Получить документы с группировкой по месяцам
+// Получить документы филиала с группировкой по месяцам (id = branchId)
 export const getDocumentsByMonths = async (
   req: Request<{ id: string }>,
   res: Response,
@@ -732,43 +406,30 @@ export const getDocumentsByMonths = async (
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
-    
+
     const { id } = req.params;
-    
-    // Проверяем существование cleaning branch
-    const cleaningBranch = await (prisma as any).cleaningBranch.findUnique({
-      where: { id },
+
+    const branch = await prisma.branch.findUnique({
+      where: { uuid: id },
       include: {
-        branch: true,
-        documents: {
-          include: {
-            uploadedBy: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-          orderBy: {
-            uploadedAt: 'desc',
-          },
+        cleaningDocuments: {
+          include: { uploadedBy: { select: { id: true, name: true } } },
+          orderBy: { uploadedAt: 'desc' },
         },
       },
     });
-    
-    if (!cleaningBranch) {
-      res.status(404).json({ error: 'Cleaning branch not found' });
+
+    if (!branch) {
+      res.status(404).json({ error: 'Branch not found' });
       return;
     }
-    
-    // Проверяем доступ
-    const access = await checkBranchAccess(token.userId, cleaningBranch.branchId, false);
+
+    const access = await checkBranchAccess(token.userId, branch.uuid, false);
     if (!access.hasAccess) {
       res.status(403).json({ error: 'Access denied' });
       return;
     }
-    
-    // Группируем документы по месяцам
+
     const documentsByMonth: Record<string, Array<{
       id: string;
       fileName: string;
@@ -776,21 +437,15 @@ export const getDocumentsByMonths = async (
       fileSize: number;
       mimeType: string;
       uploadedAt: Date;
-      uploadedBy: {
-        id: string;
-        name: string;
-      };
+      uploadedBy: { id: string; name: string };
     }>> = {};
-    
-    cleaningBranch.documents.forEach((doc: any) => {
+
+    branch.cleaningDocuments.forEach((doc) => {
       const date = new Date(doc.uploadedAt);
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      const monthName = date.toLocaleDateString('ru-RU', { year: 'numeric', month: 'long' });
-      
       if (!documentsByMonth[monthKey]) {
         documentsByMonth[monthKey] = [];
       }
-      
       documentsByMonth[monthKey].push({
         id: doc.id,
         fileName: doc.fileName,
@@ -801,8 +456,7 @@ export const getDocumentsByMonths = async (
         uploadedBy: doc.uploadedBy,
       });
     });
-    
-    // Преобразуем в массив и сортируем по дате (новые месяцы первыми)
+
     const grouped = Object.entries(documentsByMonth)
       .map(([key, docs]) => ({
         monthKey: key,
@@ -811,7 +465,7 @@ export const getDocumentsByMonths = async (
         count: docs.length,
       }))
       .sort((a, b) => b.monthKey.localeCompare(a.monthKey));
-    
+
     res.json({
       success: true,
       data: grouped,
@@ -822,7 +476,7 @@ export const getDocumentsByMonths = async (
   }
 };
 
-// Загрузить документы для филиала
+// Загрузить документы для филиала (id = branchId)
 export const uploadDocuments = async (
   req: Request<{ id: string }>,
   res: Response,
@@ -834,58 +488,35 @@ export const uploadDocuments = async (
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
-    
+
     const { id } = req.params;
     const files = req.files as Express.Multer.File[];
-    
+
     if (!files || files.length === 0) {
       res.status(400).json({ error: 'No files provided' });
       return;
     }
-    
-    // Проверяем существование cleaning branch
-    let cleaningBranch = await (prisma as any).cleaningBranch.findUnique({
-      where: { id },
-      include: { branch: true },
+
+    const branch = await prisma.branch.findUnique({
+      where: { uuid: id },
     });
-    
-    // Если не найден по ID, возможно это branchId - используем upsert
-    if (!cleaningBranch) {
-      const branch = await prisma.branch.findUnique({
-        where: { uuid: id },
-      });
-      
-      if (!branch) {
-        res.status(404).json({ error: `Branch with uuid "${id}" not found` });
-        return;
-      }
-      
-      // Используем upsert для автоматического создания если нужно
-      cleaningBranch = await (prisma as any).cleaningBranch.upsert({
-        where: { branchId: branch.uuid },
-        update: {},
-        create: {
-          branchId: branch.uuid,
-          folder: 'Рабочий',
-          documentsReceived: false,
-        },
-        include: { branch: true },
-      });
+
+    if (!branch) {
+      res.status(404).json({ error: 'Branch not found' });
+      return;
     }
-    
-    // Проверяем доступ
-    const access = await checkBranchAccess(token.userId, cleaningBranch.branchId, false);
+
+    const access = await checkBranchAccess(token.userId, branch.uuid, false);
     if (!access.hasAccess) {
       res.status(403).json({ error: 'Access denied. You can only upload documents for your branch' });
       return;
     }
-    
-    // Создаем записи о документах
+
     const uploadedDocuments = [];
     for (const file of files) {
-      const document = await (prisma as any).cleaningDocument.create({
+      const document = await prisma.cleaningDocument.create({
         data: {
-          cleaningBranchId: cleaningBranch.id,
+          branchId: branch.uuid,
           fileName: file.originalname,
           fileUrl: `/public/accounting/cleaning/${file.filename}`,
           fileSize: file.size,
@@ -893,26 +524,12 @@ export const uploadDocuments = async (
           uploadedById: token.userId,
         },
         include: {
-          uploadedBy: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
+          uploadedBy: { select: { id: true, name: true } },
         },
       });
       uploadedDocuments.push(document);
     }
-    
-    // Обновляем статус получения документов
-    await (prisma as any).cleaningBranch.update({
-      where: { id: cleaningBranch.id },
-      data: {
-        documentsReceived: true,
-        documentsReceivedAt: new Date(),
-      },
-    });
-    
+
     res.json({
       success: true,
       data: {
@@ -926,9 +543,10 @@ export const uploadDocuments = async (
   }
 };
 
-// Отправить уведомление о необходимости загрузки документов
+// Отправить уведомление о необходимости загрузки документов (пользователям филиала)
 async function sendCleaningNotification(
-  cleaningBranch: any,
+  branchId: string,
+  branch: { name: string; code: string },
   senderId: string
 ): Promise<void> {
   try {
@@ -937,32 +555,32 @@ async function sendCleaningNotification(
       console.warn('[Cleaning] Tool not found, skipping notification');
       return;
     }
-    
-    // Получаем ответственных за филиал (можно расширить логику)
-    // Пока отправляем системное уведомление
+
     const systemSenderId = process.env.SYSTEM_SENDER_ID || senderId;
-    
-    // Получаем пользователей, связанных с филиалом
-    const branchUsers = await prisma.user.findMany({
-      where: { branch: cleaningBranch.branchId },
-      select: {
-        id: true,
-        email: true,
-        telegramChatId: true,
-      },
-      take: 10, // Ограничиваем количество получателей
+
+    const userDataList = await prisma.userData.findMany({
+      where: { branch_uuid: branchId },
+      select: { email: true },
+      take: 20,
     });
-    
-    if (branchUsers.length === 0) {
-      console.warn(`[Cleaning] No users found for branch ${cleaningBranch.branchId}`);
+
+    const emails = userDataList.map((u) => u.email).filter((e): e is string => !!e);
+    if (emails.length === 0) {
+      console.warn(`[Cleaning] No users found for branch ${branchId}`);
       return;
     }
-    
-    // Отправляем уведомления каждому пользователю
+
+    const branchUsers = await prisma.user.findMany({
+      where: { email: { in: emails } },
+      select: { id: true, email: true, telegramChatId: true },
+    });
+
+    const hubUrl = process.env.HUB_FRONTEND_URL || process.env.HUB_API_URL?.replace('/hub-api', '') || 'http://localhost:5173';
+    const actionUrl = `${hubUrl}/accounting/cleaning?branchId=${branchId}`;
+
     for (const user of branchUsers) {
       if (!user) continue;
-      
-      // Проверяем настройки email
+
       const emailSettings = await prisma.userSettings.findUnique({
         where: {
           userId_parameter: {
@@ -971,28 +589,17 @@ async function sendCleaningNotification(
           },
         },
       });
-      
+
       const wantsEmail = emailSettings ? emailSettings.value === 'true' : true;
-      
-      // Формируем каналы
       const channels: Array<'IN_APP' | 'TELEGRAM' | 'EMAIL'> = ['IN_APP'];
-      
-      if (user.telegramChatId) {
-        channels.push('TELEGRAM');
-      }
-      
-      if (wantsEmail && user.email) {
-        channels.push('EMAIL');
-      }
-      
-      const hubUrl = process.env.HUB_FRONTEND_URL || process.env.HUB_API_URL?.replace('/hub-api', '') || 'http://localhost:5173';
-      const actionUrl = `${hubUrl}/accounting/cleaning?branchId=${cleaningBranch.branchId}`;
-      
+      if (user.telegramChatId) channels.push('TELEGRAM');
+      if (wantsEmail && user.email) channels.push('EMAIL');
+
       await NotificationController.create({
         type: 'WARNING',
         channels,
         title: 'Требуется загрузка документов по клинингу',
-        message: `Филиал "${cleaningBranch.branch.name}" (${cleaningBranch.branch.code}): требуется загрузка документов по клинингу.`,
+        message: `Филиал "${branch.name}" (${branch.code}): требуется загрузка документов по клинингу.`,
         senderId: systemSenderId,
         receiverId: user.id,
         toolId: tool.id,
@@ -1000,7 +607,7 @@ async function sendCleaningNotification(
         action: {
           type: 'NAVIGATE',
           path: '/accounting/cleaning',
-          params: { branchId: cleaningBranch.branchId },
+          params: { branchId },
           url: actionUrl,
           text: 'Открыть филиал',
         },
@@ -1008,6 +615,5 @@ async function sendCleaningNotification(
     }
   } catch (error) {
     console.error('[Cleaning] Error sending notification:', error);
-    // Не прерываем выполнение при ошибке уведомления
   }
 }

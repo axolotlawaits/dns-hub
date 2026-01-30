@@ -49,8 +49,9 @@ export const getUpcomingBirthdays = async (
       return;
     }
 
+    // Офис/админ: показываем дни рождения по всем филиалам того же типа (Администрация, АДМИНИСТРАЦИЯ, СП)
     let whereCondition: any;
-    if (['Администрация', 'Структурное подразделение'].includes(userAuth.branch.type)) {
+    if (['Администрация', 'АДМИНИСТРАЦИЯ', 'Структурное подразделение'].includes(userAuth.branch.type)) {
       whereCondition = { branch: { type: userAuth.branch.type } };
     } else {
       whereCondition = { branch: { uuid: userAuth.branch.uuid } };

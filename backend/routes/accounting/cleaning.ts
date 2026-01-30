@@ -3,8 +3,6 @@ import { authenticateToken } from '../../middleware/auth.js';
 import {
   getCleaningBranches,
   getCleaningBranchById,
-  upsertCleaningBranch,
-  markDocumentsReceived,
   uploadDocuments,
   getOrCreateUserCleaningBranch,
   getDocumentsByMonths,
@@ -28,15 +26,7 @@ router.get('/:id', getCleaningBranchById);
 // Получение документов с группировкой по месяцам
 router.get('/:id/documents/months', getDocumentsByMonths);
 
-// Создание или обновление записи клининга
-router.post('/', upsertCleaningBranch);
-router.put('/:id', upsertCleaningBranch);
-router.patch('/:id', upsertCleaningBranch);
-
-// Отметить документы как полученные
-router.patch('/:id/documents-received', markDocumentsReceived);
-
-// Загрузить документы для филиала
+// Загрузить документы для филиала (id = branchId)
 router.post('/:id/documents', uploadCleaning.array('files', 10), uploadDocuments);
 
 export default router;

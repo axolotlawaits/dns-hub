@@ -40,7 +40,7 @@ import { fetchWithAuth } from '../../../utils/fetchWithAuth';
 import { useDisclosure } from '@mantine/hooks';
 import dayjs from 'dayjs';
 
-// Интерфейсы
+// Интерфейсы (список из Branch, документы из CleaningDocument)
 interface CleaningBranch {
   id: string;
   branchId: string;
@@ -52,21 +52,11 @@ interface CleaningBranch {
     division: string;
     status: number;
   };
-  folder: 'Архив' | 'Рабочий';
-  organizationName: string | null;
-  wetCleaningTime: string | null;
-  wetCleaningCost: string | null;
-  territoryCleaningTime: string | null;
-  territoryCleaningCost: string | null;
-  documentsReceived: boolean;
-  documentsReceivedAt: string | null;
   status: string;
   needsDocuments: boolean;
   nextDocumentDate: string | null;
   daysUntilNext: number | null;
   documentsCount: number;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export default function Cleaning() {
@@ -140,12 +130,12 @@ export default function Cleaning() {
 
   // Загрузка документов по месяцам (объявляем раньше, чтобы использовать в loadUserBranch)
   // ИСПРАВЛЕНО: Убрана зависимость documentsLoaded из useCallback, чтобы избежать проблем с замыканием
-  const loadDocumentsByMonths = useCallback(async (cleaningBranchId: string) => {
-    if (!cleaningBranchId) return;
-    
+  const loadDocumentsByMonths = useCallback(async (branchId: string) => {
+    if (!branchId) return;
+
     setDocumentsLoading(true);
     try {
-      const response = await authFetch(`${API}/accounting/cleaning/${cleaningBranchId}/documents/months`);
+      const response = await authFetch(`${API}/accounting/cleaning/${branchId}/documents/months`);
       if (response?.ok) {
         const data = await response.json();
         setDocumentsByMonths(data.data || []);
@@ -243,20 +233,6 @@ export default function Cleaning() {
     return () => clearHeader();
   }, [setHeader, clearHeader, headerIcon]);
 
-  const handleMarkDocumentsReceived = useCallback(async (branchId: string) => {
-    try {
-      const response = await authFetch(`${API}/accounting/cleaning/${branchId}/documents-received`, {
-        method: 'PATCH',
-      });
-      if (!response?.ok) {
-        throw new Error('Ошибка при обновлении статуса');
-      }
-      await loadBranches();
-    } catch (error) {
-      console.error('[Cleaning] Error marking documents received:', error);
-    }
-  }, [authFetch, loadBranches]);
-
   // Обработчики для загрузки файлов (для обычных пользователей)
   const handleFileSelect = useCallback((files: File[] | null) => {
     if (files) {
@@ -285,14 +261,14 @@ export default function Cleaning() {
     setUploadState((prev) => ({ ...prev, uploading: true, error: null, uploadProgress: 0, success: false }));
 
     try {
-      const cleaningBranchId = uploadState.branchInfo.id;
+      const branchId = uploadState.branchInfo.id;
 
       const formData = new FormData();
       uploadState.files.forEach((file) => {
         formData.append('files', file);
       });
 
-      const response = await fetchWithAuth(`${API}/accounting/cleaning/${cleaningBranchId}/documents`, {
+      const response = await fetchWithAuth(`${API}/accounting/cleaning/${branchId}/documents`, {
         method: 'POST',
         body: formData,
       });
@@ -350,15 +326,6 @@ export default function Cleaning() {
     );
   };
 
-  // Папка бейдж
-  const getFolderBadge = (folder: string) => {
-    return (
-      <Badge color={folder === 'Архив' ? 'blue' : 'orange'} variant="light">
-        {folder}
-      </Badge>
-    );
-  };
-
   // Конфигурация фильтров для FilterGroup
   const filtersConfig = useMemo(() => [
     {
@@ -369,16 +336,6 @@ export default function Cleaning() {
     },
     {
       type: 'select' as const,
-      columnId: 'folder',
-      label: 'Папка',
-      placeholder: 'Выберите папку',
-      options: [
-        { value: 'Рабочий', label: 'Рабочий' },
-        { value: 'Архив', label: 'Архив' },
-      ],
-    },
-    {
-      type: 'select' as const,
       columnId: 'status',
       label: 'Статус',
       placeholder: 'Выберите статус',
@@ -386,7 +343,6 @@ export default function Cleaning() {
         { value: 'В порядке', label: 'В порядке' },
         { value: 'Требуется загрузка', label: 'Требуется загрузка' },
         { value: 'Просрочено', label: 'Просрочено' },
-        { value: 'Архив', label: 'Архив' },
         { value: 'Неактивен', label: 'Неактивен' },
       ],
     },
@@ -437,14 +393,8 @@ export default function Cleaning() {
           filtered = filtered.filter(branch =>
             branch.branch.name.toLowerCase().includes(query) ||
             branch.branch.code.toLowerCase().includes(query) ||
-            branch.branch.address.toLowerCase().includes(query) ||
-            (branch.organizationName && branch.organizationName.toLowerCase().includes(query))
+            branch.branch.address.toLowerCase().includes(query)
           );
-        }
-      } else if (filter.id === 'folder' && filter.value) {
-        const folderValues = Array.isArray(filter.value) ? filter.value : [filter.value];
-        if (folderValues.length > 0) {
-          filtered = filtered.filter(branch => folderValues.includes(branch.folder));
         }
       } else if (filter.id === 'status' && filter.value) {
         const statusValues = Array.isArray(filter.value) ? filter.value : [filter.value];
@@ -496,12 +446,6 @@ export default function Cleaning() {
       cell: (info) => info.row.original.branch.address,
     },
     {
-      accessorKey: 'folder',
-      header: 'Папка',
-      size: 120,
-      cell: (info) => getFolderBadge(info.row.original.folder),
-    },
-    {
       accessorKey: 'status',
       header: 'Статус',
       size: 150,
@@ -525,35 +469,10 @@ export default function Cleaning() {
             <IconFileText size={16} />
           </ActionIcon>
           <Text size="sm">{info.row.original.documentsCount}</Text>
-          {info.row.original.documentsReceived && (
-            <IconCheck size={16} color="green" />
-          )}
         </Group>
       ),
     },
-    {
-      id: 'actions',
-      header: 'Действия',
-      size: 100,
-      cell: ({ row }) => (
-        <Group gap="xs">
-          {row.original.needsDocuments && (
-            <ActionIcon
-              variant="light"
-              color="green"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleMarkDocumentsReceived(row.original.id);
-              }}
-            >
-              <IconFileText size={16} />
-            </ActionIcon>
-          )}
-        </Group>
-      ),
-      enableSorting: false,
-    },
-  ], [handleMarkDocumentsReceived, handleOpenDocumentsModal]);
+  ], [handleOpenDocumentsModal]);
 
   // Форматирование размера файла
   const formatFileSize = (bytes: number): string => {
