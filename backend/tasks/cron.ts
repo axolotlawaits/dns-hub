@@ -5,6 +5,7 @@ import { weeklyRocDocSync } from '../controllers/accounting/roc.js';
 import { cleanupOldMusicFolders, preloadNextMonthMusic } from '../controllers/app/radio.js';
 import { SocketIOService } from '../socketio.js';
 import { prisma } from '../server.js';
+import { withDbRetry, isP1001 } from '../utils/dbRetry.js';
 
 export const initToolsCron = () => {
   schedule.scheduleJob('0 0 * * *', async () => {
@@ -59,16 +60,19 @@ export const initToolsCron = () => {
       const now = new Date();
       // Временная реализация до миграции Prisma
       // После миграции раскомментировать и использовать правильные типы
-      const allAccesses = await prisma.userToolAccess.findMany({
-        include: {
-          user: {
-            select: { id: true, email: true, name: true }
-          },
-          tool: {
-            select: { id: true, name: true, link: true }
+      const allAccesses = await withDbRetry(() =>
+        prisma.userToolAccess.findMany({
+          include: {
+            user: {
+              select: { id: true, email: true, name: true }
+            },
+            tool: {
+              select: { id: true, name: true, link: true }
+            }
           }
-        }
-      });
+        }),
+        { logPrefix: '[Cron]' }
+      );
       
       // Фильтруем вручную до миграции (после миграции использовать where)
       const expiredAccesses = allAccesses.filter((access: any) => {
@@ -118,16 +122,22 @@ export const initToolsCron = () => {
 
         // Удаляем истекшие доступы (после миграции использовать where)
         const idsToDelete = expiredAccesses.map((a: any) => a.id);
-        const deleted = await prisma.userToolAccess.deleteMany({
-          where: {
-            id: { in: idsToDelete }
-          }
-        });
+        const deleted = await withDbRetry(() =>
+          prisma.userToolAccess.deleteMany({
+            where: {
+              id: { in: idsToDelete }
+            }
+          })
+        );
 
         console.log(`[Access] Deleted ${deleted.count} expired temporary accesses`);
       }
-    } catch (e) {
-      console.error('[Access] Expired access cleanup error', e);
+    } catch (e: unknown) {
+      if (isP1001(e)) {
+        console.error('[Access] Expired access cleanup skipped: database unreachable (P1001). Check connectivity to DB. Will retry on next run.');
+      } else {
+        console.error('[Access] Expired access cleanup error', e);
+      }
     }
   });
 
@@ -139,16 +149,18 @@ export const initToolsCron = () => {
       const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
       
       // Временная реализация до миграции Prisma
-      const allTemporaryAccesses = await prisma.userToolAccess.findMany({
-        include: {
-          user: {
-            select: { id: true, email: true, name: true }
-          },
-          tool: {
-            select: { id: true, name: true, link: true }
+      const allTemporaryAccesses = await withDbRetry(() =>
+        prisma.userToolAccess.findMany({
+          include: {
+            user: {
+              select: { id: true, email: true, name: true }
+            },
+            tool: {
+              select: { id: true, name: true, link: true }
+            }
           }
-        }
-      });
+        })
+      );
       
       // Фильтруем вручную до миграции (после миграции использовать where)
       const soonToExpire = allTemporaryAccesses.filter((access: any) => {
@@ -182,8 +194,12 @@ export const initToolsCron = () => {
           }
         }
       }
-    } catch (e) {
-      console.error('[Access] Expiration warning error', e);
+    } catch (e: unknown) {
+      if (isP1001(e)) {
+        console.error('[Access] Soon-to-expire check skipped: database unreachable (P1001). Check connectivity to DB. Will retry tomorrow.');
+      } else {
+        console.error('[Access] Expiration warning error', e);
+      }
     }
   });
 

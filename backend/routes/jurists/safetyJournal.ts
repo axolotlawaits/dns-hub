@@ -12,6 +12,7 @@ import {
   testExternalApi,
   getJournalFilesList,
   proxyFile,
+  getBranchJournals,
   getResponsible,
   addResponsible,
   deleteResponsible,
@@ -72,6 +73,9 @@ router.patch('/branch_journals/:branchJournalId/decision', upload.none(), makeBr
 
 // Прокси для открытия файлов в новом окне
 router.get('/proxy-file', proxyFile as any);
+
+// Получение журналов филиала (прокси для внешнего API)
+router.get('/branch_journals', getBranchJournals as any);
 
 //Временные для ответственных
 

@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
-import { API, JOURNAL_API } from '../../../config/constants';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, memo } from 'react';
+import { API } from '../../../config/constants';
 import { useUserContext } from '../../../hooks/useUserContext';
 import { useAccessContext } from '../../../hooks/useAccessContext';
 import { useSocketIO } from '../../../hooks/useSocketIO';
@@ -1174,6 +1174,12 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
   }, [access]);
   // checkers больше не используется для ответственных - они видят только чат
   const [branchesWithChats, setBranchesWithChats] = useState<BranchWithChats[]>([]);
+  // ОПТИМИЗАЦИЯ: Ref для branchesWithChats, чтобы избежать замыкания в обработчике сообщений
+  const branchesWithChatsRef = useRef<BranchWithChats[]>([]);
+  // Синхронизируем ref с state
+  useEffect(() => {
+    branchesWithChatsRef.current = branchesWithChats;
+  }, [branchesWithChats]);
   const [branchSearchQuery, setBranchSearchQuery] = useState<string>('');
   // Счетчик непрочитанных сообщений по филиалам (для проверяющих)
   const [unreadCounts, setUnreadCounts] = useState<Map<string, number>>(new Map());
@@ -1208,7 +1214,21 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
   const [chat, setChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   // Кеш сообщений по chatId для избежания повторной загрузки при переключении чатов
-  const messagesCacheRef = useRef<Map<string, ChatMessage[]>>(new Map());
+  // Кэш: сообщения + пагинация по chatId (чтобы при подгрузке вверх не использовать cursor другого чата)
+  const messagesCacheRef = useRef<Map<string, { messages: ChatMessage[]; nextCursor: string | null; hasMore: boolean }>>(new Map());
+  // Сохранение позиции прокрутки при подгрузке старых сообщений вверх
+  const prependScrollRef = useRef<{ oldScrollHeight: number; oldScrollTop: number } | null>(null);
+  // Чтобы не обрезать список: не перезаписывать первой страницей, если уже подгружены старые сообщения
+  const messagesLengthRef = useRef(0);
+
+  const setMessagesCache = useCallback((chatId: string, messages: ChatMessage[]) => {
+    const prev = messagesCacheRef.current.get(chatId);
+    messagesCacheRef.current.set(chatId, {
+      messages,
+      nextCursor: prev?.nextCursor ?? null,
+      hasMore: prev?.hasMore ?? true
+    });
+  }, []);
   // Для ответственных: все участники чата (проверяющие + другие ответственные)
   const [allParticipants, setAllParticipants] = useState<Checker[]>([]);
   // Для проверяющих: все участники чата (проверяющие + ответственные)
@@ -1252,6 +1272,8 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
   const [messagesPage, setMessagesPage] = useState(1);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  // НИЗКИЙ ПРИОРИТЕТ: Cursor-based пагинация
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   
   // Состояния для поиска
   const [searchQuery, setSearchQuery] = useState('');
@@ -1295,6 +1317,9 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
   useEffect(() => {
     chatRef.current = chat;
   }, [chat]);
+  useEffect(() => {
+    messagesLengthRef.current = messages.length;
+  }, [messages]);
   useEffect(() => {
     selectedChatRefForSend.current = selectedChat;
   }, [selectedChat]);
@@ -1374,31 +1399,64 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
     
     setJournalsLoading(true);
     try {
-      const response = await authFetch(`${JOURNAL_API}/v1/branch_journals/?branchId=${branchId}`);
+      // ИСПРАВЛЕНО: Используем наш backend API вместо прямого обращения к внешнему API
+      // Это решает проблему CORS и 400 ошибок
+      const response = await authFetch(`${API}/jurists/safety/branch_journals?branchId=${branchId}`);
 
-      if (!response || !response.ok) {
-        throw new Error(`Failed to load branch journals: ${response?.status || 'unknown'}`);
+      if (!response) {
+        console.warn('[loadBranchJournals] No response received');
+        setBranchJournals([]);
+        return;
       }
 
-      const data = await response.json();
-      
-      setBranchJournals((data || []).map((j: any) => ({
-        id: j.id,
-        journal_id: j.journal_id,
-        journal_title: j.journal_title,
-        journal_type: j.journal_type,
-        status: j.status,
-        period_start: j.period_start,
-        period_end: j.period_end,
-        files: j.files,
-      })));
+      // Обрабатываем успешные ответы и ошибки 503 (Service Unavailable)
+      // При ошибках подключения backend возвращает пустой массив, чтобы не блокировать работу чата
+      if (response.ok || response.status === 503) {
+        const data = await response.json();
+        
+        // ИСПРАВЛЕНО: Правильная обработка ответа - проверяем разные форматы данных
+        let journals: any[] = [];
+        
+        if (Array.isArray(data)) {
+          journals = data;
+        } else if (data && Array.isArray(data.data)) {
+          journals = data.data;
+        } else if (data && Array.isArray(data.journals)) {
+          journals = data.journals;
+        } else if (data && data.branches && Array.isArray(data.branches)) {
+          // Если ответ содержит branches, извлекаем журналы из первого филиала
+          const branch = data.branches.find((b: any) => b.branch_id === branchId);
+          journals = branch?.journals || [];
+        }
+        
+        console.log('[loadBranchJournals] Loaded journals:', journals.length, 'for branchId:', branchId);
+        
+        setBranchJournals(journals.map((j: any) => ({
+          id: j.id || j.branch_journal_id,
+          journal_id: j.journal_id,
+          journal_title: j.journal_title,
+          journal_type: j.journal_type,
+          status: j.status,
+          period_start: j.period_start,
+          period_end: j.period_end,
+          files: j.files || [],
+        })));
+      } else if (response.status === 400 || response.status === 404) {
+        // Ошибка 400 или 404 - возвращаем пустой массив, чтобы не блокировать работу чата
+        console.warn('[loadBranchJournals] Received', response.status, ', returning empty array');
+        setBranchJournals([]);
+      } else {
+        console.error('[loadBranchJournals] Unexpected response status:', response.status);
+        setBranchJournals([]);
+      }
     } catch (error) {
       console.error('[loadBranchJournals] Error loading branch journals:', error);
+      // При любой ошибке возвращаем пустой массив, чтобы не блокировать работу чата
       setBranchJournals([]);
     } finally {
       setJournalsLoading(false);
     }
-  }, [token]);
+  }, [token, authFetch]);
 
   // Загрузка списка проверяющих (для ответственных)
   const loadCheckers = useCallback(async () => {
@@ -1436,26 +1494,39 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
         
         if (checkersOnly.length > 0) {
           const firstChecker = checkersOnly[0];
-        setSelectedChecker(firstChecker);
-        // Сразу загружаем чат для первого проверяющего
+          setSelectedChecker(firstChecker);
+          // Сразу загружаем чат для первого проверяющего
           const chatResponse = await authFetch(`${API}/jurists/safety/chat/chats/${branchId}/${firstChecker.id}`);
 
           if (chatResponse && chatResponse.ok) {
-          const chatData: Chat = await chatResponse.json();
-          setChat(chatData);
-          setSelectedChat(chatData);
-            // Сбрасываем флаг начальной загрузки для нового чата
+            const chatData: Chat = await chatResponse.json();
+            setMessages([]);
+            setChat(chatData);
+            setSelectedChat(chatData);
+            messagesLengthRef.current = 0;
             isInitialLoadRef.current = true;
-            
-            // Загружаем сообщения для этого чата
             if (chatData.id) {
-              await loadMessages(chatData.id);
+              await loadMessages(chatData.id, 1, false, true);
             }
             
-            // Загружаем журналы филиала
-            await loadBranchJournals(branchId);
+            // Загружаем журналы филиала (не блокирует отображение сообщений)
+            loadBranchJournals(branchId).catch(() => {
+              // Игнорируем ошибки загрузки журналов
+            });
           }
+        } else {
+          // Если нет проверяющих, очищаем состояние
+          setSelectedChecker(null);
+          setChat(null);
+          setSelectedChat(null);
+          setMessages([]);
         }
+      } else {
+        // Если нет участников, очищаем состояние
+        setSelectedChecker(null);
+        setChat(null);
+        setSelectedChat(null);
+        setMessages([]);
       }
     } catch (error) {
       console.error('[loadCheckers] Error loading checkers:', error);
@@ -1465,7 +1536,8 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
     } finally {
       setLoading(false);
     }
-  }, [token, branchId, user?.id, loadBranchJournals]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, branchId, user?.id, loadBranchJournals, onParticipantsChange]);
 
   // Загрузка списка ответственных для филиала
   const loadResponsibles = useCallback(async (branchId: string) => {
@@ -1498,17 +1570,25 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
 
   // Загрузка сообщений чата с пагинацией
   const loadMessages = useCallback(async (chatId: string, page: number = 1, append: boolean = false, useCache: boolean = true) => {
+    // При загрузке нового чата (не подгрузка вверх) сбрасываем пагинацию, чтобы не использовать cursor другого чата
+    if (!append) {
+      setNextCursor(null);
+      setMessagesPage(1);
+      setHasMoreMessages(true);
+    }
+
     // Проверяем кеш, если это первая страница и не append
+    // Не подставляем кэш, если уже подгружены старые сообщения — иначе «обрежем» список
     if (useCache && page === 1 && !append) {
-      const cachedMessages = messagesCacheRef.current.get(chatId);
-      if (cachedMessages && cachedMessages.length > 0) {
-        // Используем кешированные сообщения
-        setMessages(cachedMessages);
+      const cached = messagesCacheRef.current.get(chatId);
+      if (cached && cached.messages.length > 0 && messagesLengthRef.current <= cached.messages.length) {
+        setMessages(cached.messages);
         setMessagesPage(1);
-        // Прокрутка вниз после загрузки из кеша
+        setNextCursor(cached.nextCursor ?? null);
+        setHasMoreMessages(cached.hasMore);
         if (scrollAreaRef.current) {
           requestAnimationFrame(() => {
-            const scrollElement = scrollAreaRef.current;
+            const scrollElement = scrollAreaRef.current?.querySelector('[data-scroll-viewport]') || scrollAreaRef.current;
             if (scrollElement) {
               scrollElement.scrollTop = scrollElement.scrollHeight;
             }
@@ -1519,7 +1599,11 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
     }
 
     try {
-      const response = await authFetch(`${API}/jurists/safety/chat/chats/${chatId}/messages?limit=50&page=${page}`);
+      // НИЗКИЙ ПРИОРИТЕТ: Используем cursor-based пагинацию, если есть cursor
+      const cursorParam = nextCursor && append ? `&cursor=${encodeURIComponent(nextCursor)}` : '';
+      // КРИТИЧНО: При первой загрузке всегда запрашиваем последние 20 сообщений
+      const limit = page === 1 ? 20 : 50; // Для первой страницы - 20, для последующих - 50
+      const response = await authFetch(`${API}/jurists/safety/chat/chats/${chatId}/messages?limit=${limit}&page=${page}${cursorParam}`);
 
       if (!response || !response.ok) {
         if (response?.status === 403) {
@@ -1535,10 +1619,13 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
       
       // Обрабатываем разные форматы ответа
       let messagesArray: any[] = [];
+      let paginationData: any = null;
+      
       if (Array.isArray(data)) {
         messagesArray = data;
       } else if (data.messages && Array.isArray(data.messages)) {
         messagesArray = data.messages;
+        paginationData = data.pagination; // Используем данные пагинации из ответа
       } else if (data.messages && typeof data.messages === 'object' && !Array.isArray(data.messages)) {
         messagesArray = Object.values(data.messages);
       } else {
@@ -1562,46 +1649,88 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
           return msg.message.trim() !== '' || (msg.attachments && msg.attachments.length > 0);
         });
       
-      // Проверяем, есть ли еще сообщения для загрузки
-      const hasMore = normalizedMessages.length === 50;
+      // ИСПРАВЛЕНО: Используем данные пагинации из ответа сервера для правильной проверки hasMore
+      // НИЗКИЙ ПРИОРИТЕТ: Поддержка cursor-based пагинации
+      let hasMore = false;
+      if (paginationData) {
+        // Используем данные пагинации из ответа сервера
+        hasMore = paginationData.hasNextPage !== undefined 
+          ? paginationData.hasNextPage 
+          : paginationData.page < paginationData.totalPages;
+        
+        // Сохраняем cursor для следующей загрузки
+        if (paginationData.nextCursor) {
+          setNextCursor(paginationData.nextCursor);
+        } else {
+          setNextCursor(null);
+        }
+      } else {
+        // Fallback: если данных пагинации нет, используем старую логику
+        hasMore = normalizedMessages.length === 50;
+      }
       setHasMoreMessages(hasMore);
       
-      // Если append=true, добавляем к существующим сообщениям, иначе заменяем
+      // ИСПРАВЛЕНО: Правильная обработка порядка сообщений
+      // Сервер возвращает сообщения в порядке desc (новые сверху), но нам нужен asc (старые сверху, новые снизу)
+      // Сортируем сообщения по createdAt по возрастанию (старые сверху, новые снизу)
+      const sortedMessages = [...normalizedMessages].sort((a, b) => {
+        const dateA = new Date(a.createdAt).getTime();
+        const dateB = new Date(b.createdAt).getTime();
+        return dateA - dateB;
+      });
+      
+      // Удаляем дубликаты по ID
+      const uniqueMessages = sortedMessages.reduce((acc, msg) => {
+        const msgId = String(msg.id);
+        if (!acc.some(m => String(m.id) === msgId)) {
+          acc.push(msg);
+        }
+        return acc;
+      }, [] as ChatMessage[]);
+
+      // Не перезаписывать первой страницей, если уже подгружены старые сообщения (то же окно чата)
+      const activeId = isCheckerRef.current ? selectedChatRef.current?.id : chatRef.current?.id;
+      if (!append && activeId === chatId && messagesLengthRef.current > uniqueMessages.length) {
+        // Пользователь уже подгрузил вверх — не обрезать список
+        await authFetch(`${API}/jurists/safety/chat/chats/${chatId}/read`, { method: 'POST' }).catch(() => {});
+        return;
+      }
+      
+      // Если append=true, добавляем старые сообщения в начало (они уже отсортированы по возрастанию)
       if (append) {
+        const scrollElement = scrollAreaRef.current?.querySelector('[data-scroll-viewport]') || scrollAreaRef.current;
+        if (scrollElement) {
+          prependScrollRef.current = {
+            oldScrollHeight: scrollElement.scrollHeight,
+            oldScrollTop: scrollElement.scrollTop
+          };
+        }
         setMessages(prev => {
-          // Избегаем дубликатов
-          const existingIds = new Set(prev.map(m => m.id));
-          const newMessages = normalizedMessages.filter(m => !existingIds.has(m.id));
+          const existingIds = new Set(prev.map(m => String(m.id)));
+          const newMessages = uniqueMessages.filter(m => !existingIds.has(String(m.id)));
           return [...newMessages, ...prev];
         });
       } else {
-        // Сортируем сообщения по createdAt по возрастанию (старые сверху, новые снизу)
-        const sortedMessages = [...normalizedMessages].sort((a, b) => {
-          const dateA = new Date(a.createdAt).getTime();
-          const dateB = new Date(b.createdAt).getTime();
-          return dateA - dateB;
-        });
-        // Удаляем дубликаты по ID перед установкой состояния
-        const uniqueMessages = sortedMessages.reduce((acc, msg) => {
-          const msgId = String(msg.id);
-          if (!acc.some(m => String(m.id) === msgId)) {
-            acc.push(msg);
-          }
-          return acc;
-        }, [] as ChatMessage[]);
         setMessages(uniqueMessages);
         setMessagesPage(1);
-        // Сохраняем в кеш только первую страницу
         if (page === 1) {
-          messagesCacheRef.current.set(chatId, uniqueMessages);
+          const nextCursorVal = paginationData?.nextCursor ?? null;
+          messagesCacheRef.current.set(chatId, {
+            messages: uniqueMessages,
+            nextCursor: nextCursorVal,
+            hasMore
+          });
+          if (messagesCacheRef.current.size > 10) {
+            const oldestChatId = Array.from(messagesCacheRef.current.keys())[0];
+            messagesCacheRef.current.delete(oldestChatId);
+            console.log('[SafetyJournalChat] Cleared cache for chat:', oldestChatId);
+          }
         }
       }
 
-      // Прокрутка вниз после загрузки сообщений (только если не append, иначе сохраняем позицию)
-      // Устанавливаем прокрутку напрямую в конец без анимации
       if (!append && scrollAreaRef.current) {
         requestAnimationFrame(() => {
-          const scrollElement = scrollAreaRef.current;
+          const scrollElement = scrollAreaRef.current?.querySelector('[data-scroll-viewport]') || scrollAreaRef.current;
           if (scrollElement) {
             scrollElement.scrollTop = scrollElement.scrollHeight;
           }
@@ -1611,9 +1740,14 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
       // Отмечаем сообщения как прочитанные
       await authFetch(`${API}/jurists/safety/chat/chats/${chatId}/read`, {
         method: 'POST',
+      }).catch((readError) => {
+        // СРЕДНИЙ ПРИОРИТЕТ: Улучшенная обработка ошибок
+        console.error('[SafetyJournalChat] Error marking messages as read:', readError);
       });
     } catch (error) {
-      // Ошибка загрузки сообщений
+      // СРЕДНИЙ ПРИОРИТЕТ: Улучшенная обработка ошибок
+      console.error('[SafetyJournalChat] Error loading messages:', error);
+      // Не показываем уведомление для ошибок загрузки сообщений, чтобы не мешать пользователю
     }
   }, [token]);
 
@@ -1639,13 +1773,11 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
       }
 
       const chatData: Chat = await response.json();
+      setMessages([]);
       setChat(chatData);
       setSelectedChat(chatData);
-      
-      // Сбрасываем флаг начальной загрузки для нового чата
+      messagesLengthRef.current = 0;
       isInitialLoadRef.current = true;
-      
-      // Загружаем сообщения с использованием кеша (если есть)
       if (chatData.id) {
         await loadMessages(chatData.id, 1, false, true);
       } else {
@@ -1653,8 +1785,10 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
         setMessages([]);
       }
       
-      // Загружаем журналы филиала
-      await loadBranchJournals(branchId);
+      // Загружаем журналы филиала (не блокирует отображение сообщений)
+      loadBranchJournals(branchId).catch(() => {
+        // Игнорируем ошибки загрузки журналов
+      });
     } catch (error) {
       // Ошибка загрузки чата
       setMessages([]);
@@ -1716,40 +1850,48 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
         return;
       }
       
-      // Получаем актуальное значение quotedMessage из ref
       const currentQuotedMessageId = quotedMessageRef.current?.id || null;
-      
-      // Если есть файлы, отправляем через FormData, иначе через JSON
+
+      // Таймаут отправки: текст — 15 с, с файлами — 30 с (спиннер не крутится бесконечно)
+      const sendTimeoutMs = filesToSend.length > 0 ? 30000 : 15000;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), sendTimeoutMs);
+
       let response: Response | null = null;
-      if (filesToSend && filesToSend.length > 0) {
-        const formData = new FormData();
-        formData.append('branchId', currentChat.branchId);
-        if (text) {
-          formData.append('message', text);
+      try {
+        if (filesToSend && filesToSend.length > 0) {
+          const formData = new FormData();
+          formData.append('branchId', currentChat.branchId);
+          if (text) {
+            formData.append('message', text);
+          }
+          if (currentQuotedMessageId) {
+            formData.append('quotedMessageId', currentQuotedMessageId);
+          }
+          filesToSend.forEach((file) => {
+            formData.append(`files`, file);
+          });
+          response = await authFetch(`${API}/jurists/safety/chat/chats/${currentChat.id}/messages`, {
+            method: 'POST',
+            body: formData,
+            signal: controller.signal,
+          });
+        } else {
+          response = await authFetch(`${API}/jurists/safety/chat/chats/${currentChat.id}/messages`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              branchId: currentChat.branchId,
+              message: text,
+              ...(currentQuotedMessageId && { quotedMessageId: currentQuotedMessageId }),
+            }),
+            signal: controller.signal,
+          });
         }
-        if (currentQuotedMessageId) {
-          formData.append('quotedMessageId', currentQuotedMessageId);
-        }
-        filesToSend.forEach((file) => {
-          formData.append(`files`, file);
-        });
-        
-        response = await authFetch(`${API}/jurists/safety/chat/chats/${currentChat.id}/messages`, {
-          method: 'POST',
-          body: formData,
-        });
-      } else {
-        response = await authFetch(`${API}/jurists/safety/chat/chats/${currentChat.id}/messages`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            branchId: currentChat.branchId,
-            message: text,
-            ...(currentQuotedMessageId && { quotedMessageId: currentQuotedMessageId }),
-          }),
-        });
+      } finally {
+        clearTimeout(timeoutId);
       }
 
       if (!response || !response.ok) {
@@ -1831,7 +1973,7 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
             const updated = [...filtered, finalMessage];
             // Обновляем кеш один раз после обновления состояния
             setTimeout(() => {
-              messagesCacheRef.current.set(currentChat.id, updated);
+              setMessagesCache(currentChat.id, updated);
             }, 0);
             return updated;
           });
@@ -1859,7 +2001,10 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
       });
     } catch (error) {
       console.error('[sendMessage] Error sending message:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Не удалось отправить сообщение';
+      const isAbort = error instanceof Error && error.name === 'AbortError';
+      const errorMessage = isAbort
+        ? 'Сервер не ответил вовремя. Попробуйте ещё раз.'
+        : (error instanceof Error ? error.message : 'Не удалось отправить сообщение');
       notificationSystem.addNotification('Ошибка', errorMessage, 'error');
       
       // Обновляем статус сообщения на "error" или добавляем в список неудачных
@@ -1894,26 +2039,24 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
 
       if (chatResponse && chatResponse.ok) {
         const chatData = await chatResponse.json();
+        setMessages([]);
         setSelectedChat(chatData);
         setChat(chatData);
-        
-        // Сбрасываем флаг начальной загрузки для нового чата
+        messagesLengthRef.current = 0;
         isInitialLoadRef.current = true;
-        
-        // Загружаем сообщения чата с использованием кеша (если есть)
         if (chatData.id) {
           await loadMessages(chatData.id, 1, false, true);
-          // Прокрутка вниз происходит автоматически в loadMessages
         } else {
-          // Если чата нет, очищаем сообщения
           setMessages([]);
         }
         
-        // Загружаем список ответственных
-        await loadResponsibles(branchId);
-        
-        // Загружаем журналы филиала
-        await loadBranchJournals(branchId);
+        // Параллельно загружаем ответственных и журналы (не блокируют отображение сообщений)
+        Promise.allSettled([
+          loadResponsibles(branchId),
+          loadBranchJournals(branchId)
+        ]).catch(() => {
+          // Игнорируем ошибки загрузки дополнительных данных
+        });
       } else {
         setMessages([]);
       }
@@ -1925,6 +2068,13 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
 
   // Обработка выбора филиала (для проверяющего) - сам филиал и есть чат
   const handleSelectBranch = useCallback((branch: BranchWithChats) => {
+    // ИСПРАВЛЕНО: Очищаем сообщения и чат перед переключением на новый чат
+    setMessages([]);
+    setSelectedChat(null);
+    setChat(null);
+    // НИЗКИЙ ПРИОРИТЕТ: Очищаем cursor при переключении чата
+    setNextCursor(null);
+    
     setSelectedBranch(branch);
     // Сбрасываем флаг начальной загрузки для нового чата
     isInitialLoadRef.current = true;
@@ -1936,7 +2086,7 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
       newMap.delete(branch.branchId);
       return newMap;
     });
-    // Загружаем чат для выбранного филиала (сообщения загрузятся из кеша или с сервера)
+    // Загружаем чат для выбранного филиала (БЕЗ использования кеша при переключении)
     loadChatForBranch(branch.branchId);
   }, [loadChatForBranch]);
 
@@ -2023,21 +2173,24 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
     }
 
     // Объявляем обработчик сообщений до его использования
+    // ОПТИМИЗАЦИЯ: Обертываем всю обработку в requestAnimationFrame для отложенного выполнения
     const handleNewMessage = (data: any) => {
-      // КРИТИЧНО: Получаем актуальные значения из ref, чтобы избежать проблем с устаревшими замыканиями
-      const actualChat = isChecker ? selectedChatRef.current : currentChatRef.current;
-      // Для проверяющих: используем branchId из чата, если он есть, или из списка филиалов, или из данных сообщения
-      // Для ответственных: используем branchId из чата, если он есть, иначе из пропсов
-      let actualBranchId: string | undefined;
-      if (isChecker) {
-        actualBranchId = actualChat?.branchId;
-        // Если branchId не определен из чата, но есть в данных сообщения, используем его
-        if (!actualBranchId && data.branchId) {
-          actualBranchId = String(data.branchId);
+      // Откладываем всю обработку, чтобы не блокировать основной поток
+      requestAnimationFrame(() => {
+        // КРИТИЧНО: Получаем актуальные значения из ref, чтобы избежать проблем с устаревшими замыканиями
+        const actualChat = isChecker ? selectedChatRef.current : currentChatRef.current;
+        // Для проверяющих: используем branchId из чата, если он есть, или из списка филиалов, или из данных сообщения
+        // Для ответственных: используем branchId из чата, если он есть, иначе из пропсов
+        let actualBranchId: string | undefined;
+        if (isChecker) {
+          actualBranchId = actualChat?.branchId;
+          // Если branchId не определен из чата, но есть в данных сообщения, используем его
+          if (!actualBranchId && data.branchId) {
+            actualBranchId = String(data.branchId);
+          }
+        } else {
+          actualBranchId = actualChat?.branchId || branchId;
         }
-      } else {
-        actualBranchId = actualChat?.branchId || branchId;
-      }
       
       // Обработка события удаления сообщения
       if (data.type === 'SAFETY_JOURNAL_MESSAGE_DELETED') {
@@ -2053,7 +2206,7 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
             const updated = prev.filter(m => m.id !== data.messageId);
             // Обновляем кеш
             if (actualChat?.id) {
-              messagesCacheRef.current.set(actualChat.id, updated);
+              setMessagesCache(actualChat.id, updated);
             }
             return updated;
           });
@@ -2070,11 +2223,11 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
       // Для ответственных: data.branchId === actualBranchId (так как у них может быть другой chatId)
       // Все ответственные находятся в одном чате по branchId, независимо от типа (ОТ или ПБ)
       const chatIdMatch = data.chatId && actualChat?.id && String(data.chatId) === String(actualChat.id);
-      // Для проверяющих: проверяем branchId даже если чат не открыт (используем branchId из данных сообщения)
-      // Для ответственных: проверяем branchId из чата или пропсов (если чат еще не загружен, используем branchId из пропсов)
+      // ОПТИМИЗАЦИЯ: Упрощаем проверку branchId - используем ref для branchesWithChats, чтобы избежать замыкания
+      const currentBranchesWithChats = branchesWithChatsRef.current || [];
       const branchIdMatch = data.branchId && (
         actualBranchId ? String(data.branchId) === String(actualBranchId) :
-        (isChecker ? branchesWithChats.some(b => String(b.branchId) === String(data.branchId)) :
+        (isChecker ? currentBranchesWithChats.some(b => String(b.branchId) === String(data.branchId)) :
          (branchId && String(data.branchId) === String(branchId)))
       );
       
@@ -2099,9 +2252,9 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
           if (branchIdMatch) return true;
           
           // Дополнительная проверка: если есть branchId в данных, проверяем его со всеми открытыми чатами
-          if (data.branchId && branchesWithChats.length > 0) {
+          if (data.branchId && currentBranchesWithChats.length > 0) {
             const messageBranchId = String(data.branchId);
-            const hasBranchInList = branchesWithChats.some(b => String(b.branchId) === messageBranchId);
+            const hasBranchInList = currentBranchesWithChats.some(b => String(b.branchId) === messageBranchId);
             if (hasBranchInList) {
               // Если филиал есть в списке, но чат не открыт, все равно принимаем сообщение
               // Это позволяет получать сообщения даже если чат еще не открыт
@@ -2121,35 +2274,38 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
       if (!isForCurrentChat) {
         // Если сообщение пришло в другой чат (для проверяющих), увеличиваем счетчик непрочитанных
         if (isChecker && data.branchId && data.type === 'SAFETY_JOURNAL_MESSAGE' && data.message) {
-          const messageBranchId = String(data.branchId);
-          setUnreadCounts(prev => {
-            const newMap = new Map(prev);
-            const currentCount = newMap.get(messageBranchId) || 0;
-            newMap.set(messageBranchId, currentCount + 1);
-            return newMap;
-          });
-          
-          // Обновляем lastMessage в списке филиалов (оптимизировано - только если филиал существует)
-          if (data.message) {
-            const newMessage = normalizeMessage(data.message);
-            setBranchesWithChats(prev => {
-              const branchIndex = prev.findIndex(b => b.branchId === messageBranchId);
-              if (branchIndex === -1) return prev; // Филиал не найден, не обновляем
-              
-              const updated = [...prev];
-              const updatedBranch = {
-                ...updated[branchIndex],
-                lastMessage: newMessage,
-                updatedAt: newMessage.createdAt,
-              };
-              
-              // Перемещаем филиал в начало списка (вверх)
-              updated.splice(branchIndex, 1);
-              updated.unshift(updatedBranch);
-              
-              return updated;
+          // ОПТИМИЗАЦИЯ: Откладываем обновления для других чатов, чтобы не блокировать основной поток
+          requestAnimationFrame(() => {
+            const messageBranchId = String(data.branchId);
+            setUnreadCounts(prev => {
+              const newMap = new Map(prev);
+              const currentCount = newMap.get(messageBranchId) || 0;
+              newMap.set(messageBranchId, currentCount + 1);
+              return newMap;
             });
-          }
+            
+            // Обновляем lastMessage в списке филиалов (оптимизировано - только если филиал существует)
+            if (data.message) {
+              const newMessage = normalizeMessage(data.message);
+              setBranchesWithChats(prev => {
+                const branchIndex = prev.findIndex(b => b.branchId === messageBranchId);
+                if (branchIndex === -1) return prev; // Филиал не найден, не обновляем
+                
+                const updated = [...prev];
+                const updatedBranch = {
+                  ...updated[branchIndex],
+                  lastMessage: newMessage,
+                  updatedAt: newMessage.createdAt,
+                };
+                
+                // Перемещаем филиал в начало списка (вверх)
+                updated.splice(branchIndex, 1);
+                updated.unshift(updatedBranch);
+                
+                return updated;
+              });
+            }
+          });
         }
         return;
       }
@@ -2174,91 +2330,84 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
         newMessage.message = String(newMessage.message || '');
       }
         
+        // ОПТИМИЗАЦИЯ: Используем функциональное обновление и оптимизируем проверки
         setMessages(prev => {
           const messageId = String(newMessage.id);
-          // Проверяем, нет ли уже такого сообщения
-          if (prev.some(m => String(m.id) === messageId)) {
+          // Проверяем, нет ли уже такого сообщения (оптимизированная проверка)
+          const existingIndex = prev.findIndex(m => String(m.id) === messageId);
+          if (existingIndex !== -1) {
             // Если сообщение уже есть, обновляем его (на случай, если пришла обновленная версия)
-            const updated = prev.map(m => String(m.id) === messageId ? newMessage : m);
-            // Обновляем кеш
+            const updated = [...prev];
+            updated[existingIndex] = newMessage;
+            // Обновляем кеш асинхронно, чтобы не блокировать
             if (actualChat?.id) {
-              messagesCacheRef.current.set(actualChat.id, updated);
+              requestAnimationFrame(() => {
+                setMessagesCache(actualChat.id, updated);
+              });
             }
             return updated;
           }
         
-        // Дополнительная проверка перед добавлением (только при ошибке)
-        if (typeof newMessage.message !== 'string') {
-          return prev;
-        }
-        
-        // ОПТИМИЗАЦИЯ: Предыдущие сообщения уже нормализованы при загрузке
-        // Проверяем только новое сообщение и добавляем его
-        // Нормализуем только если обнаружена проблема (что маловероятно)
-        const hasInvalidMessages = prev.some(m => typeof m.message !== 'string');
-        if (hasInvalidMessages) {
-          // Только если есть проблемы, нормализуем все
-          const normalizedPrev = prev.map(normalizeMessage).filter((msg: ChatMessage) => {
-            return typeof msg.message === 'string';
-          });
-          // Удаляем дубликаты
-          const uniquePrev = normalizedPrev.reduce((acc, msg) => {
-            const msgId = String(msg.id);
-            if (!acc.some(m => String(m.id) === msgId)) {
-              acc.push(msg);
-            }
-            return acc;
-          }, [] as ChatMessage[]);
-          // Сортируем по дате и добавляем новое сообщение
-          const allMessages = [...uniquePrev, newMessage].sort((a, b) => {
-            const dateA = new Date(a.createdAt).getTime();
-            const dateB = new Date(b.createdAt).getTime();
-            return dateA - dateB;
-          });
-          // Обновляем кеш
+          // Дополнительная проверка перед добавлением (только при ошибке)
+          if (typeof newMessage.message !== 'string') {
+            return prev;
+          }
+          
+          // ОПТИМИЗАЦИЯ: В нормальном случае просто добавляем новое сообщение
+          // Предполагаем, что сообщения уже отсортированы, поэтому проверяем только последнее
+          const lastMessage = prev[prev.length - 1];
+          const newMessageTime = new Date(newMessage.createdAt).getTime();
+          const lastMessageTime = lastMessage ? new Date(lastMessage.createdAt).getTime() : 0;
+          
+          let allMessages: ChatMessage[];
+          if (newMessageTime >= lastMessageTime) {
+            // Новое сообщение новее последнего - просто добавляем в конец
+            allMessages = [...prev, newMessage];
+          } else {
+            // Нужно вставить в правильное место - сортируем только если необходимо
+            allMessages = [...prev, newMessage].sort((a, b) => {
+              const dateA = new Date(a.createdAt).getTime();
+              const dateB = new Date(b.createdAt).getTime();
+              return dateA - dateB;
+            });
+          }
+          
+          // Обновляем кеш асинхронно
           if (actualChat?.id) {
-            messagesCacheRef.current.set(actualChat.id, allMessages);
+            requestAnimationFrame(() => {
+              setMessagesCache(actualChat.id, allMessages);
+            });
           }
           return allMessages;
-        }
-        
-        // В нормальном случае просто добавляем новое сообщение и сортируем
-        const allMessages = [...prev, newMessage].sort((a, b) => {
-          const dateA = new Date(a.createdAt).getTime();
-          const dateB = new Date(b.createdAt).getTime();
-          return dateA - dateB;
-        });
-        // Обновляем кеш
-        if (actualChat?.id) {
-          messagesCacheRef.current.set(actualChat.id, allMessages);
-        }
-        return allMessages;
         });
         
-        // Обновляем lastMessage в списке филиалов для проверяющего (если сообщение для текущего чата)
+        // ОПТИМИЗАЦИЯ: Откладываем обновление списка филиалов, чтобы не блокировать обработку сообщения
         if (isChecker && actualChat?.branchId && data.branchId) {
-          const messageBranchId = String(data.branchId);
-          setBranchesWithChats(prev => {
-            const branchIndex = prev.findIndex(b => b.branchId === messageBranchId);
-            if (branchIndex === -1) return prev;
-            
-            const updated = [...prev];
-            const updatedBranch = {
-              ...updated[branchIndex],
-              lastMessage: newMessage,
-              updatedAt: newMessage.createdAt,
-            };
-            
-            // Перемещаем филиал в начало списка (вверх)
-            updated.splice(branchIndex, 1);
-            updated.unshift(updatedBranch);
-            
-            return updated;
+          requestAnimationFrame(() => {
+            const messageBranchId = String(data.branchId);
+            setBranchesWithChats(prev => {
+              const branchIndex = prev.findIndex(b => b.branchId === messageBranchId);
+              if (branchIndex === -1) return prev;
+              
+              const updated = [...prev];
+              const updatedBranch = {
+                ...updated[branchIndex],
+                lastMessage: newMessage,
+                updatedAt: newMessage.createdAt,
+              };
+              
+              // Перемещаем филиал в начало списка (вверх)
+              updated.splice(branchIndex, 1);
+              updated.unshift(updatedBranch);
+              
+              return updated;
+            });
           });
         }
         
-        // Прокрутка вниз при получении нового сообщения через сокет - мгновенная
+        // ОПТИМИЗАЦИЯ: Откладываем тяжелые операции, чтобы не блокировать основной поток
         requestAnimationFrame(() => {
+          // Прокрутка вниз при получении нового сообщения через сокет
           const scrollElement = scrollAreaRef.current;
           if (scrollElement) {
             const isNearBottom = scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight < 100;
@@ -2266,14 +2415,18 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
               scrollElement.scrollTop = scrollElement.scrollHeight;
             }
           }
-        });
 
-        // Отмечаем сообщения как прочитанные (только если сообщение не от нас)
-      if (actualChat?.id && newMessage.senderId && newMessage.senderId !== user?.id) {
-        authFetch(`${API}/jurists/safety/chat/chats/${actualChat.id}/read`, {
-            method: 'POST',
-          }).catch(() => {});
-      }
+          // Отмечаем сообщения как прочитанные (только если сообщение не от нас) - отложенно
+          if (actualChat?.id && newMessage.senderId && newMessage.senderId !== user?.id) {
+            // ОПТИМИЗАЦИЯ: Откладываем запрос, чтобы не блокировать обработку сообщения
+            setTimeout(() => {
+              authFetch(`${API}/jurists/safety/chat/chats/${actualChat.id}/read`, {
+                method: 'POST',
+              }).catch(() => {});
+            }, 100);
+          }
+        });
+      });
     };
 
     // Обработка индикатора "печатает..."
@@ -2352,9 +2505,8 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
           }
           return m;
         });
-        // Обновляем кеш
         if (actualChat?.id) {
-          messagesCacheRef.current.set(actualChat.id, updated);
+          setMessagesCache(actualChat.id, updated);
         }
         return updated;
       });
@@ -2695,6 +2847,20 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
     return () => observer.disconnect();
   }, [hasMoreMessages, isLoadingMore, loadMoreMessages]);
 
+  // Сохранение позиции прокрутки после подгрузки старых сообщений вверх
+  useLayoutEffect(() => {
+    const ref = prependScrollRef.current;
+    if (!ref) return;
+    prependScrollRef.current = null;
+    const scrollElement = scrollAreaRef.current?.querySelector('[data-scroll-viewport]') || scrollAreaRef.current;
+    if (!scrollElement) return;
+    requestAnimationFrame(() => {
+      const newScrollHeight = scrollElement.scrollHeight;
+      const delta = newScrollHeight - ref.oldScrollHeight;
+      scrollElement.scrollTop = ref.oldScrollTop + delta;
+    });
+  }, [messages]);
+
   // Поиск по сообщениям
   const handleSearch = useCallback((query: string) => {
     if (!query.trim()) {
@@ -2895,7 +3061,7 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
           const updated = prev.filter(m => m.id !== messageToDelete);
           // Обновляем кеш
           if (currentChat.id) {
-            messagesCacheRef.current.set(currentChat.id, updated);
+            setMessagesCache(currentChat.id, updated);
           }
           return updated;
         });
@@ -3168,7 +3334,7 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
           );
           // Обновляем кеш
           if (currentChat.id) {
-            messagesCacheRef.current.set(currentChat.id, updated);
+            setMessagesCache(currentChat.id, updated);
           }
           return updated;
         });

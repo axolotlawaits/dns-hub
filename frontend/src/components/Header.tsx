@@ -221,92 +221,120 @@ const Header: React.FC<HeaderProps> = ({ navOpened }) => {
     prevMenuOpenedRef.current = menuOpened;
   }, [menuOpened, fetchNotifications]);
 
+  // ИСПРАВЛЕНО: Ref для отслеживания последнего обработанного уведомления, чтобы избежать повторной обработки и ререндеров
+  const lastProcessedNotificationIdRef = useRef<string | null>(null);
+  
   // Обновление уведомлений при получении нового через Socket.IO (независимо от состояния меню)
   // useNotifications в App.tsx уже обрабатывает push-уведомления, здесь мы только добавляем в список
   useEffect(() => {
-    if (lastNotification && user?.id) {
+    if (!lastNotification || !user?.id) return;
+    
+    // ИСПРАВЛЕНО: Проверяем, не обрабатывали ли мы уже это уведомление
+    const notificationId = lastNotification.id;
+    if (!notificationId) return;
+    
+    // Если это то же самое уведомление, что мы уже обработали - пропускаем (предотвращаем ререндер)
+    if (lastProcessedNotificationIdRef.current === notificationId) {
+      return;
+    }
+    
+    // ИСПРАВЛЕНО: Используем функциональное обновление состояния, чтобы не зависеть от notifications в зависимостях
+    // Это предотвращает ререндеры при изменении notifications
+    let shouldProcess = false;
+    setNotifications(prev => {
       // Проверяем, не было ли это уведомление уже добавлено (по ID)
-      const notificationId = lastNotification.id;
-      if (notificationId && notifications.some(n => n.id === notificationId)) {
+      if (prev.some(n => n.id === notificationId)) {
         // Уведомление уже есть в списке, обновляем его
-        setNotifications(prev => prev.map(n => n.id === notificationId ? {
+        lastProcessedNotificationIdRef.current = notificationId;
+        return prev.map(n => n.id === notificationId ? {
           ...n,
           read: lastNotification.read || n.read,
-        } : n));
-        return;
+        } : n);
       }
-      // Убеждаемся, что уведомление имеет все необходимые поля
-      // Преобразуем message в строку, если это не строка
-      let messageText = '';
-      if (typeof lastNotification.message === 'string') {
-        messageText = lastNotification.message;
-      } else if (lastNotification.message !== null && lastNotification.message !== undefined) {
-        // Если message - это объект, пытаемся извлечь строку из него
-        if (typeof lastNotification.message === 'object') {
-          // Пытаемся найти строковое поле в объекте
-          const msgObj = lastNotification.message as any;
-          if (msgObj.message && typeof msgObj.message === 'string') {
-            messageText = msgObj.message;
-          } else if (msgObj.text && typeof msgObj.text === 'string') {
-            messageText = msgObj.text;
-          } else if (msgObj.content && typeof msgObj.content === 'string') {
-            messageText = msgObj.content;
-          } else {
-            // Если не нашли строковое поле, преобразуем весь объект в JSON
-            try {
-              messageText = JSON.stringify(lastNotification.message);
-            } catch {
-              messageText = 'Сообщение';
-            }
-          }
-        } else {
-          // Для других типов просто преобразуем в строку
-          messageText = String(lastNotification.message);
-        }
-      }
-      
-      const notification: Notification = {
-        id: lastNotification.id || '',
-        type: lastNotification.type || 'INFO',
-        channel: lastNotification.channel || ['IN_APP'],
-        title: lastNotification.title || '',
-        message: messageText,
-        read: lastNotification.read || false,
-        createdAt: lastNotification.createdAt || new Date().toISOString(),
-        sender: lastNotification.sender,
-        tool: lastNotification.tool,
-        action: lastNotification.action,
-      };
-      
-      // Логируем для отладки
-      if (!messageText || !messageText.trim()) {
-        console.warn('[Header] Received notification with empty message:', {
-          id: notification.id,
-          title: notification.title,
-          messageType: typeof lastNotification.message,
-          messageValue: lastNotification.message
-        });
-      }
-      
-      setNotifications(prev => {
-        // Проверяем, не было ли это уведомление уже добавлено (по ID)
-        const exists = prev.some(n => n.id === notification.id);
-        if (exists) {
-          // Если уведомление уже есть, обновляем его (но сохраняем статус прочитанности)
-          return prev.map(n => n.id === notification.id ? {
-            ...notification,
-            read: n.read // Сохраняем статус прочитанности
-          } : n);
-        } else {
-          // Добавляем новое уведомление в начало списка только если его еще нет
-          return [notification, ...prev];
-        }
-      });
-      
-      // Popup уведомлений не должен открываться автоматически
-      // Пользователь сам откроет popup, если нужно
+      // Уведомления еще нет - нужно обработать
+      shouldProcess = true;
+      return prev;
+    });
+    
+    // Если уведомление уже было в списке, выходим (предотвращаем ререндер)
+    if (!shouldProcess) {
+      return;
     }
-  }, [lastNotification, user?.id, menuOpened]);
+    
+    // Убеждаемся, что уведомление имеет все необходимые поля
+    // Преобразуем message в строку, если это не строка
+    let messageText = '';
+    if (typeof lastNotification.message === 'string') {
+      messageText = lastNotification.message;
+    } else if (lastNotification.message !== null && lastNotification.message !== undefined) {
+      // Если message - это объект, пытаемся извлечь строку из него
+      if (typeof lastNotification.message === 'object') {
+        // Пытаемся найти строковое поле в объекте
+        const msgObj = lastNotification.message as any;
+        if (msgObj.message && typeof msgObj.message === 'string') {
+          messageText = msgObj.message;
+        } else if (msgObj.text && typeof msgObj.text === 'string') {
+          messageText = msgObj.text;
+        } else if (msgObj.content && typeof msgObj.content === 'string') {
+          messageText = msgObj.content;
+        } else {
+          // Если не нашли строковое поле, преобразуем весь объект в JSON
+          try {
+            messageText = JSON.stringify(lastNotification.message);
+          } catch {
+            messageText = 'Сообщение';
+          }
+        }
+      } else {
+        // Для других типов просто преобразуем в строку
+        messageText = String(lastNotification.message);
+      }
+    }
+    
+    const notification: Notification = {
+      id: lastNotification.id || '',
+      type: lastNotification.type || 'INFO',
+      channel: lastNotification.channel || ['IN_APP'],
+      title: lastNotification.title || '',
+      message: messageText,
+      read: lastNotification.read || false,
+      createdAt: lastNotification.createdAt || new Date().toISOString(),
+      sender: lastNotification.sender,
+      tool: lastNotification.tool,
+      action: lastNotification.action,
+    };
+    
+    // Логируем для отладки
+    if (!messageText || !messageText.trim()) {
+      console.warn('[Header] Received notification with empty message:', {
+        id: notification.id,
+        title: notification.title,
+        messageType: typeof lastNotification.message,
+        messageValue: lastNotification.message
+      });
+    }
+    
+    // ИСПРАВЛЕНО: Используем функциональное обновление состояния для предотвращения ререндеров
+    setNotifications(prev => {
+      // Проверяем, не было ли это уведомление уже добавлено (по ID)
+      const exists = prev.some(n => n.id === notification.id);
+      if (exists) {
+        // Если уведомление уже есть, обновляем его (но сохраняем статус прочитанности)
+        lastProcessedNotificationIdRef.current = notification.id;
+        return prev.map(n => n.id === notification.id ? {
+          ...notification,
+          read: n.read // Сохраняем статус прочитанности
+        } : n);
+      } else {
+        // Добавляем новое уведомление в начало списка только если его еще нет
+        lastProcessedNotificationIdRef.current = notification.id;
+        return [notification, ...prev];
+      }
+    });
+    
+    // Popup уведомлений не должен открываться автоматически
+    // Пользователь сам откроет popup, если нужно
+  }, [lastNotification, user?.id]); // ИСПРАВЛЕНО: Убрали menuOpened из зависимостей, так как он не влияет на логику
 
   // Отметить как прочитанное
   const markAsRead = useCallback(async (notificationId: string | undefined) => {
