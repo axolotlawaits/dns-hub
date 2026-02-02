@@ -132,8 +132,8 @@ export default function RocList() {
 
   const [filterNameData, setFilterNameData] = useState<string[]>([])
   const [filterInnData, setFilterInnData] = useState<string[]>([])
-  const [types, setTypes] = useState<string[]>([]);
-  const [statuses, setStatuses] = useState<string[]>([]);
+  const [types, setTypes] = useState<TypeOption[]>([]);
+  const [statuses, setStatuses] = useState<TypeOption[]>([]);
 
   const [filters, setFilters] = useState({ column: [] as any[], sorting: [{ id: 'createdAt', desc: true }] });
   const [activeTab, setActiveTab] = useState<'list' | 'byDoc'>('list');
@@ -218,8 +218,9 @@ export default function RocList() {
       
       setFilterNameData(uniqueNames.map((n: any) => extractString(n.name)))
       setFilterInnData(uniqueInns.map((i: any) => extractString(i.inn)))
-      setTypes(t.map((o: any) => extractString(o.name)));
-      setStatuses(s.map((o: any) => extractString(o.name)));
+      // Сохраняем полные объекты для формы (value = id, label = name)
+      setTypes(t.map((o: any) => ({ value: o.id || o.value, label: extractString(o.name) })));
+      setStatuses(s.map((o: any) => ({ value: o.id || o.value, label: extractString(o.name) })));
     }
   }, [fetchJson]);
 
@@ -256,8 +257,8 @@ export default function RocList() {
     { columnId: 'dateContract', label: 'Дата договора', type: 'date' as const },
     { columnId: 'name', label: 'Контрагент', type: 'select' as const, options: filterNameData.map(v => ({ value: v, label: v })) },
     { columnId: 'doc_inn', label: 'ИНН', type: 'select' as const, options: filterInnData.map(v => ({ value: v, label: v })) },
-    { columnId: 'typeContract_name', label: 'Тип договора', type: 'select' as const, options: types.map(v => ({ value: v, label: v })) },
-    { columnId: 'statusContract_name', label: 'Статус', type: 'select' as const, options: statuses.map(v => ({ value: v, label: v })) },
+    { columnId: 'typeContract_name', label: 'Тип договора', type: 'select' as const, options: types.map(v => ({ value: v.label, label: v.label })) },
+    { columnId: 'statusContract_name', label: 'Статус', type: 'select' as const, options: statuses.map(v => ({ value: v.label, label: v.label })) },
     { columnId: 'folderNo', label: 'Папка', type: 'select' as const, options: filterFolderData.map(v => ({ value: v, label: v })) },
   ]), [filterInnData, filterNameData, types, statuses, filterFolderData]);
 
@@ -416,7 +417,7 @@ export default function RocList() {
           name: 'typeContractId', 
           label: 'Тип договора', 
           type: 'select', 
-          options: types.map(v => ({ value: v, label: v })), 
+          options: types.map(v => ({ value: v.value, label: v.label })), 
           placeholder: 'Выберите тип',
           groupWith: ['statusContractId', 'shelfLife'],
           groupSize: 3,
@@ -426,7 +427,7 @@ export default function RocList() {
           name: 'statusContractId', 
           label: 'Статус', 
           type: 'select', 
-          options: statuses.map(v => ({ value: v, label: v })), 
+          options: statuses.map(v => ({ value: v.value, label: v.label })), 
           placeholder: 'Выберите статус',
           groupWith: ['typeContractId', 'shelfLife'],
           groupSize: 3,
@@ -445,7 +446,16 @@ export default function RocList() {
           label: 'Без срока', 
           type: 'boolean',
           groupWith: ['contractNumber', 'dateContract'],
-          groupSize: 3
+          groupSize: 3,
+          onChange: (value: boolean, setFieldValue?: (path: string, v: any) => void) => {
+            setFormValues((prev: typeof formValues) => ({ ...prev, indefinite: value }));
+            if (setFieldValue) {
+              setFieldValue('indefinite', value);
+              if (value) {
+                setFieldValue('agreedTo', '');
+              }
+            }
+          }
         },
         { 
           name: 'agreedTo', 
@@ -453,7 +463,8 @@ export default function RocList() {
           type: 'date',
           groupWith: ['contractNumber', 'dateContract'],
           groupSize: 3,
-          required: !formValues.indefinite
+          required: !formValues.indefinite,
+          disabled: formValues.indefinite
         },
         { 
           name: 'shelfLife', 
@@ -633,6 +644,9 @@ export default function RocList() {
       indefinite: !row.agreedTo,
       userAddId: user?.id || DEFAULT_FORM.userAddId,
       userUpdatedId: user?.id || DEFAULT_FORM.userUpdatedId,
+      // Преобразуем объекты в ID для формы
+      typeContractId: row.typeContract?.id || '',
+      statusContractId: row.statusContract?.id || '',
       roc: { selectedByName: '', selectedByInn: '' }
     });
     const allAtt: any[] = (row as any)?.rocAttachment || [];
@@ -987,7 +1001,7 @@ export default function RocList() {
                 item: {
                   border: 'none',
                   borderBottom: '1px solid var(--theme-border-secondary)',
-                  '&:last-child': {
+                  '&:lastChild': {
                     borderBottom: 'none'
                   }
                 },

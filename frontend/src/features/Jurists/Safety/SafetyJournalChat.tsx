@@ -1456,7 +1456,7 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
     } finally {
       setJournalsLoading(false);
     }
-  }, [token, authFetch]);
+  }, [token]); // УБРАЛИ authFetch из зависимостей
 
   // Загрузка списка проверяющих (для ответственных)
   const loadCheckers = useCallback(async () => {
@@ -1537,7 +1537,7 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, branchId, user?.id, loadBranchJournals, onParticipantsChange]);
+  }, [token, branchId, user?.id]); // УБРАЛИ loadBranchJournals и onParticipantsChange из зависимостей
 
   // Загрузка списка ответственных для филиала
   const loadResponsibles = useCallback(async (branchId: string) => {
@@ -2579,7 +2579,7 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
     
     initialLoadDone.current = true;
     prevBranchIdRef.current = branchId;
-  }, [stableAccess, user, loadCheckers, loadBranchesWithChats, shouldLoad, branchId]);
+  }, [stableAccess, user, shouldLoad, branchId]); // УБРАЛИ loadCheckers и loadBranchesWithChats из зависимостей
   
   // Автоматическое открытие чата для конкретного филиала (для проверяющих)
   useEffect(() => {

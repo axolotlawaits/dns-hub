@@ -59,7 +59,7 @@ interface Correspondence {
   comments?: string;
   responsibleId: string;
   responsible?: User;
-  documentNumber?: string;
+  documentNumber?: number;
   trackNumber?: string;
   // Старые поля для обратной совместимости
   from?: string;
@@ -88,7 +88,6 @@ interface CorrespondenceForm {
   senderSubSubTypeId?: string;
   senderName: string;
   documentTypeId: string;
-  documentNumber?: string;
   trackNumber?: string;
   comments?: string;
   responsibleId: string;
@@ -102,7 +101,6 @@ const DEFAULT_CORRESPONDENCE_FORM: CorrespondenceForm = {
   senderSubSubTypeId: undefined,
   senderName: '',
   documentTypeId: '',
-  documentNumber: '',
   trackNumber: '',
   comments: '',
   responsibleId: '',
@@ -161,8 +159,6 @@ export default function CorrespondenceList() {
     columnFilters: [] as ColumnFiltersState,
     sorting: [{ id: 'formattedReceiptDate', desc: true }] as SortingState,
     senderTypes: [] as Type[],
-    senderSubTypes: [] as Type[],
-    senderSubSubTypes: [] as Type[],
     documentTypes: [] as Type[],
     users: [] as User[],
     loadingUsers: false,
@@ -282,28 +278,12 @@ export default function CorrespondenceList() {
             getTypes('Тип документа', correspondenceTool.id, undefined, false) // плоский список
           ]);
         }
-        
-        // Извлекаем подтипы и подподтипы из иерархии senderTypes
-        const senderSubTypes: Type[] = [];
-        const senderSubSubTypes: Type[] = [];
-        senderTypesData.forEach((type: Type & { children?: Type[] }) => {
-          if (type.children) {
-            type.children.forEach((subType: Type & { children?: Type[] }) => {
-              senderSubTypes.push(subType);
-              if (subType.children) {
-                senderSubSubTypes.push(...subType.children);
-              }
-            });
-          }
-        });
 
         setState(prev => ({
           ...prev,
           correspondence: correspondenceData,
           users: usersData,
           senderTypes: senderTypesData,
-          senderSubTypes,
-          senderSubSubTypes,
           documentTypes: documentTypesData,
           senderNames: Array.isArray(senderNamesData) ? senderNamesData.sort() : [],
           loading: false
@@ -384,13 +364,38 @@ export default function CorrespondenceList() {
         label: 'Подтип отправителя',
         type: 'select' as const,
         options: (values: any) => {
-          // Показываем только подтипы для выбранного типа "Суд"
+          // Показываем подтипы только если у выбранного типа есть дочерние элементы
           const selectedType = state.senderTypes.find(t => t.id === values.senderTypeId);
-          if (selectedType?.name === 'Суд') {
-            // Находим тип "Суд" и возвращаем его детей
-            const courtType = state.senderTypes.find(t => t.name === 'Суд' && t.children);
-            if (courtType?.children) {
-              return courtType.children.map((child: Type) => ({ 
+          if (selectedType && selectedType.children && selectedType.children.length > 0) {
+            return selectedType.children.map((child: Type) => ({ 
+              value: child.id, 
+              label: child.name 
+            }));
+          }
+          return [];
+        },
+        required: false,
+        disabled: (values: any) => {
+          const selectedType = state.senderTypes.find(t => t.id === values.senderTypeId);
+          return !selectedType || !selectedType.children || selectedType.children.length === 0;
+        },
+        onChange: (val: string, setFieldValue: any) => {
+          setFieldValue('senderSubTypeId', val);
+          // Сбрасываем подподтип при смене подтипа
+          setFieldValue('senderSubSubTypeId', '');
+        }
+      },
+      {
+        name: 'senderSubSubTypeId',
+        label: 'Подподтип отправителя',
+        type: 'select' as const,
+        options: (values: any) => {
+          // Показываем подподтипы только если у выбранного подтипа есть дочерние элементы
+          const selectedType = state.senderTypes.find(t => t.id === values.senderTypeId);
+          if (selectedType && selectedType.children) {
+            const selectedSubType = selectedType.children.find(t => t.id === values.senderSubTypeId);
+            if (selectedSubType && selectedSubType.children && selectedSubType.children.length > 0) {
+              return selectedSubType.children.map((child: Type) => ({ 
                 value: child.id, 
                 label: child.name 
               }));
@@ -401,47 +406,11 @@ export default function CorrespondenceList() {
         required: false,
         disabled: (values: any) => {
           const selectedType = state.senderTypes.find(t => t.id === values.senderTypeId);
-          return selectedType?.name !== 'Суд';
-        },
-        onChange: (val: string, setFieldValue: any) => {
-          setFieldValue('senderSubTypeId', val);
-          // Сбрасываем подподтип при смене подтипа - используем пустую строку
-          const selectedSubType = state.senderSubTypes.find(t => t.id === val);
-          if (selectedSubType?.name !== 'Федеральные суды') {
-            setFieldValue('senderSubSubTypeId', '');
+          if (selectedType && selectedType.children) {
+            const selectedSubType = selectedType.children.find(t => t.id === values.senderSubTypeId);
+            return !selectedSubType || !selectedSubType.children || selectedSubType.children.length === 0;
           }
-        }
-      },
-      {
-        name: 'senderSubSubTypeId',
-        label: 'Подподтип отправителя',
-        type: 'select' as const,
-        options: (values: any) => {
-          // Показываем только подподтипы для выбранного подтипа "Федеральные суды"
-          const selectedSubType = state.senderSubTypes.find(t => t.id === values.senderSubTypeId);
-          if (selectedSubType?.name === 'Федеральные суды') {
-            // Находим тип "Суд" в senderTypes, затем его ребенка "Федеральные суды", затем его детей
-            const courtType = state.senderTypes.find(t => t.name === 'Суд' && t.children);
-            if (courtType?.children) {
-              const federalCourtsType = courtType.children.find((child: Type) => child.name === 'Федеральные суды' && child.children);
-              if (federalCourtsType?.children) {
-                return federalCourtsType.children.map((child: Type) => ({ 
-                  value: child.id, 
-                  label: child.name 
-                }));
-              }
-            }
-            // Fallback: ищем в senderSubSubTypes по parent_type
-            return state.senderSubSubTypes
-              .filter(t => t.parent_type === selectedSubType.id)
-              .map(t => ({ value: t.id, label: t.name }));
-          }
-          return [];
-        },
-        required: false,
-        disabled: (values: any) => {
-          const selectedSubType = state.senderSubTypes.find(t => t.id === values.senderSubTypeId);
-          return selectedSubType?.name !== 'Федеральные суды';
+          return true;
         },
         groupWith: ['senderName'],
         groupSize: 2 as const,
@@ -453,34 +422,18 @@ export default function CorrespondenceList() {
           if (selectedType?.name === 'Физическое лицо') {
             return 'ФИО';
           }
-          return 'Наименование';
+          return 'Отправитель';
         },
-        type: 'autocomplete' as const,
+        type: 'text' as const,
         required: true,
         placeholder: (values: any) => {
           const selectedType = state.senderTypes.find(t => t.id === values.senderTypeId);
           if (selectedType?.name === 'Физическое лицо') {
-            return 'Введите или выберите ФИО физического лица';
+            return 'Введите ФИО физического лица';
           }
-          return 'Введите или выберите наименование отправителя';
+          return 'Введите наименование отправителя';
         },
-        options: state.senderNames.map(name => ({ value: name, label: name })),
-        onSearchChange: async (search: string) => {
-          if (search.trim().length >= 2) {
-            try {
-              setState(prev => ({ ...prev, loadingSenderNames: true }));
-              const names = await fetchData(`${API}/aho/correspondence/sender-names?search=${encodeURIComponent(search)}`);
-              setState(prev => ({
-                ...prev,
-                senderNames: Array.from(new Set([...prev.senderNames, ...names])).sort(),
-                loadingSenderNames: false
-              }));
-            } catch (error) {
-              console.error('Failed to load sender names:', error);
-              setState(prev => ({ ...prev, loadingSenderNames: false }));
-            }
-          }
-        }
+        description: 'Пример: ООО "Ромашка", ИП Иванов И.И., Судебный участок №123, Иванов Иван Иванович'
       },
       {
         name: 'documentTypeId',
@@ -488,15 +441,8 @@ export default function CorrespondenceList() {
         type: 'select' as const,
         options: documentTypeOptions,
         required: true,
-        groupWith: ['documentNumber', 'trackNumber'],
-        groupSize: 3 as const,
-      },
-      {
-        name: 'documentNumber',
-        label: 'Номер документа',
-        type: 'text' as const,
-        required: false,
-        placeholder: 'Введите номер документа',
+        groupWith: ['trackNumber'],
+        groupSize: 2 as const,
       },
       {
         name: 'trackNumber',
@@ -541,7 +487,7 @@ export default function CorrespondenceList() {
       }
     ],
     initialValues: DEFAULT_CORRESPONDENCE_FORM,
-  }), [userOptions, senderTypeOptions, documentTypeOptions, state.senderTypes, state.senderSubTypes, state.senderSubSubTypes, state.senderNames, fetchData]);
+  }), [userOptions, senderTypeOptions, documentTypeOptions, state.senderTypes, state.senderNames, fetchData]);
 
 
 
@@ -577,8 +523,8 @@ export default function CorrespondenceList() {
     {
       type: 'text' as const,
       columnId: 'senderName',
-      label: 'Наименование/ФИО',
-      placeholder: 'Поиск по наименованию отправителя',
+      label: 'Отправитель/ФИО',
+      placeholder: 'Поиск по отправителю',
       width: 250,
     },
     {
@@ -668,7 +614,7 @@ export default function CorrespondenceList() {
     },
     {
       accessorKey: 'senderName',
-      header: 'Наименование/ФИО',
+      header: 'Отправитель/ФИО',
       filterFn: 'includesString',
       cell: ({ getValue }) => {
         const senderName = getValue() as string;
@@ -738,30 +684,29 @@ export default function CorrespondenceList() {
       header: 'Номер документа',
       filterFn: 'includesString',
       cell: ({ getValue }) => {
-        const documentNumber = getValue() as string;
+        const documentNumber = getValue() as number;
+        const displayValue = documentNumber ? documentNumber.toString() : '';
         return (
           <Tooltip
-            label={documentNumber}
-            disabled={!documentNumber}
+            label={displayValue}
+            disabled={!displayValue}
             withArrow
             position="top"
             openDelay={300}
-            multiline
-            w={300}
           >
             <Text 
               size="sm" 
               c="var(--theme-text-primary)"
               style={{ 
-                cursor: documentNumber ? 'help' : 'default',
+                cursor: displayValue ? 'help' : 'default',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                maxWidth: '200px',
+                maxWidth: '100px',
                 display: 'block'
               }}
             >
-              {documentNumber || '-'}
+              {displayValue || '-'}
         </Text>
           </Tooltip>
         );
@@ -1118,7 +1063,6 @@ export default function CorrespondenceList() {
           senderSubSubTypeId: data.senderSubSubTypeId,
           senderName: data.senderName,
           documentTypeId: data.documentTypeId,
-          documentNumber: data.documentNumber || data.numberMail || '', // Для обратной совместимости
           trackNumber: data.trackNumber || (data.numberMail && /^\d{13,14}$/.test(data.numberMail.trim().replace(/\s+/g, '')) ? data.numberMail : '') || '',
           comments: data.comments || '',
           responsibleId: data.responsibleId,
@@ -1424,7 +1368,7 @@ export default function CorrespondenceList() {
                     fields: [
                       { label: 'Дата получения', value: formattedItem.formattedReceiptDate, icon: IconCalendar },
                       { label: 'Тип документа', value: formattedItem.documentTypeLabel, icon: IconFileText },
-                      { label: 'Номер документа', value: formattedItem.documentNumber || formattedItem.numberMail || 'Не указан', icon: IconFileText },
+                      { label: 'Номер документа', value: formattedItem.documentNumber ? formattedItem.documentNumber.toString() : (formattedItem.numberMail || 'Не указан'), icon: IconFileText },
                       { label: 'Трек-номер', value: formattedItem.trackNumber || (formattedItem.numberMail && /^\d{13,14}$/.test(formattedItem.numberMail.trim().replace(/\s+/g, '')) ? formattedItem.numberMail : null) || 'Не указан', icon: IconPackage },
                     ]
                   },
@@ -1452,7 +1396,7 @@ export default function CorrespondenceList() {
                         show: !!formattedItem.senderSubSubType
                       },
                       { 
-                        label: 'Наименование/ФИО', 
+                        label: 'Отправитель/ФИО', 
                         value: formattedItem.senderName, 
                         icon: IconUser,
                         show: !!formattedItem.senderName

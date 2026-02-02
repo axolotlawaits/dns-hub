@@ -136,7 +136,6 @@ export const updateUserSettings = async (req: Request, res: Response):Promise<an
 
     return res.status(200).json(setting);
   } catch (error) {
-    console.error('[User] Error updating user settings:', error);
     return res.status(500).json({ error: 'Failed to update user settings' });
   }
 };
@@ -155,8 +154,6 @@ export const getUserSettings = async (req: Request, res: Response):Promise<any> 
   }
 
   if (token.userId !== userId) {
-    console.warn(`[User] Security: User ${token.userId} attempted to access settings for user ${userId}`);
-    
     // Логируем попытку несанкционированного доступа
     await logUserAction(
       token.userId,
@@ -177,7 +174,6 @@ export const getUserSettings = async (req: Request, res: Response):Promise<any> 
     const rateLimitCheck = checkPasswordRateLimit(token.userId, 5, 15 * 60 * 1000);
     if (!rateLimitCheck.allowed) {
       const resetTime = new Date(rateLimitCheck.resetTime).toLocaleString('ru-RU');
-      console.warn(`[User] Security: Rate limit exceeded for password access by user ${token.userId}`);
       
       // Логируем попытку превышения лимита
       await logUserAction(
@@ -253,7 +249,6 @@ export const getUserSettings = async (req: Request, res: Response):Promise<any> 
 
     return res.status(200).json(setting);
   } catch (error) {
-    console.error('[User] Error fetching user settings:', error);
     return res.status(500).json({ error: 'Failed to fetch user settings' });
   }
 };
@@ -269,7 +264,6 @@ export const login = async (req: Request, res: Response): Promise<any> => {
   const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
   const userAgent = req.get('user-agent') || null;
 
-  console.log(`[Login] Starting login process for user: ${maskedLogin}`);
 
   if (!data) {
     console.error(`[Login] No user data in res.locals for user: ${maskedLogin}`);
@@ -295,20 +289,12 @@ export const login = async (req: Request, res: Response): Promise<any> => {
     return res.status(500).json({ error: 'Authentication data missing' });
   }
 
-  console.log(`[Login] LDAP data received for user: ${maskedLogin}`, {
-    hasDisplayName: !!data.displayName,
-    hasEmail: !!data.mail,
-    hasDepartment: !!data.department,
-    hasPhoto: !!data.thumbnailPhoto
-  });
-
   try {
     const user = await prisma.user.findUnique({
       where: { login: loginLowerCase }
     });
 
     if (!user) {
-      console.log(`[Login] Creating new user: ${loginLowerCase}`);
       
       const userData = {
         login: loginLowerCase,
@@ -321,20 +307,10 @@ export const login = async (req: Request, res: Response): Promise<any> => {
         telegramChatId: null
       };
 
-      console.log(`[Login] User data to create:`, {
-        login: userData.login,
-        email: userData.email ? `${userData.email.substring(0, 3)}***` : null,
-        position: userData.position,
-        name: userData.name,
-        branch: userData.branch,
-        hasImage: !!userData.image
-      });
-
       const newUser = await prisma.user.create({
         data: userData
       });
       
-      console.log(`[Login] New user created successfully: ${newUser.id}`);
       const getGroupName = await prisma.position.findUnique({
         where: {name: newUser.position},
         select: {group: {select: {name: true}}}
@@ -359,7 +335,6 @@ export const login = async (req: Request, res: Response): Promise<any> => {
         maxAge: 90 * 24 * 60 * 60 * 1000
       })
 
-      console.log(`[Login] Login successful for new user: ${maskedLogin}`);
       
       // Автоматически сохраняем пароль Exchange для нового пользователя
       const userPassword = (res.locals as any).userPassword;
@@ -406,7 +381,6 @@ export const login = async (req: Request, res: Response): Promise<any> => {
       return res.status(200).json({user: newUser, token})
     }
 
-    console.log(`[Login] Existing user found: ${loginLowerCase}, ID: ${user.id}`);
 
     const getGroupName = await prisma.position.findUnique({
       where: {name: user.position},
@@ -420,14 +394,13 @@ export const login = async (req: Request, res: Response): Promise<any> => {
     const groupName = getGroupName?.group?.name
     const userUuid = getUserUuid?.uuid
 
-    console.log(`[Login] User metadata:`, {
-      groupName,
-      userUuid,
-      position: user.position,
-      role: user.role
-    });
-
-    const payload = { userId: user.id, userUuid, positionName: user.position, groupName, userRole: user.role }
+    const payload = { 
+      userId: user.id, 
+      userUuid, 
+      positionName: user.position, 
+      groupName, 
+      userRole: user.role 
+    }
 
     const token = jwt.sign(payload, accessPrivateKey, { algorithm: 'RS256', expiresIn: '30m' })
     const refreshToken = jwt.sign(payload, refreshPrivateKey, { algorithm: 'RS256', expiresIn: '90d' })
@@ -439,7 +412,6 @@ export const login = async (req: Request, res: Response): Promise<any> => {
       maxAge: 90 * 24 * 60 * 60 * 1000
     })
     
-    console.log(`[Login] Login successful for existing user: ${maskedLogin}`);
     
     // Автоматически сохраняем пароль Exchange при каждом логине
     // Пароль LDAP = пароль Exchange, поэтому обновляем его при каждом входе
@@ -682,7 +654,6 @@ export const getUserData = async (req: Request, res: Response): Promise<any> => 
     let impersonatedBy = undefined;
     if (token && token.impersonatedBy) {
       impersonatedBy = token.impersonatedBy;
-      console.log('[getUserData] Сохраняем impersonatedBy из текущего токена:', impersonatedBy);
     }
 
     const payload = { 

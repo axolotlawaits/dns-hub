@@ -186,7 +186,6 @@ export const updateGroupAccessInfo = async (req: Request, res: Response): Promis
   })
   if (access) {
     res.status(200).json(access)
-    console.log('[Access]', access)
   } else {
     res.status(400).json({error: 'ошибка обновления доступа'})
   }
@@ -315,7 +314,6 @@ export const updateUserAccessInfo = async (req: Request, res: Response): Promise
           toolName: access.tool.name,
           toolLink: access.tool.link
         });
-        console.log(`[Access] Sent access_updated event to user ${userId} for tool ${toolId}`);
       } catch (socketError) {
         console.error('Failed to send access_updated socket event:', socketError);
       }
@@ -369,7 +367,6 @@ export const deleteUserAccessInfo = async (req: Request, res: Response): Promise
         toolLink: access.tool.link,
         deleted: true
       });
-      console.log(`[Access] Sent access_updated event (deleted) to user ${userId} for tool ${toolId}`);
     } catch (socketError) {
       console.error('Failed to send access_updated socket event:', socketError);
     }
@@ -1003,7 +1000,6 @@ export const approveAccessRequest = async (req: Request, res: Response): Promise
         toolName: metadata?.toolName || 'Инструмент',
         toolLink: metadata?.toolLink || ''
       });
-      console.log(`[Access] Sent access_updated event to user ${requesterId} for tool ${toolId}`);
     } catch (socketError) {
       console.error('Failed to send access_updated socket event:', socketError);
     }

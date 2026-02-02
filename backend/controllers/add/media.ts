@@ -26,11 +26,6 @@ const MediaSchema = z.object({
 });
 
 // Helper functions remain similar but adjusted for media
-const logRequest = (req: Request) => {
-  console.log('[Media] Request Body:', req.body);
-  console.log('[Media] Request Files:', req.files);
-};
-
 const validateUserExists = async (userId: string) => {
   return prisma.user.findUnique({ where: { id: userId } });
 };
@@ -38,7 +33,6 @@ const validateUserExists = async (userId: string) => {
 const deleteFileSafely = async (filePath: string) => {
   try {
     await fs.unlink(filePath);
-    console.log(`[Media] File deleted successfully: ${filePath}`);
   } catch (error) {
     console.error(`[Media] Error deleting file at ${filePath}:`, error);
   }
@@ -159,7 +153,6 @@ export const createMedia = async (
   next: NextFunction
 ) => {
   try {
-    logRequest(req);
     const validatedData = MediaSchema.parse(req.body);
     const files = req.files as MulterFiles;
 

@@ -1,6 +1,5 @@
 import 'dotenv/config';
 
-console.log('🚀 Starting server...');
 
 import express from 'express';
 import cors from "cors"
@@ -180,7 +179,6 @@ if (process.env.ENABLE_BOTS !== 'false') {
         const { default: router } = await import('./routes/app/merchBot.js');
         merchBotRouter = router;
         merchBotRouterLoaded = true;
-        console.log('✅ [Server] Merch bot router loaded lazily');
       } catch (error) {
         console.error('❌ [Server] Failed to load merch bot router:', error);
         return res.status(500).json({ error: 'Merch bot router not available' });
@@ -245,9 +243,7 @@ app.use('/hub-api/scanner', async (req, res, next) => {
       const { default: router } = await import('./routes/scanner/scanner.js');
       scannerRouter = router;
       scannerRouterLoaded = true;
-      console.log('✅ [Server] Scanner router loaded lazily');
     } catch (error) {
-      console.error('❌ [Server] Failed to load scanner router:', error);
       return res.status(500).json({ error: 'Scanner router not available' });
     }
   }
@@ -279,9 +275,7 @@ app.use('/hub-api/jurists/safety', async (req, res, next) => {
       const { default: router } = await import('./routes/jurists/safetyJournal.js');
       safetyJournalRouter = router;
       safetyJournalRouterLoaded = true;
-      console.log('✅ [Server] Safety journal router loaded lazily');
     } catch (error) {
-      console.error('❌ [Server] Failed to load safety journal router:', error);
       return res.status(500).json({ error: 'Safety journal router not available' });
     }
   }
@@ -300,9 +294,7 @@ app.use('/hub-api/jurists/safety/chat', async (req, res, next) => {
       const { default: router } = await import('./routes/jurists/safetyJournalChat.js');
       safetyJournalChatRouter = router;
       safetyJournalChatRouterLoaded = true;
-      console.log('✅ [Server] Safety journal chat router loaded lazily');
     } catch (error) {
-      console.error('❌ [Server] Failed to load safety journal chat router:', error);
       return res.status(500).json({ error: 'Safety journal chat router not available' });
     }
   }
@@ -327,7 +319,6 @@ app.use('/hub-api/public', express.static(path.join(__dirname, 'public')))
 // И прямой доступ по /public/... (для совместимости)
 app.use('/public', express.static(path.join(__dirname, 'public')))
 
-console.log('🚀 Server starting...');
 
 // Оптимизированный запуск сервера
 const port = process.env.PORT || 2000;
@@ -357,9 +348,7 @@ server.listen(port, async function() {
         try {
           const botStarted = await telegramService.launch();
           if (botStarted) {
-            console.log('✅ [Server] Telegram bot started successfully');
           } else {
-            console.log('❌ [Server] Telegram bot failed to start - check .env file');
           }
         } catch (error) {
           if (error instanceof Error && !error.message.includes('Conflict') && !error.message.includes('terminated by other getUpdates request')) {

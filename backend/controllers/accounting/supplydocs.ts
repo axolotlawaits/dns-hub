@@ -43,11 +43,6 @@ const SupplyDocsSchema = z.object({
 });
 
 // Helper functions
-const logRequest = (req: Request) => {
-  console.log('Request Body:', req.body);
-  console.log('Request Files:', req.files);
-};
-
 const validateUserExists = async (userId: string) => {
   return prisma.user.findUnique({ where: { id: userId } });
 };
@@ -59,7 +54,6 @@ const validateBranchExists = async (branchId: string) => {
 const deleteFileSafely = async (filePath: string) => {
   try {
     await fs.unlink(filePath);
-    console.log(`File deleted successfully: ${filePath}`);
   } catch (error) {
     console.error(`Error deleting file at ${filePath}:`, error);
   }
@@ -173,7 +167,6 @@ export const createSupplyDoc = async (
   next: NextFunction
 ) => {
   try {
-    logRequest(req);
     const validatedData = SupplyDocsSchema.parse(req.body);
     const files = req.files as MulterFiles;
 

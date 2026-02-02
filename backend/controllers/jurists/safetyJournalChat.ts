@@ -153,7 +153,6 @@ export const clearResponsibleCacheForBranch = (branchId: string) => {
     }
   }
   keysToDelete.forEach(key => responsibleCache.delete(key));
-  console.log(`[SafetyJournalChat] Cleared cache for branch ${branchId}, removed ${keysToDelete.length} entries`);
 };
 
 // Функция для проверки, является ли пользователь ответственным по филиалу
@@ -194,7 +193,6 @@ const isResponsibleForBranch = async (userId: string, branchId: string, token: s
     const cachedApiData = apiCache.get(apiCacheKey);
     if (cachedApiData && Date.now() - cachedApiData.timestamp < API_CACHE_TTL) {
       response = { data: cachedApiData.data };
-      console.log('[SafetyJournalChat] isResponsibleForBranch - using cached API data for branch:', branchId);
     } else {
       // Очищаем устаревшие записи из кэша периодически
       if (apiCache.size > 100) {
@@ -478,7 +476,6 @@ export const getBranchesWithChats = async (req: Request, res: Response) => {
     const cachedApiData = apiCache.get(apiCacheKey);
     if (cachedApiData && Date.now() - cachedApiData.timestamp < API_CACHE_TTL) {
       allBranches = cachedApiData.data?.branches || [];
-      console.log('[SafetyJournalChat] getBranchesWithChats - using cached API data:', allBranches.length);
     } else {
       // Очищаем устаревшие записи из кэша периодически
       if (apiCache.size > 100) {
@@ -500,7 +497,6 @@ export const getBranchesWithChats = async (req: Request, res: Response) => {
           allBranches = branchesResponse.data.branches;
           // Сохраняем в кэш
           apiCache.set(apiCacheKey, { data: branchesResponse.data, timestamp: Date.now() });
-          console.log('[SafetyJournalChat] getBranchesWithChats - received branches from external API:', allBranches.length);
         } else {
           console.warn('[SafetyJournalChat] getBranchesWithChats - No branches data in API response');
         }
@@ -514,10 +510,6 @@ export const getBranchesWithChats = async (req: Request, res: Response) => {
         // Продолжаем работу без данных из внешнего API
       }
     }
-
-    console.log('[SafetyJournalChat] getBranchesWithChats - found chats in DB:', chats.length);
-    console.log('[SafetyJournalChat] getBranchesWithChats - branches from API:', allBranches.length);
-    console.log('[SafetyJournalChat] getBranchesWithChats - unique branchIds from chats:', Array.from(new Set(chats.map(c => c.branchId))).length);
 
     // КРИТИЧНО: Создаем мапу последних НЕ-СТАТУСНЫХ сообщений по chatId для превью
     // Функция для проверки, является ли сообщение статусным
@@ -604,7 +596,6 @@ export const getBranchesWithChats = async (req: Request, res: Response) => {
     // КРИТИЧНО: Сначала добавляем ВСЕ филиалы из внешнего API (даже без чатов)
     // ИСПРАВЛЕНО: Безопасная обработка данных из внешнего API
     if (Array.isArray(allBranches)) {
-      console.log('[SafetyJournalChat] getBranchesWithChats - processing branches from API:', allBranches.length);
       for (const apiBranch of allBranches) {
         if (!apiBranch || typeof apiBranch !== 'object' || !apiBranch.branch_id) {
           continue; // Пропускаем некорректные данные
@@ -678,7 +669,6 @@ export const getBranchesWithChats = async (req: Request, res: Response) => {
         }
       }
     }
-    console.log('[SafetyJournalChat] getBranchesWithChats - added branches from DB (not in API):', addedFromDB);
 
     // КРИТИЧНО: Преобразуем Map в массив и сортируем по дате обновления (самые свежие сверху)
     const branchesWithChats = Array.from(branchesMap.values()).sort((a: any, b: any) => {
@@ -688,8 +678,6 @@ export const getBranchesWithChats = async (req: Request, res: Response) => {
     });
     
     const duration = Date.now() - startTime; // ВЫСОКИЙ ПРИОРИТЕТ: Мониторинг производительности
-    console.log('[SafetyJournalChat] getBranchesWithChats - returning branches:', branchesWithChats.length, `(${duration}ms)`);
-    console.log('[SafetyJournalChat] getBranchesWithChats - branch IDs:', branchesWithChats.map((b: any) => b.branchId).slice(0, 20));
     
     // ВЫСОКИЙ ПРИОРИТЕТ: Логирование медленных запросов
     if (duration > 2000) {
@@ -1151,7 +1139,6 @@ export const getChatParticipants = async (req: Request, res: Response) => {
         const cachedApiData = apiCache.get(apiCacheKey);
         if (cachedApiData && Date.now() - cachedApiData.timestamp < API_CACHE_TTL) {
           responsiblesResponse = { data: cachedApiData.data };
-          console.log('[SafetyJournalChat] getChatParticipants - using cached API data for branch:', branchId);
         } else {
           // Очищаем устаревшие записи из кэша периодически
           if (apiCache.size > 100) {
@@ -1227,7 +1214,6 @@ export const getChatParticipants = async (req: Request, res: Response) => {
     }
     
     // Получаем информацию о всех участниках из локальной БД
-    console.log('[SafetyJournalChat] getChatParticipants - total participantIds:', participantIds.size, Array.from(participantIds));
     
     const participants = await prisma.user.findMany({
       where: {
@@ -1300,15 +1286,10 @@ export const getChatParticipants = async (req: Request, res: Response) => {
         position: '',
         branch: '',
         responsibilityTypes: extResp.responsibilityTypes,
-        isChecker: false // Внешние ответственные не являются проверяющими
+        isChecker: false
       });
     }
 
-    console.log('[SafetyJournalChat] getChatParticipants - returning participants:', participantsWithTypes.length, {
-      fromLocalDB: participants.length,
-      fromExternalAPI: externalResponsibles.length
-    });
-    
     res.json(participantsWithTypes);
   } catch (error) {
     console.error('[SafetyJournalChat] Error getting chat participants:', error);
@@ -1852,7 +1833,7 @@ export const getMessages = async (req: Request, res: Response) => {
       }
     }
 
-    console.log('[SafetyJournalChat] getMessages - returning messages:', {
+    res.json({
       chatId,
       totalMessages: messages.length,
       totalCount: total,
@@ -1883,12 +1864,6 @@ export const getMessages = async (req: Request, res: Response) => {
     }));
 
     const duration = Date.now() - startTime; // ВЫСОКИЙ ПРИОРИТЕТ: Мониторинг производительности
-    console.log('[SafetyJournalChat] getMessages - completed:', {
-      chatId,
-      messagesCount: messagesWithEditedFlag.length,
-      page: pageNum,
-      duration: `${duration}ms`
-    });
     
     // ВЫСОКИЙ ПРИОРИТЕТ: Логирование медленных запросов
     if (duration > 1000) {
@@ -2108,7 +2083,6 @@ export const sendMessage = async (req: Request, res: Response) => {
           throw new Error('No valid attachments to save');
         }
         
-        console.log('[SafetyJournalChat] sendMessage - saving attachments:', validAttachments.length, 'out of', files.length);
         
         await prisma.chatMessageAttachment.createMany({
           data: validAttachments
@@ -2183,11 +2157,6 @@ export const sendMessage = async (req: Request, res: Response) => {
     
     // КРИТИЧНО: Возвращаем ответ СРАЗУ после Socket.IO
     const duration = Date.now() - startTime;
-    console.log('[SafetyJournalChat] sendMessage - quick response:', {
-      chatId,
-      messageId: message.id,
-      duration: `${duration}ms`
-    });
     
     res.status(201).json(message);
     
@@ -2394,7 +2363,6 @@ export const sendMessage = async (req: Request, res: Response) => {
         }
         
         await Promise.allSettled(notificationPromises);
-        console.log('[SafetyJournalChat] Background notifications sent');
       } catch (bgError) {
         console.error('[SafetyJournalChat] Error in background processing:', bgError);
       }

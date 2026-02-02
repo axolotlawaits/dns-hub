@@ -244,29 +244,6 @@ export const downloadLatestVersion = async (req: Request, res: Response): Promis
     
     const startTime = Date.now();
     console.log(`[Download] Starting download for app ID: ${appId}, IP: ${req.ip}`);
-    console.log(`[Download] User-Agent: ${req.headers['user-agent'] || 'unknown'}`);
-    console.log(`[Download] Accept: ${req.headers['accept'] || 'unknown'}`);
-    console.log(`[Download] Connection: ${req.headers['connection'] || 'unknown'}`);
-    console.log(`[Download] Range: ${req.headers['range'] || 'none'}`);
-    console.log(`[Download] Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`[Download] Request URL: ${req.url}`);
-    console.log(`[Download] Request method: ${req.method}`);
-    
-    // Логируем важные заголовки
-    const importantHeaders = ['content-type', 'accept-encoding', 'cache-control', 'referer', 'origin'];
-    importantHeaders.forEach(header => {
-      if (req.headers[header]) {
-        console.log(`[Download] ${header}: ${req.headers[header]}`);
-      }
-    });
-    
-    // Логируем ВСЕ заголовки для диагностики
-    console.log(`[Download] ==== ALL HEADERS ====`);
-    Object.keys(req.headers).forEach(key => {
-      console.log(`[Download] ${key}: ${req.headers[key]}`);
-    });
-    console.log(`[Download] ==== END HEADERS ====`);
-    
     const dbStartTime = Date.now();
     const latestVersion = await prisma.appVersion.findFirst({
       where: { 
@@ -279,8 +256,7 @@ export const downloadLatestVersion = async (req: Request, res: Response): Promis
       orderBy: { createdAt: 'desc' }
     });
     const dbTime = Date.now() - dbStartTime;
-    console.log(`[Download] Database query took ${dbTime}ms`);
-
+  
     if (!latestVersion) {
       console.log(`[Download] Version not found for app ID: ${appId}`);
       res.status(404).json({ 
@@ -301,8 +277,7 @@ export const downloadLatestVersion = async (req: Request, res: Response): Promis
       return;
     }
     const fileCheckTime = Date.now() - fileCheckStartTime;
-    console.log(`[Download] File existence check took ${fileCheckTime}ms`);
-
+  
     // Получаем информацию о файле
     const fileStats = fs.statSync(filePath);
     const fileSize = fileStats.size;
@@ -333,10 +308,7 @@ export const downloadLatestVersion = async (req: Request, res: Response): Promis
     };
     const contentType = getContentType(fileExtension);
     
-    console.log(`[Download] File info - Size: ${fileSize} bytes, Original: ${downloadFileName}, Safe: ${safeFileName}`);
-    console.log(`[Download] Content-Type: ${contentType}`);
-    console.log(`[Download] Content-Disposition header: attachment; filename="${safeFileName}"; filename*=UTF-8''${encodeURIComponent(downloadFileName)}`);
-
+      
     // Увеличиваем счетчик скачиваний (делаем это асинхронно, чтобы не блокировать скачивание)
     prisma.appVersion.update({
       where: { id: latestVersion.id },
@@ -398,7 +370,7 @@ export const downloadLatestVersion = async (req: Request, res: Response): Promis
         autoClose: true
       });
       fileStream.on('open', () => {
-        console.log('[Download] Range file stream opened');
+        // File opened
       });
       
       let bytesSent = 0;
@@ -421,13 +393,11 @@ export const downloadLatestVersion = async (req: Request, res: Response): Promis
       fileStream.on('end', () => {
         const endTime = Date.now();
         const duration = endTime - startTime;
-        console.log(`[Download] Range stream ended, ${bytesSent}/${chunksize} bytes sent`);
-        console.log(`[Download] Range download completed in ${duration}ms`);
+        // Range download completed
       });
       
       res.on('close', () => {
-        console.log(`[Download] Range client disconnected: ${bytesSent}/${chunksize} bytes sent`);
-        if (!fileStream.destroyed) {
+          if (!fileStream.destroyed) {
           fileStream.destroy();
         }
       });
@@ -466,7 +436,7 @@ export const downloadLatestVersion = async (req: Request, res: Response): Promis
       autoClose: true
     });
     fileStream.on('open', () => {
-      console.log('[Download] File stream opened');
+      // File opened
     });
     
     // Таймаут для скачивания (30 минут)
@@ -503,9 +473,7 @@ export const downloadLatestVersion = async (req: Request, res: Response): Promis
       const endTime = Date.now();
       const duration = endTime - startTime;
       const speed = fileSize / (duration / 1000) / 1024; // KB/s
-      console.log(`[Download] Stream ended, ${bytesSent}/${fileSize} bytes sent`);
-      console.log(`[Download] Download completed for ${safeFileName} in ${duration}ms (${speed.toFixed(2)} KB/s)`);
-      
+          
       // Логируем медленные скачивания для анализа
       if (speed < 100) {
         console.warn(`[Download] SLOW DOWNLOAD WARNING: ${speed.toFixed(2)} KB/s for ${safeFileName}`);
@@ -520,8 +488,6 @@ export const downloadLatestVersion = async (req: Request, res: Response): Promis
     res.on('close', () => {
       const closeTime = Date.now();
       const totalDuration = closeTime - startTime;
-      console.log(`[Download] Client disconnected: ${bytesSent}/${fileSize} bytes sent in ${totalDuration}ms`);
-      console.log(`[Download] Disconnect during download of ${safeFileName}`);
       clearTimeout(downloadTimeout);
       if (!fileStream.destroyed) {
         fileStream.destroy();
@@ -531,7 +497,7 @@ export const downloadLatestVersion = async (req: Request, res: Response): Promis
     res.on('finish', () => {
       const finishTime = Date.now();
       const totalDuration = finishTime - startTime;
-      console.log(`[Download] Response finished: ${bytesSent}/${fileSize} bytes sent in ${totalDuration}ms`);
+      // Download finished
     });
 
     fileStream.pipe(res);
@@ -822,12 +788,8 @@ export const getApkChecksum = async (req: Request, res: Response): Promise<void>
     let apksignerCommand = 'apksigner verify --print-certs';
     
     // Логируем информацию о системе и переменных окружения
-    console.log(`[Checksum] 🔍 Поиск Android SDK...`);
-    console.log(`[Checksum] Платформа: ${process.platform}`);
-    console.log(`[Checksum] ANDROID_HOME: ${process.env.ANDROID_HOME || 'не установлена'}`);
-    console.log(`[Checksum] ANDROID_SDK_ROOT: ${process.env.ANDROID_SDK_ROOT || 'не установлена'}`);
-    console.log(`[Checksum] HOME: ${process.env.HOME || process.env.USERPROFILE || 'не установлена'}`);
-    
+      console.log(`[Checksum] Платформа: ${process.platform}`);
+          
     // Функция для поиска apksigner
     const findApksigner = (): string | null => {
       // Сначала проверяем переменные окружения

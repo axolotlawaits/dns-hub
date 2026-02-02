@@ -198,10 +198,8 @@ class MerchBotService {
 
     // Обработка выбора категории/карточки
     this.bot.callbackQuery(/^item_/, async (ctx) => {
-      console.log(`🔘 [callbackQuery] Обрабатываем нажатие кнопки: "${ctx.callbackQuery.data}"`);
       await ctx.answerCallbackQuery();
       const itemId = ctx.callbackQuery.data.replace('item_', '');
-      console.log(`🔘 [callbackQuery] Извлечен itemId: ${itemId}`);
       await this.handleItemClick(ctx, itemId);
     });
 
@@ -274,8 +272,7 @@ class MerchBotService {
                     itemName: parsed.itemName,
                     itemType: parsed.itemType
                   };
-                  console.log(`📌 Найдена карточка для реакции: ${cardInfo.itemName} (${cardInfo.itemId})`);
-                }
+                     }
               } catch (parseError) {
                 console.error('Ошибка парсинга details для card_sent:', parseError);
               }
@@ -409,8 +406,7 @@ class MerchBotService {
           return;
         } catch (error) {
           // Если не удалось обновить (сообщение не найдено), отправляем новое
-          console.log('⚠️ [MerchBot] Не удалось обновить меню, отправляем новое сообщение');
-        }
+             }
       }
 
       // Отправляем новое сообщение с постоянной клавиатурой
@@ -444,8 +440,7 @@ class MerchBotService {
       const messageText = ctx.message?.text;
       if (!messageText || !ctx.from) return;
 
-      console.log(`🔘 Обрабатываем нажатие кнопки: "${messageText}"`);
-
+     
       // Обработка специальных кнопок
       if (messageText === '🏠 Главная') {
         ctx.session.searchState = false;
@@ -505,12 +500,10 @@ class MerchBotService {
       }
 
       if (!foundButton) {
-        console.log(`❌ Кнопка "${messageText}" не найдена в иерархии`);
-        return;
+             return;
       }
 
-      console.log(`✅ Найдена кнопка: ${foundButton.name} (ID: ${foundButton.id})`);
-
+     
       // Обновляем статистику
       await this.updateStats(ctx.from.id, 'button_click', foundButton.name);
 
@@ -560,8 +553,7 @@ class MerchBotService {
 
       // Отправляем связанные файлы (изображения и PDF)
       const photoPaths = await this.getPhotoPaths(foundButton.id);
-      console.log(`📎 Найдено ${photoPaths.length} файлов для отправки`);
-      
+           
       for (const photoPath of photoPaths) {
         try {
           // Проверяем, что файл существует
@@ -570,7 +562,6 @@ class MerchBotService {
             continue;
           }
           
-          console.log(`📤 Отправляем файл: ${photoPath}`);
           
           const lowerPath = photoPath.toLowerCase();
           const isPdf = lowerPath.endsWith('.pdf');
@@ -625,10 +616,6 @@ class MerchBotService {
       // Отправляем описание (получаем полный элемент из базы для получения description)
       if (item && item.description) {
         const formattedText = this.formatDescription(item.description);
-        console.log(`📝 [MerchBot] Отправляем описание (raw из БД):`, item.description);
-        console.log(`📝 [MerchBot] Отправляем описание (formatted):`, formattedText);
-        console.log(`📝 [MerchBot] Содержит <b>:`, formattedText.includes('<b>'));
-        console.log(`📝 [MerchBot] Содержит **:`, formattedText.includes('**'));
         
         try {
           if (!ctx.chat) {
@@ -780,8 +767,7 @@ class MerchBotService {
           return;
         } catch (error) {
           // Если не удалось обновить (сообщение не найдено), отправляем новое
-          console.log('⚠️ [MerchBot] Не удалось обновить дополнительные категории, отправляем новое сообщение');
-        }
+             }
       }
 
       // Отправляем новое сообщение с постоянной клавиатурой
@@ -802,20 +788,11 @@ class MerchBotService {
   // Обработка клика по элементу
   private async handleItemClick(ctx: MerchContext, itemId: string): Promise<void> {
     try {
-      console.log(`🔘 [handleItemClick] Начало обработки клика для itemId: ${itemId}`);
-      const buttonsHierarchy = await this.getButtonsHierarchy();
+           const buttonsHierarchy = await this.getButtonsHierarchy();
       const item = await this.findItemById(itemId);
       
-      console.log('[DEBUG merch item]', {
-        id: item?.id,
-        name: item?.name,
-        hasDescription: !!item?.description,
-        descriptionLength: item?.description?.length || 0,
-        descriptionPreview: item?.description?.substring(0, 100) || 'нет'
-      });
       
       if (!item) {
-        console.log(`❌ [handleItemClick] Элемент ${itemId} не найден`);
         await ctx.reply('❌ Элемент не найден.');
         return;
       }
@@ -856,7 +833,6 @@ class MerchBotService {
       const photoPaths = await this.getPhotoPaths(itemId);
       
       // Отправляем файлы
-      console.log(`📎 Отправляем ${photoPaths.length} файлов для элемента ${itemId}`);
       for (const photoPath of photoPaths) {
         try {
           // Проверяем, что файл существует
@@ -865,7 +841,6 @@ class MerchBotService {
             continue;
           }
           
-          console.log(`📤 Отправляем файл: ${photoPath}`);
           
           const lowerPath = photoPath.toLowerCase();
           const isPdf = lowerPath.endsWith('.pdf');
@@ -918,10 +893,6 @@ class MerchBotService {
       // Отправляем описание
       if (item.description) {
         const formattedText = this.formatDescription(item.description);
-        console.log(`📝 [MerchBot] Отправляем описание (raw из БД):`, item.description);
-        console.log(`📝 [MerchBot] Отправляем описание (formatted):`, formattedText);
-        console.log(`📝 [MerchBot] Содержит <b>:`, formattedText.includes('<b>'));
-        console.log(`📝 [MerchBot] Содержит **:`, formattedText.includes('**'));
         
         try {
           if (!ctx.chat) {
@@ -1057,7 +1028,6 @@ class MerchBotService {
         return;
       } catch (error) {
         // Если не удалось обновить (сообщение не найдено), отправляем новое
-        console.log('⚠️ [MerchBot] Не удалось обновить подменю, отправляем новое сообщение');
       }
     }
 
@@ -1097,7 +1067,6 @@ class MerchBotService {
         return;
       } catch (error) {
         // Если не удалось обновить (сообщение не найдено), отправляем новое
-        console.log('⚠️ [MerchBot] Не удалось обновить меню навигации, отправляем новое сообщение');
       }
     }
 
@@ -1438,7 +1407,6 @@ class MerchBotService {
           if (retries > 0) {
             // Ждем перед повторной попыткой (файл может быть еще не обработан)
             await new Promise(resolve => setTimeout(resolve, 1000));
-            console.log(`🔄 Повторная попытка получить файл (осталось попыток: ${retries})`);
           }
         }
       }
@@ -1483,7 +1451,6 @@ class MerchBotService {
             downloadRetries--;
             if (downloadRetries > 0) {
               // Ждем перед повторной попыткой (файл может быть еще не доступен)
-              console.log(`🔄 Файл временно недоступен, повторная попытка через 2 секунды (осталось попыток: ${downloadRetries})`);
               await new Promise(resolve => setTimeout(resolve, 2000));
               continue;
             } else {
@@ -1497,7 +1464,6 @@ class MerchBotService {
           // Для других ошибок пробуем повторить
           downloadRetries--;
           if (downloadRetries > 0) {
-            console.log(`🔄 Ошибка загрузки файла, повторная попытка через 1 секунду (осталось попыток: ${downloadRetries}):`, axiosError.message);
             await new Promise(resolve => setTimeout(resolve, 1000));
             continue;
           } else {
@@ -1522,12 +1488,10 @@ class MerchBotService {
         throw new Error('Получен пустой буфер от Telegram API');
       }
       
-      console.log(`📥 Получен файл из Telegram: ${file.file_path}, размер: ${buffer.length} байт`);
       
       // Создаем директорию для feedback фотографий, если её нет
       const feedbackDir = path.join(process.cwd(), 'public', 'feedback');
       if (!fs.existsSync(feedbackDir)) {
-        console.log(`📁 Создаем директорию для фотографий: ${feedbackDir}`);
         fs.mkdirSync(feedbackDir, { recursive: true });
       }
       
@@ -1540,7 +1504,6 @@ class MerchBotService {
       // Сохраняем файл
       try {
         fs.writeFileSync(filePath, buffer);
-        console.log(`✅ Фотография успешно сохранена на сервер: ${filePath}`);
         
         // Проверяем, что файл действительно сохранен
         if (!fs.existsSync(filePath)) {
@@ -1548,7 +1511,6 @@ class MerchBotService {
         }
         
         const stats = fs.statSync(filePath);
-        console.log(`📊 Размер сохраненного файла: ${stats.size} байт`);
         
         if (stats.size === 0) {
           throw new Error(`Сохраненный файл пустой: ${filePath}`);
@@ -1560,7 +1522,6 @@ class MerchBotService {
       
       // Сохраняем имя файла в сессии
       feedback.photos.push(fileName);
-      console.log(`💾 Фотография добавлена в сессию. Всего фотографий: ${feedback.photos.length}`);
       
       const remaining = MAX_PHOTOS - feedback.photos.length;
       if (remaining > 0) {
@@ -1680,8 +1641,6 @@ class MerchBotService {
       `;
       
       // Здесь можно отправить сообщение администратору
-      console.log('Feedback received:', adminMessage);
-      console.log('Feedback saved with ID:', savedFeedback.id);
       
       // Очищаем состояние после успешной обработки
       ctx.session.feedbackState = undefined;
@@ -1758,7 +1717,6 @@ class MerchBotService {
   public async refreshCache(): Promise<boolean> {
     try {
       await this.getButtonsHierarchy(true);
-      console.log('✅ [MerchBot] Cache refreshed successfully');
       return true;
     } catch (error) {
       console.error('❌ [MerchBot] Cache refresh failed:', error);
@@ -1797,7 +1755,6 @@ class MerchBotService {
   // Получение локальных путей к файлам (изображения и PDF)
   private async getPhotoPaths(itemId: string): Promise<string[]> {
     try {
-      console.log(`🔍 Ищем файлы для элемента ${itemId}`);
       const item = await prisma.merch.findUnique({
         where: { id: itemId },
         select: {
@@ -1816,17 +1773,14 @@ class MerchBotService {
       });
       
       if (!item) {
-        console.log(`❌ Элемент ${itemId} не найден в базе данных`);
         return [];
       }
       
       // Проверяем активность элемента
       if (!item.isActive) {
-        console.log(`❌ Элемент ${itemId} неактивен, изображения не будут отправлены`);
         return [];
       }
       
-      console.log(`📋 Найден элемент: ${item.name}, attachments: ${item.attachments.length}`);
       
       const paths: string[] = [];
       const retailedFiles = new Set<string>(); // Для отслеживания уже добавленных файлов
@@ -1843,16 +1797,12 @@ class MerchBotService {
           if (fs.existsSync(filePath)) {
             paths.push(filePath);
             retailedFiles.add(attachment.source);
-            console.log(`📎 Добавлен файл (${attachment.type}): ${filePath}`);
           } else {
-            console.warn(`⚠️ Файл не найден: ${filePath}`);
           }
         } else {
-          console.log(`⏭️ Пропущен дублирующий файл: ${attachment.source}`);
         }
       }
       
-      console.log(`📸 Итого найдено файлов: ${paths.length}`);
       return paths;
     } catch (error) {
       console.error('Error getting photo paths:', error);
@@ -1863,7 +1813,6 @@ class MerchBotService {
   // Поиск элемента по ID
   private async findItemById(itemId: string): Promise<{id: string, name: string, description: string, layer: number} | null> {
     try {
-      console.log(`🔍 [findItemById] Ищем элемент с ID: ${itemId}`);
       const item = await prisma.merch.findUnique({
         where: { id: itemId },
         select: {
@@ -1876,23 +1825,14 @@ class MerchBotService {
       });
       
       if (!item) {
-        console.log(`❌ [findItemById] Элемент ${itemId} не найден в БД`);
         return null;
       }
       
       // Проверяем активность элемента
       if (!item.isActive) {
-        console.log(`❌ [findItemById] Элемент ${itemId} неактивен`);
         return null;
       }
       
-      console.log(`✅ [findItemById] Найден элемент:`, {
-        id: item.id,
-        name: item.name,
-        layer: item.layer,
-        hasDescription: !!item.description,
-        descriptionLength: item.description?.length || 0
-      });
       
       return {
         id: item.id,
@@ -1948,7 +1888,6 @@ class MerchBotService {
         });
       }
       
-      console.log(`Stats: User ${userId} - ${actionType}${details ? ` - ${details}` : ''}`);
     } catch (error) {
       console.error('Error updating stats:', error);
     }
@@ -2070,51 +2009,40 @@ class MerchBotService {
       // Извлекаем только имя файла из пути
       const pathParts = imagePath.replace(/\\/g, '/').split('/');
       fileName = pathParts[pathParts.length - 1];
-      console.log(`📁 [getImageUrl] Извлечено имя файла из пути: ${imagePath} -> ${fileName}`);
     }
     
     // Убираем префикс "public/retail/merch/" если он есть
     if (fileName.startsWith('public/retail/merch/')) {
       fileName = fileName.replace('public/retail/merch/', '');
-      console.log(`📁 [getImageUrl] Убран префикс public/retail/merch/: ${fileName}`);
     }
     
     // Убираем старый префикс "public/retail/merch/" если он есть (для совместимости)
     if (fileName.startsWith('public/retail/merch/')) {
       fileName = fileName.replace('public/retail/merch/', '');
-      console.log(`📁 [getImageUrl] Убран префикс public/retail/merch/: ${fileName}`);
     }
     
     // Убираем префикс "retail/merch/" если он есть
     if (fileName.startsWith('retail/merch/')) {
       fileName = fileName.replace('retail/merch/', '');
-      console.log(`📁 [getImageUrl] Убран префикс retail/merch/: ${fileName}`);
     }
     
     // Убираем старый префикс "retail/merch/" если он есть (для совместимости)
     if (fileName.startsWith('retail/merch/')) {
       fileName = fileName.replace('retail/merch/', '');
-      console.log(`📁 [getImageUrl] Убран префикс retail/merch/: ${fileName}`);
     }
     
     // Формируем правильный URL (новый путь retail/merch)
     const url = `${API}/public/retail/merch/${fileName}`;
-    console.log(`📁 [getImageUrl] Итоговый URL: ${url}`);
     return url;
   }
 
 
   // Запуск бота
   public async launch(): Promise<boolean> {
-    console.log('🚀 [MerchBot] Попытка запуска бота...');
-    console.log('📊 [MerchBot] Статус:', { isRunning: this.isRunning, hasBot: !!this.bot, botInitialized: this.bot !== null });
     
     // Проверяем переменные окружения
     const hasToken = !!process.env.MERCH_BOT_TOKEN;
     const hasBotName = !!process.env.MERCH_BOT_NAME;
-    console.log('🔍 [MerchBot] Проверка переменных окружения:');
-    console.log('  - MERCH_BOT_TOKEN:', hasToken ? 'найден' : 'НЕ НАЙДЕН');
-    console.log('  - MERCH_BOT_NAME:', hasBotName ? `найден (${process.env.MERCH_BOT_NAME})` : 'НЕ НАЙДЕН');
     
     if (!hasToken) {
       console.error('❌ [MerchBot] MERCH_BOT_TOKEN не найден - невозможно запустить бота');
@@ -2127,14 +2055,12 @@ class MerchBotService {
     }
     
     if (this.isRunning) {
-      console.log('⚠️ [MerchBot] Бот уже запущен');
       return true; // Возвращаем true, так как бот уже работает
     }
     
     if (!this.bot) {
       console.error('❌ [MerchBot] Бот не инициализирован');
       // Пытаемся переинициализировать бота
-      console.log('🔄 [MerchBot] Попытка переинициализации бота...');
       this.initializeBot();
       
       if (!this.bot) {
@@ -2145,11 +2071,9 @@ class MerchBotService {
         console.error('  - Отсутствует MERCH_BOT_NAME');
         return false;
       }
-      console.log('✅ [MerchBot] Бот успешно переинициализирован');
     }
 
     try {
-      console.log('🔄 [MerchBot] Вызываем bot.start()...');
       await this.bot.start({
         drop_pending_updates: true,
         allowed_updates: ['message', 'callback_query', 'message_reaction', 'message_reaction_count'],
@@ -2158,8 +2082,6 @@ class MerchBotService {
       this.isRunning = true;
       this.retryCount = 0;
       this.restartAttempts = 0; // Сбрасываем счетчик при успешном запуске
-      console.log('✅ [MerchBot] Бот успешно запущен');
-      console.log('📊 [MerchBot] Final status:', this.status);
       
       // Обработчик ошибок уже установлен в initializeBot(), не нужно устанавливать здесь
       
@@ -2184,8 +2106,7 @@ class MerchBotService {
       if (this.retryCount < this.MAX_RETRIES) {
         this.retryCount++;
         const delay = Math.min(2000 * this.retryCount, 10000);
-        console.log(`🔄 [MerchBot] Retry ${this.retryCount}/${this.MAX_RETRIES} через ${delay}ms...`);
-        await new Promise((resolve) => setTimeout(resolve, delay));
+            await new Promise((resolve) => setTimeout(resolve, delay));
         return this.launch();
       }
 
@@ -2201,8 +2122,7 @@ class MerchBotService {
     try {
       await this.bot.stop();
       this.isRunning = false;
-      console.log('MerchBot stopped');
-    } catch (error) {
+      } catch (error) {
       console.error('Error stopping MerchBot:', error);
     }
   }
@@ -2210,8 +2130,7 @@ class MerchBotService {
 
   // Перезапуск бота
   public async restart(): Promise<boolean> {
-    console.log('🔄 [MerchBot] Перезапуск бота...');
-    
+        
     // Останавливаем бота, если он запущен
     if (this.isRunning && this.bot) {
       try {
@@ -2230,8 +2149,7 @@ class MerchBotService {
     this.restartAttempts = 0;
     
     // Переинициализируем бота (создаем новый экземпляр)
-    console.log('🔧 [MerchBot] Переинициализация бота...');
-    this.initializeBot();
+        this.initializeBot();
     
     // Если после инициализации бот все еще не создан, возвращаем false
     if (!this.bot) {
@@ -2314,12 +2232,10 @@ class MerchBotService {
       // Для фото всегда используем plain text в caption, чтобы избежать ошибок парсинга
       sanitizedMessage = this.sanitizeMessage(message, 'Plain');
       finalParseMode = undefined; // Не используем parse_mode для caption при отправке фото
-      console.log(`[MerchBot] Photo message sanitized (Plain mode): ${sanitizedMessage.substring(0, 50)}...`);
-    } else {
+        } else {
       sanitizedMessage = this.sanitizeMessage(message, parseMode);
       finalParseMode = parseMode;
-      console.log(`[MerchBot] Text message sanitized (${parseMode} mode): ${sanitizedMessage.substring(0, 50)}...`);
-    }
+        }
     
     // Дополнительная проверка: если после санитизации остались HTML теги, принудительно используем Plain
     if (/<[^>]+>/.test(sanitizedMessage)) {
@@ -2350,8 +2266,7 @@ class MerchBotService {
         // Если ошибка парсинга, пытаемся отправить без форматирования
         if (this.isParseError(error)) {
           try {
-            console.log(`[MerchBot] Parse error detected, retrying with Plain mode for user ${userId}`);
-            const plainMessage = this.sanitizeMessage(message, 'Plain');
+                const plainMessage = this.sanitizeMessage(message, 'Plain');
             
             // Убеждаемся, что plainMessage не содержит HTML тегов
             const finalPlainMessage = plainMessage.replace(/<[^>]+>/g, '');
@@ -2364,8 +2279,7 @@ class MerchBotService {
               await this.bot.api.sendMessage(userId, finalPlainMessage);
             }
             success++;
-            console.log(`[MerchBot] Successfully sent plain message to user ${userId}`);
-            continue; // Переходим к следующему пользователю
+                continue; // Переходим к следующему пользователю
           } catch (retryError: any) {
             console.error(`[MerchBot] Retry send failed for user ${userId}:`, retryError.message);
           }

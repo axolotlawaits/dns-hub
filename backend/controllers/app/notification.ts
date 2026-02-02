@@ -84,16 +84,6 @@ const buildIncludeOptions = (include?: string[]) => {
 };
 
 const dispatchNotification = async (notification: NotificationWithRelations) => {
-  console.log('[Notification] Dispatching notification:', {
-    id: notification.id,
-    type: notification.type,
-    channels: notification.channel,
-    receiverId: notification.receiverId,
-    receiverEmail: notification.receiver?.email,
-    receiverTelegramChatId: notification.receiver?.telegramChatId,
-    title: notification.title
-  });
-  
   const userSettings = await prisma.userSettings.findUnique({
     where: {
       userId_parameter: {
@@ -119,15 +109,6 @@ const dispatchNotification = async (notification: NotificationWithRelations) => 
       ? userSettings.value?.trim().toLowerCase() === 'true' 
       : true); // По умолчанию включено, если настройка не найдена
   
-  console.log('[Notification] User settings:', {
-    receiverId: notification.receiverId,
-    wantsEmail,
-    ignoreEmailSettings,
-    hasEmailSetting: !!userSettings,
-    emailSettingValue: userSettings?.value,
-    emailSettingValueTrimmed: userSettings?.value?.trim().toLowerCase()
-  });
-
   if (shouldSendInApp) {
     try {
       const receiverId = notification.receiver?.id || notification.receiverId;
@@ -135,11 +116,6 @@ const dispatchNotification = async (notification: NotificationWithRelations) => 
       const messageText = typeof notification.message === 'string' 
         ? notification.message 
         : String(notification.message || '');
-      
-      console.log('[Notification] Sending IN_APP notification via Socket.IO:', {
-        notificationId: notification.id,
-        receiverId
-      });
       
       socketService.sendToUser(receiverId, {
         id: notification.id,
@@ -153,71 +129,58 @@ const dispatchNotification = async (notification: NotificationWithRelations) => 
         action: notification.action,
       });
       
-      console.log('[Notification] IN_APP notification sent successfully');
     } catch (error) {
-      console.error(`[Notification] Failed to send IN_APP to ${notification.receiverId}:`, error);
+      // console.error(`[Notification] Failed to send IN_APP to ${notification.receiverId}:`, error);
     }
   } else {
-    console.log('[Notification] IN_APP channel not requested, skipping');
   }
 
   // ИСПРАВЛЕНО: Включены email-уведомления для отправки по всем каналам
   if (notification.channel.includes('EMAIL')) {
-    console.log('[Notification] EMAIL channel requested:', {
-      wantsEmail,
-      ignoreEmailSettings,
-      hasEmail: !!notification.receiver?.email,
-      receiverEmail: notification.receiver?.email,
-      emailServiceConfigured: emailService.isConfigured()
-    });
+    // console.log('[Notification] EMAIL channel requested:', {
+    //   wantsEmail,
+    //   ignoreEmailSettings,
+    //   hasEmail: !!notification.receiver?.email,
+    //   receiverEmail: notification.receiver?.email,
+    //   emailServiceConfigured: emailService.isConfigured()
+    // });
     
     if (wantsEmail && notification.receiver?.email) {
       try {
         const logPrefix = ignoreEmailSettings 
           ? '[Notification] Ignoring user email setting (ignoreEmailSettings=true), attempting to send EMAIL...'
           : '[Notification] Attempting to send EMAIL...';
-        console.log(logPrefix);
         const emailSent = await emailService.send(notification);
         if (emailSent) {
-          console.log(`[Notification] EMAIL sent successfully to ${notification.receiver.email} for notification ${notification.id}`);
         } else {
-          console.warn(`[Notification] EMAIL service returned false for ${notification.receiver.email}`);
         }
       } catch (error) {
-        console.error(`[Notification] Failed to send EMAIL to ${notification.receiver.email}:`, error);
+        // console.error(`[Notification] Failed to send EMAIL to ${notification.receiver.email}:`, error);
       }
     } else if (!notification.receiver?.email) {
-      console.warn(`[Notification] EMAIL channel requested but receiver ${notification.receiverId} has no email address`);
     } else if (!wantsEmail && !ignoreEmailSettings) {
-      console.log(`[Notification] EMAIL channel requested but user ${notification.receiverId} has disabled email notifications`);
     }
   } else {
-    console.log('[Notification] EMAIL channel not requested, skipping');
   }
 
   if (notification.channel.includes('TELEGRAM')) {
-    console.log('[Notification] TELEGRAM channel requested:', {
-      hasTelegramChatId: !!notification.receiver?.telegramChatId,
-      telegramChatId: notification.receiver?.telegramChatId
-    });
+    // console.log('[Notification] TELEGRAM channel requested:', {
+    //   hasTelegramChatId: !!notification.receiver?.telegramChatId,
+    //   telegramChatId: notification.receiver?.telegramChatId
+    // });
     
     if (notification.receiver?.telegramChatId) {
       try {
-        console.log('[Notification] Attempting to send TELEGRAM...');
         const sent = await telegramService.sendNotification(notification as any, notification.receiver.telegramChatId);
         if (sent) {
-          console.log(`[Notification] TELEGRAM sent successfully to ${notification.receiver.telegramChatId}`);
         } else {
-          console.warn(`[Notification] TELEGRAM send returned false for ${notification.receiver.telegramChatId}`);
         }
       } catch (error) {
-        console.error(`[Notification] Failed to send TELEGRAM:`, error);
+        // console.error(`[Notification] Failed to send TELEGRAM:`, error);
       }
     } else {
-      console.warn(`[Notification] TELEGRAM channel requested but receiver ${notification.receiverId} has no telegramChatId`);
     }
   } else {
-    console.log('[Notification] TELEGRAM channel not requested, skipping');
   }
 };
 
@@ -225,16 +188,16 @@ const createNotification = async (data: z.infer<typeof createNotificationSchema>
   // Обрабатываем ignoreEmailSettings с дефолтным значением false
   const ignoreEmailSettings = data.ignoreEmailSettings ?? false;
   
-  console.log('[Notification] Creating notification:', {
-    type: data.type,
-    channels: data.channels,
-    title: data.title,
-    message: data.message.substring(0, 50) + '...',
-    senderId: data.senderId,
-    receiverId: data.receiverId,
-    priority: data.priority,
-    ignoreEmailSettings
-  });
+  // console.log('[Notification] Creating notification:', {
+  //   type: data.type,
+  //   channels: data.channels,
+  //   title: data.title,
+  //   message: data.message.substring(0, 50) + '...',
+  //   senderId: data.senderId,
+  //   receiverId: data.receiverId,
+  //   priority: data.priority,
+  //   ignoreEmailSettings
+  // });
   
   // Сохраняем ignoreEmailSettings в action как метаданные
   const actionWithMetadata = data.action 
@@ -257,11 +220,11 @@ const createNotification = async (data: z.infer<typeof createNotificationSchema>
     },
   });
 
-  console.log('[Notification] Notification created in DB:', {
-    id: notification.id,
-    receiverId: notification.receiverId,
-    channels: notification.channel
-  });
+  // console.log('[Notification] Notification created in DB:', {
+  //   id: notification.id,
+  //   receiverId: notification.receiverId,
+  //   channels: notification.channel
+  // });
 
   // Получаем полные данные с отношениями
   const notificationWithRelations = await prisma.notifications.findUnique({
@@ -277,21 +240,21 @@ const createNotification = async (data: z.infer<typeof createNotificationSchema>
     throw new Error(`Failed to retrieve created notification ${notification.id}`);
   }
 
-  console.log('[Notification] Notification with relations:', {
-    id: notificationWithRelations.id,
-    receiverEmail: notificationWithRelations.receiver?.email,
-    receiverTelegramChatId: notificationWithRelations.receiver?.telegramChatId,
-    receiverName: notificationWithRelations.receiver?.name
-  });
+  // console.log('[Notification] Notification with relations:', {
+  //   id: notificationWithRelations.id,
+  //   receiverEmail: notificationWithRelations.receiver?.email,
+  //   receiverTelegramChatId: notificationWithRelations.receiver?.telegramChatId,
+  //   receiverName: notificationWithRelations.receiver?.name
+  // });
 
   // ИСПРАВЛЕНО: Отправляем уведомления асинхронно, чтобы не блокировать ответ
   // Это особенно важно для email, который может занимать время
   dispatchNotification(notificationWithRelations as NotificationWithRelations).catch((error) => {
-    console.error('[Notification] Error dispatching notification (async):', {
-      notificationId: notificationWithRelations.id,
-      error: error?.message,
-      errorStack: error?.stack
-    });
+    // console.error('[Notification] Error dispatching notification (async):', {
+    //   notificationId: notificationWithRelations.id,
+    //   error: error?.message,
+    //   errorStack: error?.stack
+    // });
     // Не пробрасываем ошибку - уведомление уже создано в БД
   });
   

@@ -14,7 +14,9 @@ export default function DraggableChatModal({
   isDark,
   children
 }: DraggableChatModalProps) {
-  const [position, setPosition] = useState({ x: window.innerWidth / 2 - 400, y: window.innerHeight / 2 - 300 });
+  const footerHeight = 80; // Высота футера в пикселях
+  const initialY = Math.min(window.innerHeight / 2 - 300, window.innerHeight - 600 - footerHeight); // Учитываем футер при начальной позиции
+  const [position, setPosition] = useState({ x: window.innerWidth / 2 - 400, y: initialY });
   const [size, setSize] = useState({ width: 800, height: 600 });
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -30,9 +32,12 @@ export default function DraggableChatModal({
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (isDragging && !isMaximized && !isMinimized) {
+        // Ограничиваем позицию с учетом футера
+        const newX = Math.max(0, Math.min(e.clientX - dragOffset.x, window.innerWidth - size.width));
+        const newY = Math.max(0, Math.min(e.clientY - dragOffset.y, window.innerHeight - size.height - footerHeight));
         setPosition({
-          x: e.clientX - dragOffset.x,
-          y: e.clientY - dragOffset.y,
+          x: newX,
+          y: newY,
         });
       } else if (isResizing && !isMaximized && !isMinimized) {
         const newWidth = Math.max(400, Math.min(1920, resizeStart.width + (e.clientX - resizeStart.x)));
@@ -55,7 +60,31 @@ export default function DraggableChatModal({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, isResizing, isMaximized, isMinimized, dragOffset, resizeStart]);
+  }, [isDragging, isResizing, isMaximized, isMinimized, dragOffset, resizeStart, size, footerHeight]);
+
+  // Обработка изменения размера окна для пересчета позиции
+  useEffect(() => {
+    const handleResize = () => {
+      // При изменении размера окна, пересчитываем позицию чтобы чат не выходил за пределы
+      if (!isMaximized && !isMinimized) {
+        setPosition(prev => ({
+          x: Math.max(0, Math.min(prev.x, window.innerWidth - size.width)),
+          y: Math.max(0, Math.min(prev.y, window.innerHeight - size.height - footerHeight)),
+        }));
+      }
+      // В свернутом режиме также пересчитываем позицию чтобы оставаться справа снизу
+      else if (isMinimized) {
+        setPosition({
+          x: window.innerWidth - 350,
+          y: window.innerHeight - 50 - footerHeight,
+        });
+      }
+      // В полноэкранном режиме ничего не делаем - чат занимает весь экран
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [size, isMaximized, isMinimized]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (headerRef.current && modalRef.current && !isMaximized && !isMinimized) {
@@ -132,18 +161,18 @@ export default function DraggableChatModal({
     }
   };
 
-  // Ограничиваем позицию в пределах экрана
+  // Ограничиваем позицию в пределах экрана с учетом футера
   const constrainedPosition = isMaximized
-    ? { x: 0, y: 0 }
+    ? { x: 0, y: 0 } // В полноэкранном режиме чат занимает весь экран
     : isMinimized
-    ? { x: window.innerWidth - 350, y: window.innerHeight - 50 } // Фиксированная позиция справа снизу
+    ? { x: window.innerWidth - 350, y: window.innerHeight - 50 - footerHeight } // Фиксированная позиция справа снизу с учетом футера
     : {
         x: Math.max(0, Math.min(position.x, window.innerWidth - size.width)),
-        y: Math.max(0, Math.min(position.y, window.innerHeight - size.height)),
+        y: Math.max(0, Math.min(position.y, window.innerHeight - size.height - footerHeight)),
       };
 
   const modalSize = isMaximized
-    ? { width: window.innerWidth, height: window.innerHeight }
+    ? { width: window.innerWidth, height: window.innerHeight } // В полноэкранном режиме занимаем весь экран
     : isMinimized
     ? { width: 350, height: 50 } // Компактный размер для свернутой модалки
     : size;

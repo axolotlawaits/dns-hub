@@ -208,7 +208,7 @@ export const createRoc = async (req: Request, res: Response, next: NextFunction)
         name: body.name,
         typeTerm: (body.typeTerm as any) || 'Perpetual',
         contractNumber: body.contractNumber || '',
-        dateContract: body.dateContract ? new Date(body.dateContract) : undefined,
+        dateContract: body.dateContract ? new Date(body.dateContract) : new Date(), // Обязательное поле, используем текущую дату по умолчанию
         agreedTo: body.agreedTo ? new Date(body.agreedTo) : undefined,
         shelfLife: body.shelfLife || 0,
         ...(body.typeContractId ? { typeContract: { connect: { id: body.typeContractId } } } : {}),

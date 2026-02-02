@@ -10,7 +10,6 @@ import { withDbRetry, isP1001 } from '../utils/dbRetry.js';
 export const initToolsCron = () => {
   schedule.scheduleJob('0 0 * * *', async () => {
     try {
-      console.log('running scheduled tools tasks...')
       await scheduleRouteDay();
       await dailyRKJob();
     } catch (e) {
@@ -29,7 +28,6 @@ export const initToolsCron = () => {
   // Очистка старых папок с музыкой каждый 1 числа в 02:00
   schedule.scheduleJob('0 2 1 * *', async () => {
     try {
-      console.log('running music cleanup task...');
       await cleanupOldMusicFolders();
     } catch (e) {
       console.error('Music cleanup error', e);
@@ -45,7 +43,6 @@ export const initToolsCron = () => {
       const msPerDay = 24 * 60 * 60 * 1000;
       const daysLeft = Math.ceil((firstNext.getTime() - now.getTime()) / msPerDay);
       if (daysLeft <= 5) {
-        console.log(`[Radio] Running monthly preload (daysLeft=${daysLeft})...`);
         await preloadNextMonthMusic();
       }
     } catch (e) {
@@ -56,7 +53,6 @@ export const initToolsCron = () => {
   // Очистка истекших временных доступов: каждый час
   schedule.scheduleJob('0 * * * *', async () => {
     try {
-      console.log('[Access] Running expired temporary access cleanup...');
       const now = new Date();
       // Временная реализация до миграции Prisma
       // После миграции раскомментировать и использовать правильные типы
@@ -82,7 +78,6 @@ export const initToolsCron = () => {
       });
 
       if (expiredAccesses.length > 0) {
-        console.log(`[Access] Found ${expiredAccesses.length} expired temporary accesses`);
         
         // Отправляем уведомления пользователям
         const { NotificationController } = await import('../controllers/app/notification.js');
@@ -130,7 +125,6 @@ export const initToolsCron = () => {
           })
         );
 
-        console.log(`[Access] Deleted ${deleted.count} expired temporary accesses`);
       }
     } catch (e: unknown) {
       if (isP1001(e)) {
@@ -144,7 +138,6 @@ export const initToolsCron = () => {
   // Уведомления о скором истечении временных доступов: ежедневно в 09:00
   schedule.scheduleJob('0 9 * * *', async () => {
     try {
-      console.log('[Access] Checking for soon-to-expire temporary accesses...');
       const now = new Date();
       const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
       
@@ -170,7 +163,6 @@ export const initToolsCron = () => {
       });
 
       if (soonToExpire.length > 0) {
-        console.log(`[Access] Found ${soonToExpire.length} soon-to-expire temporary accesses`);
         const { NotificationController } = await import('../controllers/app/notification.js');
         
         for (const access of soonToExpire) {
