@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, memo } from 'react';
+import { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { API } from '../../../config/constants';
 import { notificationSystem } from '../../../utils/Push';
 import { Button, Box, Group, ActionIcon, Text, Stack, Paper, Badge, Tooltip, Divider, Select, Popover, Modal } from '@mantine/core';
@@ -181,17 +181,28 @@ const BranchCardComponent = function BranchCardComponent({
       if (onResponsibleDataChange) {
         onResponsibleDataChange(branch.branch_id, undefined);
       }
+    } finally {
+      loadingRef.current = false;
     }
-  }, [branch.branch_id, authFetch, propResponsibleData, onResponsibleDataChange])
+  }, [branch.branch_id]); // УБРАЛИ authFetch, propResponsibleData, onResponsibleDataChange из зависимостей
 
-  // ИСПРАВЛЕНО: Загружаем ответственных только если они не переданы из родителя
+  const initialLoadDoneRef = useRef(false);
+  const loadingRef = useRef(false);
+
+  // ИСПРАВЛЕНО: Загружаем ответственных только один раз при монтировании
   useEffect(() => {
+    // Предотвращаем повторные запросы
+    if (loadingRef.current || initialLoadDoneRef.current) return;
+    
     if (propResponsibleData === undefined) {
+      loadingRef.current = true;
       getResponsive();
+      initialLoadDoneRef.current = true;
     } else {
       setResponsibleData(propResponsibleData);
+      initialLoadDoneRef.current = true;
     }
-  }, [propResponsibleData, getResponsive]);
+  }, []); // Загружаем только один раз при монтировании
 
   const addResponsive = async () => {
     // ИСПРАВЛЕНО: Валидация перед отправкой

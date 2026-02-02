@@ -179,7 +179,6 @@ const validateBranchExists = async (branchId: string) => {
 const deleteFileSafely = async (filePath: string) => {
   try {
     await fs.unlink(filePath);
-    console.log(`[RK] File deleted successfully: ${filePath}`);
   } catch (error) {
     console.error(`[RK] Error deleting file at ${filePath}:`, error);
   }
@@ -382,15 +381,6 @@ export const getRKById = async (req: Request, res: Response, next: NextFunction)
 
 export const createRK = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    console.log('[RK] Create RK request received:', {
-      body: req.body,
-      files: req.files ? (req.files as Express.Multer.File[]).map(f => ({
-        originalname: f.originalname,
-        size: f.size,
-        mimetype: f.mimetype,
-        path: f.path
-      })) : 'No files'
-    });
 
     // Проверка обязательных полей
     if (!req.body.userAddId || !req.body.branchId) {
@@ -413,9 +403,6 @@ export const createRK = async (req: Request, res: Response, next: NextFunction) 
         ? JSON.parse(req.body.documentsMeta)
         : [];
       
-      console.log('[RK] Parsed attachments meta:', attachmentsMeta);
-      console.log('[RK] Parsed documents meta:', documentsMeta);
-      
       // Проверяем, что количество файлов с метаданными совпадает с количеством метаданных
       // Файлы без метаданных (документы) будут обработаны отдельно
       const filesWithMeta = req.files ? Math.min((req.files as Express.Multer.File[]).length, attachmentsMeta.length) : 0;
@@ -428,7 +415,6 @@ export const createRK = async (req: Request, res: Response, next: NextFunction) 
         });
       }
     } catch (e: unknown) {
-      console.error('[RK] Error parsing attachmentsMeta:', e);
       return res.status(400).json({
         error: 'Invalid attachmentsMeta format',
         details: e instanceof Error ? e.message : String(e)
@@ -456,7 +442,6 @@ export const createRK = async (req: Request, res: Response, next: NextFunction) 
 
     // Обработка вложений
     if (Array.isArray(req.files) && req.files.length > 0) {
-      console.log('[RK] Creating attachments with meta:', attachmentsMeta);
       
       // Разделяем файлы на те, что имеют метаданные (конструкции) и те, что не имеют (документы)
       const filesWithMeta = req.files.slice(0, attachmentsMeta.length);
@@ -545,12 +530,9 @@ export const createRK = async (req: Request, res: Response, next: NextFunction) 
       }
     });
 
-    console.log('[RK] RK created successfully:', result);
     return res.status(201).json(result);
 
   } catch (error) {
-    console.error('[RK] Error in createRK:', error);
-    
     // Удаление созданной записи если возникла ошибка после создания
     if (req.body.userAddId && req.body.branchId) {
       await prisma.rK.deleteMany({
@@ -558,7 +540,7 @@ export const createRK = async (req: Request, res: Response, next: NextFunction) 
           userAddId: req.body.userAddId,
           branchId: req.body.branchId,
         }
-      }).catch(e => console.error('[RK] Error cleaning up:', e));
+      }).catch(e => {});
     }
 
     return res.status(500).json({ 
@@ -578,9 +560,7 @@ export const updateRK = async (req: Request, res: Response, next: NextFunction) 
       attachmentsToDelete = body.removedAttachments
         ? JSON.parse(body.removedAttachments)
         : [];
-    } catch (e) {
-      console.error('[RK] Error parsing removedAttachments:', e);
-    }
+    } catch (e) {}
 
     // Обработка удаленных документов
     let documentsToDelete: string[] = [];
@@ -588,9 +568,7 @@ export const updateRK = async (req: Request, res: Response, next: NextFunction) 
       documentsToDelete = body.removedDocuments
         ? JSON.parse(body.removedDocuments)
         : [];
-    } catch (e) {
-      console.error('[RK] Error parsing removedDocuments:', e);
-    }
+    } catch (e) {}
 
     let newAttachmentsMeta: Array<{ typeAttachment?: 'CONSTRUCTION' | 'DOCUMENT'; sizeXY?: string; clarification?: string; typeStructureId?: string; approvalStatusId?: string; agreedTo?: string }> = [];
     let newDocumentsMeta: Array<{ parentConstructionIndex: number }> = [];
@@ -599,17 +577,13 @@ export const updateRK = async (req: Request, res: Response, next: NextFunction) 
       newAttachmentsMeta = body.newAttachmentsMeta
         ? JSON.parse(body.newAttachmentsMeta)
         : [];
-    } catch (e) {
-      console.error('[RK] Error parsing newAttachmentsMeta:', e);
-    }
+    } catch (e) {}
     
     try {
       newDocumentsMeta = body.newDocumentsMeta
         ? JSON.parse(body.newDocumentsMeta)
         : [];
-    } catch (e) {
-      console.error('[RK] Error parsing newDocumentsMeta:', e);
-    }
+    } catch (e) {}
 
     await deleteRKAttachments(attachmentsToDelete, rkId);
     
@@ -696,9 +670,7 @@ export const updateRK = async (req: Request, res: Response, next: NextFunction) 
             },
           });
         }
-      } catch (e) {
-        console.error('[RK] Error parsing existingAttachmentsMeta', e);
-      }
+      } catch (e) {}
     }
 
     const updateData: any = { updatedAt: new Date() };
@@ -849,7 +821,6 @@ const getUsersWithFullRKAccess = async (): Promise<string[]> => {
     });
 
     if (!rkTool) {
-      console.warn('[RK] RK tool not found');
       return [];
     }
 
@@ -958,7 +929,6 @@ const getUsersWithFullRKAccess = async (): Promise<string[]> => {
 
     return Array.from(userIds);
   } catch (error) {
-    console.error('[RK] Error getting users with full RK access:', error);
     return [];
   }
 };
@@ -976,7 +946,6 @@ export const dailyRKJob = async () => {
     });
 
     if (!systemSender) {
-      console.error('[RK] No system sender found');
       return;
     }
     
@@ -984,7 +953,6 @@ export const dailyRKJob = async () => {
     const usersWithFullAccess = await getUsersWithFullRKAccess();
     
     if (usersWithFullAccess.length === 0) {
-      console.log('[RK] No users with full access to RK tool found');
       return;
     }
 
@@ -1049,17 +1017,15 @@ export const dailyRKJob = async () => {
               url: `/add/rk?rkId=${rk.id}`,
             },
           }).catch(error => {
-            console.error(`[RK] Failed to send notification to user ${userId}:`, error);
             return null;
           })
         );
 
         await Promise.all(notificationPromises);
-        console.log(`[RK] Sent expiration notifications for RK ${rk.id}, attachment ${att.id} to ${usersWithFullAccess.length} users`);
       }
     }
   } catch (error) {
-    console.error('[RK] Error in dailyRKJob:', error);
+    return;
   }
 };
 
@@ -1174,9 +1140,6 @@ export const addConstruction = async (req: Request, res: Response, next: NextFun
       return res.status(400).json({ error: 'userAddId is required' });
     }
     
-    console.log('[RK] addConstruction - files:', files?.map(f => ({ fieldname: f.fieldname, originalname: f.originalname })));
-    console.log('[RK] addConstruction - body keys:', Object.keys(req.body));
-
     // Парсим мета-данные вложений
     let attachmentsMeta: Array<any> = [];
     
@@ -1206,7 +1169,6 @@ export const addConstruction = async (req: Request, res: Response, next: NextFun
       });
     }
     
-    console.log('[RK] addConstruction - parsed attachmentsMeta:', attachmentsMeta);
 
     // Обрабатываем основные файлы (конструкции)
     const constructionFiles = (files || []).filter(f => f.fieldname === 'attachments');
@@ -1240,7 +1202,6 @@ export const addConstruction = async (req: Request, res: Response, next: NextFun
         orderBy: { createdAt: 'desc' }
       });
 
-      console.log('[RK] Adding documents to construction:', lastConstruction?.id, 'count:', documentFiles.length);
       
       for (const docFile of documentFiles) {
         await prisma.rKAttachment.create({

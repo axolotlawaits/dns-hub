@@ -62,7 +62,6 @@ const trassirLogin = async (): Promise<boolean> => {
     }
     return false;
   } catch (error) {
-    console.error('[Trassir] Login error:', error);
     return false;
   }
 };
@@ -122,7 +121,6 @@ export const loadDoors = async (): Promise<Map<number, string>> => {
     });
     
     lastDoorsUpdate = Date.now();
-    console.log(`[Trassir] Loaded ${doorsCache.size} doors`);
   } catch (error) {
     console.error('[Trassir] Error loading doors:', error);
   }
@@ -169,12 +167,10 @@ export const getDoors = async (includeAdditional: boolean = false): Promise<Map<
 // Открыть дверь
 export const openDoor = async (doorId: number, personName?: string, tgId?: number): Promise<boolean> => {
   try {
-    console.log(`[Trassir] Opening door ${doorId} for ${personName}...`);
     const data = await trassirRequest('access-point-open-once', {
       access_point_id: doorId,
       language: 'en'
     });
-    console.log(`[Trassir] Response:`, JSON.stringify(data));
     
     if (data.opened) {
       // Логируем открытие двери
@@ -189,7 +185,6 @@ export const openDoor = async (doorId: number, personName?: string, tgId?: numbe
             tgId: tgId || null
           }
         });
-        console.log(`[Trassir] Door ${doorId} opened by ${personName}, logged to DB`);
       } catch (err) {
         console.error('[Trassir] Error logging to DB:', err);
       }

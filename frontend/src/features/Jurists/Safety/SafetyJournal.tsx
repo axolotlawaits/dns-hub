@@ -375,10 +375,11 @@ export default function SafetyJournal() {
     loadViewMode();
   }, [user?.id, token]);
 
-  // ОПТИМИЗАЦИЯ: Ref для отслеживания предыдущего viewMode, чтобы не сохранять без изменений
+  // ОПТИМИЗАЦИЯ: Ref для отслеживания предыдущего viewMode и предотвращения частых сохранений
   const prevViewModeRef = useRef<'list' | 'grid'>(viewMode);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
-  // Сохраняем предпочтение пользователя в UserSettings
+  // Сохраняем предпочтение пользователя в UserSettings с защитой от частых вызовов
   useEffect(() => {
     // ОПТИМИЗАЦИЯ: Не сохраняем, если viewMode не изменился или это первая загрузка
     if (prevViewModeRef.current === viewMode || !viewModeLoadedRef.current) {
@@ -386,36 +387,44 @@ export default function SafetyJournal() {
       return;
     }
     
-    const saveViewMode = async () => {
-      if (!user?.id || !token) return;
-      
-      try {
-        const response = await fetch(`${API}/user/settings`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            userId: user.id,
-            parameter: 'safety_journal_view_mode',
-            value: viewMode,
-          }),
-        });
-        
-        if (!response || !response.ok) {
-          console.error('Ошибка при сохранении настройки отображения');
-        }
-      } catch (error) {
-        console.error('Ошибка при сохранении настройки отображения:', error);
-      }
-    };
-
-    // Сохраняем только если пользователь загружен и это не первая инициализация
-    if (user?.id && token) {
-      prevViewModeRef.current = viewMode;
-      saveViewMode();
+    // Отменяем предыдущий таймаут если есть
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
     }
+    
+    // Откладываем сохранение на 1 секунду чтобы избежать частых запросов
+    saveTimeoutRef.current = setTimeout(() => {
+      const saveViewMode = async () => {
+        if (!user?.id || !token) return;
+        
+        try {
+          const response = await fetch(`${API}/user/settings`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              userId: user.id,
+              parameter: 'safety_journal_view_mode',
+              value: viewMode,
+            }),
+          });
+          
+          if (!response || !response.ok) {
+            console.error('Ошибка при сохранении настройки отображения');
+          }
+        } catch (error) {
+          console.error('Ошибка при сохранении настройки отображения:', error);
+        }
+      };
+
+      // Сохраняем только если пользователь загружен и это не первая инициализация
+      if (user?.id && token) {
+        prevViewModeRef.current = viewMode;
+        saveViewMode();
+      }
+    }, 1000); // Задержка 1 секунда
   }, [viewMode, user?.id, token]);
 
 
@@ -670,11 +679,8 @@ export default function SafetyJournal() {
             loading: false 
           });
           
-          // ИСПРАВЛЕНО: Загружаем ответственных для всех филиалов батчами после загрузки филиалов
-          const branchIds = sortedBranches.map((b: any) => b.branch_id).filter(Boolean);
-          if (branchIds.length > 0) {
-            loadResponsiblesBatch(branchIds);
-          }
+          // ИСПРАВЛЕНО: НЕ загружаем ответственных здесь - они должны загружаться индивидуально в BranchCard
+          // Это предотвращает тысячи запросов при инициализации
         }
       } else {
         let errorMessage = 'Ошибка загрузки филиалов с журналами';
@@ -701,50 +707,6 @@ export default function SafetyJournal() {
       updateState({ error: 'Ошибка соединения с сервером', loading: false });
     }
   }, [user, token, fetchWithAuth, updateState, logout, loadResponsiblesBatch]);
-
-  // ИСПРАВЛЕНО: Тихая перезагрузка данных без показа лоадера (для обновления ответственных)
-  const refreshBranchesSilently = useCallback(async () => {
-    try {
-      // Проверяем, что пользователь авторизован
-      if (!user || !token) {
-        return;
-      }
-      
-      // Загружаем филиалы без установки loading: true
-      const branchesResponse = await fetchWithAuth(`${API}/jurists/safety/me/branches_with_journals`, {
-        method: 'GET',
-      });
-
-      if (branchesResponse.ok) {
-        const data = await branchesResponse.json();
-        
-        if (!data.apiUnavailable) {
-          // Простая сортировка журналов по алфавиту на frontend
-          const sortedBranches = (data.branches || []).map((branch: any) => ({
-            ...branch,
-            journals: [...(branch.journals || [])].sort((a: any, b: any) => {
-              return a.journal_title.localeCompare(b.journal_title, 'ru');
-            })
-          }));
-          
-          // ИСПРАВЛЕНО: Обновляем только branches без установки loading
-          updateState({ 
-            branches: sortedBranches,
-            lastUpdate: Date.now() // Обновляем timestamp для отслеживания изменений
-          });
-          
-          // ИСПРАВЛЕНО: Обновляем кэш ответственных после обновления филиалов
-          const branchIds = sortedBranches.map((b: any) => b.branch_id).filter(Boolean);
-          if (branchIds.length > 0) {
-            loadResponsiblesBatch(branchIds);
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Error refreshing branches silently:', err);
-      // Не показываем ошибку пользователю при тихом обновлении
-    }
-  }, [user, token, fetchWithAuth, updateState, loadResponsiblesBatch]);
 
   // Загрузка информации о последних оповещениях
   // Вызывается при монтировании компонента и автоматически после отправки уведомлений
@@ -837,7 +799,7 @@ export default function SafetyJournal() {
     } finally {
       setNotifying(false);
     }
-  }, [fetchWithAuth, loadLastNotifications]);
+  }, [fetchWithAuth]); // УБРАЛИ loadLastNotifications из зависимостей
 
   // Оповещение одного филиала с не заполненными журналами
   const handleNotifyBranch = useCallback(async (branchId: string) => {
@@ -922,7 +884,7 @@ export default function SafetyJournal() {
       
       notificationSystem.addNotification('Ошибка', errorMessage, 'error');
     }
-  }, [fetchWithAuth, loadLastNotifications]);
+  }, [fetchWithAuth]); // УБРАЛИ loadLastNotifications из зависимостей
 
   // ОПТИМИЗАЦИЯ: Ref для отслеживания, была ли выполнена начальная загрузка
   const initialLoadDoneRef = useRef(false);
@@ -937,7 +899,7 @@ export default function SafetyJournal() {
       loadLastNotifications();
       initialLoadDoneRef.current = true;
     }
-  }, [user, token, loadBranchesWithJournals, loadLastNotifications]);
+  }, [user, token]); // УБРАЛИ loadBranchesWithJournals и loadLastNotifications из зависимостей
 
   // ОПТИМИЗАЦИЯ: Ref для отслеживания предыдущего состояния loading
   const prevLoadingRef = useRef<boolean>(false);
@@ -1489,7 +1451,7 @@ export default function SafetyJournal() {
         behavior: 'instant'
       });
     });
-  }, [loadBranchesWithJournals, loadResponsiblesBatch]);
+  }, []); // УБРАЛИ loadBranchesWithJournals и loadResponsiblesBatch из зависимостей
 
   // Устанавливаем заголовок страницы
   // ИСПРАВЛЕНО: Убраны лишние зависимости и мемоизирован icon, чтобы избежать ререндеров
@@ -1811,7 +1773,7 @@ export default function SafetyJournal() {
                   onUploadFiles={handleUploadFiles}
                   onOpenChat={(branchId: string, branchName: string) => handleOpenChat(branchId, branchName)}
                   onNotifyBranch={handleNotifyBranch}
-                  onResponsibleChange={refreshBranchesSilently}
+                  onResponsibleChange={() => {}} // ИСПРАВЛЕНО: Убираем вызов refreshBranchesSilently чтобы предотвратить спам
                   canManageStatuses={canManageStatuses}
                   expandedBranches={expandedBranches}
                   setExpandedBranches={setExpandedBranches}
@@ -1832,7 +1794,7 @@ export default function SafetyJournal() {
                     onUploadFiles={handleUploadFiles}
                     onOpenChat={(branchId: string, branchName: string) => handleOpenChat(branchId, branchName)}
                     onNotifyBranch={handleNotifyBranch}
-                    onResponsibleChange={refreshBranchesSilently}
+                    onResponsibleChange={() => {}} // ИСПРАВЛЕНО: Убираем вызов refreshBranchesSilently чтобы предотвратить спам
                     canManageStatuses={canManageStatuses}
                     expandedBranches={expandedBranches}
                     setExpandedBranches={setExpandedBranches}

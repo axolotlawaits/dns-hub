@@ -59,7 +59,7 @@ interface Correspondence {
   comments?: string;
   responsibleId: string;
   responsible?: User;
-  documentNumber?: string;
+  documentNumber?: number;
   trackNumber?: string;
   // Старые поля для обратной совместимости
   from?: string;
@@ -88,7 +88,6 @@ interface CorrespondenceForm {
   senderSubSubTypeId?: string;
   senderName: string;
   documentTypeId: string;
-  documentNumber?: string;
   trackNumber?: string;
   comments?: string;
   responsibleId: string;
@@ -102,7 +101,6 @@ const DEFAULT_CORRESPONDENCE_FORM: CorrespondenceForm = {
   senderSubSubTypeId: undefined,
   senderName: '',
   documentTypeId: '',
-  documentNumber: '',
   trackNumber: '',
   comments: '',
   responsibleId: '',
@@ -453,7 +451,7 @@ export default function CorrespondenceList() {
           if (selectedType?.name === 'Физическое лицо') {
             return 'ФИО';
           }
-          return 'Наименование';
+          return 'Отправитель';
         },
         type: 'autocomplete' as const,
         required: true,
@@ -462,7 +460,7 @@ export default function CorrespondenceList() {
           if (selectedType?.name === 'Физическое лицо') {
             return 'Введите или выберите ФИО физического лица';
           }
-          return 'Введите или выберите наименование отправителя';
+          return 'Введите или выберите отправителя';
         },
         options: state.senderNames.map(name => ({ value: name, label: name })),
         onSearchChange: async (search: string) => {
@@ -488,15 +486,8 @@ export default function CorrespondenceList() {
         type: 'select' as const,
         options: documentTypeOptions,
         required: true,
-        groupWith: ['documentNumber', 'trackNumber'],
-        groupSize: 3 as const,
-      },
-      {
-        name: 'documentNumber',
-        label: 'Номер документа',
-        type: 'text' as const,
-        required: false,
-        placeholder: 'Введите номер документа',
+        groupWith: ['trackNumber'],
+        groupSize: 2 as const,
       },
       {
         name: 'trackNumber',
@@ -577,8 +568,8 @@ export default function CorrespondenceList() {
     {
       type: 'text' as const,
       columnId: 'senderName',
-      label: 'Наименование/ФИО',
-      placeholder: 'Поиск по наименованию отправителя',
+      label: 'Отправитель/ФИО',
+      placeholder: 'Поиск по отправителю',
       width: 250,
     },
     {
@@ -668,7 +659,7 @@ export default function CorrespondenceList() {
     },
     {
       accessorKey: 'senderName',
-      header: 'Наименование/ФИО',
+      header: 'Отправитель/ФИО',
       filterFn: 'includesString',
       cell: ({ getValue }) => {
         const senderName = getValue() as string;
@@ -738,30 +729,29 @@ export default function CorrespondenceList() {
       header: 'Номер документа',
       filterFn: 'includesString',
       cell: ({ getValue }) => {
-        const documentNumber = getValue() as string;
+        const documentNumber = getValue() as number;
+        const displayValue = documentNumber ? documentNumber.toString() : '';
         return (
           <Tooltip
-            label={documentNumber}
-            disabled={!documentNumber}
+            label={displayValue}
+            disabled={!displayValue}
             withArrow
             position="top"
             openDelay={300}
-            multiline
-            w={300}
           >
             <Text 
               size="sm" 
               c="var(--theme-text-primary)"
               style={{ 
-                cursor: documentNumber ? 'help' : 'default',
+                cursor: displayValue ? 'help' : 'default',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                maxWidth: '200px',
+                maxWidth: '100px',
                 display: 'block'
               }}
             >
-              {documentNumber || '-'}
+              {displayValue || '-'}
         </Text>
           </Tooltip>
         );
@@ -1118,7 +1108,6 @@ export default function CorrespondenceList() {
           senderSubSubTypeId: data.senderSubSubTypeId,
           senderName: data.senderName,
           documentTypeId: data.documentTypeId,
-          documentNumber: data.documentNumber || data.numberMail || '', // Для обратной совместимости
           trackNumber: data.trackNumber || (data.numberMail && /^\d{13,14}$/.test(data.numberMail.trim().replace(/\s+/g, '')) ? data.numberMail : '') || '',
           comments: data.comments || '',
           responsibleId: data.responsibleId,
@@ -1424,7 +1413,7 @@ export default function CorrespondenceList() {
                     fields: [
                       { label: 'Дата получения', value: formattedItem.formattedReceiptDate, icon: IconCalendar },
                       { label: 'Тип документа', value: formattedItem.documentTypeLabel, icon: IconFileText },
-                      { label: 'Номер документа', value: formattedItem.documentNumber || formattedItem.numberMail || 'Не указан', icon: IconFileText },
+                      { label: 'Номер документа', value: formattedItem.documentNumber ? formattedItem.documentNumber.toString() : (formattedItem.numberMail || 'Не указан'), icon: IconFileText },
                       { label: 'Трек-номер', value: formattedItem.trackNumber || (formattedItem.numberMail && /^\d{13,14}$/.test(formattedItem.numberMail.trim().replace(/\s+/g, '')) ? formattedItem.numberMail : null) || 'Не указан', icon: IconPackage },
                     ]
                   },
@@ -1452,7 +1441,7 @@ export default function CorrespondenceList() {
                         show: !!formattedItem.senderSubSubType
                       },
                       { 
-                        label: 'Наименование/ФИО', 
+                        label: 'Отправитель/ФИО', 
                         value: formattedItem.senderName, 
                         icon: IconUser,
                         show: !!formattedItem.senderName

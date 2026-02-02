@@ -444,7 +444,7 @@ model Correspondence {
   comments              String?
   responsibleId         String
   responsible           User                          @relation("CorrespondenceResponsible", fields: [responsibleId], references: [id])
-  documentNumber        String?
+  documentNumber        Int                           @default(autoincrement())
   trackNumber           String?
   user                  User                          @relation("CorrespondenceUser", fields: [userAdd], references: [id])
   attachments           CorrespondenceAttachment[]

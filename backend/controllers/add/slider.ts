@@ -22,11 +22,6 @@ const SliderSchema = z.object({
 });
 
 // Helper functions
-const logRequest = (req: Request) => {
-  console.log('[Slider] Request Body:', req.body);
-  console.log('[Slider] Request File:', req.file);
-};
-
 const validateUserExists = async (userId: string) => {
   return prisma.user.findUnique({ where: { id: userId } });
 };
@@ -34,7 +29,6 @@ const validateUserExists = async (userId: string) => {
 const deleteFileSafely = async (filePath: string) => {
   try {
     await fs.unlink(filePath);
-    console.log(`[Slider] File deleted successfully: ${filePath}`);
   } catch (error) {
     console.error(`[Slider] Error deleting file at ${filePath}:`, error);
   }
@@ -90,8 +84,6 @@ export const createSlider = async (
   next: NextFunction
 ) => {
   try {
-    logRequest(req);
-    
     const validatedData = SliderSchema.parse({
       ...req.body,
       visible: req.body.visible === 'true',

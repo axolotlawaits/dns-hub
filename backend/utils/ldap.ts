@@ -39,7 +39,6 @@ async function processLdapPhoto(photoBase64: string): Promise<Buffer> {
         }
 
         const metadata = await sharp(inputBuffer).metadata();
-        console.log(`Original image: ${metadata.width}x${metadata.height}, ${metadata.format}, ${inputBuffer.length} bytes`);
 
         const processedImage = await sharp(inputBuffer)
             .resize({
@@ -58,7 +57,6 @@ async function processLdapPhoto(photoBase64: string): Promise<Buffer> {
             })
             .toBuffer();
 
-        console.log(`Processed image: 200x200, JPEG, ${processedImage.length} bytes (${Math.round(processedImage.length / inputBuffer.length * 100)}% of original)`);
 
         return processedImage;
     } catch (error) {
@@ -182,10 +180,8 @@ async function processUserData(entry: any, login: string) {
                         where: { login },
                         data: { image: ldapPhoto }
                     });
-                    console.log(`Photo synced from LDAP to database for user ${login}`);
                 }
             } else {
-                console.log(`User ${login} not found in database, skipping photo sync`);
             }
         } catch (dbError) {
             console.error('Database photo sync error:', dbError);
@@ -592,7 +588,6 @@ export async function updateUserPhoto(req: Request, res: Response): Promise<void
             if (!photo) missingFields.push('photo');
             if (!password) missingFields.push('password');
 
-            console.log(`[Photo Update] Missing required fields for user: ${maskedLogin}`);
             
             const elapsed = Date.now() - startTime;
             if (elapsed < minResponseTime) {

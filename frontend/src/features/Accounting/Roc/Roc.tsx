@@ -445,7 +445,16 @@ export default function RocList() {
           label: 'Без срока', 
           type: 'boolean',
           groupWith: ['contractNumber', 'dateContract'],
-          groupSize: 3
+          groupSize: 3,
+          onChange: (value: boolean, setFieldValue?: (path: string, v: any) => void) => {
+            setFormValues((prev: typeof formValues) => ({ ...prev, indefinite: value }));
+            if (setFieldValue) {
+              setFieldValue('indefinite', value);
+              if (value) {
+                setFieldValue('agreedTo', '');
+              }
+            }
+          }
         },
         { 
           name: 'agreedTo', 
@@ -453,7 +462,8 @@ export default function RocList() {
           type: 'date',
           groupWith: ['contractNumber', 'dateContract'],
           groupSize: 3,
-          required: !formValues.indefinite
+          required: !formValues.indefinite,
+          disabled: formValues.indefinite
         },
         { 
           name: 'shelfLife', 
@@ -987,7 +997,7 @@ export default function RocList() {
                 item: {
                   border: 'none',
                   borderBottom: '1px solid var(--theme-border-secondary)',
-                  '&:last-child': {
+                  '&:lastChild': {
                     borderBottom: 'none'
                   }
                 },

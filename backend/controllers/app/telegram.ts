@@ -440,8 +440,7 @@ class TelegramService {
         
         // Если настройка существует и отключена, не отправляем уведомление
         if (telegramNotificationsSetting && telegramNotificationsSetting.value === 'false') {
-          console.log(`[Telegram] Уведомления отключены для пользователя ${user.id}`);
-          return false;
+               return false;
         }
       }
     } catch (error) {
@@ -457,8 +456,7 @@ class TelegramService {
         console.error('[Telegram] Failed to start bot for notification');
         return false;
       }
-      console.log('[Telegram] Bot started successfully for notification');
-    }
+        }
 
     // Проверяем, что бот все еще существует после запуска
     if (!this.bot) {

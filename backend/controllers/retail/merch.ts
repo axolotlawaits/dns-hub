@@ -943,7 +943,6 @@ export const addCardImages = [
               throw new Error(`Файл ${file.originalname} пустой и был удален`);
             }
 
-            console.log(`✅ [addCardImages] Файл сохранен: ${file.filename} (${stats.size} bytes)`);
             
             const attachment = await prisma.merchAttachment.create({
               data: {
@@ -963,7 +962,6 @@ export const addCardImages = [
               const filePath = path.join(process.cwd(), 'public', 'retail', 'merch', file.filename);
               if (fs.existsSync(filePath)) {
                 fs.unlinkSync(filePath);
-                console.log(`🗑️ [addCardImages] Удален файл после ошибки: ${file.filename}`);
               }
             } catch (cleanupError) {
               console.error(`⚠️ [addCardImages] Ошибка при очистке файла ${file.filename}:`, cleanupError);
@@ -972,7 +970,6 @@ export const addCardImages = [
           }
         }
         
-        console.log(`✅ [addCardImages] Успешно добавлено ${savedAttachments.length} файлов к карточке ${cardId}`);
       } else {
         console.warn('⚠️ [addCardImages] Нет файлов для добавления');
       }

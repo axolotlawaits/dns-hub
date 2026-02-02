@@ -21,6 +21,43 @@ const notifyStreamsUpdate = async (branchType: string) => {
   }
 };
 
+// Функция для удаления папки прошлого месяца, когда в текущем появляется музыка
+const cleanupPreviousMonthIfNeeded = async () => {
+  try {
+    const musicPath = './public/retail/radio/music';
+    
+    if (!fs.existsSync(musicPath)) {
+      return;
+    }
+
+    const now = new Date();
+    const curMonth = now.getMonth() + 1;
+    const curYear = now.getFullYear();
+    const currentFolder = `${String(curMonth).padStart(2, '0')}-${curYear}`;
+    
+    // Проверяем, есть ли музыка в текущем месяце
+    const currentMonthPath = path.join(musicPath, currentFolder);
+    const currentMonthHasMusic = fs.existsSync(currentMonthPath) && 
+      fs.readdirSync(currentMonthPath).length > 0;
+    
+    if (!currentMonthHasMusic) {
+      return; // Если в текущем месяце нет музыки, ничего не удаляем
+    }
+    
+    // Если в текущем месяце есть музыка, удаляем прошлый месяц
+    const prevMonth = new Date(curYear, curMonth - 2, 1); // previous month
+    const prevMonthFolder = `${String(prevMonth.getMonth() + 1).padStart(2, '0')}-${prevMonth.getFullYear()}`;
+    const prevMonthPath = path.join(musicPath, prevMonthFolder);
+    
+    if (fs.existsSync(prevMonthPath)) {
+      fs.rmSync(prevMonthPath, { recursive: true, force: true });
+    }
+    
+  } catch (error) {
+    console.error('[Radio] Error cleaning previous month:', error);
+  }
+};
+
 // Функция для очистки старых папок с музыкой
 export const cleanupOldMusicFolders = async () => {
   try {
@@ -38,6 +75,15 @@ export const cleanupOldMusicFolders = async () => {
     const next = new Date(curYear, curMonth, 1); // first day of next month
     const nextFolder = `${String(next.getMonth() + 1).padStart(2, '0')}-${next.getFullYear()}`;
     
+    // Проверяем, есть ли музыка в текущем месяце
+    const currentMonthPath = path.join(musicPath, currentFolder);
+    const currentMonthHasMusic = fs.existsSync(currentMonthPath) && 
+      fs.readdirSync(currentMonthPath).length > 0;
+    
+    // Если в текущем месяце нет музыки, не удаляем прошлый месяц
+    const prevMonth = new Date(curYear, curMonth - 2, 1); // previous month
+    const prevMonthFolder = `${String(prevMonth.getMonth() + 1).padStart(2, '0')}-${prevMonth.getFullYear()}`;
+    
     let deletedCount = 0;
     
     for (const folder of folders) {
@@ -46,8 +92,14 @@ export const cleanupOldMusicFolders = async () => {
       if (!folderRegex.test(folder)) {
         continue;
       }
+      
       // Оставляем текущий и следующий месяц без изменений
       if (folder === currentFolder || folder === nextFolder) {
+        continue;
+      }
+      
+      // Если в текущем месяце нет музыки, оставляем прошлый месяц
+      if (!currentMonthHasMusic && folder === prevMonthFolder) {
         continue;
       }
 
@@ -72,6 +124,41 @@ export const cleanupOldMusicFolders = async () => {
     
   } catch (error) {
   }
+};
+
+// Утилита для получения папки с музыкой для воспроизведения
+// Если в текущем месяце нет музыки, возвращает прошлый месяц
+const getCurrentMusicFolder = (): string => {
+  const currentDate = new Date();
+  const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+  const year = currentDate.getFullYear();
+  const currentFolder = `${month}-${year}`;
+  
+  const musicPath = './public/retail/radio/music';
+  const currentMonthPath = path.join(musicPath, currentFolder);
+  
+  // Проверяем, есть ли музыка в текущем месяце
+  if (fs.existsSync(currentMonthPath)) {
+    const files = fs.readdirSync(currentMonthPath);
+    if (files.length > 0) {
+      return currentFolder;
+    }
+  }
+  
+  // Если в текущем месяце нет музыки, ищем в прошлом месяце
+  const prevMonth = new Date(year, currentDate.getMonth() - 1, 1);
+  const prevMonthFolder = `${String(prevMonth.getMonth() + 1).padStart(2, '0')}-${prevMonth.getFullYear()}`;
+  const prevMonthPath = path.join(musicPath, prevMonthFolder);
+  
+  if (fs.existsSync(prevMonthPath)) {
+    const files = fs.readdirSync(prevMonthPath);
+    if (files.length > 0) {
+      return prevMonthFolder;
+    }
+  }
+  
+  // Если ничего не найдено, возвращаем текущий месяц (пустая папка)
+  return currentFolder;
 };
 
 // Утилита для получения текущей папки месяца
@@ -126,7 +213,6 @@ export const preloadNextMonthMusic = async (): Promise<void> => {
     const year = nextMonthDate.getFullYear();
     const nextFolder = `${month}-${year}`;
     const pathCreated = ensureMusicFolder(nextFolder);
-    console.log(`[Radio] Preload check: ensured next month folder ${nextFolder} at ${pathCreated}`);
   } catch (e) {
     console.error('[Radio] Preload next month music error:', e);
   }
@@ -146,6 +232,9 @@ export const uploadMusic = async (req: Request, res: Response): Promise<any> => 
     if (!fs.existsSync(filePath)) {
       return res.status(500).json({ error: 'Файл не найден' });
     }
+    
+    // После успешной загрузки музыки в текущий месяц, удаляем прошлый месяц
+    await cleanupPreviousMonthIfNeeded();
     
     return res.status(200).json({ 
       success: true, 
@@ -181,6 +270,12 @@ export const uploadMusicToFolder = async (req: Request, res: Response): Promise<
     if (!fs.existsSync(filePath)) {
       return res.status(500).json({ error: 'Файл не найден' });
     }
+    
+    // Если загружаем в текущий месяц, удаляем прошлый месяц
+    if (folderName === getCurrentMonthFolder()) {
+      await cleanupPreviousMonthIfNeeded();
+    }
+    
     return res.status(200).json({
       success: true,
       message: 'Музыка загружена успешно',
@@ -219,6 +314,31 @@ export const uploadMusicNextMonth = async (req: Request, res: Response): Promise
   }
 };
 
+// Получение текущей папки с музыкой для воспроизведения
+export const getCurrentMusicFolderForPlayback = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const currentFolder = getCurrentMusicFolder();
+    const musicPath = './public/retail/radio/music';
+    const folderPath = path.join(musicPath, currentFolder);
+    
+    let files = [];
+    if (fs.existsSync(folderPath)) {
+      files = fs.readdirSync(folderPath);
+    }
+    
+    return res.status(200).json({ 
+      success: true, 
+      currentFolder,
+      hasMusic: files.length > 0,
+      filesCount: files.length,
+      isCurrentMonth: currentFolder === getCurrentMonthFolder()
+    });
+  } catch (error) {
+    console.error('[Radio] Error getting current music folder for playback:', error);
+    return res.status(500).json({ error: 'Ошибка при получении текущей папки с музыкой' });
+  }
+};
+
 // Подсказка: текущая и следующая папки
 export const getMonthFoldersInfo = async (req: Request, res: Response): Promise<any> => {
   try {
@@ -231,7 +351,33 @@ export const getMonthFoldersInfo = async (req: Request, res: Response): Promise<
     const msPerDay = 24 * 60 * 60 * 1000;
     const firstNext = new Date(nextYear, next.getMonth(), 1);
     const daysLeft = Math.ceil((firstNext.getTime() - now.getTime()) / msPerDay);
-    return res.json({ success: true, current: `${curMonth}-${curYear}`, next: `${nextMonth}-${nextYear}`, daysLeft });
+    
+    // Проверяем наличие музыки в текущем месяце
+    const currentFolder = `${curMonth}-${curYear}`;
+    const musicPath = './public/retail/radio/music';
+    const currentMonthPath = path.join(musicPath, currentFolder);
+    let currentMonthHasMusic = false;
+    let currentMonthFilesCount = 0;
+    
+    if (fs.existsSync(currentMonthPath)) {
+      const files = fs.readdirSync(currentMonthPath);
+      currentMonthFilesCount = files.length;
+      currentMonthHasMusic = files.length > 0;
+    }
+    
+    // Получаем папку для воспроизведения
+    const playbackFolder = getCurrentMusicFolder();
+    
+    return res.json({ 
+      success: true, 
+      current: currentFolder,
+      next: `${nextMonth}-${nextYear}`, 
+      daysLeft,
+      currentMonthHasMusic,
+      currentMonthFilesCount,
+      playbackFolder,
+      isPlayingCurrentMonth: playbackFolder === currentFolder
+    });
   } catch (e) {
     return res.status(500).json({ success: false });
   }
@@ -277,7 +423,6 @@ export const getMusicFolders = async (req: Request, res: Response): Promise<any>
   try {
     const folders = await getMusicFoldersAsync();
     if (folders.length === 0) {
-      console.log('[Radio] No music folders found');
     }
     return res.status(200).json({ success: true, folders });
   } catch (error) {
@@ -496,7 +641,6 @@ export const getDevicesStatusPing = async (req: Request, res: Response) => {
         const lastSeenMem = heartbeatStore.get(deviceName);
         const timeDiff = lastSeenMem ? (now - lastSeenMem) : null;
         const online = lastSeenMem ? (timeDiff! <= ONLINE_THRESHOLD_MS) : false;
-        // console.log(`🔍 [getDevicesStatusPing] Web player ${d.id} (${deviceName}): lastSeen=${lastSeenMem}, timeDiff=${timeDiff}, online=${online}`);
         return { deviceId: d.id, branchId: d.branchId, online, rttMs: null, source: 'heartbeat' };
       } else {
         // Для обычных устройств используем WebSocket ping
@@ -968,41 +1112,21 @@ export const getRadioStreams = async (req: Request, res: Response): Promise<any>
 // Создание нового радио потока
 export const createRadioStream = async (req: Request, res: Response): Promise<any> => {
   try {
-    console.log('[Radio] Creating radio stream with data:', req.body);
-    console.log('[Radio] Request file:', req.file);
-    console.log('[Radio] Request files:', req.files);
-    console.log('[Radio] Content-Type:', req.headers['content-type']);
     const { name, branchTypeOfDist, frequencySongs, fadeInDuration, volumeLevel, startDate, endDate } = req.body;
-
-    console.log('[Radio] Parsed data:', {
-      name,
-      branchTypeOfDist,
-      frequencySongs,
-      fadeInDuration,
-      volumeLevel,
-      startDate,
-      endDate
-    });
 
     let attachmentPath = null;
     
     // Обработка загруженного файла
     if (req.file) {
-      console.log('[Radio] File uploaded:', req.file);
-      console.log('[Radio] File path:', req.file.path);
-      console.log('[Radio] File exists:', fs.existsSync(req.file.path));
-      
+            
       // Файл уже в правильном месте благодаря middleware
       if (fs.existsSync(req.file.path)) {
         // Используем название файла как оно сохранено на диске
         attachmentPath = req.file.filename;
-        console.log('[Radio] Attachment path set to:', attachmentPath);
       } else {
-        console.error('[Radio] File does not exist at path:', req.file.path);
         attachmentPath = null;
       }
     } else {
-      console.log('[Radio] No file uploaded');
     }
 
     const stream = await prisma.radioStream.create({
@@ -1018,7 +1142,6 @@ export const createRadioStream = async (req: Request, res: Response): Promise<an
       }
     });
 
-    console.log('[Radio] Created stream:', stream);
     
     // Уведомляем устройства об обновлении потоков
     await notifyStreamsUpdate(stream.branchTypeOfDist);
@@ -1026,8 +1149,6 @@ export const createRadioStream = async (req: Request, res: Response): Promise<an
     return res.status(201).json({ success: true, data: stream });
   } catch (error: any) {
     console.error('[Radio] Error creating radio stream:', error);
-    console.error('[Radio] Error details:', error.message);
-    console.error('[Radio] Error stack:', error.stack);
     return res.status(500).json({ error: 'Ошибка при создании радио потока', details: error.message });
   }
 };
@@ -1070,25 +1191,9 @@ export const uploadStreamRoll = async (req: Request, res: Response): Promise<any
 // Обновление радио потока
 export const updateRadioStream = async (req: Request, res: Response): Promise<any> => {
   try {
-    console.log('[Radio] Updating radio stream with data:', req.body);
-    console.log('[Radio] Request file:', req.file);
-    console.log('[Radio] Request files:', req.files);
-    console.log('[Radio] Content-Type:', req.headers['content-type']);
     
     const { id } = req.params;
     const { name, branchTypeOfDist, frequencySongs, fadeInDuration, volumeLevel, startDate, endDate, isActive } = req.body;
-
-    console.log('[Radio] Parsed data:', {
-      id,
-      name,
-      branchTypeOfDist,
-      frequencySongs,
-      fadeInDuration,
-      volumeLevel,
-      startDate,
-      endDate,
-      isActive
-    });
 
     // Подготавливаем данные для обновления
     const updateData: any = {
@@ -1104,20 +1209,14 @@ export const updateRadioStream = async (req: Request, res: Response): Promise<an
 
     // Обработка загруженного файла
     if (req.file) {
-      console.log('[Radio] File uploaded:', req.file);
-      console.log('[Radio] File path:', req.file.path);
-      console.log('[Radio] File exists:', fs.existsSync(req.file.path));
-      
+            
       // Файл уже в правильном месте благодаря middleware
       if (fs.existsSync(req.file.path)) {
         // Используем название файла как оно сохранено на диске
         updateData.attachment = req.file.filename;
-        console.log('[Radio] Attachment path set to:', req.file.filename);
       } else {
-        console.error('[Radio] File does not exist at path:', req.file.path);
       }
     } else {
-      console.log('[Radio] No file uploaded for update');
     }
 
     const stream = await prisma.radioStream.update({
@@ -1125,7 +1224,6 @@ export const updateRadioStream = async (req: Request, res: Response): Promise<an
       data: updateData
     });
 
-    console.log('[Radio] Updated stream:', stream);
 
     // Уведомляем устройства об обновлении потоков
     await notifyStreamsUpdate(stream.branchTypeOfDist);
@@ -1133,8 +1231,6 @@ export const updateRadioStream = async (req: Request, res: Response): Promise<an
     return res.status(200).json({ success: true, data: stream });
   } catch (error: any) {
     console.error('[Radio] Error updating radio stream:', error);
-    console.error('[Radio] Error details:', error.message);
-    console.error('[Radio] Error stack:', error.stack);
     return res.status(500).json({ error: 'Ошибка при обновлении радио потока', details: error.message });
   }
 };
@@ -1216,7 +1312,6 @@ export const downloadStreamFile = async (req: Request, res: Response): Promise<a
   try {
     const { id } = req.params;
     
-    console.log('[Radio] Downloading stream file for ID:', id);
     
     // Находим поток в базе данных
     const stream = await prisma.radioStream.findUnique({
@@ -1224,42 +1319,34 @@ export const downloadStreamFile = async (req: Request, res: Response): Promise<a
     });
     
     if (!stream) {
-      console.log('[Radio] Stream not found:', id);
       return res.status(404).json({ error: 'Поток не найден' });
     }
     
     if (!stream.attachment) {
-      console.log('[Radio] Stream has no attachment:', id);
       return res.status(404).json({ error: 'Файл потока не найден' });
     }
     
     // Путь к файлу
     const filePath = path.join('./public/retail/radio/stream', stream.attachment);
     
-    console.log('[Radio] Looking for file at path:', filePath);
     
     // Проверяем существование файла
     if (!fs.existsSync(filePath)) {
-      console.log('[Radio] File does not exist at path:', filePath);
       
       // Пытаемся найти файл с исправленным названием (для совместимости с искаженными названиями)
       const streamDir = './public/retail/radio/stream';
       const files = fs.readdirSync(streamDir);
-      console.log('[Radio] Available files in stream directory:', files);
       
       // Ищем файл, который может соответствовать нашему потоку
       const matchingFile = files.find(file => {
         // Сравниваем название файла с attachment из базы данных
         // Также проверяем, может ли файл быть с исправленным названием
         const correctedFile = decodeRussianFileName(file);
-        console.log('[Radio] Comparing:', file, 'corrected:', correctedFile, 'with', stream.attachment);
         return file === stream.attachment || correctedFile === stream.attachment;
       });
       
       if (matchingFile) {
-        console.log('[Radio] Found matching file:', matchingFile);
         const correctedFilePath = path.join(streamDir, matchingFile);
-        console.log('[Radio] Using corrected file path:', correctedFilePath);
         
         // Отправляем файл с исправленным путем
         res.download(correctedFilePath, stream.attachment, (err) => {
@@ -1276,7 +1363,6 @@ export const downloadStreamFile = async (req: Request, res: Response): Promise<a
       return res.status(404).json({ error: 'Файл не найден на сервере' });
     }
     
-    console.log('[Radio] File found, sending download response');
     
     // Отправляем файл
     res.download(filePath, stream.attachment, (err) => {
@@ -1403,7 +1489,6 @@ export const playRadioStream = async (req: Request, res: Response): Promise<any>
       return res.status(404).json({ error: 'Файл потока не найден' });
     }
 
-    console.log('✅ [playRadioStream] Отправляем файл для проигрывания:', filePath);
 
     // Определяем MIME тип по расширению файла
     const ext = path.extname(stream.attachment).toLowerCase();
@@ -1429,7 +1514,6 @@ export const playRadioStream = async (req: Request, res: Response): Promise<any>
         contentType = 'audio/mpeg';
     }
 
-    console.log(`🎵 [playRadioStream] MIME тип: ${contentType} для файла ${stream.attachment}`);
 
     // Получаем размер файла
     const stats = fs.statSync(filePath);
@@ -1483,8 +1567,7 @@ export const playRadioStream = async (req: Request, res: Response): Promise<any>
             res.status(500).json({ error: 'Ошибка при проигрывании потока' });
           }
         } else {
-          console.log('✅ [playRadioStream] Файл успешно отправлен для проигрывания');
-        }
+            }
       });
     }
 
