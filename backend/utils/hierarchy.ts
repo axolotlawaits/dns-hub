@@ -39,11 +39,12 @@ export async function getHierarchyItems<T = any>(
   const where: any = { ...additionalWhere };
 
   // Обработка parentId
-  if (parentId === null || parentId === 'null' || parentId === undefined) {
+  if (parentId === null || parentId === 'null') {
     where[parentField] = null;
   } else if (parentId) {
     where[parentField] = parentId;
   }
+  // Если parentId undefined, НЕ добавляем фильтр - получаем все элементы
 
   const queryOptions: any = {
     where,

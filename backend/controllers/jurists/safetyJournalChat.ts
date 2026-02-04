@@ -1833,27 +1833,6 @@ export const getMessages = async (req: Request, res: Response) => {
       }
     }
 
-    res.json({
-      chatId,
-      totalMessages: messages.length,
-      totalCount: total,
-      page: pageNum,
-      limit: limitNum,
-      allMessages: messages.map(m => ({
-        id: m.id,
-        message: m.message?.substring(0, 100),
-        senderId: m.senderId,
-        senderName: m.sender?.name,
-        createdAt: m.createdAt,
-        isStatusMessage: m.message && (
-          m.message.includes('одобрен') ||
-          m.message.includes('отклонен') ||
-          m.message.includes('отправлен на проверку') ||
-          m.message.includes('ожидает загрузки файлов')
-        )
-      }))
-    });
-
     // Добавляем флаг isEdited для каждого сообщения
     // Используем поле isEdited из базы данных, если оно есть, иначе вычисляем по updatedAt
     const messagesWithEditedFlag = messages.map(msg => ({

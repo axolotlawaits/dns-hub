@@ -101,6 +101,7 @@ const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: 
       let isMounted = true;
 
       // ИСПРАВЛЕНО: Обрабатываем как относительные пути (без http), так и абсолютные URL
+      // Автоматически определяем необходимость аутентификации для защищенных путей
       const finalSrc = src.startsWith('http') || src.startsWith('blob:') 
         ? src 
         : (src.startsWith('/') ? `${API}${src}` : `${API}/${src}`);
@@ -197,7 +198,14 @@ const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: 
             }
             
             // Если получили 401, пробуем обновить токен и повторить запрос
-            if (err?.status === 401) {
+            // Автоматически определяем необходимость аутентификации по URL паттернам
+            const isProtectedEndpoint = finalSrc.includes('/jurists/safety/') || 
+                                      finalSrc.includes('/files/') ||
+                                      finalSrc.includes('/view') ||
+                                      finalSrc.includes('/download') ||
+                                      (finalSrc.includes('/api/') && !finalSrc.includes('/public/'));
+            
+            if (err?.status === 401 && isProtectedEndpoint) {
               try {
                 const refreshResponse = await fetch(`${API}/refresh-token`, {
                   method: 'POST',
@@ -449,6 +457,11 @@ interface FilePreviewModalProps {
   initialIndex?: number;
   onDeleteFile?: (fileId: string) => Promise<void>;
   requireAuth?: boolean; // Флаг для SafetyJournal - требует передачи токена
+  // Примечание: автоматически определяем необходимость аутентификации для:
+  // - /jurists/safety/ paths (журналы безопасности)
+  // - /files/ paths (файловые сервисы)
+  // - /view и /download endpoints
+  // - /api/ paths (кроме /public/)
 }
 
 const SUPPORTED_IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
@@ -1084,7 +1097,15 @@ export const FilePreviewModal = ({
             const blob = await doFetch(token);
             openBlob(blob);
           } catch (err: any) {
-            if (requireAuth && err?.status === 401) {
+            // Enhanced authentication handling - check for common protected paths
+            const isProtectedPath = requireAuth || 
+                                  fileUrl.includes('/jurists/safety/') || 
+                                  fileUrl.includes('/files/') ||
+                                  fileUrl.includes('/view') ||
+                                  fileUrl.includes('/download') ||
+                                  (fileUrl.includes('/api/') && !fileUrl.includes('/public/'));
+            
+            if (isProtectedPath && err?.status === 401) {
               try {
                 const refreshResponse = await fetch(`${API}/refresh-token`, {
                   method: 'POST',

@@ -129,7 +129,7 @@ const COMMON_FIELD_PROPS = {
 const DECORATIVE_CLASS = 'decorative-element';
 
 // Types and interfaces
-export type FieldType = 'text' | 'password' | 'number' | 'select' | 'selectSearch' | 'autocomplete' | 'date' | 'datetime' | 'textarea' | 'file' | 'boolean' | 'multiselect' | 'icon' | 'color';
+export type FieldType = 'text' | 'password' | 'number' | 'select' | 'selectSearch' | 'autocomplete' | 'date' | 'datetime' | 'textarea' | 'file' | 'boolean' | 'multiselect' | 'icon' | 'color' | 'dynamic';
 
 interface FileFieldConfig {
   name: string;
@@ -164,9 +164,11 @@ export interface FormField {
   searchable?: boolean;
   onSearchChange?: (search: string) => void;
   disabled?: boolean | ((values: Record<string, any>) => boolean);
+  // Условное отображение поля
+  visible?: boolean | ((values: Record<string, any>) => boolean);
   // Группировка полей в ряд
-  groupWith?: string[]; // Массив имен полей для группировки в ряд
-  groupSize?: 1 | 2 | 3; // Размер группы (1, 2 или 3 поля в ряд)
+  groupWith?: string[] | ((values: Record<string, any>) => string[]); // Массив имен полей для группировки в ряд или функция
+  groupSize?: 1 | 2 | 3 | ((values: Record<string, any>) => 1 | 2 | 3); // Размер группы или функция
   // Дополнительные свойства для полей
   loading?: boolean;
   leftSection?: JSX.Element;
@@ -179,6 +181,37 @@ export interface FormField {
   description?: string; // Описание поля
   mb?: string | number; // Отступ снизу для поля
   onKeyDown?: (e: React.KeyboardEvent) => void; // Обработчик нажатия клавиш
+  // Свойства для динамических полей
+  dynamicFields?: DynamicFieldConfig[]; // Конфигурация динамических полей
+}
+
+// Интерфейс для конфигурации динамических полей
+export interface DynamicFieldConfig {
+  name: string;
+  label: string;
+  type: Exclude<FieldType, 'dynamic' | 'file'>; // Динамические поля не могут быть динамическими или файловыми
+  required?: boolean;
+  options?: Array<{ value: string; label: string; icon?: JSX.Element }>;
+  placeholder?: string;
+  description?: string;
+  // Условие отображения поля
+  condition?: {
+    field: string; // Имя поля для проверки
+    value: string | string[] | (() => string | string[]); // Значение, массив значений или функция для активации
+    operator?: 'equals' | 'in' | 'not_equals'; // Оператор сравнения
+  };
+  // Горизонтальная группировка
+  groupWith?: string[]; // Массив имен полей для группировки в ряд
+  groupSize?: 1 | 2 | 3; // Размер группы (1, 2 или 3 поля в ряд)
+  // Дополнительные свойства
+  step?: string;
+  min?: number;
+  max?: number;
+  searchable?: boolean;
+  clearable?: boolean;
+  allowDeselect?: boolean;
+  mask?: (value: string) => string;
+  onChange?: (value: any) => void;
 }
 
 export interface ViewFieldConfig {
@@ -1051,6 +1084,294 @@ const FileFieldsCard = memo(({
   );
 });
 
+// Компонент для отображения динамических полей
+const DynamicFieldsComponent = memo(({ field, form }: { field: FormField; form: MantineForm }) => {
+  // Получаем динамические поля из конфигурации
+  const dynamicFields = field.dynamicFields || [];
+  
+  // Отслеживаем изменения senderTypeId для отладки
+  useEffect(() => {
+    // console.log('DEBUG: senderTypeId изменился:', form.values.senderTypeId);
+  }, [form.values.senderTypeId]);
+  
+  // Функция для проверки условия отображения поля
+  const checkCondition = useCallback((condition: DynamicFieldConfig['condition'], formValues: Record<string, any>) => {
+    if (!condition) {
+      // console.log('DEBUG: Условие отсутствует, поле видно');
+      return true;
+    }
+    
+    const fieldValue = formValues[condition.field];
+    let conditionValue = condition.value;
+    
+    // Если value - это функция, вызываем ее
+    if (typeof conditionValue === 'function') {
+      conditionValue = conditionValue();
+    }
+    
+    // console.log('DEBUG: Проверка условия', {
+    //   field: condition.field,
+    //   fieldValue,
+    //   conditionValue,
+    //   operator: condition.operator
+    // });
+    
+    const { operator = 'equals' } = condition;
+    
+    let result = false;
+    switch (operator) {
+      case 'equals':
+        result = fieldValue === conditionValue;
+        break;
+      case 'in':
+        result = Array.isArray(conditionValue) ? conditionValue.includes(fieldValue) : false;
+        break;
+      case 'not_equals':
+        result = fieldValue !== conditionValue;
+        break;
+      default:
+        result = true;
+    }
+    
+    // console.log('DEBUG: Результат проверки условия', result);
+    return result;
+  }, []);
+
+  // Фильтруем поля по условиям
+  const visibleFields = useMemo(() => {
+    return dynamicFields.filter(dynamicField => {
+      const isVisible = checkCondition(dynamicField.condition, form.values);
+      return isVisible;
+    });
+  }, [dynamicFields, form.values, checkCondition]);
+
+  // Группируем поля по горизонтали автоматически
+  const fieldGroups = useMemo(() => {
+    const groups: Array<{ fields: DynamicFieldConfig[], size: 1 | 2 | 3 }> = [];
+    
+    if (visibleFields.length === 0) return groups;
+    
+    // Если только одно поле - оно на всю ширину
+    if (visibleFields.length === 1) {
+      groups.push({
+        fields: [visibleFields[0]],
+        size: 1
+      });
+      return groups;
+    }
+    
+    // Если два поля - делим пополам
+    if (visibleFields.length === 2) {
+      groups.push({
+        fields: visibleFields,
+        size: 2
+      });
+      return groups;
+    }
+    
+    // Если три поля - делим на 3 колонки
+    if (visibleFields.length === 3) {
+      groups.push({
+        fields: visibleFields,
+        size: 3
+      });
+      return groups;
+    }
+    
+    // Если больше 3 полей - группируем по 3 в ряд, последние могут быть 1 или 2
+    const fieldsPerRow = 3;
+    for (let i = 0; i < visibleFields.length; i += fieldsPerRow) {
+      const remainingFields = visibleFields.slice(i);
+      const fieldsInThisRow = remainingFields.slice(0, fieldsPerRow);
+      
+      let groupSize: 1 | 2 | 3;
+      if (fieldsInThisRow.length === 1) {
+        groupSize = 1;
+      } else if (fieldsInThisRow.length === 2) {
+        groupSize = 2;
+      } else {
+        groupSize = 3;
+      }
+      
+      groups.push({
+        fields: fieldsInThisRow,
+        size: groupSize
+      });
+    }
+    
+    return groups;
+  }, [visibleFields]);
+
+  // Функция для рендеринга отдельного динамического поля
+  const renderDynamicField = useCallback((dynamicField: DynamicFieldConfig) => {
+    const fieldValue = form.values[dynamicField.name] || '';
+    
+    const commonProps = {
+      size: 'sm' as const,
+      radius: 'md' as const,
+      style: {
+        '--input-bd': 'var(--theme-border)',
+        '--input-bg': 'var(--theme-bg-elevated)',
+        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+      }
+    };
+
+    switch (dynamicField.type) {
+      case 'text':
+        return (
+          <TextInput
+            key={dynamicField.name}
+            label={dynamicField.label}
+            value={fieldValue}
+            onChange={(e) => {
+              const raw = e.target.value;
+              const masked = typeof dynamicField.mask === 'function' ? dynamicField.mask(raw) : raw;
+              form.setFieldValue(dynamicField.name, masked);
+              dynamicField.onChange?.(masked);
+            }}
+            placeholder={dynamicField.placeholder}
+            required={dynamicField.required}
+            description={dynamicField.description}
+            {...commonProps}
+          />
+        );
+      case 'select':
+        return (
+          <Select
+            key={dynamicField.name}
+            label={dynamicField.label}
+            value={fieldValue}
+            onChange={(value) => {
+              form.setFieldValue(dynamicField.name, value || '');
+              dynamicField.onChange?.(value || '');
+            }}
+            placeholder={dynamicField.placeholder}
+            required={dynamicField.required}
+            description={dynamicField.description}
+            data={dynamicField.options || []}
+            searchable={dynamicField.searchable}
+            clearable={dynamicField.clearable}
+            allowDeselect={dynamicField.allowDeselect}
+            comboboxProps={{ withinPortal: true }}
+            {...commonProps}
+          />
+        );
+      case 'number':
+        return (
+          <TextInput
+            key={dynamicField.name}
+            label={dynamicField.label}
+            type="number"
+            value={fieldValue}
+            onChange={(e) => {
+              form.setFieldValue(dynamicField.name, e.target.value);
+              dynamicField.onChange?.(e.target.value);
+            }}
+            placeholder={dynamicField.placeholder}
+            required={dynamicField.required}
+            description={dynamicField.description}
+            step={dynamicField.step}
+            min={dynamicField.min}
+            max={dynamicField.max}
+            {...commonProps}
+          />
+        );
+      case 'date':
+        return (
+          <TextInput
+            key={dynamicField.name}
+            label={dynamicField.label}
+            type="date"
+            value={fieldValue}
+            onChange={(e) => {
+              form.setFieldValue(dynamicField.name, e.target.value);
+              dynamicField.onChange?.(e.target.value);
+            }}
+            placeholder={dynamicField.placeholder}
+            required={dynamicField.required}
+            description={dynamicField.description}
+            {...commonProps}
+          />
+        );
+      case 'datetime':
+        return (
+          <TextInput
+            key={dynamicField.name}
+            label={dynamicField.label}
+            type="datetime-local"
+            value={fieldValue}
+            onChange={(e) => {
+              form.setFieldValue(dynamicField.name, e.target.value);
+              dynamicField.onChange?.(e.target.value);
+            }}
+            placeholder={dynamicField.placeholder}
+            required={dynamicField.required}
+            description={dynamicField.description}
+            {...commonProps}
+          />
+        );
+      case 'textarea':
+        return (
+          <Textarea
+            key={dynamicField.name}
+            label={dynamicField.label}
+            value={fieldValue}
+            onChange={(e) => {
+              form.setFieldValue(dynamicField.name, e.target.value);
+              dynamicField.onChange?.(e.target.value);
+            }}
+            placeholder={dynamicField.placeholder}
+            required={dynamicField.required}
+            description={dynamicField.description}
+            {...commonProps}
+          />
+        );
+      case 'boolean':
+        return (
+          <Switch
+            key={dynamicField.name}
+            label={dynamicField.label}
+            checked={fieldValue}
+            onChange={(e) => {
+              form.setFieldValue(dynamicField.name, e.currentTarget.checked);
+              dynamicField.onChange?.(e.currentTarget.checked);
+            }}
+            description={dynamicField.description}
+          />
+        );
+      default:
+        return null;
+    }
+  }, [form]);
+
+  // Если нет видимых полей, не рендерим компонент
+  if (visibleFields.length === 0) {
+    return null;
+  }
+
+  return (
+    <Stack gap="md" mb="md">
+      <Text fw={600} size="sm" c="var(--theme-text-primary)">
+        {typeof field.label === 'function' ? field.label(form.values) : field.label}
+      </Text>
+      
+      {fieldGroups.map((group, groupIndex) => (
+        <div key={groupIndex} style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+          {group.fields.map((dynamicField) => (
+            <div key={dynamicField.name} style={{ 
+              flex: group.size === 1 ? '1' : `0 0 calc(${100 / group.fields.length}% - 16px)`,
+              minWidth: group.size === 1 ? '100%' : group.size === 2 ? 'calc(50% - 8px)' : 'calc(33.333% - 11px)'
+            }}>
+              {renderDynamicField(dynamicField)}
+            </div>
+          ))}
+        </div>
+      ))}
+    </Stack>
+  );
+});
+
 export const DynamicFormModal = ({
   opened,
   onClose,
@@ -1322,8 +1643,8 @@ export const DynamicFormModal = ({
   }, [form]);
 
   // Функция для группировки полей
-  const groupFields = useCallback((fields: FormField[]) => {
-    const grouped: (FormField | FormField[])[] = [];
+  const groupFields = useCallback((fields: FormField[], formValues: Record<string, any>) => {
+    const grouped: (FormField[] | FormField)[] = [];
     const processed = new Set<string>();
 
     for (let i = 0; i < fields.length; i++) {
@@ -1331,13 +1652,18 @@ export const DynamicFormModal = ({
       
       if (processed.has(field.name)) continue;
 
+      // Получаем динамические значения группировки
+      const groupWith = typeof field.groupWith === 'function' 
+        ? field.groupWith(formValues) 
+        : field.groupWith;
+      
       // Проверяем, есть ли у поля группировка
-      if (field.groupWith && field.groupWith.length > 0) {
+      if (groupWith && groupWith.length > 0) {
         const groupFields: FormField[] = [field];
         processed.add(field.name);
 
         // Находим все поля в группе
-        for (const groupFieldName of field.groupWith) {
+        for (const groupFieldName of groupWith) {
           const groupField = fields.find(f => f.name === groupFieldName);
           if (groupField && !processed.has(groupField.name)) {
             groupFields.push(groupField);
@@ -1373,6 +1699,16 @@ export const DynamicFormModal = ({
 
 
   const renderField = useCallback((field: FormField) => {
+    // Проверка видимости поля
+    const isVisible = typeof field.visible === 'function' 
+      ? field.visible(form.values) 
+      : (field.visible !== undefined ? field.visible : true);
+    
+    // Если поле невидимо, не рендерим его
+    if (!isVisible) {
+      return null;
+    }
+    
     // Поддержка динамических label и placeholder через функции
     const labelValue = typeof field.label === 'function' ? field.label(form.values) : field.label;
     const placeholderValue = typeof field.placeholder === 'function' ? field.placeholder(form.values) : field.placeholder;
@@ -1740,14 +2076,20 @@ export const DynamicFormModal = ({
         });
         return <ColorPickerFieldComponent key={field.name} field={field} />;
       }
+      case 'dynamic': {
+        return <DynamicFieldsComponent key={field.name} field={field} form={form} />;
+      }
       default:
         return null;
     }
   }, [form, handleFileDropFor, handleRemoveAttachmentFor, attachmentsMap, handleMetaChangeFor, fileAttachments, onFileAttachmentsChange, attachmentLabel, attachmentAccept]);
 
   // Функция для рендеринга группы полей
-  const renderFieldGroup = useCallback((fieldGroup: FormField[]) => {
-    const groupSize = fieldGroup[0]?.groupSize || 2;
+  const renderFieldGroup = useCallback((fieldGroup: FormField[], formValues: Record<string, any>) => {
+    // Получаем динамический размер группы
+    const groupSize = typeof fieldGroup[0]?.groupSize === 'function' 
+      ? fieldGroup[0].groupSize(formValues) 
+      : fieldGroup[0]?.groupSize || 2;
     
     return (
       <div 
@@ -2037,9 +2379,9 @@ export const DynamicFormModal = ({
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, height: '100%' }}>
               <form onSubmit={form.onSubmit(values => onSubmit?.({ ...values }))} style={{ flex: 1, height: '100%' }}>
                 <Stack style={{ height: '100%' }}>
-                  {groupFields(fields).map((fieldOrGroup) => 
+                  {groupFields(fields, form.values).map((fieldOrGroup) => 
                     Array.isArray(fieldOrGroup) 
-                      ? renderFieldGroup(fieldOrGroup)
+                      ? renderFieldGroup(fieldOrGroup, form.values)
                       : renderField(fieldOrGroup)
                   )}
                   {error && <Alert color="red">{error}</Alert>}
@@ -2058,9 +2400,9 @@ export const DynamicFormModal = ({
         return (
           <form onSubmit={form.onSubmit(values => onSubmit?.({ ...values }))} style={{ height: '100%' }}>
             <Stack style={{ height: '100%' }}>
-              {groupFields(fields).map((fieldOrGroup) => 
+              {groupFields(fields, form.values).map((fieldOrGroup) => 
                 Array.isArray(fieldOrGroup) 
-                  ? renderFieldGroup(fieldOrGroup)
+                  ? renderFieldGroup(fieldOrGroup, form.values)
                   : renderField(fieldOrGroup)
               )}
               {error && <Alert color="red">{error}</Alert>}

@@ -277,6 +277,8 @@ export default function CorrespondenceList() {
             getTypes('Отправитель', correspondenceTool.id, undefined, true), // tree=true для иерархии
             getTypes('Тип документа', correspondenceTool.id, undefined, false) // плоский список
           ]);
+          
+          // Загружаем типы отправителей с иерархией
         }
 
         setState(prev => ({
@@ -335,7 +337,8 @@ export default function CorrespondenceList() {
     }));
   }, [state.documentTypes]);
 
-  const formConfig = useMemo(() => ({
+  const formConfig = useMemo(() => {
+    return {
     fields: [
       {
         name: 'ReceiptDate',
@@ -349,8 +352,39 @@ export default function CorrespondenceList() {
         type: 'select' as const,
         options: senderTypeOptions,
         required: true,
-        groupWith: ['senderSubTypeId'],
-        groupSize: 2 as const,
+        // Группируем поля отправителя в одну строку
+        groupWith: (values: any) => {
+          const selectedType = state.senderTypes.find(t => t.id === values.senderTypeId);
+          const groupFields = [];
+                
+          // Добавляем subType если он видим
+          if (selectedType && selectedType.children && selectedType.children.length > 0) {
+            groupFields.push('senderSubTypeId');
+                  
+            // Проверяем subSubType
+            const selectedSubType = selectedType.children.find(t => t.id === values.senderSubTypeId);
+            if (selectedSubType && selectedSubType.children && selectedSubType.children.length > 0) {
+              groupFields.push('senderSubSubTypeId');
+            }
+          }
+                
+          return groupFields;
+        },
+        groupSize: (values: any) => {
+          const selectedType = state.senderTypes.find(t => t.id === values.senderTypeId);
+          let size = 1; // Только senderTypeId
+                
+          if (selectedType && selectedType.children && selectedType.children.length > 0) {
+            size = 2; // senderTypeId + senderSubTypeId
+                  
+            const selectedSubType = selectedType.children.find(t => t.id === values.senderSubTypeId);
+            if (selectedSubType && selectedSubType.children && selectedSubType.children.length > 0) {
+              size = 3; // Все три поля
+            }
+          }
+                
+          return size as 1 | 2 | 3;
+        },
         onChange: (val: string, setFieldValue: any) => {
           // Устанавливаем новое значение типа отправителя
           setFieldValue('senderTypeId', val);
@@ -366,6 +400,7 @@ export default function CorrespondenceList() {
         options: (values: any) => {
           // Показываем подтипы только если у выбранного типа есть дочерние элементы
           const selectedType = state.senderTypes.find(t => t.id === values.senderTypeId);
+                
           if (selectedType && selectedType.children && selectedType.children.length > 0) {
             return selectedType.children.map((child: Type) => ({ 
               value: child.id, 
@@ -375,9 +410,10 @@ export default function CorrespondenceList() {
           return [];
         },
         required: false,
-        disabled: (values: any) => {
+        // Поле видно только если у выбранного типа есть дети
+        visible: (values: any) => {
           const selectedType = state.senderTypes.find(t => t.id === values.senderTypeId);
-          return !selectedType || !selectedType.children || selectedType.children.length === 0;
+          return !!(selectedType && selectedType.children && selectedType.children.length > 0);
         },
         onChange: (val: string, setFieldValue: any) => {
           setFieldValue('senderSubTypeId', val);
@@ -392,8 +428,10 @@ export default function CorrespondenceList() {
         options: (values: any) => {
           // Показываем подподтипы только если у выбранного подтипа есть дочерние элементы
           const selectedType = state.senderTypes.find(t => t.id === values.senderTypeId);
+                
           if (selectedType && selectedType.children) {
             const selectedSubType = selectedType.children.find(t => t.id === values.senderSubTypeId);
+                  
             if (selectedSubType && selectedSubType.children && selectedSubType.children.length > 0) {
               return selectedSubType.children.map((child: Type) => ({ 
                 value: child.id, 
@@ -404,16 +442,15 @@ export default function CorrespondenceList() {
           return [];
         },
         required: false,
-        disabled: (values: any) => {
+        // Поле видно только если у выбранного подтипа есть дети
+        visible: (values: any) => {
           const selectedType = state.senderTypes.find(t => t.id === values.senderTypeId);
           if (selectedType && selectedType.children) {
             const selectedSubType = selectedType.children.find(t => t.id === values.senderSubTypeId);
-            return !selectedSubType || !selectedSubType.children || selectedSubType.children.length === 0;
+            return !!(selectedSubType && selectedSubType.children && selectedSubType.children.length > 0);
           }
-          return true;
-        },
-        groupWith: ['senderName'],
-        groupSize: 2 as const,
+          return false;
+        }
       },
       {
         name: 'senderName',
@@ -431,11 +468,7 @@ export default function CorrespondenceList() {
           if (selectedType?.name === 'Физическое лицо') {
             return 'Введите ФИО физического лица';
           }
-<<<<<<< HEAD
-          return 'Введите наименование отправителя';
-=======
-          return 'Введите или выберите отправителя';
->>>>>>> 73987224c954f983910f9f0fa589fcba82c34c5b
+return 'Введите или выберите отправителя';
         },
         description: 'Пример: ООО "Ромашка", ИП Иванов И.И., Судебный участок №123, Иванов Иван Иванович'
       },
@@ -488,10 +521,178 @@ export default function CorrespondenceList() {
           newAttachments.splice(index, 1);
           setFieldValue('attachments', newAttachments);
         }
+      },
+      {
+        name: 'dynamicFields',
+        label: 'Дополнительные поля',
+        type: 'dynamic' as const,
+        dynamicFields: [
+          {
+            name: 'courtName',
+            label: 'Наименование суда',
+            type: 'text' as const,
+            condition: {
+              field: 'senderTypeId',
+              value: () => {
+                const judicialSenderTypes = state.senderTypes
+                  .filter(t => t.name.toLowerCase().includes('суд') || t.name.toLowerCase().includes('исполнительная') || t.name.toLowerCase().includes('прокуратура') || t.name.toLowerCase().includes('следственный'))
+                  .map(t => t.id);
+                return judicialSenderTypes;
+              },
+              operator: 'in' as const
+            },
+            placeholder: 'Введите наименование суда'
+          },
+          {
+            name: 'caseNumber',
+            label: 'Номер дела',
+            type: 'text' as const,
+            condition: {
+              field: 'senderTypeId',
+              value: () => {
+                const judicialSenderTypes = state.senderTypes
+                  .filter(t => t.name.toLowerCase().includes('суд') || t.name.toLowerCase().includes('исполнительная') || t.name.toLowerCase().includes('прокуратура') || t.name.toLowerCase().includes('следственный'))
+                  .map(t => t.id);
+                return judicialSenderTypes;
+              },
+              operator: 'in' as const
+            },
+            placeholder: 'Введите номер дела'
+          },
+          {
+            name: 'judgeName',
+            label: 'ФИО судьи/должностного лица',
+            type: 'text' as const,
+            condition: {
+              field: 'senderTypeId',
+              value: () => {
+                const judicialSenderTypes = state.senderTypes
+                  .filter(t => t.name.toLowerCase().includes('суд') || t.name.toLowerCase().includes('исполнительная') || t.name.toLowerCase().includes('прокуратура') || t.name.toLowerCase().includes('следственный'))
+                  .map(t => t.id);
+                return judicialSenderTypes;
+              },
+              operator: 'in' as const
+            },
+            placeholder: 'Введите ФИО судьи или должностного лица'
+          },
+          {
+            name: 'companyINN',
+            label: 'ИНН организации',
+            type: 'text' as const,
+            condition: {
+              field: 'senderTypeId',
+              value: () => {
+                const companySenderTypes = state.senderTypes
+                  .filter(t => t.name.toLowerCase().includes('организаци') || t.name.toLowerCase().includes('компани') || t.name.toLowerCase().includes('общество') || t.name.toLowerCase().includes('ооо') || t.name.toLowerCase().includes('ао') || t.name.toLowerCase().includes('зао'))
+                  .map(t => t.id);
+                return companySenderTypes;
+              },
+              operator: 'in' as const
+            },
+            placeholder: 'Введите ИНН организации'
+          },
+          {
+            name: 'companyOGRN',
+            label: 'ОГРН',
+            type: 'text' as const,
+            condition: {
+              field: 'senderTypeId',
+              value: () => {
+                const companySenderTypes = state.senderTypes
+                  .filter(t => t.name.toLowerCase().includes('организаци') || t.name.toLowerCase().includes('компани') || t.name.toLowerCase().includes('общество') || t.name.toLowerCase().includes('ооо') || t.name.toLowerCase().includes('ао') || t.name.toLowerCase().includes('зао'))
+                  .map(t => t.id);
+                return companySenderTypes;
+              },
+              operator: 'in' as const
+            },
+            placeholder: 'Введите ОГРН'
+          },
+          {
+            name: 'companyAddress',
+            label: 'Юридический адрес',
+            type: 'text' as const,
+            condition: {
+              field: 'senderTypeId',
+              value: () => {
+                const companySenderTypes = state.senderTypes
+                  .filter(t => t.name.toLowerCase().includes('организаци') || t.name.toLowerCase().includes('компани') || t.name.toLowerCase().includes('общество') || t.name.toLowerCase().includes('ооо') || t.name.toLowerCase().includes('ао') || t.name.toLowerCase().includes('зао'))
+                  .map(t => t.id);
+                return companySenderTypes;
+              },
+              operator: 'in' as const
+            },
+            placeholder: 'Введите юридический адрес'
+          },
+          {
+            name: 'personPassport',
+            label: 'Серия и номер паспорта',
+            type: 'text' as const,
+            condition: {
+              field: 'senderTypeId',
+              value: () => {
+                const personSenderTypes = state.senderTypes
+                  .filter(t => t.name.toLowerCase().includes('физическо') || t.name.toLowerCase().includes('гражданин') || t.name.toLowerCase().includes('лицо'))
+                  .map(t => t.id);
+                return personSenderTypes;
+              },
+              operator: 'in' as const
+            },
+            placeholder: 'Введите серию и номер паспорта'
+          },
+          {
+            name: 'personAddress',
+            label: 'Адрес регистрации',
+            type: 'text' as const,
+            condition: {
+              field: 'senderTypeId',
+              value: () => {
+                const personSenderTypes = state.senderTypes
+                  .filter(t => t.name.toLowerCase().includes('физическо') || t.name.toLowerCase().includes('гражданин') || t.name.toLowerCase().includes('лицо'))
+                  .map(t => t.id);
+                return personSenderTypes;
+              },
+              operator: 'in' as const
+            },
+            placeholder: 'Введите адрес регистрации'
+          },
+          {
+            name: 'governmentBody',
+            label: 'Наименование органа',
+            type: 'text' as const,
+            condition: {
+              field: 'senderTypeId',
+              value: () => {
+                const governmentSenderTypes = state.senderTypes
+                  .filter(t => t.name.toLowerCase().includes('орган') || t.name.toLowerCase().includes('управление') || t.name.toLowerCase().includes('департамент') || t.name.toLowerCase().includes('министерство') || t.name.toLowerCase().includes('служба') || t.name.toLowerCase().includes('агентство'))
+                  .map(t => t.id);
+                return governmentSenderTypes;
+              },
+              operator: 'in' as const
+            },
+            placeholder: 'Введите наименование государственного органа'
+          },
+          {
+            name: 'governmentNumber',
+            label: 'Исходящий номер',
+            type: 'text' as const,
+            condition: {
+              field: 'senderTypeId',
+              value: () => {
+                const governmentSenderTypes = state.senderTypes
+                  .filter(t => t.name.toLowerCase().includes('орган') || t.name.toLowerCase().includes('управление') || t.name.toLowerCase().includes('департамент') || t.name.toLowerCase().includes('министерство') || t.name.toLowerCase().includes('служба') || t.name.toLowerCase().includes('агентство'))
+                  .map(t => t.id);
+                return governmentSenderTypes;
+              },
+              operator: 'in' as const
+            },
+            placeholder: 'Введите исходящий номер документа'
+          }
+        ]
       }
     ],
     initialValues: DEFAULT_CORRESPONDENCE_FORM,
-  }), [userOptions, senderTypeOptions, documentTypeOptions, state.senderTypes, state.senderNames, fetchData]);
+  };
+  }, [userOptions, senderTypeOptions, documentTypeOptions, state.senderTypes, state.senderNames, fetchData]);
 
 
 

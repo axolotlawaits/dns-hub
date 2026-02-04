@@ -14,17 +14,15 @@ import {
   Stack,
   Alert,
   Text,
-  Grid,
   ScrollArea,
-  Divider,
   Box
 } from '@mantine/core';
-import { IconEdit, IconTrash, IconPlus, IconAlertCircle, IconTags, IconFolder, IconChevronRight, IconChevronDown, IconArrowsSort, IconX } from '@tabler/icons-react';
+import { IconEdit, IconTrash, IconPlus, IconAlertCircle, IconTags, IconFolder, IconChevronRight, IconChevronDown, IconArrowsSort } from '@tabler/icons-react';
 import { DynamicFormModal } from '../../../utils/formModal';
 import { FilterGroup } from '../../../utils/filter';
 import useAuthFetch from '../../../hooks/useAuthFetch';
 import { API } from '../../../config/constants';
-import { buildTree, flattenTree, getAllDescendantIds } from '../../../utils/hierarchy';
+import { buildTree, flattenTree } from '../../../utils/hierarchy';
 import { UniversalHierarchySortModal } from '../../../utils/UniversalHierarchySortModal';
 import { UniversalHierarchy, HierarchyItem } from '../../../utils/UniversalHierarchy';
 import { CustomModal } from '../../../utils/CustomModal';
@@ -62,7 +60,6 @@ export default function TypesManagement() {
   const [modalOpened, setModalOpened] = useState(false);
   const [deleteModalOpened, setDeleteModalOpened] = useState(false);
   const [selectedType, setSelectedType] = useState<Type | null>(null);
-  const [selectedTypeForChildren, setSelectedTypeForChildren] = useState<Type | null>(null); // Для просмотра дочерних элементов
   const [selectedToolId, setSelectedToolId] = useState<string | null>(null);
   const [selectedChapter, setSelectedChapter] = useState<string | null>(null);
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
@@ -126,42 +123,21 @@ export default function TypesManagement() {
     setDeleteModalOpened(true);
   };
 
-  const handleEditChapter = (toolId: string, chapterName: string) => {
-    // Находим первый тип в разделе для редактирования
-    const chapterTypes = types.filter(t => 
-      t.model_uuid === toolId && 
-      (t.chapter || 'Без раздела') === chapterName
-    );
-    if (chapterTypes.length > 0) {
-      handleEdit(chapterTypes[0]);
-    }
-  };
-
-  const handleDeleteChapter = (toolId: string, chapterName: string) => {
-    // Находим все типы в разделе
-    const chapterTypes = types.filter(t => 
-      t.model_uuid === toolId && 
-      (t.chapter || 'Без раздела') === chapterName
-    );
-    if (chapterTypes.length > 0) {
-      // Устанавливаем первый тип для показа модального окна
-      // В модальном окне будет информация о количестве типов для удаления
-      setSelectedType(chapterTypes[0]);
-      setDeleteModalOpened(true);
-    }
-  };
-
   const handleSave = async (formData: any) => {
     try {
       setError(null);
+      
+      // Add chapter from context
       const data = {
         ...formData,
-        parent_type: formData.parent_type || null,
-        // sortOrder автоматически вычисляется триггером в БД
+        chapter: selectedType?.chapter || '',
+        // If creating a child (selectedType exists but has no ID or empty ID), use selectedType.id as parent_type
+        parent_type: selectedType && (!selectedType.id || selectedType.id === '') ? selectedType.parent_type : formData.parent_type || null,
+        // sortOrder is automatically calculated by the database
       };
       
-      if (selectedType) {
-        // Обновление
+      if (selectedType && selectedType.id) {
+        // Update existing type
         const response = await authFetch(`${API}/type/${selectedType.id}`, {
           method: 'PATCH',
           body: JSON.stringify(data),
@@ -174,7 +150,7 @@ export default function TypesManagement() {
           setError(errorData?.error || errorData?.errors?.[0]?.message || 'Ошибка обновления типа');
         }
       } else {
-        // Создание
+        // Create new type
         const response = await authFetch(`${API}/type`, {
           method: 'POST',
           body: JSON.stringify(data),
@@ -189,7 +165,7 @@ export default function TypesManagement() {
       }
     } catch (error) {
       console.error('Error saving type:', error);
-      setError('Ошибка сохранения типа');
+      setError(error instanceof Error ? error.message : 'Ошибка сохранения типа');
     }
   };
 
@@ -294,58 +270,88 @@ export default function TypesManagement() {
       });
   }, [types, selectedType, selectedToolId, selectedChapter]);
 
-  const formFields = useMemo(() => [
-    {
-      name: 'model_uuid',
-      label: 'Инструмент (Tool)',
-      type: 'select' as const,
-      required: true,
-      options: tools.map(tool => ({ value: tool.id, label: tool.name })),
-    },
-    {
-      name: 'chapter',
-      label: 'Раздел (Chapter)',
-      type: 'text' as const,
-      required: true,
-    },
-    {
-      name: 'parent_type',
-      label: 'Родительский тип',
-      type: 'select' as const,
-      required: false,
-      options: [
-        { value: '', label: 'Нет (корневой тип)' },
-        ...parentTypeOptions.map(opt => ({
-          value: opt.value,
-          label: opt.parent 
-            ? `  └─ ${opt.label}` 
-            : opt.label
-        }))
-      ],
-    },
-    {
-      name: 'name',
-      label: 'Название',
-      type: 'text' as const,
-      required: true,
-    },
-    {
-      name: 'colorHex',
-      label: 'Цвет (HEX)',
-      type: 'text' as const,
-      required: false,
-      placeholder: '#000000',
-    },
-  ], [tools, parentTypeOptions]);
+  const formFields = useMemo(() => {
+    const isCreatingChild = selectedType && !selectedType.id;
+    const isEditing = selectedType && selectedType.id;
+    
+    const fields = [];
 
-  const initialValues = useMemo(() => selectedType ? {
-    model_uuid: selectedType.model_uuid,
-    chapter: selectedType.chapter,
-    parent_type: selectedType.parent_type || '',
-    name: selectedType.name,
-    colorHex: selectedType.colorHex || '',
-    sortOrder: selectedType.sortOrder || 0,
-  } : undefined, [selectedType]);
+    // Добавляем tool только при создании нового типа или редактировании
+    if (!isCreatingChild || isEditing) {
+      fields.push(
+        {
+          name: 'model_uuid',
+          label: 'Инструмент (Tool)',
+          type: 'select' as const,
+          required: true,
+          options: tools.map(tool => ({ value: tool.id, label: tool.name })),
+          disabled: isCreatingChild || isEditing ? true : undefined, // Блокируем при редактировании
+        }
+      );
+    }
+
+    // Добавляем parent_type только если не создаем дочерний элемент (тогда он уже установлен)
+    if (!isCreatingChild) {
+      fields.push({
+        name: 'parent_type',
+        label: 'Родительский тип',
+        type: 'select' as const,
+        required: false,
+        options: [
+          { value: '', label: 'Нет (корневой тип)' },
+          ...parentTypeOptions.map(opt => ({
+            value: opt.value,
+            label: opt.parent 
+              ? `  └─ ${opt.label}` 
+              : opt.label
+          }))
+        ],
+      });
+    }
+
+    // Всегда добавляем основные поля
+    fields.push(
+      {
+        name: 'name',
+        label: 'Название',
+        type: 'text' as const,
+        required: true,
+      },
+      {
+        name: 'colorHex',
+        label: 'Цвет (HEX)',
+        type: 'text' as const,
+        required: false,
+        placeholder: '#000000',
+      }
+    );
+
+    return fields;
+  }, [tools, parentTypeOptions, selectedType]);
+
+  const initialValues = useMemo(() => {
+    if (!selectedType) return undefined;
+    
+    // If creating a child (no ID), set parent_type to the parent's ID
+    if (!selectedType.id) {
+      return {
+        model_uuid: selectedType.model_uuid,
+        parent_type: selectedType.id, // Set parent_type to the parent's ID
+        name: '',
+        colorHex: '',
+        sortOrder: 0,
+      };
+    }
+    
+    // If editing an existing type
+    return {
+      model_uuid: selectedType.model_uuid,
+      parent_type: selectedType.parent_type || '',
+      name: selectedType.name,
+      colorHex: selectedType.colorHex || '',
+      sortOrder: selectedType.sortOrder || 0,
+    };
+  }, [selectedType]);
 
   // Получаем значения фильтров
   const chapterFilter = columnFilters.find(f => f.id === 'chapter')?.value as string[] || [];
@@ -390,77 +396,64 @@ export default function TypesManagement() {
   // Получаем типы выбранного раздела с иерархией (плоский список для UniversalHierarchy)
   const selectedChapterTypesFlat = useMemo(() => {
     if (!selectedToolId || !selectedChapter) return [];
-    const filtered = types.filter(type => 
-      type.model_uuid === selectedToolId && 
+    
+    // Получаем все типы из выбранного инструмента
+    const toolTypes = types.filter(type => type.model_uuid === selectedToolId);
+    
+    // Находим корневые элементы из выбранного раздела
+    const rootTypes = toolTypes.filter(type => 
       (type.chapter || 'Без раздела') === selectedChapter
     );
-    const filteredTypes = applyFilters(filtered);
-    return flattenTree(buildTree(filteredTypes, {
-      parentField: 'parent_type',
-      sortField: 'sortOrder',
-      nameField: 'name',
-      childrenField: 'children'
-    }), {
+    
+    // Получаем все ID корневых элементов
+    const rootIds = new Set(rootTypes.map(t => t.id));
+    
+    // Получаем все дочерние элементы корневых типов (рекурсивно)
+    const getAllDescendants = (parentId: string): Set<string> => {
+      const descendants = new Set<string>();
+      // Ищем детей среди ВСЕХ типов инструмента, не только корневых
+      const directChildren = toolTypes.filter(t => t.parent_type === parentId);
+      
+      directChildren.forEach(child => {
+        descendants.add(child.id);
+        const childDescendants = getAllDescendants(child.id);
+        childDescendants.forEach(id => descendants.add(id));
+      });
+      
+      return descendants;
+    };
+    
+    // Собираем все ID корневых элементов и их потомков
+    const allIds = new Set(rootIds);
+    rootIds.forEach(rootId => {
+      const descendants = getAllDescendants(rootId);
+      descendants.forEach(id => allIds.add(id));
+    });
+    
+    // Получаем все элементы по ID
+    const allElements = toolTypes.filter(type => allIds.has(type.id));
+    
+    // Применяем текстовые фильтры
+    const filteredTypes = applyFilters(allElements);
+    
+    // Строим иерархию
+    const tree = buildTree(filteredTypes, {
       parentField: 'parent_type',
       sortField: 'sortOrder',
       nameField: 'name',
       childrenField: 'children'
     });
+    
+    // Разворачиваем дерево для UniversalHierarchy
+    const result = flattenTree(tree, {
+      parentField: 'parent_type',
+      sortField: 'sortOrder',
+      nameField: 'name',
+      childrenField: 'children'
+    });
+    
+    return result;
   }, [types, selectedToolId, selectedChapter, chapterFilter, nameFilter]);
-
-  // Получаем все дочерние элементы выбранного типа рекурсивно (плоский список для UniversalHierarchy)
-  const selectedTypeChildrenFlat = useMemo(() => {
-    if (!selectedTypeForChildren) return [];
-    
-    // Получаем все ID потомков рекурсивно
-    const descendantIds = getAllDescendantIds(types, selectedTypeForChildren.id, {
-      parentField: 'parent_type'
-    });
-    
-    // Добавляем прямых детей
-    const directChildrenIds = types
-      .filter(type => type.parent_type === selectedTypeForChildren.id)
-      .map(type => type.id);
-    
-    // Объединяем и получаем уникальные ID
-    const allChildrenIds = new Set([...directChildrenIds, ...descendantIds]);
-    
-    // Получаем все дочерние элементы
-    const children = types.filter(type => allChildrenIds.has(type.id));
-    
-    // Строим дерево и разворачиваем его
-    return flattenTree(buildTree(children, {
-      parentField: 'parent_type',
-      sortField: 'sortOrder',
-      nameField: 'name',
-      childrenField: 'children'
-    }), {
-      parentField: 'parent_type',
-      sortField: 'sortOrder',
-      nameField: 'name',
-      childrenField: 'children'
-    });
-  }, [types, selectedTypeForChildren]);
-
-  // Получаем все типы в плоском виде для UniversalHierarchy (чтобы дочерние элементы могли быть найдены)
-  const allTypesFlat = useMemo(() => {
-    const filtered = applyFilters(types.filter(type => 
-      type.model_uuid === selectedToolId && 
-      (type.chapter || 'Без раздела') === selectedChapter
-    ));
-    const tree = buildTree(filtered, {
-      parentField: 'parent_type',
-      sortField: 'sortOrder',
-      nameField: 'name',
-      childrenField: 'children'
-    });
-    return flattenTree(tree, {
-      parentField: 'parent_type',
-      sortField: 'sortOrder',
-      nameField: 'name',
-      childrenField: 'children'
-    });
-  }, [types, selectedToolId, selectedChapter, applyFilters]);
 
   const handleColumnFiltersChange = (columnId: string, value: any) => {
     setColumnFilters(prev => {
@@ -511,10 +504,10 @@ export default function TypesManagement() {
         </Group>
 
         {/* Две колонки: инструменты и типы */}
-        <Grid gutter="md">
+        <Group gap="md" style={{ width: '100%', height: 'calc(100vh - 300px)' }}>
           {/* Левая колонка: Инструменты */}
-          <Grid.Col span={4}>
-            <Paper shadow="sm" p="md" radius="md" withBorder h="calc(100vh - 300px)">
+          <Box style={{ width: '30%', height: '100%' }}>
+            <Paper shadow="sm" p="md" radius="md" withBorder h="100%">
               <Stack gap="md" h="100%">
                 <Group justify="space-between">
                   <Title order={4}>Инструменты</Title>
@@ -613,33 +606,7 @@ export default function TypesManagement() {
                                               {chapter.name}
                                             </Text>
                                           </Group>
-                                          <Group gap={4} onClick={(e) => e.stopPropagation()}>
-                                            <Tooltip label="Редактировать все типы раздела">
-                                              <ActionIcon
-                                                variant="subtle"
-                                                color="blue"
-                                                size="sm"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  handleEditChapter(tool.id, chapter.name);
-                                                }}
-                                              >
-                                                <IconEdit size={14} />
-                                              </ActionIcon>
-                                            </Tooltip>
-                                            <Tooltip label="Удалить все типы раздела">
-                                              <ActionIcon
-                                                variant="subtle"
-                                                color="red"
-                                                size="sm"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  handleDeleteChapter(tool.id, chapter.name);
-                                                }}
-                                              >
-                                                <IconTrash size={14} />
-                                              </ActionIcon>
-                                            </Tooltip>
+                                          <Group gap="xs" onClick={(e) => e.stopPropagation()}>
                                           </Group>
                                         </Group>
                                       </Table.Td>
@@ -661,16 +628,11 @@ export default function TypesManagement() {
                 )}
               </Stack>
             </Paper>
-          </Grid.Col>
+          </Box>
 
-          {/* Разделитель */}
-          <Grid.Col span={0.5}>
-            <Divider orientation="vertical" />
-          </Grid.Col>
-
-          {/* Правая колонка: Типы выбранного инструмента или дочерние элементы */}
-          <Grid.Col span={selectedTypeForChildren ? 3.5 : 7.5}>
-            <Paper shadow="sm" p="md" radius="md" withBorder h="calc(100vh - 300px)">
+          {/* Правая колонка: Типы выбранного инструмента */}
+          <Box style={{ flex: 1, height: '100%' }}>
+            <Paper shadow="sm" p="md" radius="md" withBorder h="100%">
               <Stack gap="md" h="100%">
                 <Group justify="space-between">
                   <Title order={4}>
@@ -744,65 +706,52 @@ export default function TypesManagement() {
                         initialData: selectedChapterTypesFlat,
                         parentField: 'parent_type',
                         nameField: 'name',
-                        renderItem: (item: HierarchyItem, isSelected: boolean, hasChildren: boolean) => {
+                        renderItem: (item: HierarchyItem, _isSelected: boolean, _hasChildren: boolean) => {
                           const type = item as Type;
-                          const parentType = types.find(t => t.id === type.parent_type);
+                          const nestingLevel = item.nestingLevel || 0;
+                          const indent = nestingLevel * 20; // 20px на каждый уровень
+                          
                           return (
-                            <Group gap="xs" style={{ width: '100%' }}>
-                              {hasChildren ? (
-                                <IconFolder 
-                                  size={18} 
-                                  style={{ 
-                                    opacity: 0.8, 
-                                    color: type.colorHex || 'var(--mantine-color-blue-6)',
-                                    flexShrink: 0
-                                  }} 
-                                />
-                              ) : (
-                                <IconTags size={16} style={{ opacity: 0.6, flexShrink: 0 }} />
-                              )}
-                              <Text 
-                                fw={isSelected ? 600 : 400}
-                                c={type.colorHex || (isSelected ? undefined : 'dimmed')}
-                                size="sm"
-                                style={{ flex: 1 }}
-                              >
-                                {type.name}
-                              </Text>
-                              {parentType && (
-                                <Badge 
-                                  variant="light" 
-                                  size="xs"
-                                  style={{ 
-                                    backgroundColor: parentType.colorHex 
-                                      ? `${parentType.colorHex}20` 
-                                      : undefined 
-                                  }}
-                                >
-                                  {parentType.name}
-                                </Badge>
-                              )}
-                              {type.colorHex && (
-                                <Badge
-                                  size="xs"
-                                  style={{ 
-                                    backgroundColor: type.colorHex,
-                                    color: '#fff',
-                                    border: 'none'
-                                  }}
-                                >
-                                  {type.colorHex}
-                                </Badge>
-                              )}
-                              <Group gap="xs" onClick={(e) => e.stopPropagation()}>
+                            <Group gap="xs" style={{ width: '100%', paddingLeft: `${indent}px` }}>
+                              <IconFolder 
+                                size={16} 
+                                style={{ 
+                                  color: type.colorHex || undefined,
+                                  minWidth: 16
+                                }} 
+                              />
+                              <Text style={{ flex: 1 }}>{type.name}</Text>
+                              <Group gap="xs">
                                 <Tooltip label="Редактировать">
                                   <ActionIcon
                                     variant="light"
-                                    color="blue"
                                     size="sm"
                                     onClick={() => handleEdit(type)}
                                   >
                                     <IconEdit size={16} />
+                                  </ActionIcon>
+                                </Tooltip>
+                                <Tooltip label="Добавить дочерний элемент">
+                                  <ActionIcon
+                                    variant="light"
+                                    color="green"
+                                    size="sm"
+                                    onClick={() => {
+                                      // Устанавливаем родителя для нового элемента
+                                      setSelectedType({
+                                        id: '',
+                                        model_uuid: type.model_uuid,
+                                        chapter: type.chapter,
+                                        parent_type: type.id,
+                                        name: '',
+                                        colorHex: '',
+                                        sortOrder: 0,
+                                        Tool: type.Tool
+                                      });
+                                      setModalOpened(true);
+                                    }}
+                                  >
+                                    <IconPlus size={16} />
                                   </ActionIcon>
                                 </Tooltip>
                                 <Tooltip label="Удалить">
@@ -815,28 +764,9 @@ export default function TypesManagement() {
                                     <IconTrash size={16} />
                                   </ActionIcon>
                                 </Tooltip>
-                                {hasChildren && (
-                                  <Tooltip label="Показать дочерние элементы">
-                                    <ActionIcon
-                                      variant="light"
-                                      color="gray"
-                                      size="sm"
-                                      onClick={() => setSelectedTypeForChildren(type)}
-                                    >
-                                      <IconFolder size={16} />
-                                    </ActionIcon>
-                                  </Tooltip>
-                                )}
                               </Group>
                             </Group>
                           );
-                        },
-                        onItemSelect: (item) => {
-                          const type = item as Type;
-                          const hasChildren = types.some(t => t.parent_type === type.id);
-                          if (hasChildren) {
-                            setSelectedTypeForChildren(type);
-                          }
                         },
                         onDataUpdate: () => {
                           fetchTypes();
@@ -848,136 +778,8 @@ export default function TypesManagement() {
                 )}
               </Stack>
             </Paper>
-          </Grid.Col>
-
-          {/* Колонка дочерних элементов (если выбран тип с детьми) */}
-          {selectedTypeForChildren && (
-            <>
-              <Grid.Col span={0.5}>
-                <Divider orientation="vertical" />
-              </Grid.Col>
-              <Grid.Col span={3.5}>
-                <Paper shadow="sm" p="md" radius="md" withBorder h="calc(100vh - 300px)">
-                  <Stack gap="md" h="100%">
-                    <Group justify="space-between">
-                      <Title order={4}>
-                        Дочерние элементы
-                        <Text span c="dimmed" size="sm" fw={400}>
-                          {' '}({selectedTypeForChildren.name})
-                        </Text>
-                      </Title>
-                      <Group gap="xs">
-                        <Badge variant="light">{selectedTypeChildrenFlat.length}</Badge>
-                        <ActionIcon
-                          variant="subtle"
-                          color="gray"
-                          onClick={() => setSelectedTypeForChildren(null)}
-                        >
-                          <IconX size={16} />
-                        </ActionIcon>
-                      </Group>
-                    </Group>
-                    {selectedTypeChildrenFlat.length === 0 ? (
-                      <Box
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          height: '100%',
-                          flexDirection: 'column',
-                          gap: 16,
-                        }}
-                      >
-                        <IconFolder size={48} style={{ color: 'var(--mantine-color-dimmed)' }} />
-                        <Text c="dimmed">У этого типа нет дочерних элементов</Text>
-                      </Box>
-                    ) : (
-                      <ScrollArea h="100%">
-                        <UniversalHierarchy
-                          config={{
-                            initialData: allTypesFlat,
-                            parentField: 'parent_type',
-                            nameField: 'name',
-                            rootFilter: (item) => {
-                              // Показываем только прямых дочерних элементов выбранного типа
-                              // UniversalHierarchy сам найдет и отобразит их потомков рекурсивно
-                              return item['parent_type'] === selectedTypeForChildren.id;
-                            },
-                            renderItem: (item: HierarchyItem, isSelected: boolean, hasChildren: boolean) => {
-                              const type = item as Type;
-                              return (
-                                <Group gap="xs" style={{ width: '100%' }}>
-                                  {hasChildren ? (
-                                    <IconFolder 
-                                      size={18} 
-                                      style={{ 
-                                        opacity: 0.8, 
-                                        color: type.colorHex || 'var(--mantine-color-blue-6)',
-                                        flexShrink: 0
-                                      }} 
-                                    />
-                                  ) : (
-                                    <IconTags size={16} style={{ opacity: 0.6, flexShrink: 0 }} />
-                                  )}
-                                  <Text 
-                                    fw={isSelected ? 600 : 400}
-                                    c={type.colorHex || (isSelected ? undefined : 'dimmed')}
-                                    size="sm"
-                                    style={{ flex: 1 }}
-                                  >
-                                    {type.name}
-                                  </Text>
-                                  {type.colorHex && (
-                                    <Badge
-                                      size="xs"
-                                      style={{ 
-                                        backgroundColor: type.colorHex,
-                                        color: '#fff',
-                                        border: 'none'
-                                      }}
-                                    >
-                                      {type.colorHex}
-                                    </Badge>
-                                  )}
-                                  <Group gap="xs" onClick={(e) => e.stopPropagation()}>
-                                    <Tooltip label="Редактировать">
-                                      <ActionIcon
-                                        variant="light"
-                                        color="blue"
-                                        size="sm"
-                                        onClick={() => handleEdit(type)}
-                                      >
-                                        <IconEdit size={16} />
-                                      </ActionIcon>
-                                    </Tooltip>
-                                    <Tooltip label="Удалить">
-                                      <ActionIcon
-                                        variant="light"
-                                        color="red"
-                                        size="sm"
-                                        onClick={() => handleDelete(type)}
-                                      >
-                                        <IconTrash size={16} />
-                                      </ActionIcon>
-                                    </Tooltip>
-                                  </Group>
-                                </Group>
-                              );
-                            },
-                            onDataUpdate: () => {
-                              fetchTypes();
-                            }
-                          }}
-                          hasFullAccess={true}
-                        />
-                      </ScrollArea>
-                    )}
-                  </Stack>
-                </Paper>
-              </Grid.Col>
-            </>
-          )}
-        </Grid>
+          </Box>
+        </Group>
 
         <DynamicFormModal
           opened={modalOpened}

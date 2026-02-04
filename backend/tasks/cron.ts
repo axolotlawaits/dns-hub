@@ -195,4 +195,59 @@ export const initToolsCron = () => {
     }
   });
 
+  // Удаление неактивных радиоустройств: ежедневно в 03:00
+  // Удаляем устройства, которые не выходили на связь больше месяца
+  schedule.scheduleJob('0 3 * * *', async () => {
+    try {
+      const now = new Date();
+      const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); // 30 дней назад
+      
+      // Находим устройства, которые не были замечены больше месяца
+      const inactiveDevices = await withDbRetry(() =>
+        prisma.devices.findMany({
+          where: {
+            lastSeen: {
+              lt: oneMonthAgo
+            }
+          },
+          select: {
+            id: true,
+            name: true,
+            number: true,
+            branch: {
+              select: {
+                name: true
+              }
+            }
+          }
+        }),
+        { logPrefix: '[Radio]' }
+      );
+
+      if (inactiveDevices.length > 0) {
+        console.log(`[Radio] Found ${inactiveDevices.length} inactive devices to delete`);
+        
+        // Удаляем неактивные устройства
+        const deleted = await withDbRetry(() =>
+          prisma.devices.deleteMany({
+            where: {
+              id: { in: inactiveDevices.map(d => d.id) }
+            }
+          }),
+          { logPrefix: '[Radio]' }
+        );
+        
+        console.log(`[Radio] Successfully deleted ${deleted.count} inactive devices`);
+      } else {
+        console.log('[Radio] No inactive devices found for cleanup');
+      }
+    } catch (e: unknown) {
+      if (isP1001(e)) {
+        console.error('[Radio] Inactive device cleanup skipped: database unreachable (P1001). Check connectivity to DB. Will retry tomorrow.');
+      } else {
+        console.error('[Radio] Inactive device cleanup error', e);
+      }
+    }
+  });
+
 }

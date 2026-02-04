@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import {Container,Title,Paper,Text,Button,Group,Stack,Modal,LoadingOverlay, Tabs, Box, Progress, Badge, TextInput, Select, SimpleGrid, ActionIcon, Loader} from '@mantine/core';
 import { TimeInput } from '@mantine/dates';
-import {  IconUpload,  IconMusic,  IconClock,  IconDeviceMobile,  IconBuilding, IconEdit, IconCheck, IconRefresh, IconPower, IconBattery, IconWifi, IconCalendar, IconPlayerPlay, IconPlayerPause, IconWifiOff, IconX, IconRadio, IconDownload, IconAlertCircle, IconChevronDown, IconChevronRight, IconChevronsDown, IconChevronsUp, IconSearch, IconTrash, IconQrcode, IconLayoutDashboard, IconFilter, IconPlus } from '@tabler/icons-react';
+import {  IconUpload,  IconMusic,  IconClock,  IconDeviceMobile,  IconBuilding, IconEdit, IconCheck, IconRefresh, IconPower, IconBattery, IconWifi, IconCalendar, IconPlayerPlay, IconPlayerPause, IconWifiOff, IconX, IconRadio, IconDownload, IconAlertCircle, IconChevronDown, IconChevronRight, IconChevronsDown, IconChevronsUp, IconSearch, IconTrash, IconQrcode, IconFilter, IconPlus } from '@tabler/icons-react';
 import { notificationSystem } from '../../../utils/Push';
 import { API } from '../../../config/constants';
 import { DynamicFormModal, FormField } from '../../../utils/formModal';
@@ -14,7 +14,7 @@ import { useAccessContext } from '../../../hooks/useAccessContext';
 import { FilterGroup } from '../../../utils/filter';
 import WebRadioPlayer from './components/WebRadioPlayer';
 import QrProvisionModal from './components/QrProvisionModal';
-import RadioDashboard from './components/RadioDashboard';
+
 import './Radio.css';
 import '../../../app/styles/DesignSystem.css';
 
@@ -1597,22 +1597,6 @@ const RadioAdmin: React.FC = () => {
               <Tabs.List grow>
                 {hasFullAccess && (
                 <Tabs.Tab 
-                  value="dashboard" 
-                  leftSection={<IconLayoutDashboard size={20} />}
-                  className="radio-tab-item"
-                  style={{
-                    borderRadius: 'var(--radius-lg)',
-                    fontWeight: 'var(--font-weight-medium)',
-                    transition: 'var(--transition-all)',
-                    padding: 'var(--space-3) var(--space-4)',
-                    fontSize: 'var(--font-size-sm)'
-                  }}
-                >
-                  Дашборд
-                </Tabs.Tab>
-                )}
-                {hasFullAccess && (
-                <Tabs.Tab 
                   value="music" 
                   leftSection={<IconMusic size={20} />}
                   className="radio-tab-item"
@@ -1713,60 +1697,7 @@ const RadioAdmin: React.FC = () => {
                   borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0'
                 }} />
 
-              {/* Дашборд - только для полного доступа */}
-              {hasFullAccess && (
-              <Tabs.Panel value="dashboard">
-                <RadioDashboard
-                  stats={stats}
-                  radioStreams={radioStreams}
-                  branchesWithDevices={branchesWithDevices}
-                  statusMap={statusMap}
-                  expandedBranches={expandedBranches}
-                  onToggleBranch={toggleBranchExpansion}
-                  onExpandAll={expandAllBranches}
-                  onCollapseAll={collapseAllBranches}
-                  onCreateStream={handleCreateStream}
-                  onUploadMusic={() => setUploadModalOpen(true)}
-                  onDeviceClick={openDeviceModal}
-                  onAddDevice={() => setQrProvisionModalOpen(true)}
-                  hasFullAccess={hasFullAccess}
-                  user={user}
-                  musicStatus={musicStatus}
-                  onNavigateToTab={(tab: string, filters?: Record<string, any>) => {
-                    setActiveTab(tab);
-                    // Применяем фильтры в зависимости от вкладки
-                    if (tab === 'devices' && filters) {
-                      const newFilters: any[] = [];
-                      if (filters.status === 'offline') {
-                        // Фильтр для офлайн устройств
-                        newFilters.push({ id: 'status', value: ['offline'] });
-                      } else if (filters.allOffline) {
-                        // Фильтр для филиалов где все офлайн - устанавливаем статус офлайн
-                        newFilters.push({ id: 'status', value: ['offline'] });
-                      } else if (filters.branchId) {
-                        // Фильтр по конкретному филиалу
-                        newFilters.push({ id: 'branchId', value: [filters.branchId] });
-                      }
-                      if (newFilters.length > 0) {
-                        setDeviceColumnFilters(newFilters);
-                      }
-                    } else if (tab === 'streams' && filters) {
-                      if (filters.active === true) {
-                        setStreamFilterActive('active');
-                      } else if (filters.active === false) {
-                        setStreamFilterActive('inactive');
-                      } else if (filters.expiring) {
-                        setStreamFilterActive('active');
-                        // Можно добавить дополнительный фильтр для истекающих
-                      } else if (filters.streamId) {
-                        // Можно добавить логику для выделения конкретного потока
-                        setStreamSearchQuery('');
-                      }
-                    }
-                  }}
-                />
-              </Tabs.Panel>
-              )}
+
 
               {hasFullAccess && (
               <Tabs.Panel value="music">

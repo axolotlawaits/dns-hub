@@ -130,7 +130,7 @@ model Type {
   id                     String         @id @default(uuid())
   model_uuid             String
   chapter                String
-  name                   String
+  name                   StringP
   colorHex               String?
   parent_type            String?
   parent                 Type?          @relation("TypeHierarchy", fields: [parent_type], references: [id], onDelete: Cascade)
