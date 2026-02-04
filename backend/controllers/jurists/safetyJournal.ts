@@ -613,7 +613,7 @@ export const viewFile = async (req: Request, res: Response) => {
         'Authorization': `Bearer ${token}`
       },
       responseType: 'stream',
-      timeout: 90000 // 90 секунд таймаут для больших файлов и медленных соединений
+      timeout: 10000 // 90 секунд таймаут для больших файлов и медленных соединений
     });
     
     // Устанавливаем заголовки для просмотра файла

@@ -130,20 +130,13 @@ const dispatchNotification = async (notification: NotificationWithRelations) => 
       });
       
     } catch (error) {
-      // console.error(`[Notification] Failed to send IN_APP to ${notification.receiverId}:`, error);
+
     }
   } else {
   }
 
   // ИСПРАВЛЕНО: Включены email-уведомления для отправки по всем каналам
   if (notification.channel.includes('EMAIL')) {
-    // console.log('[Notification] EMAIL channel requested:', {
-    //   wantsEmail,
-    //   ignoreEmailSettings,
-    //   hasEmail: !!notification.receiver?.email,
-    //   receiverEmail: notification.receiver?.email,
-    //   emailServiceConfigured: emailService.isConfigured()
-    // });
     
     if (wantsEmail && notification.receiver?.email) {
       try {
@@ -155,7 +148,6 @@ const dispatchNotification = async (notification: NotificationWithRelations) => 
         } else {
         }
       } catch (error) {
-        // console.error(`[Notification] Failed to send EMAIL to ${notification.receiver.email}:`, error);
       }
     } else if (!notification.receiver?.email) {
     } else if (!wantsEmail && !ignoreEmailSettings) {
@@ -164,10 +156,6 @@ const dispatchNotification = async (notification: NotificationWithRelations) => 
   }
 
   if (notification.channel.includes('TELEGRAM')) {
-    // console.log('[Notification] TELEGRAM channel requested:', {
-    //   hasTelegramChatId: !!notification.receiver?.telegramChatId,
-    //   telegramChatId: notification.receiver?.telegramChatId
-    // });
     
     if (notification.receiver?.telegramChatId) {
       try {
@@ -176,7 +164,7 @@ const dispatchNotification = async (notification: NotificationWithRelations) => 
         } else {
         }
       } catch (error) {
-        // console.error(`[Notification] Failed to send TELEGRAM:`, error);
+        
       }
     } else {
     }
@@ -187,17 +175,6 @@ const dispatchNotification = async (notification: NotificationWithRelations) => 
 const createNotification = async (data: z.infer<typeof createNotificationSchema>) => {
   // Обрабатываем ignoreEmailSettings с дефолтным значением false
   const ignoreEmailSettings = data.ignoreEmailSettings ?? false;
-  
-  // console.log('[Notification] Creating notification:', {
-  //   type: data.type,
-  //   channels: data.channels,
-  //   title: data.title,
-  //   message: data.message.substring(0, 50) + '...',
-  //   senderId: data.senderId,
-  //   receiverId: data.receiverId,
-  //   priority: data.priority,
-  //   ignoreEmailSettings
-  // });
   
   // Сохраняем ignoreEmailSettings в action как метаданные
   const actionWithMetadata = data.action 
@@ -220,12 +197,6 @@ const createNotification = async (data: z.infer<typeof createNotificationSchema>
     },
   });
 
-  // console.log('[Notification] Notification created in DB:', {
-  //   id: notification.id,
-  //   receiverId: notification.receiverId,
-  //   channels: notification.channel
-  // });
-
   // Получаем полные данные с отношениями
   const notificationWithRelations = await prisma.notifications.findUnique({
     where: { id: notification.id },
@@ -240,22 +211,7 @@ const createNotification = async (data: z.infer<typeof createNotificationSchema>
     throw new Error(`Failed to retrieve created notification ${notification.id}`);
   }
 
-  // console.log('[Notification] Notification with relations:', {
-  //   id: notificationWithRelations.id,
-  //   receiverEmail: notificationWithRelations.receiver?.email,
-  //   receiverTelegramChatId: notificationWithRelations.receiver?.telegramChatId,
-  //   receiverName: notificationWithRelations.receiver?.name
-  // });
-
-  // ИСПРАВЛЕНО: Отправляем уведомления асинхронно, чтобы не блокировать ответ
-  // Это особенно важно для email, который может занимать время
   dispatchNotification(notificationWithRelations as NotificationWithRelations).catch((error) => {
-    // console.error('[Notification] Error dispatching notification (async):', {
-    //   notificationId: notificationWithRelations.id,
-    //   error: error?.message,
-    //   errorStack: error?.stack
-    // });
-    // Не пробрасываем ошибку - уведомление уже создано в БД
   });
   
   return notificationWithRelations;
