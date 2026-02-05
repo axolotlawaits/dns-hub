@@ -1,24 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { API } from '../config/constants';
-import { 
-  Box, 
-  Text, 
-  Group, 
-  LoadingOverlay, 
-  Badge, 
-  ThemeIcon, 
-  Avatar, 
-  ScrollArea, 
-  Alert, 
-  Card, 
-  Stack,
-  Title} from '@mantine/core';
-import { 
-  IconCalendar, 
-  IconGift, 
-  IconAlertCircle, 
-  IconClock,
-} from '@tabler/icons-react';
+import {  Box,  Text,  Group,  LoadingOverlay,  Badge,  ThemeIcon,  Avatar,  ScrollArea,  Alert,  Card,  Stack, Title} from '@mantine/core';
+import {  IconCalendar,  IconGift,  IconAlertCircle,  IconClock, } from '@tabler/icons-react';
 import { useUserContext } from '../hooks/useUserContext';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ru';
@@ -78,7 +61,6 @@ export default function Events() {
       setLoading(false);
     }
   }, [user?.email]);
-
 
 
   useEffect(() => {
@@ -296,4 +278,3 @@ export default function Events() {
     </Box>
   );
 }
-

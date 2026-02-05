@@ -32,7 +32,7 @@ const navLinks = [
     description: "Медиа портал"
   },
   {
-    href: "https://ecosystem.dns-shop.ru/stream",
+    href: "https://ecosystem.dns-shop.ru",
     icon: IconNews,
     name: "EcoSystem",
     description: "Новости компании"

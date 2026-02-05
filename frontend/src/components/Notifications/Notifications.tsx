@@ -1,24 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { 
-  Box, 
-  Text, 
-  Group, 
-  LoadingOverlay, 
-  Badge, 
-  ThemeIcon, 
-  ActionIcon, 
-  Stack, 
-  Card,
-  Button
-} from '@mantine/core';
+import {  Box,  Text,  Group,  LoadingOverlay,  Badge,  ThemeIcon,  ActionIcon,  Stack,  Card, Button } from '@mantine/core';
 import dayjs from 'dayjs';
-import { 
-  IconBell, 
-  IconAlertCircle, 
-  IconInfoCircle, 
-  IconCheck, 
-  IconX
-} from '@tabler/icons-react';
+import {  IconBell,  IconAlertCircle,  IconInfoCircle,  IconCheck,  IconX} from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
 import { useUserContext } from '../../hooks/useUserContext';
 import { API } from '../../config/constants';
@@ -107,15 +90,9 @@ function NotificationsList() {
   }, [user?.id]);
 
 
-
   useEffect(() => {
     fetchNotifications();
   }, [fetchNotifications]);
-
-  useEffect(() => {
-    // Socket functionality will be implemented later
-    // For now, we'll just show a placeholder
-  }, []);
 
   const getNotificationIcon = (type: string) => {
     const IconComponent = NOTIFICATION_ICONS[type as keyof typeof NOTIFICATION_ICONS] || IconInfoCircle;

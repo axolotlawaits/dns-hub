@@ -55,7 +55,6 @@ export default function BookmarksList() {
   ];
 
 
-
   const fetchBookmarks = useCallback(async () => {
     if (!user?.id) return;
 

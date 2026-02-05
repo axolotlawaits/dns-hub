@@ -1,28 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  ActionIcon, 
-  AppShell, 
-  Tooltip, 
-  Text, 
-  Badge,
-  Transition,
-  ScrollArea,
-  Loader,
-  Alert,
-  Button
-} from '@mantine/core';
-import { 
-  IconLayoutSidebarLeftExpand, 
-  IconLayoutSidebarRightExpand,
-  IconHome,
-  IconChevronRight,
-  IconAlertCircle,
-  IconChristmasBall
-} from '@tabler/icons-react';
+import {  ActionIcon,  AppShell,  Tooltip,  Text,  Badge, Transition, ScrollArea, Loader, Alert, Button } from '@mantine/core';
+import {  IconLayoutSidebarLeftExpand,  IconLayoutSidebarRightExpand, IconHome, IconChevronRight, IconAlertCircle, IconChristmasBall } from '@tabler/icons-react';
 import * as TablerIcons from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
 import { API } from '../config/constants';
-import { useTheme } from '../contexts/ThemeContext';
 import { useUserContext } from '../hooks/useUserContext';
 import './styles/Navigation.css';
 import { DynamicFormModal, type FormField } from '../utils/formModal';
@@ -59,7 +40,6 @@ const Navigation: React.FC<NavigationProps> = ({ navOpened, toggleNav }) => {
   const [toolsData, setToolsData] = useState<any>(null);
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
-  const { isDark } = useTheme();
   const { user } = useUserContext();
   const navigate = useNavigate();
 

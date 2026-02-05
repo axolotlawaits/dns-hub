@@ -1,22 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { 
-  Paper, 
-  Group, 
-  Text, 
-  Button, 
-  Progress, 
-  Stack, 
-  Alert,
-  ActionIcon,
-  Badge
-} from '@mantine/core';
-import { 
-  IconUpload, 
-  IconFile, 
-  IconX, 
-  IconCheck,
-  IconAlertCircle
-} from '@tabler/icons-react';
+import {  Paper,  Group,  Text,  Button,  Progress,  Stack,  Alert, ActionIcon, Badge } from '@mantine/core';
+import {  IconUpload,  IconFile,  IconX,  IconCheck, IconAlertCircle } from '@tabler/icons-react';
 import { notificationSystem } from '../utils/Push';
 
 interface FileUploadProps {

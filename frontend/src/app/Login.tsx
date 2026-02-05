@@ -1,35 +1,11 @@
-import { 
-  Button, 
-  Paper, 
-  PasswordInput, 
-  TextInput, 
-  Title, 
-  ActionIcon, 
-  Avatar, 
-  Text, 
-  Stack,
-  Card,
-  Box,
-  Container,
-  Transition,
-  Alert,
-  Divider
-} from '@mantine/core';
+import {  Button,  Paper,  PasswordInput,  TextInput,  Title,  ActionIcon,  Avatar,  Text,  Stack, Card, Box, Container, Transition, Alert, Divider } from '@mantine/core';
 import { useState, useCallback, useMemo, useEffect, memo, useRef } from 'react';
 import { useUserContext } from '../hooks/useUserContext';
 import { useNavigate } from 'react-router';
 import { API } from '../config/constants';
 import './styles/Login.css';
 import { useThemeContext } from '../hooks/useThemeContext';
-import { 
-  IconBrightnessDown, 
-  IconMoon, 
-  IconUser, 
-  IconLock, 
-  IconLogin,
-  IconArrowRight,
-  IconRefresh,
-  IconAlertCircle} from '@tabler/icons-react';
+import {  IconBrightnessDown,  IconMoon,  IconUser,  IconLock,  IconLogin, IconArrowRight, IconRefresh, IconAlertCircle} from '@tabler/icons-react';
 import { formatName } from '../utils/format';
 
 // Типы вынесены в начало для лучшей читаемости
@@ -274,12 +250,6 @@ const getContextualGradientBackground = (
   return dataUrl;
 };
 
-// Внешние API функции удалены - используем только локальные источники
-
-// Все API функции удалены
-
-// Все API функции удалены - используем только цвета фона
-
 // Функция для получения расширенного контекстного фона
 const getContextualBackground = (
   season: Season, 
@@ -433,8 +403,6 @@ const UserProfileCard = memo(({ userInfo }: { userInfo: UserInfo }) => (
     </Stack>
   </Card>
 ));
-
-// PhotoCredit удален - используем только цвета фона
 
 // Оптимизированный компонент фона с немедленным доступом к форме
 const BackgroundWrapper = memo(({ 

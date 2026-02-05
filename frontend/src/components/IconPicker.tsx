@@ -1,18 +1,5 @@
 import { useState, useMemo } from 'react';
-import {
-  Modal,
-  TextInput,
-  Button,
-  Group,
-  Stack,
-  SimpleGrid,
-  ActionIcon,
-  Text,
-  Paper,
-  Badge,
-  Pagination,
-  Box,
-} from '@mantine/core';
+import { Modal, TextInput, Button, Group, Stack, SimpleGrid, ActionIcon, Text, Paper, Badge, Pagination, Box, } from '@mantine/core';
 import * as TablerIcons from '@tabler/icons-react';
 import { IconSearch, IconX } from '@tabler/icons-react';
 
@@ -225,4 +212,3 @@ export function IconPicker({ opened, onClose, onSelect, currentIcon }: IconPicke
     </Modal>
   );
 }
-
