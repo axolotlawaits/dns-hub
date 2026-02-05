@@ -29,7 +29,7 @@ const pdfOptions = {
 };
 
 // Кеш для blob URL, чтобы не загружать один и тот же файл повторно
-const blobUrlCache = new Map<string, { blobUrl: string; timestamp: number }>();
+const blobUrlCache = new Map<string, { blobUrl: string; timestamp: number; refCount: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 минут
 const MAX_CACHE_SIZE = 50; // Максимум 50 файлов в кеше
 
@@ -39,7 +39,8 @@ const cleanupCache = () => {
   const entriesToDelete: string[] = [];
   
   for (const [key, value] of blobUrlCache.entries()) {
-    if (now - value.timestamp > CACHE_TTL) {
+    // Не удаляем активные ссылки (refCount > 0)
+    if (value.refCount <= 0 && now - value.timestamp > CACHE_TTL) {
       entriesToDelete.push(key);
       try {
         URL.revokeObjectURL(value.blobUrl);
@@ -51,11 +52,12 @@ const cleanupCache = () => {
   
   entriesToDelete.forEach(key => blobUrlCache.delete(key));
   
-  // Если кеш все еще слишком большой, удаляем самые старые
+  // Если кеш все еще слишком большой, удаляем самые старые неактивные записи
   if (blobUrlCache.size > MAX_CACHE_SIZE) {
     const sortedEntries = Array.from(blobUrlCache.entries())
+      .filter(([_, value]) => value.refCount <= 0) // Только неактивные
       .sort((a, b) => a[1].timestamp - b[1].timestamp);
-    const toRemove = sortedEntries.slice(0, blobUrlCache.size - MAX_CACHE_SIZE);
+    const toRemove = sortedEntries.slice(0, Math.min(sortedEntries.length, blobUrlCache.size - MAX_CACHE_SIZE));
     toRemove.forEach(([key, value]) => {
       blobUrlCache.delete(key);
       try {
@@ -64,6 +66,37 @@ const cleanupCache = () => {
         // Игнорируем ошибки очистки
       }
     });
+  }
+};
+
+// Увеличиваем счетчик ссылок для blob URL
+const incrementRefCount = (url: string) => {
+  if (blobUrlCache.has(url)) {
+    const entry = blobUrlCache.get(url)!;
+    entry.refCount += 1;
+  }
+};
+
+// Уменьшаем счетчик ссылок для blob URL
+const decrementRefCount = (url: string) => {
+  if (blobUrlCache.has(url)) {
+    const entry = blobUrlCache.get(url)!;
+    entry.refCount -= 1;
+    // Если счетчик стал 0, планируем удаление через таймаут
+    if (entry.refCount <= 0) {
+      entry.refCount = 0; // Защита от отрицательных значений
+      // Планируем очистку через 1 секунду, чтобы дать время другим компонентам
+      setTimeout(() => {
+        if (entry.refCount <= 0) {
+          try {
+            URL.revokeObjectURL(entry.blobUrl);
+            blobUrlCache.delete(url);
+          } catch (e) {
+            // Игнорируем ошибки
+          }
+        }
+      }, 1000);
+    }
   }
 };
 
@@ -95,7 +128,15 @@ const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: 
     const [error, setError] = useState(false);
 
     useEffect(() => {
-      if (!src || src.trim() === '') return;
+      // Сброс состояния при изменении src
+      setBlobUrl(null);
+      setLoading(true);
+      setError(false);
+      
+      if (!src || src.trim() === '') {
+        setLoading(false);
+        return;
+      }
 
       let currentBlobUrl: string | null = null;
       let isMounted = true;
@@ -112,8 +153,10 @@ const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: 
         const cached = blobUrlCache.get(finalSrc);
         if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
           if (isMounted) {
+            incrementRefCount(cached.blobUrl);
             setBlobUrl(cached.blobUrl);
             setLoading(false);
+            setError(false);
             if (onLoad) onLoad();
           }
           return;
@@ -185,7 +228,7 @@ const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: 
             currentBlobUrl = newBlobUrl;
             
             // ИСПРАВЛЕНО: Сохраняем в кеш для повторного использования (используем finalSrc)
-            blobUrlCache.set(finalSrc, { blobUrl: newBlobUrl, timestamp: Date.now() });
+            blobUrlCache.set(finalSrc, { blobUrl: newBlobUrl, timestamp: Date.now(), refCount: 1 });
             
             if (isMounted) {
               setBlobUrl(newBlobUrl);
@@ -237,7 +280,7 @@ const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: 
                   currentBlobUrl = newBlobUrl;
                   
                   // Сохраняем в кеш (используем finalSrc)
-                  blobUrlCache.set(finalSrc, { blobUrl: newBlobUrl, timestamp: Date.now() });
+                  blobUrlCache.set(finalSrc, { blobUrl: newBlobUrl, timestamp: Date.now(), refCount: 1 });
                   
                   if (isMounted) {
                     setBlobUrl(newBlobUrl);
@@ -265,13 +308,9 @@ const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: 
           // Помечаем компонент как размонтированный
           isMounted = false;
           
-          // Очищаем blob URL, если он был создан
+          // Уменьшаем счетчик ссылок вместо немедленного удаления
           if (currentBlobUrl && currentBlobUrl.startsWith('blob:')) {
-            try {
-              URL.revokeObjectURL(currentBlobUrl);
-            } catch (error) {
-              // Игнорируем ошибки очистки
-            }
+            decrementRefCount(currentBlobUrl);
           }
         };
       } else {
@@ -285,13 +324,9 @@ const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: 
         // Помечаем компонент как размонтированный
         isMounted = false;
         
-        // Очистка при размонтировании или изменении src
+        // Уменьшаем счетчик ссылок вместо немедленного удаления
         if (currentBlobUrl && currentBlobUrl.startsWith('blob:')) {
-          try {
-            URL.revokeObjectURL(currentBlobUrl);
-          } catch (error) {
-            // Игнорируем ошибки очистки
-          }
+          decrementRefCount(currentBlobUrl);
         }
       };
     }, [src, onMimeTypeDetected, onLoad, onError]);
@@ -300,11 +335,7 @@ const AuthFileLoader = ({ src, onMimeTypeDetected, onLoad, onError, children }: 
     useEffect(() => {
       return () => {
         if (blobUrl && blobUrl.startsWith('blob:')) {
-          try {
-            URL.revokeObjectURL(blobUrl);
-          } catch (error) {
-            // Игнорируем ошибки очистки
-          }
+          decrementRefCount(blobUrl);
         }
       };
     }, [blobUrl]);
@@ -598,14 +629,18 @@ export const FilePreviewModal = ({
   }, [attachments, API]);
 
   useEffect(() => {
+    // Увеличиваем счетчик ссылок для активных thumbnail'ов
+    attachmentMeta.forEach((meta) => {
+      if (meta.previewUrl && meta.previewUrl.startsWith('blob:')) {
+        incrementRefCount(meta.previewUrl);
+      }
+    });
+    
     return () => {
+      // Уменьшаем счетчик ссылок при размонтировании
       attachmentMeta.forEach((meta) => {
-        if (meta.shouldRevoke && meta.previewUrl && meta.previewUrl.startsWith('blob:')) {
-          try {
-            URL.revokeObjectURL(meta.previewUrl);
-          } catch (error) {
-            console.warn('Failed to revoke blob URL:', error);
-          }
+        if (meta.previewUrl && meta.previewUrl.startsWith('blob:')) {
+          decrementRefCount(meta.previewUrl);
         }
       });
     };
@@ -1150,6 +1185,16 @@ export const FilePreviewModal = ({
       setCurrentIndex(initialIndex);
       setLoading(true);
       setError(false);
+    } else {
+      // При открытии модального окна сбрасываем состояние загрузки
+      setLoading(true);
+      setError(false);
+      // Небольшая задержка для правильного отображения состояния загрузки
+      setTimeout(() => {
+        if (opened) {
+          setLoading(false);
+        }
+      }, 50);
     }
   }, [opened, initialIndex]);
 
@@ -1237,6 +1282,7 @@ export const FilePreviewModal = ({
     if (!currentAttachment) return;
 
     setLoading(true);
+    setError(false);
     // Если MIME пришел извне — используем его сразу
     if (currentAttachment.mimeType) {
       setFileMimeType(currentAttachment.mimeType);
@@ -1256,6 +1302,13 @@ export const FilePreviewModal = ({
                 : currentAttachment.previewUrl || '')) // Только имя файла - используем previewUrl, если передан
         : URL.createObjectURL(currentAttachment.source));
 
+    // Небольшая задержка для плавного перехода
+    setTimeout(() => {
+      if (opened) {
+        setLoading(false);
+      }
+    }, 100);
+    
     // Получаем MIME-тип файла для правильного определения типа, только если он не был предоставлен
     if (!currentAttachment.mimeType && typeof currentAttachment.source === 'string' && computedFileUrl && computedFileUrl.startsWith('http') && !computedFileUrl.startsWith('blob:')) {
       const headers: HeadersInit = {};
@@ -1321,13 +1374,9 @@ export const FilePreviewModal = ({
     }
 
     return () => {
-      // Очистка blob URL только если это локальный файл
-      if (currentAttachment && typeof currentAttachment.source !== 'string' && computedFileUrl && computedFileUrl.startsWith('blob:')) {
-        try {
-          URL.revokeObjectURL(computedFileUrl);
-        } catch (error) {
-          console.warn('Failed to revoke blob URL:', error);
-        }
+      // Уменьшаем счетчик ссылок для blob URL
+      if (computedFileUrl && computedFileUrl.startsWith('blob:')) {
+        decrementRefCount(computedFileUrl);
       }
     };
   }, [currentAttachment, isText, API]);
@@ -1353,7 +1402,7 @@ export const FilePreviewModal = ({
               {/* ИСПРАВЛЕНО: Ленивая загрузка thumbnails - загружаем только активный файл и соседние */}
               {meta.isImage && meta.previewUrl && meta.previewUrl.trim() !== '' && 
                (isActive || Math.abs(index - currentIndex) <= 2) && (
-                <AuthFileLoader src={meta.previewUrl}>
+                <AuthFileLoader key={`thumb-${index}-${meta.previewUrl}`} src={meta.previewUrl}>
                   {(blobUrl: string) => {
                     if (!blobUrl || blobUrl.trim() === '') {
                       return <FileIcon size={24} />;
@@ -1372,7 +1421,7 @@ export const FilePreviewModal = ({
               {/* ИСПРАВЛЕНО: Ленивая загрузка thumbnails для видео */}
               {meta.isVideo && meta.previewUrl && meta.previewUrl.trim() !== '' && 
                (isActive || Math.abs(index - currentIndex) <= 2) && (
-                <AuthFileLoader src={meta.previewUrl}>
+                <AuthFileLoader key={`thumb-${index}-${meta.previewUrl}`} src={meta.previewUrl}>
                   {(blobUrl: string) => {
                     if (!blobUrl || blobUrl.trim() === '') {
                       return <FileIcon size={24} />;
@@ -1392,7 +1441,7 @@ export const FilePreviewModal = ({
               )}
 
               {meta.isPdf && meta.previewUrl && meta.previewUrl.trim() !== '' && (
-                <AuthFileLoader src={meta.previewUrl}>
+                <AuthFileLoader key={`thumb-${index}-${meta.previewUrl}`} src={meta.previewUrl}>
                   {(blobUrl: string) => {
                     if (!blobUrl || blobUrl.trim() === '') {
                       return <FileIcon size={24} />;
@@ -1542,6 +1591,7 @@ export const FilePreviewModal = ({
               >
                 {fileUrl && fileUrl.trim() !== '' ? (
                   <AuthImage
+                    key={`image-${currentIndex}-${fileUrl}`}
                     src={fileUrl}
                     alt={fileName}
                     fit="contain"
@@ -1782,6 +1832,7 @@ export const FilePreviewModal = ({
           <Box className="file-preview-modal__audio-wrapper">
             {fileUrl && fileUrl.trim() !== '' ? (
               <AuthFileLoader 
+                key={`audio-${currentIndex}-${fileUrl}`}
                 src={fileUrl} 
                 onMimeTypeDetected={setFileMimeType}
                 onLoad={() => setLoading(false)}
@@ -1836,6 +1887,7 @@ export const FilePreviewModal = ({
           
           {fileUrl && fileUrl.trim() !== '' ? (
             <AuthFileLoader 
+              key={`pdf-${currentIndex}-${fileUrl}`}
               src={fileUrl} 
               onMimeTypeDetected={setFileMimeType}
               onLoad={() => setLoading(false)}
@@ -1923,6 +1975,7 @@ export const FilePreviewModal = ({
             >
               {fileUrl && fileUrl.trim() !== '' ? (
                 <AuthFileLoader 
+                  key={`iframe-${currentIndex}-${fileUrl}`}
                   src={fileUrl} 
                   onMimeTypeDetected={setFileMimeType}
                   onLoad={() => setLoading(false)}

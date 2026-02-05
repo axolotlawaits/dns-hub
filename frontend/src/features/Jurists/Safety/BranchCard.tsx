@@ -282,18 +282,35 @@ const BranchCardComponent = function BranchCardComponent({
     })
     if (response && response.ok) {
       notificationSystem.addNotification('Успех', 'Ответственный удален', 'success')
-      // ИСПРАВЛЕНО: Небольшая задержка перед обновлением
-      await new Promise(resolve => setTimeout(resolve, 500))
-      // Обновляем список ответственных после успешного удаления
-      await getResponsive()
-      // ИСПРАВЛЕНО: Вызываем колбэк для обновления списка филиалов в родительском компоненте
-      if (onResponsibleChange) {
-        onResponsibleChange()
+      
+      // ИСПРАВЛЕНО: Обновляем локальное состояние немедленно для мгновенного отображения
+      if (responsibleData && responsibleData.responsibles) {
+        const updatedResponsibles = responsibleData.responsibles.filter(
+          (res: ResponsibleDataType) => 
+            !(res.employee_id === deleteResId && res.responsibility_type === deleteResType)
+        );
+        
+        const updatedData = {
+          ...responsibleData,
+          responsibles: updatedResponsibles
+        };
+        
+        setResponsibleData(updatedData);
+        
+        // Обновляем кэш в родительском компоненте
+        if (onResponsibleDataChange) {
+          onResponsibleDataChange(branch.branch_id, updatedData);
+        }
       }
-      // ИСПРАВЛЕНО: Обновляем кэш в родительском компоненте
-      if (onResponsibleDataChange && responsibleData) {
-        onResponsibleDataChange(branch.branch_id, responsibleData);
-      }
+      
+      // Асинхронно обновляем с сервера
+      setTimeout(async () => {
+        await getResponsive();
+        // Вызываем колбэк для обновления списка филиалов в родительском компоненте
+        if (onResponsibleChange) {
+          onResponsibleChange();
+        }
+      }, 100);
     } else {
       notificationSystem.addNotification('Ошибка', 'Ошибка при удалении ответственного', 'error')
     }
@@ -656,9 +673,7 @@ const BranchCardComponent = function BranchCardComponent({
                 await addResponsive()
                 closeAddResonsibleModal()
                 // Открываем Popover после добавления, чтобы показать обновленный список
-                if (!resPopoverOpened) {
-                  setResPopoverOpened(true)
-                }
+                setResPopoverOpened(true)
               }}>Назначить</Button>
             </Stack>
           </Modal>
@@ -669,9 +684,7 @@ const BranchCardComponent = function BranchCardComponent({
                 await deleteResponsive()
                 closeDeleteModal()
                 // Открываем Popover после удаления, чтобы показать обновленный список
-                if (!resPopoverOpened) {
-                  setResPopoverOpened(true)
-                }
+                setResPopoverOpened(true)
               }}>Удалить</Button>
             </Group>
           </Modal>
@@ -753,7 +766,9 @@ const BranchCard = memo(BranchCardComponent, (prevProps: BranchCardProps, nextPr
     prevProps.expandedBranches.has(prevProps.branch.branch_id) === nextProps.expandedBranches.has(nextProps.branch.branch_id) &&
     prevProps.viewMode === nextProps.viewMode &&
     prevProps.onNotifyBranch === nextProps.onNotifyBranch &&
-    prevProps.onResponsibleChange === nextProps.onResponsibleChange
+    prevProps.onResponsibleChange === nextProps.onResponsibleChange &&
+    // Добавляем проверку на изменение данных ответственных
+    prevProps.responsibleData === nextProps.responsibleData
   );
   
   // Если viewMode изменился, обязательно перерисовываем

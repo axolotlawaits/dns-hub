@@ -1391,7 +1391,7 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
     } finally {
       setLoading(false);
     }
-  }, [token, user, access]);
+  }, [token]); // УБРАЛИ user и access из зависимостей
 
   // Загрузка журналов филиала
   const loadBranchJournals = useCallback(async (branchId: string) => {
@@ -1537,7 +1537,7 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, branchId, user?.id]); // УБРАЛИ loadBranchJournals и onParticipantsChange из зависимостей
+  }, [token, branchId]); // УБРАЛИ user?.id, loadBranchJournals и onParticipantsChange из зависимостей
 
   // Загрузка списка ответственных для филиала
   const loadResponsibles = useCallback(async (branchId: string) => {
@@ -2533,7 +2533,7 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
         typingTimeoutRef.current = null;
       }
     };
-  }, [socket, chat, selectedChat, isChecker, token, user?.id, branchId]);
+  }, [socket, isChecker, token, user?.id, branchId]); // УБРАЛИ chat и selectedChat из зависимостей
 
   // Загрузка данных при монтировании
   // ОПТИМИЗАЦИЯ: Используем useRef для отслеживания, была ли уже выполнена начальная загрузка
@@ -2593,14 +2593,14 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
         handleSelectBranch(targetBranch);
       }
     }
-  }, [isChecker, branchId, branchesWithChats, handleSelectBranch]);
+  }, [isChecker, branchId, branchesWithChats]); // УБРАЛИ handleSelectBranch из зависимостей
 
   // Загрузка чата при выборе проверяющего
   useEffect(() => {
     if (selectedChecker) {
       loadChat(selectedChecker);
     }
-  }, [selectedChecker, loadChat]);
+  }, [selectedChecker]); // УБРАЛИ loadChat из зависимостей
 
   // Перезагрузка чата при изменении branchId (для ответственных)
   useEffect(() => {
@@ -2624,7 +2624,7 @@ export default function SafetyJournalChat({ branchId, branchName: propBranchName
       }
       prevBranchIdRef.current = branchId;
     }
-  }, [branchId, isChecker, loadCheckers]);
+  }, [branchId, isChecker]); // УБРАЛИ loadCheckers из зависимостей для предотвращения ререндеров
 
   // Нормализованные сообщения для рендеринга
   // ОПТИМИЗАЦИЯ: Кешируем нормализованные сообщения, чтобы не нормализовать их заново
